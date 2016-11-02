@@ -1,5 +1,12 @@
 app_new_flow >>re syscall1 >>re new_flow_client@KERNEL >>2 doorbell3 >> send_handshake_syn@NIC >> TO_NET;
 
+// client->server
+app_new_flow_init >> context_enqueue@APP_CORE | kernel_context@KERNEL (API) >> context_dequeue@KERNEL >> classify@KERNEL >> new_flow_client@KERNEL >> doorbell3 >> send_handshake_syn@NIC >> TO_NET;
+
+
+[exception >> exception_enqueue@NIC >> DMA_write >>pull kernel_entry >>] recv_handshake_syn_ack@KERNEL >> new_flow_confirm@KERNEL >> doorbell4 >> nic_new_flow@NIC >> send_handshake_ack@NIC >> TO_NET;
+new_flow_confirm@KERNEL >> enqueue_ker2app@KERNEL |  dequeue_ker2app@APP_CORE >>pull app_new_flow_ready;
+
 
 AppNewFlow app_new_flow;
 API AppNewFlow@APP_CORE {
@@ -49,3 +56,6 @@ Element KernelEntry {
 // @APP_CORE/APP: API nodes
 // @KERNEL: need scheduling
 // @APP_CORE/APP non-API node: need scheduling
+
+// Consider having API for kernel
+// external part may have interrupt, use external libraries

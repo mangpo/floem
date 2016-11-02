@@ -28,7 +28,7 @@ Element ExtractKey@NIC {
     remove some fields
   }
 }
-
+0
 Flow SteeringQueue {
   port in(packet_mod, uint32_t);
   port out(packet_mod);
@@ -37,6 +37,8 @@ Flow SteeringQueue {
     EnqueueRx enqueue_rx;
     DequeueRx dequeue_rx;
     in(0), in(1) >> enqueue_rx@NIC >> DMA_write >>pull dequeue_rx@APP_CORE >> out();
+    // Need one DMA_write b/c write one entry to the queue
+    // Need multiple reads 1. own_bit 2. an entry???
   }
 }
 
@@ -51,7 +53,8 @@ Element EnqueueRx@NIC {
 }
 
 Element DequeueRx@APP_CORE {
-  port in(signal_t);
+  port in_pull(uint32_t, uint32_t); // addr, size
+  port in(packet_mod);
   port out_pull(uint32_t);
   port out(packet_mod);
   

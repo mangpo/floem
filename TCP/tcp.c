@@ -1,15 +1,38 @@
-app_new_flow@call >> syscall1@call >> new_flow_client@KERNEL >> syscall1@return >> app_new_flow@return;
-new_flow_client@KERNEL >> doorbell3 >> send_handshake_syn@NIC >> TO_NET;
+// client->server
+app_new_flow_init@call >> enqueue_app2ker@APP_CORE | kernel_context@KERNEL >> dequeue_app2ker@KERNEL >> new_flow_client@KERNEL >> doorbell3 >> send_handshake_syn@NIC >> TO_NET;
 
 
-AppNewFlow app_new_flow;
-API AppNewFlow@APP_CORE {
+exception >> exception_queue@NIC | kernel_entry@KERNEL >> recv_handshake_syn_ack@KERNEL >> new_flow_confirm@KERNEL >> doorbell4 >> nic_new_flow@NIC >> send_handshake_ack@NIC >> TO_NET;
+new_flow_confirm@KERNEL >> enqueue_ker2app@KERNEL |  app_new_flow_ready@call >> dequeue_ker2app@APP_CORE >> app_new_flow_ready@return;
+
+
+
+AppNewFlowInt app_new_flow_init;
+API AppNewFlowInit@APP_CORE {
+  .call {
+    port in(socket,ip,port);
+    port out(queue_entry);
+
+    .run { out(create entry from in(0), in(1), in(2)); }
+  }
+
+  // return void
+}
+
+AppNewFlowReady app_new_flow_ready;
+API AppNewFlowReady@APP_CORE {
+  .call {
+    port in();
+    port out(command_type);
+
+    .run { out(0); }
+  }
 
   .return {
-    port in(queue*);
-    port out(queue*);
+    port in(queue_entry);
+    port out(socket,in,port,queue*);
 
-    .run() { out(in()); }
+    .run { out(extract socket,in,port,queue from in()); }
   }
 }
 

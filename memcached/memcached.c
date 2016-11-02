@@ -7,7 +7,8 @@ ExtractKey extract_key;
 SteeringQueue steering_queue;
 APPRecv app_recv;
 
-FROM_NET >> extract_key@NIC >>2 steering_queue; // extract_key sends two tokens to app_recv@call >> steering_queue >> app_recv@return;
+FROM_NET >> extract_key@NIC >>2 steering_queue; // extract_key sends two tokens to 
+app_recv@call >> steering_queue >> app_recv@return;
 
 
 Element ExtractKey@NIC {
