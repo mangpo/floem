@@ -28,7 +28,7 @@ Element ExtractKey@NIC {
     remove some fields
   }
 }
-0
+
 Flow SteeringQueue {
   port in(packet_mod, uint32_t);
   port out(packet_mod);
