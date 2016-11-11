@@ -22,14 +22,11 @@ garbage_collec@API >> LogCollection@APP_CORE;
 // When using @API, programmers bind the computation units to the provided thread. For single-thread configuration, when @API connects to @APP_CORE, all called and posted actions @APP_CORE will be executed on that thread. The API call then returns when all computations are executed.
 // For multi-thread configuration, the API call returns whenever the main thread has no more work to do. Essentially, it only guarantees to finish the entry action. ???
 
-// Normal DMA inside SteeringQueue
-// API
-// Check for threads of control
+struct queue {
+  uint32_t base, len, head, tail;
+}
 
 State Queue@NIC {
-  struct queue {
-    uint32_t base, len, head, tail;
-  }
   queue queues_rx[N];
   queue queues_tx[N];
 }
@@ -130,9 +127,67 @@ Element FormatGetResponse@NIC {
 Composite SteeringQueue {
   input port in(eqe_entry p, size_t size, uint6_t core_id);
   input port dequeue();
-  output port out(eqe_entry);
+  output port lookup(eqe_get);
+  output port store(eqe_set);
+  output port full_segment(eqe_full_seg);
 
   Implementation {
-    [in] >> NICQueue@NIC; [dequeue] >> APPQueue@APP_CORE >> [out];
+    [in] >> NICSteeringQueue@NIC; [dequeue] >> APPSteeringQueue@APP_CORE >> Classify@APP_CORE >> [lookup,store,full_segment]; // automatically connect matching-name ports
+  }
+}
+
+
+Composite OutQueue {
+  input port in(cqe_entry p, size_t size);
+  output port get(cqe_get);
+  output port set(cqe_set);
+  output port new_seg(cqe_reigster_seg);
+
+  Implementation {
+    [in] >> APPOutQueue@APP_CORE >> Doorbell >> DoorbellHandle@NIC >> QueueManager >> NICOutQueue@NIC >> Classify@NIC >> [get,set,new_seg];
+  }
+}
+// NIC parser: FROM_NET, doorbell, queue_manager, DMA***
+// output port that branches out according to data type?
+// Doorbell [out(db1)] >> DoorbellHandle1 [out(int,entry1)] >> QueueManager [out(entry1)] >> Task1
+// Doorbell [out(db2)] >> DoorbellHandle2 [out(int,entry2)] >> QueueManager [out(entry2)] >> Task2
+
+Element QueueManager@NIC {
+  input port in(int n, ?);
+  output port out(?); // whatever the parser outputs?
+}
+
+Element NICSteeringQueue@NIC uses Queue { // "uses" states
+  input port in(eqe_entry p, size_t size, uint6_t core_id);
+
+  run {
+    (eqe_entry p, size_t size, uint6_t core_id) = in();
+    queue q = queues_rx[core_id];
+
+   if(queue is not full) {
+     DMA_write(q.base + q.head, psize, p);
+     // update queue
+   }
+   // else drop
+  }
+}
+
+Element DoorbellHandle@NIC uses Queue {
+  input port in(doorbell);
+  output port out(int n, entry e, int size);
+  
+  run {
+    doorbell db = in();
+    // update rx_head    
+    if(db.rx_head != -1)
+      queues_rx[db.core_id].head = db.rx_head;
+    if(db.tx_tail != -1) 
+      queues_tx[db.core_id].head = db.tx_tail;
+    if(db.tx_n > 0) {
+      // for i in range(db.tx_n):
+      //   DMA read an entry from notification queue
+      // for loop is prohibited @NIC
+      out(n,???);
+    }
   }
 }
