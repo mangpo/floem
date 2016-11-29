@@ -2,13 +2,12 @@ FROM_NET >> CheckHeader@NIC
 
 // get request
 CheckHeader [get] >> GetRequest@NIC >> SteeringQueue [lookup] >> KVSLookup@APP_CORE >> OutQueue [get] >> GetResponse@NIC >> TO_NET;
-AppEntry@APP_CORE >> SteeringQueue;
 
 // set request
-CheckHeader [set] >> SetRequest@NIC [forward] >> SteeringQueue [store] >> KVSStore@APP_CORE >> OutQueue [set] >> SetRequest@NIC >> TO_NET;
+CheckHeader [set] >> SetRequest@NIC [forward] >> SteeringQueue [store] >> KVSStore@APP_CORE >> OutQueue [set] >> SetResponse@NIC >> TO_NET;
 
 // full segment
-SetRequest@NIC [full_segment] >> FullSegment@NIC >> SteeringQueue [full_segment] >> NewSegment@APP_CORE >> OutQueue [new_seg] >> RegisterSegment@NIC;
+CheckHeader [set] >> SetRequest@NIC [full_segment] >> FullSegment@NIC >> SteeringQueue [full_segment] >> NewSegment@APP_CORE >> OutQueue [new_seg] >> RegisterSegment@NIC;
 
 // unknown
 CheckHeader@NIC [error] >> SlowPath@NIC;
@@ -154,7 +153,7 @@ Composite OutQueue {
 
 Element QueueManager@NIC {
   input port in(int n, ?);
-  output port out(?); // whatever the parser outputs?
+  output port out(?); // replicate ? n times.
 }
 
 Element NICSteeringQueue@NIC uses Queue { // "uses" states
