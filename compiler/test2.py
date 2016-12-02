@@ -1,4 +1,5 @@
 from ast import Element, Port
+import re
 
 def element_to_function(src, funcname, inports, output2func):
     port2args = {}
@@ -7,10 +8,10 @@ def element_to_function(src, funcname, inports, output2func):
         index = 0
         while not(match):
             p = src.find(f,index)
-            # m = re.search('in[ ]*\(([^\)]*)\)[ ]*;',';in(hey)   ;')
+            #m = re.search(';([^=]+)=[ ]*' + funcname + '[ ]*\(([^\)]*)\)[ ]*;',src)
             if p == -1:
                 raise Exception("Element '%s' never get data from input port '%s'." % (funcname,f))
-            if p == 0 or src[p-1] == " " or src[p-1] == "{" or src[p-1] == ";":
+            if p == 0 or re.search('[^a-zA-Z0-9_]',src[p-1]):
                 last = max(0,src[:p].rfind(";"))
                 next = src.find(";",p)
                 stmt = src[last+1:next+1]
@@ -74,6 +75,6 @@ def test2():
     element_to_function(e1.code, e1.name, [x.name for x in e1.inports],
                         dict([(x.name, x.name + '_func') for x in e1.outports]))
     element_to_function(e2.code, e2.name, [x.name for x in e2.inports],
-                        dict([(x.name, x.name + '_func') for x in e2.outports]))
+                        dict([(x.name, x.name + '_func') for x in e2.outports])) #: TODO: currently broken
 
 test2()
