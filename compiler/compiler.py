@@ -95,7 +95,7 @@ inport_types -- data types of the port
 def remove_expr(src,port2args,port,p_start, p_end, inport_types):
     n = len(inport_types)
     if n > 1 or n == 0:
-        raise Exception("Input port '%s' returns %d values. It cannot be used as an expression." % (n,port))
+        raise Exception("Input port '%s' returns %d values. It cannot be used as an expression." % (port,n))
 
     name = fresh_var_name()
     port2args[port] = [inport_types[0] + ' ' + name]
@@ -149,50 +149,3 @@ def element_to_function(src, funcname, inports, output2func):
     src = "void " + funcname + "(" + ", ".join(args) + ") {" + src + "}"
     print src
     return src
-
-def test_element(e):
-    element_to_function(e.code, e.name, e.inports,
-                        dict([(x.name, x.name + '_func') for x in e.outports]))
-    
-                                                              
-
-def test1():
-    src = r'''
-  int i = in();
-  i = i + i;
-  out(i+1);
-'''
-    element_to_function(src, "f", [Port("in", ["int"])], {"out": "g"})
-
-def test2():
-    e1 = Element("Power",
-                [Port("in", ["int"])],
-                [Port("out", ["int"])], 
-                r'''
-                int x = in();
-                out(x*x);
-                ''')
-    e2 = Element("Add1",
-                [Port("in", ["int"])],
-                [Port("out", ["int"])], 
-                r'''
-                out(in()+1);
-                ''')
-    e3 = Element("AddSub",
-                [Port("in1", ["int"]), Port("in2", ["int"])],
-                [Port("add_out", ["int"]), Port("sub_out", ["int"])], 
-                r'''
-  int a = in1(); int b = in2();
-  add_out(a+b); sub_out(a-b);
-                ''')
-    e4 = Element("Print",
-                [Port("in", [])],
-                [Port("out", [])], 
-                r'''in(); printf("hello\n"); out();
-                ''')
-    test_element(e1)
-    test_element(e2)
-    test_element(e3)
-    test_element(e4)
-
-test2()
