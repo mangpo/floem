@@ -1,4 +1,4 @@
-from ast import Element, Port
+from ast import *
 import re
 
 var_id = 0
@@ -149,3 +149,67 @@ def element_to_function(src, funcname, inports, output2func):
     src = "void " + funcname + "(" + ", ".join(args) + ") {" + src + "}"
     print src
     return src
+
+def generate_signature(funcname, inports):
+    args = []
+    for port in inports:
+        args = args + port.argtypes
+
+    src = "void " + funcname + "(" + ", ".join(args) + ");"
+    print src
+    return src
+    
+
+class Compiler:
+    def __init__(self, elements):
+        self.elements = {}
+        self.instances = {}
+        for e in elements:
+            self.elements[e.name] = e
+
+    def defineInstance(self,name,element):
+        e = self.elements[element]
+        self.instances[name] = ElementInstance(name,e)
+
+    def connect(self,name1,name2,out1=None,in2=None):
+        i1 = self.instances[name1]
+        i2 = self.instances[name2]
+        e1 = i1.element
+        e2 = i2.element
+        
+        # TODO: check type
+        if out1:
+            assert (out1 in [x.name for x in e1.outports]), \
+                "Port '%s' is undefined. Aviable ports are %s." \
+                % (out1, [x.name for x in e1.outports])
+        else:
+            assert(len(e1.outports) == 1)
+            out1 = e1.outports[0].name
+
+        if in2:
+            assert (in2 in [x.name for x in e2.inports]), \
+                "Port '%s' is undefined. Aviable ports are %s." \
+                % (in2, [x.name for x in e2.inports])
+        else:
+            assert (len(e2.inports) == 1)
+            in2 = e2.inports[0].name
+
+        if len(e2.inports) == 1:
+            i1.connectPort(out1,i2.name)
+        else:
+            raise NotImplementedError()
+
+    def generateCode(self):
+        for name in self.instances:
+            instance = self.instances[name]
+            e = instance.element
+            generate_signature(name, e.inports)
+            
+        for name in self.instances:
+            instance = self.instances[name]
+            e = instance.element
+            element_to_function(e.code, name, e.inports, instance.output2func)
+            
+        
+        
+                
