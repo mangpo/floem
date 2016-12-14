@@ -1,3 +1,7 @@
+#define N 8
+#define @APP 1
+#define @APP_CORE N
+
 FROM_NET >> CheckHeader@NIC
 
 // get request
@@ -21,13 +25,41 @@ garbage_collec@API >> LogCollection@APP_CORE;
 // When using @API, programmers bind the computation units to the provided thread. For single-thread configuration, when @API connects to @APP_CORE, all called and posted actions @APP_CORE will be executed on that thread. The API call then returns when all computations are executed.
 // For multi-thread configuration, the API call returns whenever the main thread has no more work to do. Essentially, it only guarantees to finish the entry action. ???
 
-struct queue {
+struct eq_entry {
+  uint16_t flags; // 0 = nic, 1 = cpu
+  uint16_t len;
+  uint8_t content[]; // TODO: continue here
+}
+
+struct queueNIC {
   uint32_t base, len, head, tail;
 }
 
-State Queue@NIC {
-  queue queues_rx[N];
-  queue queues_tx[N];
+State CommNIC@NIC {
+  queueNIC queues_rx[N];
+  queueNIC queues_tx[N];
+
+  CommNIC() uses CommAPP {
+    for(int i=0; i<N; i++) {
+      queues_rx[i].base = (CommAPP@APP_CORE[i]).queue_rx.base;
+      queues_tx[i].base = (CommAPP@APP_CORE[i]).queue_tx.base;
+    }
+  }
+}
+
+struct queueAPP {
+  uint32_t base, head, tail;
+}
+  
+State CommAPP@APP_CORE {
+  queueAPP queue_rx, queue_tx;
+
+  CommAPP() {
+    queue.base = malloc(256*sizeof(uint32_t));
+    queue_rx.head = queue_rx.tail = queue.base;
+    queue.base = malloc(256*sizeof(uint32_t));
+    queue_tx.head = queue_tx.tail = queue.base;
+  }
 }
 
 // Multiple output ports
@@ -143,7 +175,7 @@ Composite OutQueue {
   output port new_seg(cqe_reigster_seg);
 
   Implementation {
-    [in] >> APPOutQueue@APP_CORE >> Doorbell >> DoorbellHandle@NIC >> QueueManager >> NICOutQueue@NIC >> Classify@NIC >> [get,set,new_seg];
+    [in] >> APPOutQueue@APP_CORE >> Doorbell(grammar) >> DoorbellHandle@NIC >> QueueManager >> NICOutQueue@NIC >> Classify@NIC >> [get,set,new_seg];
   }
 }
 // NIC parser: FROM_NET, doorbell, queue_manager, DMA***
@@ -156,7 +188,7 @@ Element QueueManager@NIC {
   output port out(?); // replicate ? n times.
 }
 
-Element NICSteeringQueue@NIC uses Queue { // "uses" states
+Element NICSteeringQueue@NIC uses CommNIC { // "uses" states
   input port in(eqe_entry p, size_t size, uint6_t core_id);
 
   run {
@@ -164,14 +196,29 @@ Element NICSteeringQueue@NIC uses Queue { // "uses" states
     queue q = queues_rx[core_id];
 
    if(queue is not full) {
-     DMA_write(q.base + q.head, psize, p);
+     DMA_write(q.base + q.tail, psize, p);
+     // TODO: make sure owner bit of the next entry is 0 (NIC).
      // update queue
    }
    // else drop
   }
 }
 
-Element DoorbellHandle@NIC uses Queue {
+Element APPSteeringQueue@APP_CORE uses CommAPP {
+  input port in();
+  output port out(eqe_entry);
+
+  run {
+    in();
+    if((*uint8_t)queue_rx.head == 1) { // checking owner bit
+      eq_entry packet = parse_memory(queue_rx.head,grammar); // read memory, parse, and update head pointer
+      out(packet);
+    }
+    // else return control
+  }
+}
+
+Element DoorbellHandle@NIC uses CommNIC {
   input port in(doorbell);
   output port out(int n, entry e, int size);
   

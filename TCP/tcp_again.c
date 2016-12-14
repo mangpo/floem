@@ -1,8 +1,10 @@
+#define @APP dynamic
+#define @APP_CORE dynamic
+
 // how to use states @APP and states @APP_CORE
 // flow state in NIC
 // queue per core
 // connection
-
 
 ///////////// Connection States ////////////////
 struct NICConnection {
@@ -65,21 +67,20 @@ State Context@KERNEL {
 }
 
 // new worker thread v1
-init_worker@API >> Init@APP_CORE >> syscall >> NewAppThread@KERNEL >> sysreturn >> InitFinalize@APP_CORE >> init_worker@API; 
-// syscall & sysreturn = UNIX domain socket. They take any number of arguments and data types.
-// notion of thread of control is gone.
+init_worker@API >> SetupWorker@APP_CORE >> [call] syscall [ker-start] >> NewAppThread@KERNEL >> [ker-done] syscall [return] >> SetupFinalize@APP_CORE >> init_worker@API; 
+KernelEntry@KERNEL >> [entry] syscall;
 
-Element Init@APP_CORE uses APPConnections {
+
+Element SetupWorker@APP_CORE uses APPConnections {
   input port in();
   output port out(int app_id);
 
   run {
-    initialize(); // allocate states @APP_CORE
     out(app_id);
   }
 }
 
-Element InitFinalize@APP_CORE uses Context {
+Element SetupFinalize@APP_CORE uses Context {
   input port in(APPContext, APPnotify);
   output port out(APP_CORE*);
   
@@ -91,7 +92,7 @@ Element InitFinalize@APP_CORE uses Context {
   }
 }
 
-// new worker thread v1 (use low-level elements)
+// new worker thread v2 (use low-level elements)
 init_worker@API >> Init >> init_worker@API;
 
 Composite Init {
@@ -106,11 +107,7 @@ Composite Init {
   }
 }
 
-// new worker thread v2 (use syscall composit element)
-init_worker@API >> Init1@APP_CORE >> [in] Syscall [out] >> Init2@APP_CORE >> init_worker@API;
-KernelEntry@KERNEL >> [ker-in] Syscall [A] >> NewThread@KERNEL >> [B] Syscall;
-
-// net worker thread v3 (use function call)
+// new worker thread v3 (use function call)
 init_worker@API >> Init >> init_worker@API;
 
 Composite Init {
