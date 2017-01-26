@@ -101,9 +101,22 @@ def remove_expr(src,port2args,port,p_start, p_end, inport_types):
     port2args[port] = [inport_types[0] + ' ' + name]
     return src[:p_start] + name + src[p_end:]
 
+"""Turn an element into a function.
+- Read from an input port => input argument(s).
+- Write to an output port => a function call.
 
+Args:
+src      -- string of element source code
+funcname -- string of function name
+inports  -- a list of Port
+output2func -- dictionary of an output port name to a function name
+
+Returns: a string of function source code
+"""
 def element_to_function(src, funcname, inports, output2func):
+    # A dictionary to collect function arguments.
     port2args = {}
+    # Collect arguments and remove input ports from src.
     for portinfo in inports:
         port = portinfo.name
         argtypes = portinfo.argtypes
@@ -134,6 +147,7 @@ def element_to_function(src, funcname, inports, output2func):
         if m and re.search('[^a-zA-Z0-9_]',src[m.start(0)-1]):
             raise Exception("Cannot get data from input port '%s' more than one time in element '%s'." % (f, funcname))
 
+    # Replace output ports with function calls
     for o in output2func:
         m = re.search(o + '[ ]*\(',src[index:])
         if m == None:
@@ -142,6 +156,7 @@ def element_to_function(src, funcname, inports, output2func):
         if p == 0 or re.search('[^a-zA-Z0-9_]',src[p-1]):
             src = src[:p] + output2func[o] + src[p+len(o):]
 
+    # Construct function arguments from port2args.
     args = []
     for port in inports:
         args = args + port2args[port.name]
