@@ -6,17 +6,17 @@ class Element:
         self.outports = outports
         self.code = code
 
+
 class ElementInstance:
     def __init__(self,name,element):
         self.name = name
         self.element = element
-        self.output2func = {}
+        self.output2ele = {}   # map output port name to element name
 
-    def connectPort(self,port,f):
-        self.output2func[port] = f
+    def connectPort(self, port, f, fport):
+        self.output2ele[port] = (f, fport)
 
 class Port:
     def __init__(self, name, argtypes):
         self.name = name
         self.argtypes = argtypes
-        

@@ -101,19 +101,18 @@ def remove_expr(src,port2args,port,p_start, p_end, inport_types):
     port2args[port] = [inport_types[0] + ' ' + name]
     return src[:p_start] + name + src[p_end:]
 
-"""Turn an element into a function.
-- Read from an input port => input argument(s).
-- Write to an output port => a function call.
 
-Args:
-src      -- string of element source code
-funcname -- string of function name
-inports  -- a list of Port
-output2func -- dictionary of an output port name to a function name
-
-Returns: a string of function source code
-"""
 def element_to_function(src, funcname, inports, output2func):
+    """Turn an element into a function.
+    - Read from an input port => input argument(s).
+    - Write to an output port => a function call.
+
+    :param src: string of element source code
+    :param funcname: string of function name
+    :param inports: a list of Port
+    :param output2func: dictionary of an output port name to (function name, port)
+    :return: a string of function source code
+    """
     # A dictionary to collect function arguments.
     port2args = {}
     # Collect arguments and remove input ports from src.
@@ -145,16 +144,21 @@ def element_to_function(src, funcname, inports, output2func):
                 
         m = re.search(port + '[ ]*\(([^\)]*)\)',src[index:])
         if m and re.search('[^a-zA-Z0-9_]',src[m.start(0)-1]):
-            raise Exception("Cannot get data from input port '%s' more than one time in element '%s'." % (f, funcname))
+            raise Exception("Cannot get data from input port '%s' more than one time in element '%s'."
+                            % (port, funcname))
 
     # Replace output ports with function calls
     for o in output2func:
         m = re.search(o + '[ ]*\(',src[index:])
-        if m == None:
+        if m is None:
             raise Exception("Element '%s' never send data from output port '%s'." % (funcname,o))
         p = m.start(0)
         if p == 0 or re.search('[^a-zA-Z0-9_]',src[p-1]):
-            src = src[:p] + output2func[o] + src[p+len(o):]
+            (f, fport) = output2func[o]
+            call = f
+            if not(fport is None):
+                call = call + '_' + fport
+            src = src[:p] + call + src[p+len(o):]
 
     # Construct function arguments from port2args.
     args = []
@@ -165,15 +169,83 @@ def element_to_function(src, funcname, inports, output2func):
     print src
     return src
 
+
 def generate_signature(funcname, inports):
+    n = len(inports)
     args = []
+    src = ""
     for port in inports:
         args = args + port.argtypes
+        if n > 1:
+            src += "void %s_%s(%s);\n" % (funcname, port.name, ",".join(port.argtypes))
 
-    src = "void " + funcname + "(" + ", ".join(args) + ");"
+    src += "void %s(%s);" % (funcname, ",".join(args))
     print src
     return src
-    
+
+
+def get_element_port_arg_name(func, port, i):
+    return "_%s_%s_arg%d" % (func, port, i)
+
+
+def get_element_port_avail(func, port):
+    return "_%s_%s_avail" % (func, port)
+
+
+def generate_join_functions(funcname, inports):
+    n = len(inports)
+    src = ""
+    if n > 1:
+        avails = []
+        clear = ""
+        # Generate port available indicators.
+        for port in inports:
+            avail = get_element_port_avail(funcname, port.name)
+            src += "int %s = 0;\n" % avail
+            avails.append(avail)
+            clear += "    %s = 0;\n" % avail
+
+        # Generate buffer variables.
+        buffers = []
+        for port in inports:
+            argtypes = port.argtypes
+            for i in range(len(argtypes)):
+                buffer = get_element_port_arg_name(funcname, port.name, i)
+                src += "%s %s;\n" % (argtypes[i], buffer)
+                buffers.append(buffer)
+
+        # Generate code to invoke the main element and clear available indicators.
+        all_avails = " && ".join(avails)
+        all_buffers = ", ".join(buffers)
+        invoke = "  if(%s) {\n" % all_avails
+        invoke += clear
+        invoke += "    %s(%s);\n" % (funcname, all_buffers)
+        invoke += "  }\n"
+
+        # Generate function for each input port.
+        for port_id in range(len(inports)):
+            port = inports[port_id]
+            argtypes = port.argtypes
+
+            # Function arguments.
+            types_args = []
+            args = []
+            for i in range(len(argtypes)):
+                args.append("arg%d" % (i))
+                types_args.append("%s arg%d" % (argtypes[i], i))
+
+            src += "void %s_%s(%s) {\n" % (funcname, port.name, ",".join(types_args))
+            # Runtime check.
+            src += "  if(%s == 1) { printf(\"Join failed (overwriting some values).\\n\"); exit(-1); }\n" \
+                   % avails[port_id]
+            for i in range(len(argtypes)):
+                src += "  %s = %s;\n" % (get_element_port_arg_name(funcname, port.name, i), args[i])
+            src += "  %s = 1;\n" % avails[port_id]
+            src += invoke
+            src += "}\n"
+
+    print src
+    return src
 
 class Compiler:
     def __init__(self, elements):
@@ -207,23 +279,26 @@ class Compiler:
                 % (in2, [x.name for x in e2.inports])
         else:
             assert (len(e2.inports) == 1)
-            in2 = e2.inports[0].name
+            # Leave in2 = None if there is only one port.
 
-        if len(e2.inports) == 1:
-            i1.connectPort(out1,i2.name)
-        else:
-            raise NotImplementedError()
+        i1.connectPort(out1,i2.name,in2)
 
     def generateCode(self):
+        # Generate signatures.
         for name in self.instances:
-            instance = self.instances[name]
-            e = instance.element
+            e = self.instances[name].element
             generate_signature(name, e.inports)
-            
+
+        # Generate join functions.
+        for name in self.instances:
+            e = self.instances[name].element
+            generate_join_functions(name, e.inports)
+
+        # Generate functions.
         for name in self.instances:
             instance = self.instances[name]
             e = instance.element
-            element_to_function(e.code, name, e.inports, instance.output2func)
+            element_to_function(e.code, name, e.inports, instance.output2ele)
             
         
         

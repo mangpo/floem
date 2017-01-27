@@ -5,7 +5,7 @@ import unittest
 
 def test_element(e):
     element_to_function(e.code, e.name, e.inports,
-                        dict([(x.name, x.name + '_func') for x in e.outports]))
+                        dict([(x.name, (x.name + '_func',None)) for x in e.outports]))
 
 class TestElementToFunction(unittest.TestCase):
 
