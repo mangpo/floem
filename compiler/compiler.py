@@ -102,7 +102,7 @@ def remove_expr(src,port2args,port,p_start, p_end, inport_types):
     return src[:p_start] + name + src[p_end:]
 
 
-def element_to_function(src, funcname, inports, output2func):
+def element_to_function(src, funcname, inports, output2func, local_state, state_rename):
     """Turn an element into a function.
     - Read from an input port => input argument(s).
     - Write to an output port => a function call.
@@ -111,8 +111,11 @@ def element_to_function(src, funcname, inports, output2func):
     :param funcname: string of function name
     :param inports: a list of Port
     :param output2func: dictionary of an output port name to (function name, port)
+    :param local_state: a state object local for this element
+    :param state_rename: a map from old state name to new state name
     :return: a string of function source code
     """
+    src = ' ' + src
     # A dictionary to collect function arguments.
     port2args = {}
     # Collect arguments and remove input ports from src.
@@ -130,10 +133,11 @@ def element_to_function(src, funcname, inports, output2func):
                 check_no_args(m.group(1))
                 c1, p1 = last_non_space(src,p)
                 c2, p2 = first_non_space(src,m.end(0))
+                c0, p0 = last_non_space(src,p1-1)
 
-                if c1 == '=' and c2 == ';':
+                if c0 == ')' and c1 == '=' and c2 == ';':
                     src = remove_asgn_stmt(src,port2args,port,p1,p2+1,argtypes)
-                elif (c1 == ';' or c1 == None) and c2 == ';':
+                elif (c1 == ';' or c1 is None) and c2 == ';':
                     src = remove_nonasgn_stmt(src,port2args,port,p1+1,p2+1,argtypes)
                 else:
                     src = remove_expr(src,port2args,port,p,m.end(0),argtypes)
@@ -149,7 +153,7 @@ def element_to_function(src, funcname, inports, output2func):
 
     # Replace output ports with function calls
     for o in output2func:
-        m = re.search(o + '[ ]*\(',src[index:])
+        m = re.search(o + '[ ]*\(',src)
         if m is None:
             raise Exception("Element '%s' never send data from output port '%s'." % (funcname,o))
         p = m.start(0)
@@ -160,12 +164,48 @@ def element_to_function(src, funcname, inports, output2func):
                 call = call + '_' + fport
             src = src[:p] + call + src[p+len(o):]
 
+    # Replace old state name with new state name
+    for (old,new) in state_rename:
+        match = True
+        index = 0
+        while match:
+            match = re.search('[^a-zA-Z0-9_]('+old+').', src[index:])
+            if match:
+                src = src[:index+match.start(1)] + new + src[index+match.end(1):]
+                index = index + match.start(1) + len(old)
+
+    # Local state
+    state_src = ""
+    if local_state:
+        state_src += "  struct Local { " + local_state.content + " };\n"
+        state_src += "  static struct Local " + local_state.name
+        if local_state.init:
+            state_src += " = {" + local_state.init + "}"
+        state_src += ";\n"
+
     # Construct function arguments from port2args.
     args = []
     for port in inports:
         args = args + port2args[port.name]
 
-    src = "void " + funcname + "(" + ", ".join(args) + ") {" + src + "}"
+    src = "void " + funcname + "(" + ", ".join(args) + ") {\n" + state_src + src + "}\n"
+    print src
+    return src
+
+
+def generate_state(state):
+    src = ""
+    src += "struct %s { %s };\n" % (state.name, state.content)
+    print src
+    return src
+
+
+def generate_state_instance(name, state):
+    src = ""
+    src += "struct %s %s" % (state.name, name)
+    if state.init:
+        src += " = {%s}" % state.init
+    src += ";\n"
     print src
     return src
 
@@ -248,15 +288,34 @@ def generate_join_functions(funcname, inports):
     return src
 
 class Compiler:
-    def __init__(self, elements):
+    def __init__(self, elements, states=[]):
         self.elements = {}
         self.instances = {}
+        self.states = {}
+        self.state_instances = {}
         for e in elements:
             self.elements[e.name] = e
+        for s in states:
+            self.states[s.name] = s
 
-    def defineInstance(self,name,element):
+    def newStateInstance(self, state, name):
+        s = self.states[state]
+        self.state_instances[name] = s
+
+    def defineInstance(self, element, name, state_args=[]):
         e = self.elements[element]
-        self.instances[name] = ElementInstance(name,e)
+        self.instances[name] = ElementInstance(name, e, state_args)
+
+        # Check state types
+        if not(len(state_args) == len(e.state_params)):
+            raise Exception("Element '%s' requires %d state arguments. %d states are given."
+                            % (e.name, len(e.state_params), len(state_args)))
+        for i in range(len(state_args)):
+            (type, local_name ) = e.state_params[i]
+            s = state_args[i]
+            state = self.state_instances[s]
+            if not(state.name == type):
+                raise Exception("Element '%s' expects state '%s'. State '%s' is given." % (e.name, type, state.name))
 
     def connect(self,name1,name2,out1=None,in2=None):
         i1 = self.instances[name1]
@@ -284,6 +343,14 @@ class Compiler:
         i1.connectPort(out1,i2.name,in2)
 
     def generateCode(self):
+        # Generate states.
+        for state in self.states.values():
+            generate_state(state)
+
+        # Generate state instances.
+        for name in self.state_instances:
+            generate_state_instance(name, self.state_instances[name])
+
         # Generate signatures.
         for name in self.instances:
             e = self.instances[name].element
@@ -298,8 +365,7 @@ class Compiler:
         for name in self.instances:
             instance = self.instances[name]
             e = instance.element
-            element_to_function(e.code, name, e.inports, instance.output2ele)
-            
-        
-        
-                
+            state_rename = []
+            for i in range(len(instance.state_args)):
+                state_rename.append((e.state_params[i][1],instance.state_args[i]))
+            element_to_function(e.code, name, e.inports, instance.output2ele, e.local_state, state_rename)
