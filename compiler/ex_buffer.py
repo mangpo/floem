@@ -1,5 +1,5 @@
 from ast import *
-from compiler import Compiler
+from compiler import *
 
 s = State("Buffer", "int x; int avail;", "0,0")
 
@@ -17,8 +17,8 @@ e2= Element("BlockingRead",
              None,
              [("Buffer", "this")])
 
-compiler = Compiler([e1, e2], [s])
-compiler.newStateInstance("Buffer", "s")
-compiler.defineInstance("Write", "w", ["s"])
-compiler.defineInstance("BlockingRead", "r", ["s"])
-compiler.generateCode()
+graph = Graph([e1, e2], [s])
+graph.newStateInstance("Buffer", "s")
+graph.defineInstance("Write", "w", ["s"])
+graph.defineInstance("BlockingRead", "r", ["s"])
+generateCode(graph)

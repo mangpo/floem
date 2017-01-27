@@ -287,85 +287,31 @@ def generate_join_functions(funcname, inports):
     print src
     return src
 
-class Compiler:
-    def __init__(self, elements, states=[]):
-        self.elements = {}
-        self.instances = {}
-        self.states = {}
-        self.state_instances = {}
-        for e in elements:
-            self.elements[e.name] = e
-        for s in states:
-            self.states[s.name] = s
 
-    def newStateInstance(self, state, name):
-        s = self.states[state]
-        self.state_instances[name] = s
+def generateCode(graph):
+    # Generate states.
+    for state in graph.states.values():
+        generate_state(state)
 
-    def defineInstance(self, element, name, state_args=[]):
-        e = self.elements[element]
-        self.instances[name] = ElementInstance(name, e, state_args)
+    # Generate state instances.
+    for name in graph.state_instances:
+        generate_state_instance(name, graph.state_instances[name])
 
-        # Check state types
-        if not(len(state_args) == len(e.state_params)):
-            raise Exception("Element '%s' requires %d state arguments. %d states are given."
-                            % (e.name, len(e.state_params), len(state_args)))
-        for i in range(len(state_args)):
-            (type, local_name ) = e.state_params[i]
-            s = state_args[i]
-            state = self.state_instances[s]
-            if not(state.name == type):
-                raise Exception("Element '%s' expects state '%s'. State '%s' is given." % (e.name, type, state.name))
+    # Generate signatures.
+    for name in graph.instances:
+        e = graph.instances[name].element
+        generate_signature(name, e.inports)
 
-    def connect(self,name1,name2,out1=None,in2=None):
-        i1 = self.instances[name1]
-        i2 = self.instances[name2]
-        e1 = i1.element
-        e2 = i2.element
-        
-        # TODO: check type
-        if out1:
-            assert (out1 in [x.name for x in e1.outports]), \
-                "Port '%s' is undefined. Aviable ports are %s." \
-                % (out1, [x.name for x in e1.outports])
-        else:
-            assert(len(e1.outports) == 1)
-            out1 = e1.outports[0].name
+    # Generate join functions.
+    for name in graph.instances:
+        e = graph.instances[name].element
+        generate_join_functions(name, e.inports)
 
-        if in2:
-            assert (in2 in [x.name for x in e2.inports]), \
-                "Port '%s' is undefined. Aviable ports are %s." \
-                % (in2, [x.name for x in e2.inports])
-        else:
-            assert (len(e2.inports) == 1)
-            # Leave in2 = None if there is only one port.
-
-        i1.connectPort(out1,i2.name,in2)
-
-    def generateCode(self):
-        # Generate states.
-        for state in self.states.values():
-            generate_state(state)
-
-        # Generate state instances.
-        for name in self.state_instances:
-            generate_state_instance(name, self.state_instances[name])
-
-        # Generate signatures.
-        for name in self.instances:
-            e = self.instances[name].element
-            generate_signature(name, e.inports)
-
-        # Generate join functions.
-        for name in self.instances:
-            e = self.instances[name].element
-            generate_join_functions(name, e.inports)
-
-        # Generate functions.
-        for name in self.instances:
-            instance = self.instances[name]
-            e = instance.element
-            state_rename = []
-            for i in range(len(instance.state_args)):
-                state_rename.append((e.state_params[i][1],instance.state_args[i]))
-            element_to_function(e.code, name, e.inports, instance.output2ele, e.local_state, state_rename)
+    # Generate functions.
+    for name in graph.instances:
+        instance = graph.instances[name]
+        e = instance.element
+        state_rename = []
+        for i in range(len(instance.state_args)):
+            state_rename.append((e.state_params[i][1],instance.state_args[i]))
+        element_to_function(e.code, name, e.inports, instance.output2ele, e.local_state, state_rename)

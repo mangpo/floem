@@ -1,5 +1,5 @@
 from ast import *
-from compiler import Compiler
+from compiler import *
 
 
 e1 = Element("Fork",
@@ -19,13 +19,13 @@ e4 = Element("Print",
              [], 
              r'''printf("%d\n",in());''')
 
-compiler = Compiler([e1,e2,e3,e4])
-compiler.defineInstance("Fork","Fork")
-compiler.defineInstance("Add","Add")
-compiler.defineInstance("Sub","Sub")
-compiler.defineInstance("Print","Print")
-compiler.connect("Fork","Add","to_add")
-compiler.connect("Fork","Sub","to_sub")
-compiler.connect("Add","Print")
-compiler.connect("Sub","Print")
-compiler.generateCode()
+graph = Graph([e1, e2, e3, e4])
+graph.defineInstance("Fork", "Fork")
+graph.defineInstance("Add", "Add")
+graph.defineInstance("Sub", "Sub")
+graph.defineInstance("Print", "Print")
+graph.connect("Fork", "Add", "to_add")
+graph.connect("Fork", "Sub", "to_sub")
+graph.connect("Add", "Print")
+graph.connect("Sub", "Print")
+generateCode(graph)

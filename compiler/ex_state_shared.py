@@ -1,5 +1,5 @@
 from ast import *
-from compiler import Compiler
+from compiler import *
 
 s = State("Shared", "int sum;", "100")
 
@@ -10,8 +10,8 @@ e1 = Element("Sum",
              None,
              [("Shared", "this")])
 
-compiler = Compiler([e1], [s])
-compiler.newStateInstance("Shared", "s")
-compiler.defineInstance("Sum", "sum1", ["s"])
-compiler.defineInstance("Sum", "sum2", ["s"])
-compiler.generateCode()
+graph = Graph([e1], [s])
+graph.newStateInstance("Shared", "s")
+graph.defineInstance("Sum", "sum1", ["s"])
+graph.defineInstance("Sum", "sum2", ["s"])
+generateCode(graph)
