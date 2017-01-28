@@ -4,8 +4,8 @@ from compiler import *
 
 e1 = Element("Fork",
              [Port("in", ["int","int"])],
-             [Port("to_add", ["int"]), Port("to_sub", ["int"])],
-             r'''(int x, int y) = in(); to_add(x,y); /*to_sub(x,y);*/''')
+             [Port("to_add", ["int","int"]), Port("to_sub", ["int","int"])],
+             r'''(int x, int y) = in(); to_add(x,y); to_sub(x,y);''')
 e2 = Element("Add",
              [Port("in", ["int","int"])],
              [Port("out", ["int"])],
@@ -28,4 +28,15 @@ graph.connect("Fork", "Add", "to_add")
 graph.connect("Fork", "Sub", "to_sub")
 graph.connect("Add", "Print", "out", "in1")
 graph.connect("Sub", "Print", "out", "in2")
+
+graph.internal_trigger("Sub")
+
+print "--------------- ORG ----------------"
 generateCode(graph)
+print "--------------- INFO -----------------"
+graph.assign_threads()
+graph.insert_theading_elements()
+graph.print_threads_info()
+print "--------------- CODE ----------------"
+generateCode(graph)
+

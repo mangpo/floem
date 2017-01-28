@@ -160,8 +160,8 @@ def element_to_function(src, funcname, inports, output2func, local_state, state_
         if p == 0 or re.search('[^a-zA-Z0-9_]',src[p-1]):
             (f, fport) = output2func[o]
             call = f
-            if not(fport is None):
-                call = call + '_' + fport
+            #if not(fport is None):
+            #    call = call + '_' + fport
             src = src[:p] + call + src[p+len(o):]
 
     # Replace old state name with new state name
@@ -216,8 +216,8 @@ def generate_signature(funcname, inports):
     src = ""
     for port in inports:
         args = args + port.argtypes
-        if n > 1:
-            src += "void %s_%s(%s);\n" % (funcname, port.name, ",".join(port.argtypes))
+    #     if n > 1:
+    #         src += "void %s_%s(%s);\n" % (funcname, port.name, ",".join(port.argtypes))
 
     src += "void %s(%s);" % (funcname, ",".join(args))
     print src
@@ -302,10 +302,10 @@ def generateCode(graph):
         e = graph.instances[name].element
         generate_signature(name, e.inports)
 
-    # Generate join functions.
-    for name in graph.instances:
-        e = graph.instances[name].element
-        generate_join_functions(name, e.inports)
+    # # Generate join functions.
+    # for name in graph.instances:
+    #     e = graph.instances[name].element
+    #     generate_join_functions(name, e.inports)
 
     # Generate functions.
     for name in graph.instances:

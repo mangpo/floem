@@ -19,4 +19,12 @@ graph.external_api("Forwarder")
 graph.internal_trigger("Comsumer") # 1 thread round-robin
 # graph.same_thread()
 # graph.spawn()
+
+print "--------------- ORG ----------------"
+generateCode(graph)
+print "--------------- INFO -----------------"
+graph.assign_threads()
+graph.insert_theading_elements()
+graph.print_threads_info()
+print "--------------- CODE ----------------"
 generateCode(graph)
