@@ -1,5 +1,6 @@
 from ast import *
 from compiler import *
+from thread_allocation import *
 
 
 e1 = Element("Fork",
@@ -29,14 +30,13 @@ graph.connect("Fork", "Sub", "to_sub")
 graph.connect("Add", "Print", "out", "in1")
 graph.connect("Sub", "Print", "out", "in2")
 
-graph.internal_trigger("Sub")
+allocator = ThreadAllocator(graph)
+#allocator.internal_trigger("Sub")
 
 print "--------------- ORG ----------------"
-generateCode(graph)
+generate_code(graph)
 print "--------------- INFO -----------------"
-graph.assign_threads()
-graph.insert_theading_elements()
-graph.print_threads_info()
+allocator.transform()
 print "--------------- CODE ----------------"
-generateCode(graph)
+generate_code(graph)
 

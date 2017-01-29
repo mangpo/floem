@@ -1,6 +1,6 @@
 from ast import *
 from compiler import *
-
+from thread_allocation import *
 
 e1 = Element("Forwarder",
              [Port("in", ["int"])],
@@ -15,16 +15,16 @@ graph = Graph([e1, e2])
 graph.defineInstance("Forwarder", "Forwarder")
 graph.defineInstance("Comsumer", "Comsumer")
 graph.connect("Forwarder", "Comsumer")
-graph.external_api("Forwarder")
-graph.internal_trigger("Comsumer") # 1 thread round-robin
-# graph.same_thread()
-# graph.spawn()
+
+allocator = ThreadAllocator(graph)
+allocator.external_api("Forwarder")
+allocator.internal_trigger("Comsumer") # 1 thread round-robin
+# allocator.same_thread()
+# allocator.spawn()
 
 print "--------------- ORG ----------------"
-generateCode(graph)
+generate_code(graph)
 print "--------------- INFO -----------------"
-graph.assign_threads()
-graph.insert_theading_elements()
-graph.print_threads_info()
+allocator.transform()
 print "--------------- CODE ----------------"
-generateCode(graph)
+generate_code(graph)

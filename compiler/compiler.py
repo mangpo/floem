@@ -1,4 +1,3 @@
-from ast import *
 import re
 
 var_id = 0
@@ -8,15 +7,18 @@ def fresh_var_name():
     var_id += 1
     return name
 
+
 def check_no_args(args):
     if not(args == ""):
         raise Exception("Cannot pass an argument when retrieving data from an input port.")
 
-"""Return the last charactor before s[i] that is not a space, along with its index.
-s -- string
-i -- index
-"""
+
 def last_non_space(s,i):
+    """
+    :param s: string
+    :param i: index
+    :return: A pair of (the last character before s[i] that is not a space, its index)
+    """
     i -= 1
     while i >= 0 and s[i] == ' ':
         i -= 1
@@ -26,12 +28,13 @@ def last_non_space(s,i):
     else:
         return (None,-1)
 
-"""Return the first charactor start from s[i] that is not a space, along with its index.
 
-s -- string
-i -- index
-"""
 def first_non_space(s,i):
+    """
+    :param s: string
+    :param i: index
+    :return: A pair of (the first character start from s[i] that is not a space, its index)
+    """
     l = len(s)
     while i < l and s[i] == ' ':
         i += 1
@@ -41,17 +44,18 @@ def first_non_space(s,i):
     else:
         return (None,-1)
 
-"""Remove the reading from port statment from src, 
-and put its LHS of the statement in port2args.
 
-src       -- string source code
-port2args -- map port name to a list of (type,argument name)
-port      -- port name
-p_eq      -- position of '=' of the statement to be removed
-p_end     -- the ending positiion of the statement to be removed (after ';')
-inport_types -- data types of the port
-"""
 def remove_asgn_stmt(src,port2args,port,p_eq, p_end, inport_types):
+    """
+    Remove the reading from port statement from src, and put its LHS of the statement in port2args.
+    :param src:       string source code
+    :param port2args: map port name to a list of (type,argument name)
+    :param port:      port name
+    :param p_eq:      position of '=' of the statement to be removed
+    :param p_end:     the ending position of the statement to be removed (after ';')
+    :param inport_types: data types of the port
+    :return: updated code
+    """
     p_start = max(0,src[:p_eq].rfind(';'))
     if src[p_start] == ';':
         p_start += 1
@@ -66,33 +70,36 @@ def remove_asgn_stmt(src,port2args,port,p_eq, p_end, inport_types):
         
     return src[:p_start] + src[p_end:]
 
-"""Remove the reading from port statment from src, 
-when the reading is not saved in any variable or used in any expression.
 
-src       -- string source code
-port2args -- map port name to a list of (type,argument name)
-port      -- port name
-p_start   -- the starting position of the statement to be removed
-             (after previous ';' or 0 if no previous ';')
-p_end     -- the ending positiion of the statement to be removed (after ';')
-inport_types -- data types of the port
-"""
 def remove_nonasgn_stmt(src,port2args,port,p_start, p_end, inport_types):
+    """
+    Remove the reading from port statement from src,
+    when the reading is not saved in any variable or used in any expression.
+    :param src:       string source code
+    :param port2args: map port name to a list of (type,argument name)
+    :param port:      port name
+    :param p_start:   the starting position of the statement to be removed
+                      (after previous ';' or 0 if no previous ';')
+    :param p_end:     the ending position of the statement to be removed (after ';')
+    :param inport_types: data types of the port
+    :return: updated code
+    """
     args = [t + ' ' + fresh_var_name() for t in inport_types]
     port2args[port] = args
     return src[:p_start] + src[p_end:]
-    
-"""Remove the reading from port expression from src, 
-and replace it with a fresh variable name.
 
-src       -- string source code
-port2args -- map port name to a list of (type,argument name)
-port      -- port name
-p_start   -- the starting position of the expression to be removed
-p_end     -- the ending positiion of the statement to be removed (after ')')
-inport_types -- data types of the port
-"""
+
 def remove_expr(src,port2args,port,p_start, p_end, inport_types):
+    """
+    Remove the reading from port expression from src, and replace it with a fresh variable name.
+    :param src:       string source code
+    :param port2args: map port name to a list of (type,argument name)
+    :param port:      port name
+    :param p_start:   the starting position of the expression to be removed
+    :param p_end:     the ending positiion of the statement to be removed (after ')')
+    :param inport_types: data types of the port
+    :return: updated code
+    """
     n = len(inport_types)
     if n > 1 or n == 0:
         raise Exception("Input port '%s' returns %d values. It cannot be used as an expression." % (port,n))
@@ -232,7 +239,15 @@ def get_element_port_avail(func, port):
     return "_%s_%s_avail" % (func, port)
 
 
-def generate_join_functions(funcname, inports):
+def generate_join_functions(ele_name, inports):
+    """
+    Generate a joining function for each input port if there are multiple input ports.
+    The joining function only call the main element function when all ports are available.
+
+    :param ele_name: name of an element
+    :param inports: a list of input ports
+    :return: code for joining functions
+    """
     n = len(inports)
     src = ""
     if n > 1:
@@ -240,7 +255,7 @@ def generate_join_functions(funcname, inports):
         clear = ""
         # Generate port available indicators.
         for port in inports:
-            avail = get_element_port_avail(funcname, port.name)
+            avail = get_element_port_avail(ele_name, port.name)
             src += "int %s = 0;\n" % avail
             avails.append(avail)
             clear += "    %s = 0;\n" % avail
@@ -250,7 +265,7 @@ def generate_join_functions(funcname, inports):
         for port in inports:
             argtypes = port.argtypes
             for i in range(len(argtypes)):
-                buffer = get_element_port_arg_name(funcname, port.name, i)
+                buffer = get_element_port_arg_name(ele_name, port.name, i)
                 src += "%s %s;\n" % (argtypes[i], buffer)
                 buffers.append(buffer)
 
@@ -259,7 +274,7 @@ def generate_join_functions(funcname, inports):
         all_buffers = ", ".join(buffers)
         invoke = "  if(%s) {\n" % all_avails
         invoke += clear
-        invoke += "    %s(%s);\n" % (funcname, all_buffers)
+        invoke += "    %s(%s);\n" % (ele_name, all_buffers)
         invoke += "  }\n"
 
         # Generate function for each input port.
@@ -274,12 +289,12 @@ def generate_join_functions(funcname, inports):
                 args.append("arg%d" % (i))
                 types_args.append("%s arg%d" % (argtypes[i], i))
 
-            src += "void %s_%s(%s) {\n" % (funcname, port.name, ",".join(types_args))
+            src += "void %s_%s(%s) {\n" % (ele_name, port.name, ",".join(types_args))
             # Runtime check.
             src += "  if(%s == 1) { printf(\"Join failed (overwriting some values).\\n\"); exit(-1); }\n" \
                    % avails[port_id]
             for i in range(len(argtypes)):
-                src += "  %s = %s;\n" % (get_element_port_arg_name(funcname, port.name, i), args[i])
+                src += "  %s = %s;\n" % (get_element_port_arg_name(ele_name, port.name, i), args[i])
             src += "  %s = 1;\n" % avails[port_id]
             src += invoke
             src += "}\n"
@@ -288,7 +303,11 @@ def generate_join_functions(funcname, inports):
     return src
 
 
-def generateCode(graph):
+def generate_code(graph):
+    """
+    Display C code to stdout
+    :param graph: data-flow graph
+    """
     # Generate states.
     for state in graph.states.values():
         generate_state(state)

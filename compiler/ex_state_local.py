@@ -11,4 +11,4 @@ e1 = Element("Sum",
 graph = Graph([e1])
 graph.defineInstance("Sum", "sum1")
 graph.defineInstance("Sum", "sum2")
-generateCode(graph)
+generate_code(graph)
