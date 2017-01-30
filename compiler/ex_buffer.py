@@ -1,4 +1,4 @@
-from ast import *
+from graph import *
 from compiler import *
 
 s = State("Buffer", "int x; int avail;", "0,0")
@@ -19,6 +19,6 @@ e2= Element("BlockingRead",
 
 graph = Graph([e1, e2], [s])
 graph.newStateInstance("Buffer", "s")
-graph.defineInstance("Write", "w", ["s"])
-graph.defineInstance("BlockingRead", "r", ["s"])
+graph.newElementInstance("Write", "w", ["s"])
+graph.newElementInstance("BlockingRead", "r", ["s"])
 generate_code(graph)

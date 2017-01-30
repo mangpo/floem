@@ -1,4 +1,4 @@
-from ast import *
+from graph import *
 from compiler import *
 from thread_allocation import *
 
@@ -12,8 +12,8 @@ e2 = Element("Comsumer",
              r'''printf("%d\n", in());''')
 
 graph = Graph([e1, e2])
-graph.defineInstance("Forwarder", "Forwarder")
-graph.defineInstance("Comsumer", "Comsumer")
+graph.newElementInstance("Forwarder", "Forwarder")
+graph.newElementInstance("Comsumer", "Comsumer")
 graph.connect("Forwarder", "Comsumer")
 
 allocator = ThreadAllocator(graph)

@@ -8,8 +8,11 @@ class Element:
         self.local_state = local_state
         self.state_params = state_params
 
+    def __str__(self):
+        return self.name
 
-class ElementInstance:
+
+class ElementNode:
     def __init__(self, name, element, state_args):
         self.name = name
         self.element = element
@@ -22,14 +25,16 @@ class ElementInstance:
         self.output2ele[port] = (f, fport)
 
     def __str__(self):
-        return self.element + "::" + self.name
+        return self.element.name + "::" + self.name + "[" + str(self.output2ele) + "]"
 
     def print_details(self):
         print "Element {"
         print "  type:", self.element.name, "| name:", self.name
-        print "  thread:", self.thread
+        if self.thread:
+            print "  thread:", self.thread
         print "  out-port:", self.output2ele
-        print "  mark:", self.output2connect
+        if len(self.output2connect.keys()) > 0:
+            print "  mark:", self.output2connect
         print "}"
 
 
@@ -37,6 +42,9 @@ class Port:
     def __init__(self, name, argtypes):
         self.name = name
         self.argtypes = argtypes
+
+    def __str__(self):
+        return self.name
 
 
 class State:
@@ -47,7 +55,7 @@ class State:
 
 
 class Graph:
-    def __init__(self, elements, states=[]):
+    def __init__(self, elements=[], states=[]):
         self.elements = {}
         self.instances = {}
         self.states = {}
@@ -57,6 +65,26 @@ class Graph:
         for s in states:
             self.states[s.name] = s
 
+        self.identity = {}
+
+    def __str__(self):
+        s = "Graph:\n"
+        # s += "  states: %s\n" % str(self.states)
+        s += "  states: %s\n" % str(self.state_instances.values())
+        # s += "  elements: %s\n" % str(self.elements)
+        # s += "  elements: %s\n" % [str(x) for x in self.instances.values()]
+        s += "  elements:\n"
+        for x in self.instances.values():
+            s += "    " + str(x) + "\n"
+        return s
+
+    def get_inport_argtypes(self, instance_name, port_name):
+        inports = self.instances[instance_name].element.inports
+        return [x for x in inports if x.name == port_name][0].argtypes
+
+    def get_outport_argtypes(self, instance_name, port_name):
+        outports = self.instances[instance_name].element.outports
+        return [x for x in outports if x.name == port_name][0].argtypes
 
     def addState(self,state):
         self.states[state.name] = state
@@ -68,9 +96,9 @@ class Graph:
         s = self.states[state]
         self.state_instances[name] = s
 
-    def defineInstance(self, element, name, state_args=[]):
+    def newElementInstance(self, element, name, state_args=[]):
         e = self.elements[element]
-        self.instances[name] = ElementInstance(name, e, state_args)
+        self.instances[name] = ElementNode(name, e, state_args)
 
         # Check state types
         if not (len(state_args) == len(e.state_params)):
@@ -123,3 +151,17 @@ class Graph:
                                 % (name1, name2))
 
         i1.connectPort(out1, i2.name, in2)
+
+    def get_identity_element(self, argtypes):
+        name = "_identity_" + "_".join(argtypes)
+
+        if name in self.identity:
+            return self.identity[name]
+
+        e = Element(name,
+                    [Port("in", argtypes)],
+                    [Port("out", argtypes)],
+                    r'''out(in());''') # TODO
+
+        self.identity[name] = e
+        return e

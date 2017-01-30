@@ -1,4 +1,4 @@
-from ast import *
+from graph import *
 from compiler import *
 
 
@@ -20,10 +20,10 @@ e4 = Element("Print",
              r'''printf("%d\n",in());''')
 
 graph = Graph([e1, e2, e3, e4])
-graph.defineInstance("Fork", "Fork")
-graph.defineInstance("Add", "Add")
-graph.defineInstance("Sub", "Sub")
-graph.defineInstance("Print", "Print")
+graph.newElementInstance("Fork", "Fork")
+graph.newElementInstance("Add", "Add")
+graph.newElementInstance("Sub", "Sub")
+graph.newElementInstance("Print", "Print")
 graph.connect("Fork", "Add", "to_add")
 graph.connect("Fork", "Sub", "to_sub")
 graph.connect("Add", "Print")

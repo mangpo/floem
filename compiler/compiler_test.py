@@ -1,5 +1,5 @@
 from compiler import element_to_function
-from ast import Element, Port
+from graph import Element, Port
 import unittest
 
 

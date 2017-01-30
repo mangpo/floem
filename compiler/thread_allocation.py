@@ -1,17 +1,18 @@
-from ast import *
+from graph import *
 
 
 class ThreadAllocator:
-    def __init__(self, graph):
-        self.threads_entry_point = set()
-        self.threads_api = set()
-        self.threads_internal = set()
+    def __init__(self, graph, threads_api, threads_internal):
+        self.threads_api = threads_api
+        self.threads_internal = threads_internal
+        self.threads_entry_point = threads_api.union(threads_internal)
         self.roots = set()
         self.joins = set()
 
         self.graph = graph
         self.instances = graph.instances
 
+    """
     def external_api(self, name):
         self.threads_api.add(name)
         self.threads_entry_point.add(name)
@@ -19,6 +20,7 @@ class ThreadAllocator:
     def internal_trigger(self, name):
         self.threads_internal.add(name)
         self.threads_entry_point.add(name)
+        """
 
     def print_threads_info(self):
         print "Roots:", self.roots
@@ -149,7 +151,7 @@ class ThreadAllocator:
         ele = Element(st_name+'_read', [Port("in", [])], [Port("out", buffers_types)],
                       invoke, None, [(st_name, "this")])
         self.graph.addElement(ele)
-        self.graph.defineInstance(ele.name, ele.name, ['_'+st_name])
+        self.graph.newElementInstance(ele.name, ele.name, ['_' + st_name])
         self.graph.connect(ele.name, instance.name, "out")
 
     def insert_buffer_write_element(self, instance):
@@ -189,7 +191,7 @@ class ThreadAllocator:
             ele = Element(ele_name, [Port("in", port.argtypes)], out_port,
                           src, None, [(st_name, "this")])
             self.graph.addElement(ele)
-            self.graph.defineInstance(ele.name, ele.name, ['_'+st_name])
+            self.graph.newElementInstance(ele.name, ele.name, ['_' + st_name])
             self.graph.connect(instance.name, ele.name, out)
 
             if connect:

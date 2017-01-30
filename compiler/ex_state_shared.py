@@ -1,4 +1,4 @@
-from ast import *
+from graph import *
 from compiler import *
 
 s = State("Shared", "int sum;", "100")
@@ -12,6 +12,6 @@ e1 = Element("Sum",
 
 graph = Graph([e1], [s])
 graph.newStateInstance("Shared", "s")
-graph.defineInstance("Sum", "sum1", ["s"])
-graph.defineInstance("Sum", "sum2", ["s"])
+graph.newElementInstance("Sum", "sum1", ["s"])
+graph.newElementInstance("Sum", "sum2", ["s"])
 generate_code(graph)

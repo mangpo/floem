@@ -1,4 +1,4 @@
-from ast import *
+from graph import *
 from compiler import *
 
 
@@ -9,6 +9,6 @@ e1 = Element("Sum",
              State("this", "int sum;", "100"))
 
 graph = Graph([e1])
-graph.defineInstance("Sum", "sum1")
-graph.defineInstance("Sum", "sum2")
+graph.newElementInstance("Sum", "sum1")
+graph.newElementInstance("Sum", "sum2")
 generate_code(graph)

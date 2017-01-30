@@ -1,3 +1,4 @@
+from program import *
 import re
 
 var_id = 0
@@ -302,6 +303,16 @@ def generate_join_functions(ele_name, inports):
     print src
     return src
 
+def generate_graph(program):
+    """
+    Compile program to data-flow graph and insert necessary elements for resource mapping and join elements.
+    :param program: program AST
+    :return: data-flow graph
+    """
+    gen = GraphGenerator()
+    gen.interpret(program)
+    gen.allocate_resources()
+    return gen.graph
 
 def generate_code(graph):
     """
