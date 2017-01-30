@@ -2,23 +2,35 @@ from compiler import *
 from thread_allocation import *
 
 p = Program(
+    State("Count", "int count;", "0"),
     Element("Identity",
-             [Port("in", ["int"])],
-             [Port("out", ["int"])],
-             r'''out(in());'''),
+            [Port("in", ["int"])],
+            [Port("out", ["int"])],
+            r'''local.count++; global.count++; out(in());''',
+            None,
+            [("Count", "local"), ("Count", "global")]
+            ),
     Composite("Unit",
               [Port("in", ("x1", "in"))],
               [Port("out", ("x2", "out"))],
-              [],
+              [("Count", "global")],
               Program(
-                  ElementInstance("Identity", "x1"),
-                  ElementInstance("Identity", "x2"),
-                  Connect("x1", "x2"),
-                  InternalThread("x2")
+                  StateInstance("Count", "local"),
+                  ElementInstance("Identity", "x1", ["local", "global"]),
+                  ElementInstance("Identity", "x2", ["local", "global"]),
+                  Connect("x1", "x2")
+                  #, InternalThread("x2")
               )),
-    CompositeInstance("Unit", "u1"),
-    CompositeInstance("Unit", "u2"),
-    Connect("u1", "u2")
+    StateInstance("Count", "c"),
+    Element("Print",
+            [Port("in", ["int"])],
+            [],
+            r'''printf("%d\n", in());'''),
+    CompositeInstance("Unit", "u1", ["c"]),
+    CompositeInstance("Unit", "u2", ["c"]),
+    ElementInstance("Print", "Print"),
+    Connect("u1", "u2"),
+    Connect("u2", "Print")
 )
 
 g = generate_graph(p)

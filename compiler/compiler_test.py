@@ -5,7 +5,9 @@ import unittest
 
 def test_element(e):
     element_to_function(e.code, e.name, e.inports,
-                        dict([(x.name, (x.name + '_func',None)) for x in e.outports]))
+                        dict([(x.name, (x.name + '_func',None)) for x in e.outports]),
+                        e.local_state, e.state_params)
+
 
 class TestElementToFunction(unittest.TestCase):
 
@@ -47,7 +49,6 @@ class TestElementToFunction(unittest.TestCase):
             self.assertTrue(s in str(e))
         else:
             self.fail('Exception is not raised.')
-        
 
     def test_arg_to_inport(self):
         e = Element("Print",
@@ -60,7 +61,7 @@ class TestElementToFunction(unittest.TestCase):
         e = Element("Print",
                     [Port("in", ["int"])],
                     [], 
-                    r'''float x = in();''')
+                    r'''(float x) = in();''')
         self.expect_exception(e,"Argument types mismatch")
 
     def test_no_value_in_expr(self):

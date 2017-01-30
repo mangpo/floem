@@ -79,7 +79,8 @@ class GraphGenerator:
         elif isinstance(x, State):
             self.graph.addState(x)
         elif isinstance(x, ElementInstance):
-            self.graph.newElementInstance(x.element, self.get_node_name(stack,x.name), x.args)
+            self.graph.newElementInstance(x.element, self.get_node_name(stack, x.name),
+                                          [self.get_node_name(stack, arg) for arg in x.args])
         elif isinstance(x, StateInstance):
             self.graph.newStateInstance(x.state, self.get_node_name(stack, x.name))
         elif isinstance(x, Connect):

@@ -53,6 +53,8 @@ class State:
         self.content = content
         self.init = init
 
+    def __str__(self):
+        return self.name
 
 class Graph:
     def __init__(self, elements=[], states=[]):
@@ -70,7 +72,7 @@ class Graph:
     def __str__(self):
         s = "Graph:\n"
         # s += "  states: %s\n" % str(self.states)
-        s += "  states: %s\n" % str(self.state_instances.values())
+        s += "  states: %s\n" % [str(self.state_instances[x]) + "::" + x for x in self.state_instances.keys()]
         # s += "  elements: %s\n" % str(self.elements)
         # s += "  elements: %s\n" % [str(x) for x in self.instances.values()]
         s += "  elements:\n"
