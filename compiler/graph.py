@@ -1,3 +1,11 @@
+import sys
+
+class UndefinedInstance(Exception):
+    pass
+
+class UndefinedPort(Exception):
+    pass
+
 class Element:
 
     def __init__(self, name, inports, outports, code, local_state=None, state_params=[]):
@@ -80,13 +88,26 @@ class Graph:
             s += "    " + str(x) + "\n"
         return s
 
+    def has_element_instance(self, instance_name):
+        return instance_name in self.instances
+
     def get_inport_argtypes(self, instance_name, port_name):
-        inports = self.instances[instance_name].element.inports
-        return [x for x in inports if x.name == port_name][0].argtypes
+        try:
+            inports = self.instances[instance_name].element.inports
+            return [x for x in inports if x.name == port_name][0].argtypes
+        except IndexError:
+            raise UndefinedPort()
+        except KeyError:
+            raise UndefinedInstance()
 
     def get_outport_argtypes(self, instance_name, port_name):
-        outports = self.instances[instance_name].element.outports
-        return [x for x in outports if x.name == port_name][0].argtypes
+        try:
+            outports = self.instances[instance_name].element.outports
+            return [x for x in outports if x.name == port_name][0].argtypes
+        except IndexError:
+            raise UndefinedPort()
+        except KeyError:
+            raise UndefinedInstance()
 
     def addState(self,state):
         self.states[state.name] = state
@@ -99,6 +120,8 @@ class Graph:
         self.state_instances[name] = s
 
     def newElementInstance(self, element, name, state_args=[]):
+        if not element in self.elements:
+            raise Exception("Element '%s' is undefined." % element)
         e = self.elements[element]
         self.instances[name] = ElementNode(name, e, state_args)
 
@@ -122,8 +145,8 @@ class Graph:
         out_argtypes = []
         if out1:
             assert (out1 in [x.name for x in e1.outports]), \
-                "Port '%s' is undefined. Aviable ports are %s." \
-                % (out1, [x.name for x in e1.outports])
+                "Port '%s' is undefined for element '%s'. Available ports are %s." \
+                % (out1, name1, [x.name for x in e1.outports])
             out_argtypes += [x for x in e1.outports if x.name == out1][0].argtypes
         else:
             assert (len(e1.outports) == 1)
@@ -133,8 +156,8 @@ class Graph:
         in_argtypes = []
         if in2:
             assert (in2 in [x.name for x in e2.inports]), \
-                "Port '%s' is undefined. Aviable ports are %s." \
-                % (in2, [x.name for x in e2.inports])
+                "Port '%s' is undefined for element '%s'. Available ports are %s." \
+                % (in2, name2, [x.name for x in e2.inports])
             in_argtypes += [x for x in e2.inports if x.name == in2][0].argtypes
         else:
             # assert (len(e2.inports) == 1)

@@ -18,7 +18,7 @@ p = Program(
                   StateInstance("Count", "local"),
                   ElementInstance("Identity", "x1", ["local", "global"]),
                   ElementInstance("Identity", "x2", ["local", "global"]),
-                  Connect("x1", "x2")
+                  Connect("x1", "x2") # error
                   #, InternalThread("x2")
               )),
     StateInstance("Count", "c"),
