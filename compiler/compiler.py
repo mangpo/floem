@@ -303,7 +303,7 @@ def generate_join_functions(ele_name, inports):
     print src
     return src
 
-def generate_graph(program):
+def generate_graph(program, resource=True):
     """
     Compile program to data-flow graph and insert necessary elements for resource mapping and join elements.
     :param program: program AST
@@ -311,7 +311,8 @@ def generate_graph(program):
     """
     gen = GraphGenerator()
     gen.interpret(program)
-    gen.allocate_resources()
+    if resource:
+        gen.allocate_resources()
     return gen.graph
 
 def generate_code(graph):

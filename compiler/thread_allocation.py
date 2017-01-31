@@ -30,7 +30,7 @@ class ThreadAllocator:
     def transform(self):
         self.assign_threads()
         self.insert_threading_elements()
-        self.print_threads_info()
+        # self.print_threads_info()
 
     def find_roots(self):
         """
