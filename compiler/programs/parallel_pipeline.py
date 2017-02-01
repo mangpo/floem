@@ -13,8 +13,8 @@ p = Program(
     ElementInstance("Forwarder", "Forwarder"),
     ElementInstance("Comsumer", "Comsumer"),
     Connect("Forwarder", "Comsumer")
-    , ExternalAPI("Forwarder")
-    , InternalThread("Comsumer")
+    , ExternalTrigger("Forwarder")
+    , InternalTrigger("Comsumer")
 )
 
 g = generate_graph(p)

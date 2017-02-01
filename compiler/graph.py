@@ -117,6 +117,7 @@ class Graph:
             self.states[s.name] = s
 
         self.identity = {}
+        self.APIcode = None
 
     def __str__(self):
         s = "Graph:\n"
@@ -151,10 +152,13 @@ class Graph:
             raise UndefinedInstance()
 
     def addState(self,state):
-        if state.name in self.elements:
-            raise RedefineError("Element '%s' is already defined." % state.name)
+        if state.name in self.states:
+            if not self.states[state.name] == state:
+                raise RedefineError("State '%s' is already defined." % state.name)
+            return False
         else:
             self.states[state.name] = state
+            return True
 
     def addElement(self,element):
         if element.name in self.elements:

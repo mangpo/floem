@@ -44,14 +44,35 @@ class CompositeInstance:
         self.args = args
 
 
-class InternalThread:
+class InternalTrigger:
     def __init__(self, name):
         self.element_instance = name
 
 
-class ExternalAPI:
+class ExternalTrigger:
     def __init__(self, name):
         self.element_instance = name
+
+
+def get_node_name(stack, name):
+    if len(stack) > 0:
+        return "_" + "_".join(stack) + "_" + name
+    else:
+        return name
+
+
+class APIFunction:
+    def __init__(self, name, call_instance, call_port, return_instance, return_port, state_name = None):
+        self.name = name
+        self.call_instance = call_instance
+        self.call_port = call_port
+        self.return_instance = return_instance
+        self.return_port = return_port
+        self.state_name = state_name
+
+    def set_stack(self, stack):
+        self.call_instance = get_node_name(stack, self.call_instance)
+        self.return_instance = get_node_name(stack, self.return_instance)
 
 
 class GraphGenerator:
@@ -63,13 +84,8 @@ class GraphGenerator:
 
         self.threads_api = set()
         self.threads_internal = set()
+        self.APIs = []
 
-    @staticmethod
-    def get_node_name(stack, name):
-        if len(stack) > 0:
-            return "_" + "_".join(stack) + "_" + name
-        else:
-            return name
 
     def check_composite_port(self, composite_name, port_name, port_value):
         if not len(port_value) == 2:
@@ -127,10 +143,10 @@ class GraphGenerator:
             self.graph.addState(x)
         elif isinstance(x, ElementInstance):
             self.env[x.name] = "element"
-            self.graph.newElementInstance(x.element, self.get_node_name(stack, x.name),
+            self.graph.newElementInstance(x.element, get_node_name(stack, x.name),
                                           [self.get_state_name(arg) for arg in x.args])
         elif isinstance(x, StateInstance):
-            new_name = self.get_node_name(stack, x.name)
+            new_name = get_node_name(stack, x.name)
             self.put_state(x.name, x.state, new_name)
             self.graph.newStateInstance(x.state, new_name)
         elif isinstance(x, Connect):
@@ -140,17 +156,20 @@ class GraphGenerator:
         elif isinstance(x, CompositeInstance):
             self.interpret_CompositeInstance(x, stack)
             self.env[x.name] = "composite"
-        elif isinstance(x, InternalThread):
-            self.threads_internal.add(self.get_node_name(stack, x.element_instance))
-        elif isinstance(x, ExternalAPI):
-            self.threads_api.add(self.get_node_name(stack, x.element_instance))
+        elif isinstance(x, InternalTrigger):
+            self.threads_internal.add(get_node_name(stack, x.element_instance))
+        elif isinstance(x, ExternalTrigger):
+            self.threads_api.add(get_node_name(stack, x.element_instance))
+        elif isinstance(x, APIFunction):
+            x.set_stack(stack)
+            self.APIs.append(x)
         else:
             raise Exception("GraphGenerator: unimplemented for %s." % x)
 
     def interpret_Connect(self, x, stack):
         (name1, out1) = self.adjust_name(x.ele1, x.out1, "output")
         (name2, in2) = self.adjust_name(x.ele2, x.in2, "input")
-        self.graph.connect(self.get_node_name(stack, name1), self.get_node_name(stack, name2), out1, in2)
+        self.graph.connect(get_node_name(stack, name1), get_node_name(stack, name2), out1, in2)
 
     def adjust_name(self, ele_name, port_name, type):
         if ele_name in self.composite_instances:
@@ -197,12 +216,12 @@ class GraphGenerator:
             if is_composite:  # Composite
                 internal_name = internal_name + "_" + internal_port
                 internal_port = "in"
-            internal_name = self.get_node_name(new_stack, internal_name)
+            internal_name = get_node_name(new_stack, internal_name)
 
             try:
                 argtypes = self.graph.get_inport_argtypes(internal_name, internal_port) # TODO: better error message
                 ele = self.graph.get_identity_element(argtypes)
-                instance_name = self.get_node_name(stack, x.name + "_" + portname)
+                instance_name = get_node_name(stack, x.name + "_" + portname)
                 self.graph.addElement(ele)
                 self.graph.newElementInstance(ele.name, instance_name)
                 self.graph.connect(instance_name, internal_name, None, internal_port)
@@ -227,12 +246,12 @@ class GraphGenerator:
             if is_composite:  # Composite
                 internal_name = internal_name + "_" + internal_port
                 internal_port = "out"
-            internal_name = self.get_node_name(new_stack, internal_name)
+            internal_name = get_node_name(new_stack, internal_name)
 
             try:
                 argtypes = self.graph.get_outport_argtypes(internal_name, internal_port) # TODO: better error message
                 ele = self.graph.get_identity_element(argtypes)
-                instance_name = self.get_node_name(stack, x.name + "_" + portname)
+                instance_name = get_node_name(stack, x.name + "_" + portname)
                 self.graph.addElement(ele)
                 self.graph.newElementInstance(ele.name, instance_name)
                 self.graph.connect(internal_name, instance_name, internal_port, None)
@@ -254,5 +273,6 @@ class GraphGenerator:
         """
         Insert necessary elements for resource mapping and join elements. This method mutates self.graph
         """
-        t = ThreadAllocator(self.graph, self.threads_api, self.threads_internal)
+        t = ThreadAllocator(self.graph, self.threads_api, self.threads_internal, self.APIs)
         t.transform()
+        self.graph.APIcode = t.APIcode

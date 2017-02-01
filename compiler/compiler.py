@@ -309,9 +309,12 @@ def generate_graph(program, resource=True):
     :param program: program AST
     :return: data-flow graph
     """
+    # Generate data-flow graph.
     gen = GraphGenerator()
     gen.interpret(program)
     gen.graph.check_input_ports()
+
+    # Insert necessary elements for resource mapping and join elements.
     if resource:
         gen.allocate_resources()
     return gen.graph
@@ -347,3 +350,7 @@ def generate_code(graph):
         for i in range(len(instance.state_args)):
             state_rename.append((e.state_params[i][1],instance.state_args[i]))
         element_to_function(e.code, name, e.inports, instance.output2ele, e.local_state, state_rename)
+
+    for code in graph.APIcode.values():
+        print code
+

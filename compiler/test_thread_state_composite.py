@@ -40,8 +40,8 @@ class TestThreadStateComposite(unittest.TestCase):
             ElementInstance("Forwarder", "Forwarder"),
             ElementInstance("Comsumer", "Comsumer"),
             Connect("Forwarder", "Comsumer")
-            , ExternalAPI("Forwarder")
-            , InternalThread("Comsumer")
+            , ExternalTrigger("Forwarder")
+            , InternalTrigger("Comsumer")
         )
 
         g1 = generate_graph(p, False)
@@ -121,7 +121,7 @@ class TestThreadStateComposite(unittest.TestCase):
             Connect("Fork", "Sub", "to_sub"),
             Connect("Add", "Print", "out", "in1"),
             Connect("Sub", "Print", "out", "in2"),
-            InternalThread("Print")
+            InternalTrigger("Print")
         )
 
         g = generate_graph(p, True)
@@ -159,7 +159,7 @@ class TestThreadStateComposite(unittest.TestCase):
             Connect("Fork", "Sub", "to_sub"),
             Connect("Add", "Print", "out", "in1"),
             Connect("Sub", "Print", "out", "in2"),
-            InternalThread("Sub")
+            InternalTrigger("Sub")
         )
 
         g = generate_graph(p, True)
@@ -255,7 +255,7 @@ class TestThreadStateComposite(unittest.TestCase):
             Connect("Fork", "Sub", "to_sub"),
             Connect("Add", "Print", "out", "in1"),
             Connect("Sub", "Print", "out", "in2")
-            , InternalThread("Sub")
+            , InternalTrigger("Sub")
         )
 
         g = generate_graph(p, True)
@@ -383,7 +383,7 @@ class TestThreadStateComposite(unittest.TestCase):
                           ElementInstance("Forwarder", "f1"),
                           ElementInstance("Forwarder", "f2"),
                           Connect("f1", "f2"),
-                          InternalThread("f2")
+                          InternalTrigger("f2")
                       )),
             CompositeInstance("Unit", "u1"),
             CompositeInstance("Unit", "u2"),
@@ -424,7 +424,7 @@ class TestThreadStateComposite(unittest.TestCase):
             ElementInstance("Forwarder", "f3"),
             Connect("f1", "f3"),
             Connect("f2", "f3"),
-            InternalThread("f3")
+            InternalTrigger("f3")
         )
         g = generate_graph(p)
         self.assertEqual(5, len(g.instances))
