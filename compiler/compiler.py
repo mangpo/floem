@@ -324,6 +324,10 @@ def generate_code(graph):
     Display C code to stdout
     :param graph: data-flow graph
     """
+    src = "#include <stdio.h>\n"
+    src += "#include <stdlib.h>\n"
+    print src
+
     # Generate states.
     for state in graph.states.values():
         generate_state(state)

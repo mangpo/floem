@@ -104,11 +104,15 @@ class ThreadAllocator:
                     raise TypeError(
                         "API '%s' -- call element instance '%s' takes ports %s as arguments. The given argument ports are %s."
                     % (api.name, api.call_instance, port_names, api.call_port))
-            elif api.call_instance in self.threads_entry_point:
+            elif api.call_instance in self.threads_api:
                 if not api.call_port == []:
                     raise TypeError(
                         "API '%s' -- call element instance '%s' takes no arguments. The given argument ports are %s."
-                    % (api.nae, api.call_instance, api.call_port))
+                    % (api.name, api.call_instance, api.call_port))
+            else:
+                raise TypeError(
+                    "API '%s' -- call element instance '%s' is not marked as external trigger."
+                    % (api.name, api.call_instance))
 
             # Return
             instance = self.instances[api.return_instance]
@@ -302,12 +306,12 @@ class ThreadAllocator:
                         src = "  (%s) = in();" % ",".join(types_buffers)
                         # Only check if it's the first port.
                         if port_id == 0:
-                            src += "  if(%s == 1) { printf(\"Join failed (overwriting some values).\\n\"); exit(-1); }\n" \
+                            src += "  if(this.%s == 1) { printf(\"Join failed (overwriting some values).\\n\"); exit(-1); }\n" \
                                    % avail
                         for i in range(len(port.argtypes)):
                             buffer = buffers[i]
                             src += "  this.%s = %s;\n" % (buffer, buffer)
-                        src += "  %s = 1;\n" % avail
+                        src += "  this.%s = 1;\n" % avail
 
                         # Create element
                         ele_name = st_instance_name + '_' + port.name + "_write"
