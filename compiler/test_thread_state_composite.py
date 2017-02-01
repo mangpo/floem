@@ -27,7 +27,6 @@ class TestThreadStateComposite(unittest.TestCase):
                 self.find_subgraph(g, ele, subgraph)
         return subgraph
 
-
     def test_pipeline(self):
         p = Program(
             Element("Forwarder",
@@ -57,14 +56,12 @@ class TestThreadStateComposite(unittest.TestCase):
         self.assertEqual(set(["Forwarder"]), root1)
         self.assertEqual(set(["Forwarder", "_buffer_Comsumer_read"]), root2)
 
-        for root in root2:
-            subgraph = self.find_subgraph(g2, root, set())
-            if root == "Forwarder":
-                self.assertEqual(set(["Forwarder", "_buffer_Comsumer_in_write"]), subgraph)
-            else:
-                self.assertEqual(set(["_buffer_Comsumer_read", "Comsumer"]), subgraph)
+        self.assertEqual(set(["Forwarder", "_buffer_Comsumer_in_write"]),
+                         self.find_subgraph(g2, "Forwarder", set()))
+        self.assertEqual(set(["_buffer_Comsumer_read", "Comsumer"]),
+                         self.find_subgraph(g2, "_buffer_Comsumer_read", set()))
 
-    def test_join(self):
+    def test_fork_join(self):
         p = Program(
             Element("Fork",
                     [Port("in", ["int", "int"])],
@@ -97,6 +94,140 @@ class TestThreadStateComposite(unittest.TestCase):
         self.assertEqual(7, len(g.instances))
         roots = self.find_roots(g)
         self.assertEqual(set(["Fork"]), roots)
+
+    def test_fork_join_thread1(self):
+        p = Program(
+            Element("Fork",
+                    [Port("in", ["int", "int"])],
+                    [Port("to_add", ["int", "int"]), Port("to_sub", ["int", "int"])],
+                    r'''(int x, int y) = in(); to_add(x,y); to_sub(x,y);'''),
+            Element("Add",
+                    [Port("in", ["int", "int"])],
+                    [Port("out", ["int"])],
+                    r'''(int x, int y) = in(); out(x+y);'''),
+            Element("Sub",
+                    [Port("in", ["int", "int"])],
+                    [Port("out", ["int"])],
+                    r'''(int x, int y) = in(); out(x-y);'''),
+            Element("Print",
+                    [Port("in1", ["int"]), Port("in2", ["int"])],
+                    [],
+                    r'''printf("%d %d\n",in1(), in2());'''),
+            ElementInstance("Fork", "Fork"),
+            ElementInstance("Add", "Add"),
+            ElementInstance("Sub", "Sub"),
+            ElementInstance("Print", "Print"),
+            Connect("Fork", "Add", "to_add"),
+            Connect("Fork", "Sub", "to_sub"),
+            Connect("Add", "Print", "out", "in1"),
+            Connect("Sub", "Print", "out", "in2"),
+            InternalThread("Print")
+        )
+
+        g = generate_graph(p, True)
+        self.assertEqual(7, len(g.instances))
+        roots = self.find_roots(g)
+        self.assertEqual(set(['Fork', '_buffer_Print_read']), roots)
+        self.assertEqual(set(['Fork', 'Add', '_buffer_Print_in1_write', 'Sub', '_buffer_Print_in2_write']),
+                         self.find_subgraph(g, 'Fork', set()))
+        self.assertEqual(set(['_buffer_Print_read', 'Print']),
+                         self.find_subgraph(g, '_buffer_Print_read', set()))
+
+    def test_fork_join_thread2(self):
+        p = Program(
+            Element("Fork",
+                    [Port("in", ["int", "int"])],
+                    [Port("to_add", ["int", "int"]), Port("to_sub", ["int", "int"])],
+                    r'''(int x, int y) = in(); to_add(x,y); to_sub(x,y);'''),
+            Element("Add",
+                    [Port("in", ["int", "int"])],
+                    [Port("out", ["int"])],
+                    r'''(int x, int y) = in(); out(x+y);'''),
+            Element("Sub",
+                    [Port("in", ["int", "int"])],
+                    [Port("out", ["int"])],
+                    r'''(int x, int y) = in(); out(x-y);'''),
+            Element("Print",
+                    [Port("in1", ["int"]), Port("in2", ["int"])],
+                    [],
+                    r'''printf("%d %d\n",in1(), in2());'''),
+            ElementInstance("Fork", "Fork"),
+            ElementInstance("Add", "Add"),
+            ElementInstance("Sub", "Sub"),
+            ElementInstance("Print", "Print"),
+            Connect("Fork", "Add", "to_add"),
+            Connect("Fork", "Sub", "to_sub"),
+            Connect("Add", "Print", "out", "in1"),
+            Connect("Sub", "Print", "out", "in2"),
+            InternalThread("Sub")
+        )
+
+        g = generate_graph(p, True)
+        self.assertEqual(9, len(g.instances))
+        roots = self.find_roots(g)
+        self.assertEqual(set(['Fork', '_buffer_Sub_read']), roots)
+        self.assertEqual(6, len(self.find_subgraph(g, 'Fork', set())))
+        self.assertEqual(3, len(self.find_subgraph(g, '_buffer_Sub_read', set())))
+
+    def test_fork_join_half(self):
+        p = Program(
+            Element("Forwarder",
+                    [Port("in", ["int"])],
+                    [Port("out", ["int"])],
+                    r'''out(in());'''),
+            Element("Print",
+                    [Port("in1", ["int"]), Port("in2", ["int"])],
+                    [],
+                    r'''printf("%d %d\n",in1(), in2());'''),
+            ElementInstance("Forwarder", "f1"),
+            ElementInstance("Forwarder", "f2"),
+            ElementInstance("Print", "Print"),
+            Connect("f1", "Print", "out", "in1"),
+            Connect("f2", "Print", "out", "in2")
+        )
+
+        g = generate_graph(p, True)
+        self.assertEqual(6, len(g.instances))
+        roots = self.find_roots(g)
+        self.assertEqual(set(["f1", "f2"]), roots)
+        f1_set = self.find_subgraph(g, "f1", set())
+        f2_set = self.find_subgraph(g, "f2", set())
+        self.assertTrue((("Print" in f1_set) and ("Print" not in f2_set))
+                        or (("Print" in f2_set) and ("Print" not in f1_set)))
+
+    def test_join_only(self):
+        p = Program(
+            Element("Print",
+                    [Port("in1", ["int"]), Port("in2", ["int"])],
+                    [],
+                    r'''printf("%d %d\n",in1(), in2());'''),
+            ElementInstance("Print", "Print")
+        )
+
+        g = generate_graph(p, True)
+        self.assertEqual(1, len(g.instances))
+
+    def test_join_only_composite(self):
+        p = Program(
+            Element("Print",
+                    [Port("in1", ["int"]), Port("in2", ["int"])],
+                    [],
+                    r'''printf("%d %d\n",in1(), in2());'''),
+            Composite("Unit", [Port("in1", ("Print", "in1")), Port("in2", ("Print", "in2"))], [], [],
+                      Program(
+                          ElementInstance("Print", "Print")
+                      )),
+            CompositeInstance("Unit", "u1")
+        )
+
+        g = generate_graph(p, True)
+        self.assertEqual(6, len(g.instances))
+        roots = self.find_roots(g)
+        self.assertEqual(set(["u1_in1", "u1_in2"]), roots)
+        f1_set = self.find_subgraph(g, "u1_in1", set())
+        f2_set = self.find_subgraph(g, "u1_in2", set())
+        self.assertTrue((("_u1_Print" in f1_set) and ("_u1_Print" not in f2_set))
+                        or (("_u1_Print" in f2_set) and ("_u1_Print" not in f1_set)))
 
     def test_join_with_threads(self):
         p = Program(
@@ -247,21 +378,61 @@ class TestThreadStateComposite(unittest.TestCase):
                     [Port("in", ["int"])],
                     [Port("out", ["int"])],
                     r'''out(in());'''),
-            Element("Comsumer",
-                    [Port("in", ["int"])],
-                    [],
-                    r'''printf("%d\n", in());'''),
-            Composite("Unit", [Port("in", ("Forwarder", "in"))], [Port("out", ("Comsumer", "out"))], [],
+            Composite("Unit", [Port("in", ("f1", "in"))], [Port("out", ("f2", "out"))], [],
                       Program(
-                          ElementInstance("Forwarder", "Forwarder"),
-                          ElementInstance("Comsumer", "Comsumer"),
-                          Connect("Forwarder", "Comsumer"),
-                          InternalThread("Comsumer")
+                          ElementInstance("Forwarder", "f1"),
+                          ElementInstance("Forwarder", "f2"),
+                          Connect("f1", "f2"),
+                          InternalThread("f2")
                       )),
             CompositeInstance("Unit", "u1"),
             CompositeInstance("Unit", "u2"),
             Connect("u1", "u2")
         )
+        g = generate_graph(p, True)
+        self.assertEqual(12, len(g.instances))
+        roots = self.find_roots(g)
+        self.assertEqual(set(['u1_in', '_buffer__u1_f2_read', '_buffer__u2_f2_read']), roots)
+
+    def test_nonconflict_input(self):
+        p = Program(
+            Element("Forwarder",
+                    [Port("in", ["int"])],
+                    [Port("out", ["int"])],
+                    r'''out(in());'''),
+            ElementInstance("Forwarder", "f1"),
+            ElementInstance("Forwarder", "f2"),
+            ElementInstance("Forwarder", "f3"),
+            Connect("f1", "f3"),
+            Connect("f2", "f3"),
+        )
+        g = generate_graph(p)
+        self.assertEqual(3, len(g.instances))
+        roots = self.find_roots(g)
+        self.assertEqual(set(['f1', 'f2']), roots)
+        self.assertEqual(set(['f1', 'f3']), self.find_subgraph(g, 'f1', set()))
+        self.assertEqual(set(['f2', 'f3']), self.find_subgraph(g, 'f2', set()))
+
+    def test_nonconflict_input_thread(self):
+        p = Program(
+            Element("Forwarder",
+                    [Port("in", ["int"])],
+                    [Port("out", ["int"])],
+                    r'''out(in());'''),
+            ElementInstance("Forwarder", "f1"),
+            ElementInstance("Forwarder", "f2"),
+            ElementInstance("Forwarder", "f3"),
+            Connect("f1", "f3"),
+            Connect("f2", "f3"),
+            InternalThread("f3")
+        )
+        g = generate_graph(p)
+        self.assertEqual(5, len(g.instances))
+        roots = self.find_roots(g)
+        self.assertEqual(set(['f1', 'f2', '_buffer_f3_read']), roots)
+        self.assertEqual(set(['f1', '_buffer_f3_in_write']), self.find_subgraph(g, 'f1', set()))
+        self.assertEqual(set(['f2', '_buffer_f3_in_write']), self.find_subgraph(g, 'f2', set()))
+        self.assertEqual(set(['_buffer_f3_read', 'f3']), self.find_subgraph(g, '_buffer_f3_read', set()))
 
 if __name__ == '__main__':
     unittest.main()

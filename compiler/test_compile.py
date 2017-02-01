@@ -86,5 +86,62 @@ class TestCompile(unittest.TestCase):
         else:
             self.fail('Exception is not raised.')
 
+    def test_conflict_output(self):
+        p = Program(
+            Element("Forwarder",
+                    [Port("in", ["int"])],
+                    [Port("out", ["int"])],
+                    r'''out(in());'''),
+            ElementInstance("Forwarder", "f1"),
+            ElementInstance("Forwarder", "f2"),
+            ElementInstance("Forwarder", "f3"),
+            Connect("f1", "f2"),
+            Connect("f1", "f3"),
+        )
+        try:
+            g = generate_graph(p)
+        except Exception as e:
+            self.assertNotEqual(e.message.find("The output port 'out' of element instance 'f1' cannot be connected to both"), -1)
+        else:
+            self.fail('Exception is not raised.')
+
+    def test_conflict_input(self):
+        p = Program(
+            Element("Fork",
+                    [Port("in", ["int", "int"])],
+                    [Port("to_add", ["int", "int"]), Port("to_sub", ["int", "int"])],
+                    r'''(int x, int y) = in(); to_add(x,y); to_sub(x,y);'''),
+            Element("Add",
+                    [Port("in", ["int", "int"])],
+                    [Port("out", ["int"])],
+                    r'''(int x, int y) = in(); out(x+y);'''),
+            Element("Sub",
+                    [Port("in", ["int", "int"])],
+                    [Port("out", ["int"])],
+                    r'''(int x, int y) = in(); out(x-y);'''),
+            Element("Print",
+                    [Port("in1", ["int"]), Port("in2", ["int"])],
+                    [],
+                    r'''printf("%d %d\n",in1(), in2());'''),
+            ElementInstance("Fork", "Fork"),
+            ElementInstance("Add", "Add"),
+            ElementInstance("Sub", "Sub"),
+            ElementInstance("Print", "Print"),
+            Connect("Fork", "Add", "to_add"),
+            Connect("Fork", "Sub", "to_sub"),
+            Connect("Add", "Print", "out", "in1"),
+            Connect("Sub", "Print", "out", "in2"),
+            ElementInstance("Sub", "extra"),
+            Connect("extra", "Print", "out", "in2")
+        )
+
+        try:
+            g = generate_graph(p)
+        except Exception as e:
+            self.assertNotEqual(e.message.find("The input port 'in2' of element instance 'Print' cannot be connected to multiple"), -1)
+        else:
+            self.fail('Exception is not raised.')
+
+
 if __name__ == '__main__':
     unittest.main()

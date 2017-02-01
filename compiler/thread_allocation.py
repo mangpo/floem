@@ -29,8 +29,8 @@ class ThreadAllocator:
 
     def transform(self):
         self.assign_threads()
+        #self.print_threads_info()
         self.insert_threading_elements()
-        # self.print_threads_info()
 
     def find_roots(self):
         """
@@ -62,11 +62,11 @@ class ThreadAllocator:
         for (instance,out) in last.values():
             instance.output2connect[out] = "connect"
 
-    def assign_thread_dfs(self, instance, roots, name, last):
+    def assign_thread_dfs(self, instance, entry_points, name, last):
         """Traverse the graph in DFS fashion to assign threads.
 
         :param instance: current element instance
-        :param roots: a set of thread entry elements
+        :param entry_points: a set of thread entry elements
         :param name: current thread
         :param last: a map to decide where to marl "connect"
         :return:
@@ -74,20 +74,20 @@ class ThreadAllocator:
         if instance.thread is None:
             if len(instance.element.inports) > 1:
                 self.joins.add(instance.name)
-            if instance.name in roots:
+            if instance.name in entry_points:
                 name = instance.name
             instance.thread = name
             for out in instance.output2ele:
                 (next, port) = instance.output2ele[out]
                 next = self.instances[next]
-                self.assign_thread_dfs(next, roots, name, last)
+                self.assign_thread_dfs(next, entry_points, name, last)
                 # Mark "save" because it connects to a join element.
                 if len(next.element.inports) > 1:
                     instance.output2connect[out] = "save"
                     if next.thread == instance.thread:
                         last[next.name] = (instance,out)  # Potential port to mark "connect"
                 # Mark "save" because it connects to an element with a different thread.
-                if not(next.thread == instance.thread):
+                if next.name in entry_points:
                     instance.output2connect[out] = "save"
 
     def insert_threading_elements(self):
@@ -152,7 +152,7 @@ class ThreadAllocator:
                       invoke, None, [(st_name, "this")])
         self.graph.addElement(ele)
         self.graph.newElementInstance(ele.name, ele.name, ['_' + st_name])
-        self.graph.connect(ele.name, instance.name, "out")
+        self.graph.connect(ele.name, instance.name, "out", None, True)
 
     def insert_buffer_write_element(self, instance):
         for out in instance.output2connect:
@@ -190,9 +190,10 @@ class ThreadAllocator:
             ele_name = st_name + '_' + next_port + "_write"
             ele = Element(ele_name, [Port("in", port.argtypes)], out_port,
                           src, None, [(st_name, "this")])
-            self.graph.addElement(ele)
-            self.graph.newElementInstance(ele.name, ele.name, ['_' + st_name])
-            self.graph.connect(instance.name, ele.name, out)
+            define = self.graph.addElement(ele)
+            if define:
+                self.graph.newElementInstance(ele.name, ele.name, ['_' + st_name])
+            self.graph.connect(instance.name, ele.name, out, None, True)
 
             if connect:
-                self.graph.connect(ele.name, st_name+'_read')
+                self.graph.connect(ele_name, st_name+'_read')

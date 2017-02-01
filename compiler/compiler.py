@@ -311,6 +311,7 @@ def generate_graph(program, resource=True):
     """
     gen = GraphGenerator()
     gen.interpret(program)
+    gen.graph.check_input_ports()
     if resource:
         gen.allocate_resources()
     return gen.graph

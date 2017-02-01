@@ -6,6 +6,12 @@ class UndefinedInstance(Exception):
 class UndefinedPort(Exception):
     pass
 
+class ConflictConnection(Exception):
+    pass
+
+class RedefineError(Exception):
+    pass
+
 class Element:
 
     def __init__(self, name, inports, outports, code, local_state=None, state_params=[]):
@@ -19,21 +25,47 @@ class Element:
     def __str__(self):
         return self.name
 
+    def __eq__(self, other):
+        return (self.__class__ == other.__class__ and self.name == other.name and
+                self.inports == other.inports and self.outports == other.outports and self.code == other.code and
+                self.local_state == other.local_state and self.state_params == other.state_params)
+
 
 class ElementNode:
     def __init__(self, name, element, state_args):
         self.name = name
         self.element = element
         self.output2ele = {}   # map output port name to (element name, port)
+        self.input2ele = {}    # map input port name to (element name, port)
         self.output2connect = {}
         self.state_args = state_args
         self.thread = None
 
-    def connectPort(self, port, f, fport):
-        self.output2ele[port] = (f, fport)
-
     def __str__(self):
         return self.element.name + "::" + self.name + "[" + str(self.output2ele) + "]"
+
+    def connect_output_port(self, port, f, fport, overwrite):
+        if (not overwrite) and (port in self.output2ele):
+            raise ConflictConnection(
+                "The output port '%s' of element instance '%s' cannot be connected to both element instances '%s' and '%s'."
+                % (port, self.name, self.output2ele[port][0], f))
+        self.output2ele[port] = (f, fport)
+
+    def connect_input_port(self, port, f, fport, overwrite):
+        if not overwrite:
+            if port in self.input2ele:
+                self.input2ele[port].append((f, fport))
+            else:
+                self.input2ele[port] = [(f, fport)]
+
+    def check_input_ports(self):
+        if len(self.input2ele) > 1:
+            for port in self.input2ele:
+                port_list = self.input2ele[port]
+                if len(port_list) > 1:
+                    raise ConflictConnection(
+                        "The input port '%s' of element instance '%s' cannot be connected to multiple element instances %s because '%s' is a join element."
+                        % (port, self.name, [x[0] for x in port_list], self.name))
 
     def print_details(self):
         print "Element {"
@@ -46,6 +78,7 @@ class ElementNode:
         print "}"
 
 
+
 class Port:
     def __init__(self, name, argtypes):
         self.name = name
@@ -53,6 +86,10 @@ class Port:
 
     def __str__(self):
         return self.name
+
+    def __eq__(self, other):
+        #print "Port.eq", self, other, (self.__class__ == other.__class__ and self.name == other.name and self.argtypes == other.argtypes)
+        return self.__class__ == other.__class__ and self.name == other.name and self.argtypes == other.argtypes
 
 
 class State:
@@ -63,6 +100,10 @@ class State:
 
     def __str__(self):
         return self.name
+
+    def __eq__(self, other):
+        return (self.__class__ == other.__class__ and
+                self.name == other.name and self.content == other.content and self.init == other.init)
 
 class Graph:
     def __init__(self, elements=[], states=[]):
@@ -110,10 +151,19 @@ class Graph:
             raise UndefinedInstance()
 
     def addState(self,state):
-        self.states[state.name] = state
+        if state.name in self.elements:
+            raise RedefineError("Element '%s' is already defined." % state.name)
+        else:
+            self.states[state.name] = state
 
     def addElement(self,element):
-        self.elements[element.name] = element
+        if element.name in self.elements:
+            if not self.elements[element.name] == element:
+                raise RedefineError("Element '%s' is already defined." % element.name)
+            return False
+        else:
+            self.elements[element.name] = element
+            return True
 
     def newStateInstance(self, state, name):
         s = self.states[state]
@@ -136,7 +186,7 @@ class Graph:
             if not (state.name == type):
                 raise Exception("Element '%s' expects state '%s'. State '%s' is given." % (e.name, type, state.name))
 
-    def connect(self, name1, name2, out1=None, in2=None):
+    def connect(self, name1, name2, out1=None, in2=None, overwrite=False):
         i1 = self.instances[name1]
         i2 = self.instances[name2]
         e1 = i1.element
@@ -175,7 +225,8 @@ class Graph:
                 raise Exception("Mismatched ports -- output port of element '%s' and input port of element '%s'"
                                 % (name1, name2))
 
-        i1.connectPort(out1, i2.name, in2)
+        i1.connect_output_port(out1, i2.name, in2, overwrite)
+        i2.connect_input_port(in2, i1.name, out1, overwrite)
 
     def get_identity_element(self, argtypes):
         name = "_identity_" + "_".join(argtypes)
@@ -190,3 +241,7 @@ class Graph:
 
         self.identity[name] = e
         return e
+
+    def check_input_ports(self):
+        for instance in self.instances.values():
+            instance.check_input_ports()

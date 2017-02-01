@@ -229,12 +229,24 @@ class GraphGenerator:
                 internal_port = "out"
             internal_name = self.get_node_name(new_stack, internal_name)
 
-            argtypes = self.graph.get_outport_argtypes(internal_name, internal_port) # TODO: better error message
-            ele = self.graph.get_identity_element(argtypes)
-            instance_name = self.get_node_name(stack, x.name + "_" + portname)
-            self.graph.addElement(ele)
-            self.graph.newElementInstance(ele.name, instance_name)
-            self.graph.connect(internal_name, instance_name, internal_port, None)
+            try:
+                argtypes = self.graph.get_outport_argtypes(internal_name, internal_port) # TODO: better error message
+                ele = self.graph.get_identity_element(argtypes)
+                instance_name = self.get_node_name(stack, x.name + "_" + portname)
+                self.graph.addElement(ele)
+                self.graph.newElementInstance(ele.name, instance_name)
+                self.graph.connect(internal_name, instance_name, internal_port, None)
+            except UndefinedInstance:
+                if is_composite:
+                    raise UndefinedPort("Port '%s' of composite instance '%s' is undefined, but composite '%s' attempts to use it."
+                                        % (port.argtypes[1], port.argtypes[0], composite.name))
+                else:
+                    raise UndefinedInstance("Element instance '%s' is undefined, but composite '%s' attempts to use it."
+                                            % (port.argtypes[0], x.name))
+            except UndefinedPort:
+                raise UndefinedPort("Port '%s' of element instance '%s' is undefined, but composite '%s' attempts to use it."
+                                    % (port.argtypes[1], port.argtypes[0], composite.name))
+
 
         self.pop_scope()
 
