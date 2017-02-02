@@ -26,6 +26,7 @@ class TestCompile(unittest.TestCase):
         try:
             g = generate_graph(p)
         except Exception as e:
+            print e.message
             self.assertNotEqual(e.message.find("Element 'Node' is undefined."), -1, 'Expect undefined exception.')
         else:
             self.fail('Exception is not raised.')
@@ -53,15 +54,14 @@ class TestCompile(unittest.TestCase):
                     [Port("in", ["int"])],
                     [Port("out", ["int"])],
                     r'''out(in());'''),
-            Composite("Unit", [Port("in...", ["int"])], [Port("out", ["int"])], [], [],
+            Composite("Unit", [Port("in", ("x", "in", "extra"))], [Port("out", ("x", "out"))], [], [],
                       Program(
                           ElementInstance("ID", "x"))),
             CompositeInstance("Unit", "u"))
         try:
             g = generate_graph(p)
         except TypeError as e:
-            self.assertNotEqual(e.message.find("The value of port"), -1,
-                                'Expect port type exception.')
+            self.assertNotEqual(e.message.find("should be a pair of (internal instance, port)"), -1)
         else:
             self.fail('Exception is not raised.')
 

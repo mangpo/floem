@@ -573,6 +573,56 @@ class TestThreadStateComposite(unittest.TestCase):
         self.assertEqual(3, len(self.find_subgraph(g, 'dup', set())))
         self.assertEqual(2, len(self.find_subgraph(g, '_buffer_fwd_read', set())))
 
+    def test_composite_scope(self):
+        p = Program(
+            Element("Forward",
+                    [Port("in", ["int"])],
+                    [Port("out", ["int"])],
+                    r'''out(in());'''),
+            Composite("Unit1",
+                      [Port("in", ("aa", "in"))],
+                      [Port("out", ("aa", "out"))],
+                      [],
+                      [],
+                      Program(
+                          ElementInstance("Forward", "aa")
+                      )),
+            Composite("Unit2",
+                      [Port("in", ("bb", "in"))],
+                      [Port("out", ("cc", "out"))],
+                      [],
+                      [],
+                      Program(
+                          ElementInstance("Forward", "bb"),
+                          ElementInstance("Forward", "cc"),
+                          Connect("bb", "cc")
+                      )),
+            Composite("Wrapper1",
+                      [Port("in", ("u", "in"))],
+                      [Port("out", ("u", "out"))],
+                      [],
+                      [],
+                      Program(
+                          CompositeInstance("Unit1", "u")
+                      )),
+            CompositeInstance("Wrapper1", "u"),
+            Composite("Wrapper2",
+                      [Port("in", ("u", "in"))],
+                      [Port("out", ("u", "out"))],
+                      [],
+                      [],
+                      Program(
+                          CompositeInstance("Unit2", "u")
+                      )),
+            CompositeInstance("Wrapper2", "w2"),
+            Connect("u", "w2")
+        )
+
+        g = generate_graph(p)
+        roots = self.find_roots(g)
+        self.assertEqual(set(['u_in']), roots)
+        self.assertEqual(11, len(self.find_subgraph(g, 'u_in', set())))
+
 
 if __name__ == '__main__':
     unittest.main()
