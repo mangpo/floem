@@ -213,7 +213,7 @@ class TestThreadStateComposite(unittest.TestCase):
                     [Port("in1", ["int"]), Port("in2", ["int"])],
                     [],
                     r'''printf("%d %d\n",in1(), in2());'''),
-            Composite("Unit", [Port("in1", ("Print", "in1")), Port("in2", ("Print", "in2"))], [], [],
+            Composite("Unit", [Port("in1", ("Print", "in1")), Port("in2", ("Print", "in2"))], [], [], [],
                       Program(
                           ElementInstance("Print", "Print")
                       )),
@@ -304,7 +304,7 @@ class TestThreadStateComposite(unittest.TestCase):
                     ),
             Composite("Unit",
                       [Port("in", ("x1", "in"))],
-                      [Port("out", ("x2", "out"))],
+                      [Port("out", ("x2", "out"))], [],
                       [("Count", "global")],
                       Program(
                           StateInstance("Count", "local"),
@@ -346,14 +346,14 @@ class TestThreadStateComposite(unittest.TestCase):
                     r'''printf("%d\n", in());'''),
             Composite("Unit1",
                       [Port("in", ("x1", "in"))],  # error
-                      [Port("out", ("x1", "out"))],
+                      [Port("out", ("x1", "out"))], [],
                       [("Count", "c")],
                       Program(
                           ElementInstance("Identity", "x1", ["c"])
                       )),
             Composite("Unit2",
                       [Port("in", ("u1", "in"))],  # error
-                      [Port("out", ("u1", "out"))],
+                      [Port("out", ("u1", "out"))], [],
                       [("Count", "c1")],
                       Program(
                           CompositeInstance("Unit1", "u1", ["c1"])
@@ -378,7 +378,7 @@ class TestThreadStateComposite(unittest.TestCase):
                     [Port("in", ["int"])],
                     [Port("out", ["int"])],
                     r'''out(in());'''),
-            Composite("Unit", [Port("in", ("f1", "in"))], [Port("out", ("f2", "out"))], [],
+            Composite("Unit", [Port("in", ("f1", "in"))], [Port("out", ("f2", "out"))], [], [],
                       Program(
                           ElementInstance("Forwarder", "f1"),
                           ElementInstance("Forwarder", "f2"),
@@ -433,6 +433,146 @@ class TestThreadStateComposite(unittest.TestCase):
         self.assertEqual(set(['f1', '_buffer_f3_in_write']), self.find_subgraph(g, 'f1', set()))
         self.assertEqual(set(['f2', '_buffer_f3_in_write']), self.find_subgraph(g, 'f2', set()))
         self.assertEqual(set(['_buffer_f3_read', 'f3']), self.find_subgraph(g, '_buffer_f3_read', set()))
+
+    def test_API_basic_no_output(self):
+        p = Program(
+            Element("Inc",
+                    [Port("in", ["int"])],
+                    [Port("out", ["int"])],
+                    r'''out(in() + 1);'''),
+            Element("Print",
+                    [Port("in", ["int"])],
+                    [],
+                    r'''printf("%d\n", in());'''),
+            ElementInstance("Inc", "inc1"),
+            ElementInstance("Print", "print"),
+            Connect("inc1", "print"),
+            APIFunction("add_and_print", "inc1", "in", "print", None)
+        )
+        g = generate_graph(p)
+        self.assertEqual(2, len(g.instances))
+        self.assertEqual(0, len(g.states))
+        roots = self.find_roots(g)
+        self.assertEqual(set(['inc1']), roots)
+
+    def test_API_basic_output(self):
+        p = Program(
+            Element("Inc",
+                    [Port("in", ["int"])],
+                    [Port("out", ["int"])],
+                    r'''out(in() + 1);'''),
+            ElementInstance("Inc", "inc1"),
+            ElementInstance("Inc", "inc2"),
+            Connect("inc1", "inc2"),
+            APIFunction("add2", "inc1", "in", "inc2", "out", "Add2Return")
+        )
+        g = generate_graph(p)
+        self.assertEqual(3, len(g.instances))
+        self.assertEqual(1, len(g.states))
+        roots = self.find_roots(g)
+        self.assertEqual(set(['inc1']), roots)
+        self.assertEqual(set(['inc1', 'inc2', '_Add2Return_inc2_write']), self.find_subgraph(g, 'inc1', set()))
+
+    def test_API_blocking_read(self):
+        p = Program(
+            Element("Forward",
+                    [Port("in", ["int"])],
+                    [Port("out", ["int"])],
+                    r'''out(in());'''),
+            ElementInstance("Forward", "f1"),
+            ElementInstance("Forward", "f2"),
+            Connect("f1", "f2"),
+            # ExternalTrigger("f2"),
+            APIFunction("read", "f2", None, "f2", "out", "ReadReturn")
+        )
+        g = generate_graph(p)
+        self.assertEqual(5, len(g.instances))
+        self.assertEqual(2, len(g.states))
+        roots = self.find_roots(g)
+        self.assertEqual(set(['f1', '_buffer_f2_read']), roots)
+        self.assertEqual(2, len(self.find_subgraph(g, 'f1', set())))
+        self.assertEqual(3, len(self.find_subgraph(g, '_buffer_f2_read', set())))
+
+    def test_error_both_internal_external(self):
+        p = Program(
+            Element("Forward",
+                    [Port("in", ["int"])],
+                    [Port("out", ["int"])],
+                    r'''out(in());'''),
+            ElementInstance("Forward", "f1"),
+            ExternalTrigger("f1"),
+            InternalTrigger("f1")
+        )
+        try:
+            g = generate_graph(p)
+        except Exception as e:
+            self.assertNotEqual(e.message.find("cannot be triggered by both internal and external triggers"), -1)
+        else:
+            self.fail('Exception is not raised.')
+
+    def test_API_return_error(self):
+        p = Program(
+            Element("Forward",
+                    [Port("in", ["int"])],
+                    [Port("out", ["int"])],
+                    r'''out(in());'''),
+            ElementInstance("Forward", "f1"),
+            ElementInstance("Forward", "f2"),
+            Connect("f1", "f2"),
+            APIFunction("func", "f1", "in", "f1", None)
+        )
+        try:
+            g = generate_graph(p)
+        except Exception as e:
+            print e.message
+            self.assertNotEqual(e.message.find("return element instance 'f1' has a continuing element instance"), -1)
+        else:
+            self.fail('Exception is not raised.')
+
+    def test_API_no_return_okay(self):
+        p = Program(
+            Element("Forward",
+                    [Port("in", ["int"])],
+                    [Port("out", ["int"])],
+                    r'''out(in());'''),
+            ElementInstance("Forward", "f1"),
+            ElementInstance("Forward", "f2"),
+            Connect("f1", "f2"),
+            InternalTrigger("f2"),
+            APIFunction("func", "f1", "in", "f1", None)
+        )
+        g = generate_graph(p)
+        self.assertEqual(4, len(g.instances))
+        self.assertEqual(1, len(g.states))
+        roots = self.find_roots(g)
+        self.assertEqual(set(['f1', '_buffer_f2_read']), roots)
+        self.assertEqual(2, len(self.find_subgraph(g, 'f1', set())))
+        self.assertEqual(2, len(self.find_subgraph(g, '_buffer_f2_read', set())))
+
+    def test_API_return_okay(self):
+        p = Program(
+            Element("Dup",
+                    [Port("in", ["int"])],
+                    [Port("out1", ["int"]), Port("out2", ["int"])],
+                    r'''int x = in(); out1(x); out2(x);'''),
+            Element("Forward",
+                    [Port("in", ["int"])],
+                    [Port("out", ["int"])],
+                    r'''out(in());'''),
+            ElementInstance("Dup", "dup"),
+            ElementInstance("Forward", "fwd"),
+            Connect("dup", "fwd", "out1"),
+            InternalTrigger("fwd"),
+            APIFunction("func", "dup", "in", "dup", "out2", "FuncReturn")
+        )
+        g = generate_graph(p)
+        self.assertEqual(5, len(g.instances))
+        self.assertEqual(2, len(g.states))
+        roots = self.find_roots(g)
+        self.assertEqual(set(['dup', '_buffer_fwd_read']), roots)
+        self.assertEqual(3, len(self.find_subgraph(g, 'dup', set())))
+        self.assertEqual(2, len(self.find_subgraph(g, '_buffer_fwd_read', set())))
+
 
 if __name__ == '__main__':
     unittest.main()

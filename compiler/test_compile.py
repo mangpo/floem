@@ -53,7 +53,7 @@ class TestCompile(unittest.TestCase):
                     [Port("in", ["int"])],
                     [Port("out", ["int"])],
                     r'''out(in());'''),
-            Composite("Unit", [Port("in...", ["int"])], [Port("out", ["int"])], [],
+            Composite("Unit", [Port("in...", ["int"])], [Port("out", ["int"])], [], [],
                       Program(
                           ElementInstance("ID", "x"))),
             CompositeInstance("Unit", "u"))
@@ -71,7 +71,7 @@ class TestCompile(unittest.TestCase):
                     [Port("in", ["int"])],
                     [Port("out", ["int"])],
                     r'''out(in());'''),
-            Composite("Unit", [Port("in", ("x", "in"))], [Port("out", ("x", "out"))], [],
+            Composite("Unit", [Port("in", ("x", "in"))], [Port("out", ("x", "out"))], [], [],
                       Program(
                           ElementInstance("ID", "x"))),
             CompositeInstance("Unit", "u1"),

@@ -9,8 +9,8 @@ p = Program(
     ElementInstance("Forward", "f1"),
     ElementInstance("Forward", "f2"),
     Connect("f1", "f2"),
-    ExternalTrigger("f2"),
-    APIFunction("read", "f2", [], "f2", ["out"], "ReadReturn")
+    #ExternalTrigger("f2"),
+    APIFunction("read", "f2", None, "f2", "out", "ReadReturn")
 )
 
 g = generate_graph(p)

@@ -29,10 +29,11 @@ class Program:
 
 
 class Composite:
-    def __init__(self, name, inports, outports, state_params, program):
+    def __init__(self, name, inports, outports, thread_ports, state_params, program):
         self.name = name
         self.inports = inports
         self.outports = outports
+        self.thread_ports = thread_ports
         self.state_params = state_params
         self.program = program
 
@@ -62,17 +63,15 @@ def get_node_name(stack, name):
 
 
 class APIFunction:
-    def __init__(self, name, call_instance, call_port, return_instance, return_port, state_name = None):
+    def __init__(self, name, call_instance, call_port, return_instance, return_port, state_name=None):
+        if (return_port) and (state_name is None):
+            raise Exception("API function '%s' needs a return state when it has return ports." % name)
         self.name = name
         self.call_instance = call_instance
         self.call_port = call_port
         self.return_instance = return_instance
         self.return_port = return_port
         self.state_name = state_name
-
-    def set_stack(self, stack):
-        self.call_instance = get_node_name(stack, self.call_instance)
-        self.return_instance = get_node_name(stack, self.return_instance)
 
 
 class GraphGenerator:
@@ -98,7 +97,7 @@ class GraphGenerator:
         elif "__up__" in table:
             return self.lookup(table["__up__"], key)
         else:
-            raise Exception("State instance '%s' is undefined." % key)
+            raise Exception("'%s' is undefined." % str(key))
 
     def get_state_name(self, name):
         return self.lookup(self.env, name)[1]
@@ -161,8 +160,10 @@ class GraphGenerator:
         elif isinstance(x, ExternalTrigger):
             self.threads_api.add(get_node_name(stack, x.element_instance))
         elif isinstance(x, APIFunction):
-            x.set_stack(stack)
-            self.APIs.append(x)
+            call_instance, call_port = self.convert_to_element_ports(x.call_instance, x.call_port, stack)
+            return_instance, return_port = self.convert_to_element_ports(x.return_instance, x.return_port, stack)
+            self.threads_api.add(call_instance)
+            self.APIs.append(APIFunction(x.name, call_instance, call_port, return_instance, return_port, x.state_name))
         else:
             raise Exception("GraphGenerator: unimplemented for %s." % x)
 
@@ -170,6 +171,22 @@ class GraphGenerator:
         (name1, out1) = self.adjust_name(x.ele1, x.out1, "output")
         (name2, in2) = self.adjust_name(x.ele2, x.in2, "input")
         self.graph.connect(get_node_name(stack, name1), get_node_name(stack, name2), out1, in2)
+
+    def convert_to_element_ports(self, call_instance, call_ports, stack):
+        """
+        Convert to (element, ports)
+        :param call_instance: element or composite instance
+        :param call_ports: element or composite ports
+        :param stack: program scope
+        :return: (element, ports)
+        """
+        t = self.lookup(self.env, call_instance)
+        if t == "element":
+            call_instance = get_node_name(stack, call_instance)
+            return call_instance, call_ports
+        elif t == "composite":
+            call_instance, call_ports = self.lookup(self.env, (call_instance, call_ports))
+            return call_instance, call_ports
 
     def adjust_name(self, ele_name, port_name, type):
         if ele_name in self.composite_instances:
@@ -203,7 +220,7 @@ class GraphGenerator:
     def interpret_CompositeInstance(self, x, stack):
         new_stack = stack + [x.name]
         composite = self.composites[x.element]
-        self.composite_instances[x.name] = composite
+        self.composite_instances[x.name] = composite  # TODO: scoping!!!!
         self.push_scope(composite, composite.state_params, x.args)
         self.interpret(composite.program, new_stack)
 
@@ -267,12 +284,38 @@ class GraphGenerator:
                                     % (port.argtypes[1], port.argtypes[0], composite.name))
 
 
+        threadport2element = dict()
+        for port in composite.thread_ports + composite.inports + composite.outports:
+            key = (x.name, port.name)
+            pointer = port.argtypes
+            if not isinstance(pointer, tuple) or not len(pointer) == 2:
+                raise Exception("Port '%s' of composite '%s' should assign to a tuple of (name, port)."
+                                % (port.name, composite.name))
+            t = self.lookup(self.env, pointer[0])
+            if t == "element":
+                if port in composite.thread_ports:
+                    threadport2element[key] = (get_node_name(new_stack, pointer[0]), pointer[1])
+                elif port in composite.inports:
+                    threadport2element[key] = (get_node_name(stack, x.name + "_" + port.name), "in")
+                elif port in composite.outports:
+                    threadport2element[key] = (get_node_name(stack, x.name + "_" + port.name), "out")
+            elif t == "composite":
+                threadport2element[key] = self.lookup(self.env, pointer)
+            else:
+                raise Exception("Composite '%s' assigns undefined '%s' to thread port '%s'."
+                                % (composite.name, pointer, port.name))
         self.pop_scope()
+        for key in threadport2element:
+            self.env[key] = threadport2element[key]
 
     def allocate_resources(self):
         """
         Insert necessary elements for resource mapping and join elements. This method mutates self.graph
         """
+        intersect = self.threads_api.intersection(self.threads_internal)
+        if len(intersect) > 0:
+            raise Exception("Element instance %s cannot be triggered by both internal and external triggers."
+                            % intersect)
         t = ThreadAllocator(self.graph, self.threads_api, self.threads_internal, self.APIs)
         t.transform()
         self.graph.APIcode = t.APIcode

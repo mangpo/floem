@@ -96,18 +96,33 @@ class ThreadAllocator:
 
     def check_APIs(self):
         for api in self.APIs:
+            # Call and return are at the same thread.
+            if not self.instances[api.call_instance].thread == self.instances[api.return_instance].thread:
+                raise Exception("API '%s' -- call element instance '%s' must be on the same thread as return element instance '%s'."
+                                % (api.name, api.call_instance, api.return_instance))
+
             # Arguments
             if api.call_instance in self.roots:
                 instance = self.instances[api.call_instance]
                 port_names = [x.name for x in instance.element.inports]
-                if not api.call_port == port_names:
+                if len(port_names) > 1:
                     raise TypeError(
-                        "API '%s' -- call element instance '%s' takes ports %s as arguments. The given argument ports are %s."
-                    % (api.name, api.call_instance, port_names, api.call_port))
+                        "API '%s' -- call element instance '%s' must have zero or one input port."
+                        % (api.name, api.call_instance))
+                elif len(port_names) == 1:
+                    if not api.call_port == port_names[0]:
+                        raise TypeError(
+                            "API '%s' -- call element instance '%s' takes port '%s' as arguments. The given argument port is '%s'."
+                            % (api.name, api.call_instance, port_names, api.call_port))
+                elif api.call_port:
+                    raise TypeError(
+                        "API '%s' -- call element instance '%s' takes no arguments, but argument port '%s' is given."
+                    % (api.name, api.call_instance, api.call_port))
+
             elif api.call_instance in self.threads_api:
-                if not api.call_port == []:
+                if not api.call_port == None:
                     raise TypeError(
-                        "API '%s' -- call element instance '%s' takes no arguments. The given argument ports are %s."
+                        "API '%s' -- call element instance '%s' takes no arguments. The given argument port is '%s'."
                     % (api.name, api.call_instance, api.call_port))
             else:
                 raise TypeError(
@@ -122,12 +137,22 @@ class ThreadAllocator:
                 if next_ele not in self.threads_entry_point:
                     raise TypeError(
                         "API '%s' -- return element instance '%s' has a continuing element instance '%s' on the same thread. This is illegal."
-                        % (api.name, api.next_ele, next_ele))
+                        % (api.name, api.return_instance, next_ele))
                 port_names.remove(port)
-            if not api.return_port == port_names:
+
+            if len(port_names) > 1:
                 raise TypeError(
-                    "API '%s' -- return element instance '%s' have ports %s as return values. The given return ports are %s."
-                    % (api.name, api.return_instance, port_names, api.return_port))
+                    "API '%s' -- return element instance '%s' must have zero or one unwired output port."
+                    % (api.name, api.return_instance))
+            elif len(port_names) == 1:
+                if not api.return_port == port_names[0]:
+                    raise TypeError(
+                        "API '%s' -- return element instance '%s' have port '%s' as return values. The given return port is '%s'."
+                        % (api.name, api.return_instance, port_names[0], api.return_port))
+            elif api.return_port:
+                raise TypeError(
+                    "API '%s' -- return element instance '%s' has no return value, but return port '%s' is given."
+                    % (api.name, api.return_instance, api.return_port))
 
     def insert_threading_elements(self):
         need_read = self.joins.union(self.threads_entry_point).difference(self.roots)
@@ -259,26 +284,25 @@ class ThreadAllocator:
                 if api.name in self.APIcode:
                     raise Exception("API '%s' has more than one instantiation. This is illegal." % api.name)
 
-                st_name = api.state_name
-                st_instance_name = '_' + st_name + '_' + instance.name
+                st_name = None
+                st_instance_name = None
+                if api.return_port:
+                    st_name = api.state_name
+                    st_instance_name = '_' + st_name + '_' + instance.name
 
                 # Create element to store return values
-                if len(api.return_port) > 0:
+                if api.return_port:
                     instance = self.instances[api.return_instance]
-                    outports = []
-                    for port in instance.element.outports:
-                        if port.name in api.return_port:
-                            outports.append(port)
+                    outport = [port for port in instance.element.outports if port.name == api.return_port][0]
 
                     # Generate buffer variables.
                     buffers = []
-                    buffers_types = []
-                    for port in outports:
-                        argtypes = port.argtypes
-                        for i in range(len(argtypes)):
-                            buffer = "%s_arg%d" % (port.name, i)
-                            buffers.append(buffer)
-                            buffers_types.append(argtypes[i])
+                    argtypes = outport.argtypes
+                    types_buffers = []
+                    for i in range(len(argtypes)):
+                        buffer = "arg%d" % i
+                        buffers.append(buffer)
+                        types_buffers.append("%s %s" % (argtypes[i], buffer))
 
                     # State content
                     avail = "avail"
@@ -286,62 +310,51 @@ class ThreadAllocator:
                     st_init = "0," + ",".join(["0" for i in range(len(buffers))])
                     st_content += "int %s; " % avail
                     for i in range(len(buffers)):
-                        st_content += "%s %s; " % (buffers_types[i], buffers[i])
+                        st_content += "%s %s; " % (argtypes[i], buffers[i])
 
                     # Create state
                     state = State(st_name, st_content, st_init)
                     self.graph.addState(state)
                     self.graph.newStateInstance(st_name, st_instance_name)
 
-                    for port_id in range(len(outports)):
-                        port = outports[port_id]
-                        types_buffers = []
-                        buffers = []
-                        for i in range(len(port.argtypes)):
-                            buffer = "%s_arg%d" % (port.name, i)
-                            buffers.append(buffer)
-                            types_buffers.append("%s %s" % (port.argtypes[i], buffer))
+                    # Runtime check.
+                    src = "  (%s) = in();" % ",".join(types_buffers)
+                    # Only check if it's the first port.
+                    src += "  if(this.%s == 1) { printf(\"Join failed (overwriting some values).\\n\"); exit(-1); }\n" \
+                           % avail
+                    for i in range(len(argtypes)):
+                        src += "  this.%s = %s;\n" % (buffers[i], buffers[i])
+                    src += "  this.%s = 1;\n" % avail
 
-                        # Runtime check.
-                        src = "  (%s) = in();" % ",".join(types_buffers)
-                        # Only check if it's the first port.
-                        if port_id == 0:
-                            src += "  if(this.%s == 1) { printf(\"Join failed (overwriting some values).\\n\"); exit(-1); }\n" \
-                                   % avail
-                        for i in range(len(port.argtypes)):
-                            buffer = buffers[i]
-                            src += "  this.%s = %s;\n" % (buffer, buffer)
-                        src += "  this.%s = 1;\n" % avail
+                    # Create element
+                    ele_name = st_instance_name + "_write"
+                    ele = Element(ele_name, [Port("in", argtypes)], [],
+                                  src, None, [(st_name, "this")])
+                    self.graph.addElement(ele)
+                    self.graph.newElementInstance(ele.name, ele.name, [st_instance_name])
+                    self.graph.connect(instance.name, ele.name, outport.name, None, True)
 
-                        # Create element
-                        ele_name = st_instance_name + '_' + port.name + "_write"
-                        ele = Element(ele_name, [Port("in", port.argtypes)], [],
-                                      src, None, [(st_name, "this")])
-                        self.graph.addElement(ele)
-                        self.graph.newElementInstance(ele.name, ele.name, [st_instance_name])
-                        self.graph.connect(instance.name, ele.name, port.name, None, True)
-                    # End for
 
                 # Create API function
                 args = []
                 types_args = []
                 call_instance = self.instances[api.call_instance]
-                for port in call_instance.element.inports:
-                    if port.name in api.call_port:
-                        for i in range(len(port.argtypes)):
-                            arg = "%s_arg%d" % (port.name, i)
-                            args.append(arg)
-                            types_args.append("%s %s" % (port.argtypes[i], arg))
 
+                if api.call_port:
+                    inport = [port for port in instance.element.inports if port.name == api.call_port][0]
+                    for i in range(len(inport.argtypes)):
+                        arg = "arg%d" % i
+                        args.append(arg)
+                        types_args.append("%s %s" % (inport.argtypes[i], arg))
 
                 src = ""
-                if len(api.return_port) == 0:
+                if api.return_port is None:
                     src += "void"
                 else:
                     src += "struct " + api.state_name
                 src += " %s(%s) {\n" % (api.name, ",".join(types_args))
                 src += "  %s(%s);\n" % (api.call_instance, ",".join(args))
-                if len(api.return_port) > 0:
+                if api.return_port:
                     # TODO: optimization
                     src += "  struct %s temp = %s;\n" % (api.state_name, st_instance_name)
                     src += "  %s.avail = 0;\n" % st_instance_name

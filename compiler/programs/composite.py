@@ -13,6 +13,7 @@ p = Program(
     Composite("Unit",
               [Port("in", ("x1", "in"))],
               [Port("out", ("x2", "out"))],
+              [],
               [("Count", "global")],
               Program(
                   StateInstance("Count", "local"),

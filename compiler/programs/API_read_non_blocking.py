@@ -18,7 +18,7 @@ p = Program(
     StateInstance("Buffer", "b"),
     ElementInstance("Save", "save", ["b"]),
     ElementInstance("Load", "load", ["b"]),
-    APIFunction("read", "load", [], "load", ["out"], "ReadReturn")
+    APIFunction("read", "load", None, "load", "out", "ReadReturn")
 )
 
 g = generate_graph(p)

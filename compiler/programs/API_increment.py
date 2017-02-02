@@ -9,7 +9,7 @@ p = Program(
     ElementInstance("Inc", "inc1"),
     ElementInstance("Inc", "inc2"),
     Connect("inc1", "inc2"),
-    APIFunction("add2", "inc1", ["in"], "inc2", ["out"], "Add2Return")
+    APIFunction("add2", "inc1", "in", "inc2", "out", "Add2Return")
 )
 
 g = generate_graph(p)

@@ -17,6 +17,7 @@ p = Program(
     Composite("Unit1",
               [Port("in", ("x1", "in"))], # error
               [Port("out", ("x1", "out"))],
+              [],
               [("Count", "c")],
               Program(
                   ElementInstance("Identity", "x1", ["c"])
@@ -24,6 +25,7 @@ p = Program(
     Composite("Unit2",
               [Port("in", ("u1", "in"))], # error
               [Port("out", ("u1", "out"))],
+              [],
               [("Count", "c1")],
               Program(
                   CompositeInstance("Unit1", "u1", ["c1"])
