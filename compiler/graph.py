@@ -42,7 +42,7 @@ class ElementNode:
         self.thread = None
 
     def __str__(self):
-        return self.element.name + "::" + self.name + "[" + str(self.output2ele) + "]"
+        return self.element.name + "::" + self.name + "---OUT[" + str(self.output2ele) + "]" + "---IN[" + str(self.input2ele) + "]"
 
     def connect_output_port(self, port, f, fport, overwrite):
         if (not overwrite) and (port in self.output2ele):
@@ -51,12 +51,11 @@ class ElementNode:
                 % (port, self.name, self.output2ele[port][0], f))
         self.output2ele[port] = (f, fport)
 
-    def connect_input_port(self, port, f, fport, overwrite):
-        if not overwrite:
-            if port in self.input2ele:
-                self.input2ele[port].append((f, fport))
-            else:
-                self.input2ele[port] = [(f, fport)]
+    def connect_input_port(self, port, f, fport):
+        if port in self.input2ele:
+            self.input2ele[port].append((f, fport))
+        else:
+            self.input2ele[port] = [(f, fport)]
 
     def check_input_ports(self):
         if len(self.input2ele) > 1:
@@ -177,7 +176,8 @@ class Graph:
         if not element in self.elements:
             raise Exception("Element '%s' is undefined." % element)
         e = self.elements[element]
-        self.instances[name] = ElementNode(name, e, state_args)
+        ret = ElementNode(name, e, state_args)
+        self.instances[name] = ret
 
         # Check state types
         if not (len(state_args) == len(e.state_params)):
@@ -189,6 +189,8 @@ class Graph:
             state = self.state_instances[s]
             if not (state.name == type):
                 raise Exception("Element '%s' expects state '%s'. State '%s' is given." % (e.name, type, state.name))
+
+        return ret
 
     def connect(self, name1, name2, out1=None, in2=None, overwrite=False):
         i1 = self.instances[name1]
@@ -214,8 +216,6 @@ class Graph:
                 % (in2, name2, [x.name for x in e2.inports])
             in_argtypes += [x for x in e2.inports if x.name == in2][0].argtypes
         else:
-            # assert (len(e2.inports) == 1)
-            # Leave in2 = None if there is only one port.
             # If not specified, concat all ports together.
             in2 = e2.inports[0].name
             in_argtypes += sum([port.argtypes for port in e2.inports], []) # Flatten a list of list
@@ -230,7 +230,7 @@ class Graph:
                                 % (name1, name2))
 
         i1.connect_output_port(out1, i2.name, in2, overwrite)
-        i2.connect_input_port(in2, i1.name, out1, overwrite)
+        i2.connect_input_port(in2, i1.name, out1)
 
     def get_identity_element(self, argtypes):
         name = "_identity_" + "_".join(argtypes)
