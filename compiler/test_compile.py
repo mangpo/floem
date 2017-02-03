@@ -10,6 +10,8 @@ class TestCompile(unittest.TestCase):
     def test_pass(self):
         tests = ["hello.py",
                  "join.py",
+                 "join_multiple.py",
+                 "join_nested.py",
                  "buffer.py",
                  "parallel_pipeline.py",
                  "state_local.py",

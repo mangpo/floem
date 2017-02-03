@@ -1,12 +1,12 @@
 from compiler import element_to_function
-from graph import Element, Port
+from graph import *
 import unittest
 
-
 def test_element(e):
-    element_to_function(e.code, e.name, e.inports,
-                        dict([(x.name, (x.name + '_func',None)) for x in e.outports]),
-                        e.local_state, e.state_params)
+    g = Graph()
+    g.addElement(e)
+    instance = g.newElementInstance(e.name, e.name)
+    element_to_function(instance, [], g)
 
 
 class TestElementToFunction(unittest.TestCase):

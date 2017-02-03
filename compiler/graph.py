@@ -1,4 +1,4 @@
-import sys
+import re
 
 class UndefinedInstance(Exception):
     pass
@@ -18,9 +18,10 @@ class Element:
         self.name = name
         self.inports = inports
         self.outports = outports
-        self.code = code
+        self.code = '  ' + code
         self.local_state = local_state
         self.state_params = state_params
+        self.reorder_outports()
 
     def __str__(self):
         return self.name
@@ -30,6 +31,19 @@ class Element:
                 self.inports == other.inports and self.outports == other.outports and self.code == other.code and
                 self.local_state == other.local_state and self.state_params == other.state_params)
 
+    def reorder_outports(self):
+        if len(self.outports) > 1:
+            index2port = {}
+            for port in self.outports:
+                m = re.search('[^a-zA-Z0-9_]' + port.name + '[^a-zA-Z0-9_]', self.code)
+                index2port[m.start(0)] = port
+
+            keys = index2port.keys()
+            keys.sort()
+            ports = []
+            for key in keys:
+                ports.append(index2port[key])
+            self.outports = ports
 
 class ElementNode:
     def __init__(self, name, element, state_args):
@@ -40,6 +54,12 @@ class ElementNode:
         self.output2connect = {}
         self.state_args = state_args
         self.thread = None
+
+        self.join_ports_same_thread = None
+        self.join_state_create = []  # which join buffers need to be created
+        self.join_func_params = []   # which join buffers need to be passed as params
+        self.join_output2save = {}   # which output ports need to be saved into join buffers
+        self.join_call = []          # = 1 if this node needs to invoke the join element instance
 
     def __str__(self):
         return self.element.name + "::" + self.name + "---OUT[" + str(self.output2ele) + "]" + "---IN[" + str(self.input2ele) + "]"
@@ -217,7 +237,10 @@ class Graph:
             in_argtypes += [x for x in e2.inports if x.name == in2][0].argtypes
         else:
             # If not specified, concat all ports together.
-            in2 = e2.inports[0].name
+            if len(e2.inports) == 1:
+                in2 = e2.inports[0].name
+            else:
+                in2 = [port.name for port in e2.inports]
             in_argtypes += sum([port.argtypes for port in e2.inports], []) # Flatten a list of list
 
         # Check types
@@ -230,7 +253,11 @@ class Graph:
                                 % (name1, name2))
 
         i1.connect_output_port(out1, i2.name, in2, overwrite)
-        i2.connect_input_port(in2, i1.name, out1)
+        if isinstance(in2, str):
+            i2.connect_input_port(in2, i1.name, out1)
+        else:
+            for port_name in in2:
+                i2.connect_input_port(port_name, i1.name, out1)
 
     def get_identity_element(self, argtypes):
         name = "_identity_" + "_".join(argtypes)

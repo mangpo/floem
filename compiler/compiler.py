@@ -1,4 +1,5 @@
 from program import *
+from join_handling import get_join_buffer_name, annotate_join_info
 import re
 
 var_id = 0
@@ -110,20 +111,23 @@ def remove_expr(src,port2args,port,p_start, p_end, inport_types):
     return src[:p_start] + name + src[p_end:]
 
 
-def element_to_function(src, funcname, inports, output2func, local_state, state_rename):
-    """Turn an element into a function.
+def element_to_function(instance, state_rename, graph):
+    """
+    Turn an element into a function.
     - Read from an input port => input argument(s).
     - Write to an output port => a function call.
-
-    :param src: string of element source code
-    :param funcname: string of function name
-    :param inports: a list of Port
-    :param output2func: dictionary of an output port name to (function name, port)
-    :param local_state: a state object local for this element
-    :param state_rename: a map from old state name to new state name
+    :param instance:
+    :param state_rename:
     :return: a string of function source code
     """
-    src = ' ' + src
+    element = instance.element
+    src = element.code
+    funcname = instance.name
+    inports = element.inports
+    output2func = instance.output2ele
+    local_state = element.local_state
+
+    src += '\n'
     # A dictionary to collect function arguments.
     port2args = {}
     # Collect arguments and remove input ports from src.
@@ -165,12 +169,21 @@ def element_to_function(src, funcname, inports, output2func, local_state, state_
         if m is None:
             raise Exception("Element '%s' never send data from output port '%s'." % (funcname,o))
         p = m.start(0)
-        if p == 0 or re.search('[^a-zA-Z0-9_]',src[p-1]):
+        if re.search('[^a-zA-Z0-9_]',src[p-1]):
             (f, fport) = output2func[o]
-            call = f
-            #if not(fport is None):
-            #    call = call + '_' + fport
-            src = src[:p] + call + src[p+len(o):]
+            if o in instance.join_output2save:
+                if isinstance(fport, list):
+                    raise Exception("Join element instance '%s' has multiple input ports from one single port of an element instance '%s."
+                                    % (f, funcname))
+                # Save output to join buffer instead of calling the next function
+                join = instance.join_output2save[o]
+                call = get_join_buffer_name(join) + "_" + fport + "_save(_p_" + join + ", "
+            else:
+                call = f + "("
+                for join in graph.instances[f].join_func_params:
+                    call += "_p_%s, " % join
+                #src = src[:p] + call + src[p+len(o):]
+            src = src[:p] + call + src[m.end(0):]
 
     # Replace old state name with new state name
     for (old,new) in state_rename:
@@ -181,6 +194,30 @@ def element_to_function(src, funcname, inports, output2func, local_state, state_
             if match:
                 src = src[:index+match.start(1)] + new + src[index+match.end(1):]
                 index = index + match.start(1) + len(old)
+
+    # Create join buffer
+    join_create = ""
+    for join in instance.join_state_create:
+        join_buffer_name = get_join_buffer_name(join)
+        join_create += "  struct %s *_p_%s = malloc(sizeof(struct %s));\n" % (join_buffer_name, join, join_buffer_name)
+        # struct Vector *retVal = malloc (sizeof (struct Vector));
+
+    # Call join element
+    join_call = ""
+    for join in instance.join_call:
+        args = []
+        for port in graph.instances[join].join_ports_same_thread:
+            for i in range(len(port.argtypes)):
+                arg = "_p_%s->%s_arg%d" % (join, port.name, i)
+                args.append(arg)
+
+        join_call += "  %s(" % join
+        for o in output2func:
+            (f, fport) = output2func[o]
+            for other_join in graph.instances[f].join_func_params:
+                join_call += "_p_%s, " % other_join
+        join_call += ", ".join(args)
+        join_call += ");\n"
 
     # Local state
     state_src = ""
@@ -193,10 +230,15 @@ def element_to_function(src, funcname, inports, output2func, local_state, state_
 
     # Construct function arguments from port2args.
     args = []
+    # Join buffers
+    for i in range(len(instance.join_func_params)):
+        join = instance.join_func_params[i]
+        args.append("struct %s* _p_%s" % (get_join_buffer_name(join), join))
+    # Normal args
     for port in inports:
         args = args + port2args[port.name]
 
-    src = "void " + funcname + "(" + ", ".join(args) + ") {\n" + state_src + src + "}\n"
+    src = "void " + funcname + "(" + ", ".join(args) + ") {\n" + state_src + join_create + src + join_call + "}\n"
     print src
     return src
 
@@ -218,14 +260,37 @@ def generate_state_instance(name, state):
     return src
 
 
-def generate_signature(funcname, inports):
+def generate_join_save_function(name, join_ports_same_thread):
+    src = ""
+
+    st_name = get_join_buffer_name(name)
+    for port in join_ports_same_thread:
+        types_args = []
+        args = []
+        for i in range(len(port.argtypes)):
+            arg = "%s_arg%d" % (port.name, i)
+            args.append(arg)
+            types_args.append("%s %s" % (port.argtypes[i], arg))
+
+        src += "void %s_%s_save(struct %s *p, %s) {\n" % (st_name, port.name, st_name, ", ".join(types_args))
+        for arg in args:
+            src += "  p->%s = %s;\n" % (arg, arg)
+        src += "}\n"
+
+    print src
+    return src
+
+
+def generate_signature(instance, funcname, inports):
     n = len(inports)
     args = []
     src = ""
+    # Join buffers
+    for join in instance.join_func_params:
+        args.append("struct " + get_join_buffer_name(join) + "*")
+    # Normal args
     for port in inports:
-        args = args + port.argtypes
-    #     if n > 1:
-    #         src += "void %s_%s(%s);\n" % (funcname, port.name, ",".join(port.argtypes))
+        args += port.argtypes
 
     src += "void %s(%s);" % (funcname, ",".join(args))
     print src
@@ -314,9 +379,13 @@ def generate_graph(program, resource=True):
     gen.interpret(program)
     gen.graph.check_input_ports()
 
-    # Insert necessary elements for resource mapping and join elements.
+    # Insert necessary elements for resource mapping.
     if resource:
         gen.allocate_resources()
+
+    # Annotate join information
+    annotate_join_info(gen.graph)
+
     return gen.graph
 
 def generate_code(graph):
@@ -336,15 +405,16 @@ def generate_code(graph):
     for name in graph.state_instances:
         generate_state_instance(name, graph.state_instances[name])
 
+    # Generate functions to save join buffers.
+    for instance in graph.instances.values():
+        if instance.join_ports_same_thread:
+            generate_join_save_function(instance.name, instance.join_ports_same_thread)
+
     # Generate signatures.
     for name in graph.instances:
-        e = graph.instances[name].element
-        generate_signature(name, e.inports)
-
-    # # Generate join functions.
-    # for name in graph.instances:
-    #     e = graph.instances[name].element
-    #     generate_join_functions(name, e.inports)
+        instance = graph.instances[name]
+        e = instance.element
+        generate_signature(instance, name, e.inports)
 
     # Generate functions.
     for name in graph.instances:
@@ -353,7 +423,8 @@ def generate_code(graph):
         state_rename = []
         for i in range(len(instance.state_args)):
             state_rename.append((e.state_params[i][1],instance.state_args[i]))
-        element_to_function(e.code, name, e.inports, instance.output2ele, e.local_state, state_rename)
+        #element_to_function(e.code, name, e.inports, instance.output2ele, e.local_state, state_rename)
+        element_to_function(instance, state_rename, graph)
 
     for code in graph.APIcode.values():
         print code
