@@ -328,6 +328,11 @@ def generate_API_return_state(api, g):
     return src
 
 
+def generate_API_identity_macro(api):
+    src = "#define _get_%s(X) X\n" % api.state_name
+    print src
+    return src
+
 def generate_API_function(api, g):
     args = []
     types_args = []
@@ -423,9 +428,14 @@ def generate_code(graph):
             generate_join_save_function(instance.name, instance.join_ports_same_thread)
 
     # Generate functions to produce API return state
+    return_funcs = []
     for api in graph.APIs:
-        if api.state_name:
-            generate_API_return_state(api, graph)
+        if api.state_name and api.state_name not in return_funcs:
+            return_funcs.append(api.state_name)
+            if api.state_name in ctypes.primitive_types or not api.new_state_type:
+                generate_API_identity_macro(api)
+            else:
+                generate_API_return_state(api, graph)
 
     # Generate signatures.
     for name in graph.instances:

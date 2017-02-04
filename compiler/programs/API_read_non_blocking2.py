@@ -11,17 +11,17 @@ p = Program(
             [("Buffer", "this")]),
     Element("Load",
             [],
-            [Port("out", ["Buffer"])],
+            [Port("out", ["int", "int"])],
             r'''
-            Buffer buff = {0,0};
-            if(this.avail==1) { buff.x = this.x; buff.avail = 1; this.avail = 0; }
-            out(buff);''',
+            int x = 0; int avail = 0;
+            if(this.avail==1) { x = this.x; avail = 1; this.avail = 0; }
+            out(x, avail);''',
             None,
             [("Buffer", "this")]),
     StateInstance("Buffer", "b"),
     ElementInstance("Save", "save", ["b"]),
     ElementInstance("Load", "load", ["b"]),
-    APIFunction("read", "load", None, "load", "out", "Buffer")
+    APIFunction("read", "load", None, "load", "out", "ReadReturn")
 )
 
 g = generate_graph(p)

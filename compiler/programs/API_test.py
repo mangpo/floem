@@ -12,8 +12,9 @@ p = Program(
             ElementInstance("Dup", "dup"),
             ElementInstance("Forward", "fwd"),
             Connect("dup", "fwd", "out1"),
-            InternalTrigger("fwd"),
-            APIFunction("func", "dup", "in", "dup", "out2", "FuncReturn")
+            #InternalTrigger("fwd"),
+            APIFunction("func1", "dup", "in", "dup", "out2", "int"),
+            APIFunction("func2", "fwd", None, "fwd", "out", "int")
         )
 g = generate_graph(p)
 generate_code(g)

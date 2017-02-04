@@ -1,4 +1,5 @@
 from graph import *
+import ctypes
 
 
 class ThreadAllocator:
@@ -138,6 +139,16 @@ class ThreadAllocator:
                 raise TypeError(
                     "API '%s' -- return element instance '%s' has no return value, but return port '%s' is given."
                     % (api.name, api.return_instance, api.return_port))
+
+            # Return type
+            if api.state_name in ctypes.primitive_types or self.graph.is_state(api.state_name):
+                ports = [x for x in instance.element.outports if x.name in port_names]
+                return_types = []
+                for port in ports:
+                    return_types += port.argtypes
+                if (not len(return_types) == 1) or (not return_types[0] == api.state_name):
+                    raise TypeError("API '%s' returns '%s', but '%s' is given as a return type." %
+                                    (api.name, ",".join(return_types), api.state_name))
 
     def insert_threading_elements(self):
         instances = self.instances.values();

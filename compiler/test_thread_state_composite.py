@@ -27,6 +27,66 @@ class TestThreadStateComposite(unittest.TestCase):
                 self.find_subgraph(g, ele, subgraph)
         return subgraph
 
+    def check_join_ports_same_thread(self, g, name_ports):
+        visit = []
+        for name, ports in name_ports:
+            visit.append(name)
+            self.assertEqual(set(ports), set([port.name for port in g.instances[name].join_ports_same_thread]))
+
+        for name in g.instances:
+            if name not in visit:
+                self.assertIsNone(g.instances[name].join_ports_same_thread)
+
+    def check_join_state_create(self, g, name_creates):
+        visit = []
+        for name, targets in name_creates:
+            visit.append(name)
+            self.assertEqual(set(targets), set(g.instances[name].join_state_create))
+
+        for name in g.instances:
+            if name not in visit:
+                self.assertEqual([], g.instances[name].join_state_create)
+
+    def check_join_call(self, g, name_calls):
+        visit = []
+        for name, targets in name_calls:
+            visit.append(name)
+            self.assertEqual(set(targets), set(g.instances[name].join_call))
+
+        for name in g.instances:
+            if name not in visit:
+                self.assertEqual([], g.instances[name].join_call)
+
+    def check_api_return(self, g, name_target):
+        visit = []
+        for name, target in name_target:
+            visit.append(name)
+            self.assertEqual(target, g.instances[name].API_return)
+
+        for name in g.instances:
+            if name not in visit:
+                self.assertIsNone(g.instances[name].API_return)
+
+    def check_api_return_final(self, g, names):
+        visit = []
+        for name in names:
+            visit.append(name)
+            self.assertIsNotNone(g.instances[name].API_return_final)
+
+        for name in g.instances:
+            if name not in visit:
+                self.assertIsNone(g.instances[name].API_return_final)
+
+    def check_api_return_from(self, g, name_target):
+        visit = []
+        for name, target in name_target:
+            visit.append(name)
+            self.assertEqual(target, g.instances[name].API_return_from)
+
+        for name in g.instances:
+            if name not in visit:
+                self.assertIsNone(g.instances[name].API_return_from)
+
     def test_pipeline(self):
         p = Program(
             Element("Forwarder",
@@ -112,36 +172,6 @@ class TestThreadStateComposite(unittest.TestCase):
         self.assertEqual(g.instances["Print"].join_output2save, {})
 
         self.check_join_call(g, [("Sub", ["Print"])])
-
-    def check_join_ports_same_thread(self, g, name_ports):
-        visit = []
-        for name, ports in name_ports:
-            visit.append(name)
-            self.assertEqual(set(ports), set([port.name for port in g.instances[name].join_ports_same_thread]))
-
-        for name in g.instances:
-            if name not in visit:
-                self.assertIsNone(g.instances[name].join_ports_same_thread)
-
-    def check_join_state_create(self, g, name_creates):
-        visit = []
-        for name, targets in name_creates:
-            visit.append(name)
-            self.assertEqual(set(targets), set(g.instances[name].join_state_create))
-
-        for name in g.instances:
-            if name not in visit:
-                self.assertEqual([], g.instances[name].join_state_create)
-
-    def check_join_call(self, g, name_calls):
-        visit = []
-        for name, targets in name_calls:
-            visit.append(name)
-            self.assertEqual(set(targets), set(g.instances[name].join_call))
-
-        for name in g.instances:
-            if name not in visit:
-                self.assertEqual([], g.instances[name].join_call)
 
     def test_fork_join_thread1(self):
         p = Program(
@@ -569,127 +599,144 @@ class TestThreadStateComposite(unittest.TestCase):
         else:
             self.fail('Exception is not raised.')
 
-    # def test_API_basic_no_output(self):
-    #     p = Program(
-    #         Element("Inc",
-    #                 [Port("in", ["int"])],
-    #                 [Port("out", ["int"])],
-    #                 r'''out(in() + 1);'''),
-    #         Element("Print",
-    #                 [Port("in", ["int"])],
-    #                 [],
-    #                 r'''printf("%d\n", in());'''),
-    #         ElementInstance("Inc", "inc1"),
-    #         ElementInstance("Print", "print"),
-    #         Connect("inc1", "print"),
-    #         APIFunction("add_and_print", "inc1", "in", "print", None)
-    #     )
-    #     g = generate_graph(p)
-    #     self.assertEqual(2, len(g.instances))
-    #     self.assertEqual(0, len(g.states))
-    #     roots = self.find_roots(g)
-    #     self.assertEqual(set(['inc1']), roots)
-    #
-    # def test_API_basic_output(self):
-    #     p = Program(
-    #         Element("Inc",
-    #                 [Port("in", ["int"])],
-    #                 [Port("out", ["int"])],
-    #                 r'''out(in() + 1);'''),
-    #         ElementInstance("Inc", "inc1"),
-    #         ElementInstance("Inc", "inc2"),
-    #         Connect("inc1", "inc2"),
-    #         APIFunction("add2", "inc1", "in", "inc2", "out", "Add2Return")
-    #     )
-    #     g = generate_graph(p)
-    #     self.assertEqual(3, len(g.instances))
-    #     self.assertEqual(1, len(g.states))
-    #     roots = self.find_roots(g)
-    #     self.assertEqual(set(['inc1']), roots)
-    #     self.assertEqual(set(['inc1', 'inc2', '_Add2Return_inc2_write']), self.find_subgraph(g, 'inc1', set()))
-    #
-    # def test_API_blocking_read(self):
-    #     p = Program(
-    #         Element("Forward",
-    #                 [Port("in", ["int"])],
-    #                 [Port("out", ["int"])],
-    #                 r'''out(in());'''),
-    #         ElementInstance("Forward", "f1"),
-    #         ElementInstance("Forward", "f2"),
-    #         Connect("f1", "f2"),
-    #         # ExternalTrigger("f2"),
-    #         APIFunction("read", "f2", None, "f2", "out", "ReadReturn")
-    #     )
-    #     g = generate_graph(p)
-    #     self.assertEqual(5, len(g.instances))
-    #     self.assertEqual(2, len(g.states))
-    #     roots = self.find_roots(g)
-    #     self.assertEqual(set(['f1', '_buffer_f2_read']), roots)
-    #     self.assertEqual(2, len(self.find_subgraph(g, 'f1', set())))
-    #     self.assertEqual(3, len(self.find_subgraph(g, '_buffer_f2_read', set())))
-    #
-    # def test_API_return_error(self):
-    #     p = Program(
-    #         Element("Forward",
-    #                 [Port("in", ["int"])],
-    #                 [Port("out", ["int"])],
-    #                 r'''out(in());'''),
-    #         ElementInstance("Forward", "f1"),
-    #         ElementInstance("Forward", "f2"),
-    #         Connect("f1", "f2"),
-    #         APIFunction("func", "f1", "in", "f1", None)
-    #     )
-    #     try:
-    #         g = generate_graph(p)
-    #     except Exception as e:
-    #         print e.message
-    #         self.assertNotEqual(e.message.find("return element instance 'f1' has a continuing element instance"), -1)
-    #     else:
-    #         self.fail('Exception is not raised.')
-    #
-    # def test_API_no_return_okay(self):
-    #     p = Program(
-    #         Element("Forward",
-    #                 [Port("in", ["int"])],
-    #                 [Port("out", ["int"])],
-    #                 r'''out(in());'''),
-    #         ElementInstance("Forward", "f1"),
-    #         ElementInstance("Forward", "f2"),
-    #         Connect("f1", "f2"),
-    #         InternalTrigger("f2"),
-    #         APIFunction("func", "f1", "in", "f1", None)
-    #     )
-    #     g = generate_graph(p)
-    #     self.assertEqual(4, len(g.instances))
-    #     self.assertEqual(1, len(g.states))
-    #     roots = self.find_roots(g)
-    #     self.assertEqual(set(['f1', '_buffer_f2_read']), roots)
-    #     self.assertEqual(2, len(self.find_subgraph(g, 'f1', set())))
-    #     self.assertEqual(2, len(self.find_subgraph(g, '_buffer_f2_read', set())))
-    #
-    # def test_API_return_okay(self):
-    #     p = Program(
-    #         Element("Dup",
-    #                 [Port("in", ["int"])],
-    #                 [Port("out1", ["int"]), Port("out2", ["int"])],
-    #                 r'''int x = in(); out1(x); out2(x);'''),
-    #         Element("Forward",
-    #                 [Port("in", ["int"])],
-    #                 [Port("out", ["int"])],
-    #                 r'''out(in());'''),
-    #         ElementInstance("Dup", "dup"),
-    #         ElementInstance("Forward", "fwd"),
-    #         Connect("dup", "fwd", "out1"),
-    #         InternalTrigger("fwd"),
-    #         APIFunction("func", "dup", "in", "dup", "out2", "FuncReturn")
-    #     )
-    #     g = generate_graph(p)
-    #     self.assertEqual(5, len(g.instances))
-    #     self.assertEqual(2, len(g.states))
-    #     roots = self.find_roots(g)
-    #     self.assertEqual(set(['dup', '_buffer_fwd_read']), roots)
-    #     self.assertEqual(3, len(self.find_subgraph(g, 'dup', set())))
-    #     self.assertEqual(2, len(self.find_subgraph(g, '_buffer_fwd_read', set())))
+    def test_API_basic_no_output(self):
+        p = Program(
+            Element("Inc",
+                    [Port("in", ["int"])],
+                    [Port("out", ["int"])],
+                    r'''out(in() + 1);'''),
+            Element("Print",
+                    [Port("in", ["int"])],
+                    [],
+                    r'''printf("%d\n", in());'''),
+            ElementInstance("Inc", "inc1"),
+            ElementInstance("Print", "print"),
+            Connect("inc1", "print"),
+            APIFunction("add_and_print", "inc1", "in", "print", None)
+        )
+        g = generate_graph(p)
+        self.assertEqual(2, len(g.instances))
+        self.assertEqual(0, len(g.states))
+        roots = self.find_roots(g)
+        self.assertEqual(set(['inc1']), roots)
+        self.check_api_return(g, [])
+        self.check_api_return(g, [])
+        self.check_api_return_final(g, [])
+
+    def test_API_basic_output(self):
+        p = Program(
+            Element("Inc",
+                    [Port("in", ["int"])],
+                    [Port("out", ["int"])],
+                    r'''out(in() + 1);'''),
+            ElementInstance("Inc", "inc1"),
+            ElementInstance("Inc", "inc2"),
+            Connect("inc1", "inc2"),
+            APIFunction("add2", "inc1", "in", "inc2", "out", "Add2Return")
+        )
+        g = generate_graph(p)
+        self.assertEqual(2, len(g.instances))
+        self.assertEqual(1, len(g.states))
+        roots = self.find_roots(g)
+        self.assertEqual(set(['inc1']), roots)
+        self.assertEqual(set(['inc1', 'inc2']), self.find_subgraph(g, 'inc1', set()))
+        self.check_api_return(g, [("inc1", "Add2Return"), ("inc2", "Add2Return")])
+        self.check_api_return_from(g, [("inc1", "inc2")])
+        self.check_api_return_final(g, ["inc2"])
+
+    def test_API_blocking_read(self):
+        p = Program(
+            Element("Forward",
+                    [Port("in", ["int"])],
+                    [Port("out", ["int"])],
+                    r'''out(in());'''),
+            ElementInstance("Forward", "f1"),
+            ElementInstance("Forward", "f2"),
+            Connect("f1", "f2"),
+            APIFunction("read", "f2", None, "f2", "out", "int")
+        )
+        g = generate_graph(p)
+        self.assertEqual(4, len(g.instances))
+        self.assertEqual(1, len(g.states))
+        roots = self.find_roots(g)
+        self.assertEqual(set(['f1', '_buffer_f2_read']), roots)
+        self.assertEqual(2, len(self.find_subgraph(g, 'f1', set())))
+        self.assertEqual(2, len(self.find_subgraph(g, '_buffer_f2_read', set())))
+
+        self.check_api_return(g, [("_buffer_f2_read", "int"), ("f2", "int")])
+        self.check_api_return_from(g, [("_buffer_f2_read", "f2")])
+        self.check_api_return_final(g, ["f2"])
+
+    def test_API_return_error(self):
+        p = Program(
+            Element("Forward",
+                    [Port("in", ["int"])],
+                    [Port("out", ["int"])],
+                    r'''out(in());'''),
+            ElementInstance("Forward", "f1"),
+            ElementInstance("Forward", "f2"),
+            Connect("f1", "f2"),
+            APIFunction("func", "f1", "in", "f1", None)
+        )
+        try:
+            g = generate_graph(p)
+        except Exception as e:
+            print e.message
+            self.assertNotEqual(e.message.find("return element instance 'f1' has a continuing element instance"), -1)
+        else:
+            self.fail('Exception is not raised.')
+
+    def test_API_no_return_okay(self):
+        p = Program(
+            Element("Forward",
+                    [Port("in", ["int"])],
+                    [Port("out", ["int"])],
+                    r'''out(in());'''),
+            ElementInstance("Forward", "f1"),
+            ElementInstance("Forward", "f2"),
+            Connect("f1", "f2"),
+            InternalTrigger("f2"),
+            APIFunction("func", "f1", "in", "f1", None)
+        )
+        g = generate_graph(p)
+        self.assertEqual(4, len(g.instances))
+        self.assertEqual(1, len(g.states))
+        roots = self.find_roots(g)
+        self.assertEqual(set(['f1', '_buffer_f2_read']), roots)
+        self.assertEqual(2, len(self.find_subgraph(g, 'f1', set())))
+        self.assertEqual(2, len(self.find_subgraph(g, '_buffer_f2_read', set())))
+
+        self.check_api_return(g, [])
+        self.check_api_return(g, [])
+        self.check_api_return_final(g, [])
+
+    def test_API_return_okay(self):
+        p = Program(
+            Element("Dup",
+                    [Port("in", ["int"])],
+                    [Port("out1", ["int"]), Port("out2", ["int"])],
+                    r'''int x = in(); out1(x); out2(x);'''),
+            Element("Forward",
+                    [Port("in", ["int"])],
+                    [Port("out", ["int"])],
+                    r'''out(in());'''),
+            ElementInstance("Dup", "dup"),
+            ElementInstance("Forward", "fwd"),
+            Connect("dup", "fwd", "out1"),
+            InternalTrigger("fwd"),
+            APIFunction("func", "dup", "in", "dup", "out2", "int")
+        )
+        g = generate_graph(p)
+        self.assertEqual(4, len(g.instances))
+        self.assertEqual(1, len(g.states))
+        roots = self.find_roots(g)
+        self.assertEqual(set(['dup', '_buffer_fwd_read']), roots)
+        self.assertEqual(2, len(self.find_subgraph(g, 'dup', set())))
+        self.assertEqual(2, len(self.find_subgraph(g, '_buffer_fwd_read', set())))
+
+        self.check_api_return(g, [("dup", "int")])
+        self.check_api_return_from(g, [])
+        self.check_api_return_final(g, ["dup"])
 
     def test_composite_scope(self):
         p = Program(

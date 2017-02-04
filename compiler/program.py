@@ -72,6 +72,7 @@ class APIFunction:
         self.return_instance = return_instance
         self.return_port = return_port
         self.state_name = state_name
+        self.new_state_type = False
 
 
 class GraphGenerator:

@@ -63,9 +63,9 @@ class ElementNode:
         self.join_call = []          # = 1 if this node needs to invoke the join element instance
 
         # API information
-        self.API_return = None       # which state this node needs to return
-        self.API_return_from = None  # which output node the the return value comes form
-        self.API_return_final = None # which state this node needs to produce for return API value
+        self.API_return = None        # which state this node needs to return
+        self.API_return_from = None   # which output node the the return value comes form
+        self.API_return_final = None  # mark that this node has to create the return state
 
     def __str__(self):
         return self.element.name + "::" + self.name + "---OUT[" + str(self.output2ele) + "]" + "---IN[" + str(self.input2ele) + "]"
