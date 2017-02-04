@@ -1,5 +1,6 @@
 from program import *
 from join_handling import get_join_buffer_name, annotate_join_info
+from api_handling import annotate_api_info
 import re
 
 var_id = 0
@@ -169,21 +170,35 @@ def element_to_function(instance, state_rename, graph):
         if m is None:
             raise Exception("Element '%s' never send data from output port '%s'." % (funcname,o))
         p = m.start(0)
-        if re.search('[^a-zA-Z0-9_]',src[p-1]):
-            (f, fport) = output2func[o]
-            if o in instance.join_output2save:
-                if isinstance(fport, list):
-                    raise Exception("Join element instance '%s' has multiple input ports from one single port of an element instance '%s."
-                                    % (f, funcname))
-                # Save output to join buffer instead of calling the next function
-                join = instance.join_output2save[o]
-                call = get_join_buffer_name(join) + "_" + fport + "_save(_p_" + join + ", "
-            else:
-                call = f + "("
-                for join in graph.instances[f].join_func_params:
-                    call += "_p_%s, " % join
-                #src = src[:p] + call + src[p+len(o):]
-            src = src[:p] + call + src[m.end(0):]
+        (f, fport) = output2func[o]
+        if o in instance.join_output2save:
+            if isinstance(fport, list):
+                raise Exception(
+                    "Join element instance '%s' has multiple input ports from one single port of an element instance '%s."
+                    % (f, funcname))
+            # Save output to join buffer instead of calling the next function
+            join = instance.join_output2save[o]
+            call = get_join_buffer_name(join) + "_" + fport + "_save(_p_" + join + ", "
+        else:
+            call = ""
+            if instance.API_return_from == f:
+                call += "%s ret = " % instance.API_return
+            call += f + "("
+            for join in graph.instances[f].join_func_params:
+                call += "_p_%s, " % join
+        src = src[:p] + call + src[m.end(0):]
+
+    # Replace API output port with function to create return state
+    if instance.API_return_final:
+        #o = instance.element.outports[0].name
+        o = instance.API_return_final.return_port
+        m = re.search(o + '[ ]*\(', src)
+        if m is None:
+            raise Exception("Element '%s' never send data from output port '%s'." % (funcname, o))
+        p = m.start(0)
+        call = "%s ret = _get_%s(" % (instance.API_return, instance.API_return)
+        src = src[:p] + call + src[m.end(0):]
+
 
     # Replace old state name with new state name
     for (old,new) in state_rename:
@@ -199,7 +214,7 @@ def element_to_function(instance, state_rename, graph):
     join_create = ""
     for join in instance.join_state_create:
         join_buffer_name = get_join_buffer_name(join)
-        join_create += "  struct %s *_p_%s = malloc(sizeof(struct %s));\n" % (join_buffer_name, join, join_buffer_name)
+        join_create += "  %s *_p_%s = malloc(sizeof(%s));\n" % (join_buffer_name, join, join_buffer_name)
         # struct Vector *retVal = malloc (sizeof (struct Vector));
 
     # Call join element
@@ -211,6 +226,8 @@ def element_to_function(instance, state_rename, graph):
                 arg = "_p_%s->%s_arg%d" % (join, port.name, i)
                 args.append(arg)
 
+        if instance.API_return_from == join:
+            join_call += "%s ret =" % instance.API_return
         join_call += "  %s(" % join
         for o in output2func:
             (f, fport) = output2func[o]
@@ -218,6 +235,11 @@ def element_to_function(instance, state_rename, graph):
                 join_call += "_p_%s, " % other_join
         join_call += ", ".join(args)
         join_call += ");\n"
+
+    # API Return
+    api_return = ""
+    if instance.API_return:
+        api_return += "  return ret;\n"
 
     # Local state
     state_src = ""
@@ -233,26 +255,33 @@ def element_to_function(instance, state_rename, graph):
     # Join buffers
     for i in range(len(instance.join_func_params)):
         join = instance.join_func_params[i]
-        args.append("struct %s* _p_%s" % (get_join_buffer_name(join), join))
+        args.append("%s* _p_%s" % (get_join_buffer_name(join), join))
     # Normal args
     for port in inports:
         args = args + port2args[port.name]
 
-    src = "void " + funcname + "(" + ", ".join(args) + ") {\n" + state_src + join_create + src + join_call + "}\n"
-    print src
-    return src
+    # Code
+    if instance.API_return:
+        return_type = instance.API_return
+    else:
+        return_type = "void"
+    code = "%s %s(%s) {\n" % (return_type, funcname, ", ".join(args))
+    code += state_src + join_create + src + join_call + api_return
+    code += "}\n"
+    print code
+    return code
 
 
 def generate_state(state):
     src = ""
-    src += "struct %s { %s };\n" % (state.name, state.content)
+    src += "typedef struct { %s } %s;\n" % (state.content, state.name)
     print src
     return src
 
 
 def generate_state_instance(name, state):
     src = ""
-    src += "struct %s %s" % (state.name, name)
+    src += "%s %s" % (state.name, name)
     if state.init:
         src += " = {%s}" % state.init
     src += ";\n"
@@ -272,11 +301,51 @@ def generate_join_save_function(name, join_ports_same_thread):
             args.append(arg)
             types_args.append("%s %s" % (port.argtypes[i], arg))
 
-        src += "void %s_%s_save(struct %s *p, %s) {\n" % (st_name, port.name, st_name, ", ".join(types_args))
+        src += "void %s_%s_save(%s *p, %s) {\n" % (st_name, port.name, st_name, ", ".join(types_args))
         for arg in args:
             src += "  p->%s = %s;\n" % (arg, arg)
         src += "}\n"
 
+    print src
+    return src
+
+
+def generate_API_return_state(api, g):
+    types_args = []
+    args = []
+    for port in g.instances[api.return_instance].element.outports:
+        if port.name == api.return_port:
+            for i in range(len(port.argtypes)):
+                arg = "%s_arg%d" % (port.name, i)
+                args.append(arg)
+                types_args.append("%s %s" % (port.argtypes[i], arg))
+
+    src = ""
+    src += "%s _get_%s(%s) {\n" % (api.state_name, api.state_name, ", ".join(types_args))
+    src += "  %s ret = {%s};\n" % (api.state_name, ", ".join(args))
+    src += "  return ret; }\n"
+    print src
+    return src
+
+
+def generate_API_function(api, g):
+    args = []
+    types_args = []
+    if api.call_port:
+        instance = g.instances[api.call_instance]
+        port = [port for port in instance.element.inports if port.name == api.call_port][0]
+        for i in range(len(port.argtypes)):
+            arg = "arg%d" % i
+            args.append(arg)
+            types_args.append("%s %s" % (port.argtypes[i], arg))
+
+    src = ""
+    if api.return_port:
+        src += "%s %s(%s) { " % (api.state_name, api.name, ", ".join(types_args))
+        src += "return %s(%s); }\n" % (api.call_instance, ", ".join(args))
+    else:
+        src += "void %s(%s) { " % (api.name, ", ".join(types_args))
+        src += "%s(%s); }\n" % (api.call_instance, ", ".join(args))
     print src
     return src
 
@@ -287,12 +356,15 @@ def generate_signature(instance, funcname, inports):
     src = ""
     # Join buffers
     for join in instance.join_func_params:
-        args.append("struct " + get_join_buffer_name(join) + "*")
+        args.append(get_join_buffer_name(join) + "*")
     # Normal args
     for port in inports:
         args += port.argtypes
 
-    src += "void %s(%s);" % (funcname, ",".join(args))
+    if instance.API_return:
+        src += "%s %s(%s);\n" % (instance.API_return, funcname, ",".join(args))
+    else:
+        src += "void %s(%s);\n" % (funcname, ",".join(args))
     print src
     return src
 
@@ -304,69 +376,6 @@ def get_element_port_arg_name(func, port, i):
 def get_element_port_avail(func, port):
     return "_%s_%s_avail" % (func, port)
 
-
-def generate_join_functions(ele_name, inports):
-    """
-    Generate a joining function for each input port if there are multiple input ports.
-    The joining function only call the main element function when all ports are available.
-
-    :param ele_name: name of an element
-    :param inports: a list of input ports
-    :return: code for joining functions
-    """
-    n = len(inports)
-    src = ""
-    if n > 1:
-        avails = []
-        clear = ""
-        # Generate port available indicators.
-        for port in inports:
-            avail = get_element_port_avail(ele_name, port.name)
-            src += "int %s = 0;\n" % avail
-            avails.append(avail)
-            clear += "    %s = 0;\n" % avail
-
-        # Generate buffer variables.
-        buffers = []
-        for port in inports:
-            argtypes = port.argtypes
-            for i in range(len(argtypes)):
-                buffer = get_element_port_arg_name(ele_name, port.name, i)
-                src += "%s %s;\n" % (argtypes[i], buffer)
-                buffers.append(buffer)
-
-        # Generate code to invoke the main element and clear available indicators.
-        all_avails = " && ".join(avails)
-        all_buffers = ", ".join(buffers)
-        invoke = "  if(%s) {\n" % all_avails
-        invoke += clear
-        invoke += "    %s(%s);\n" % (ele_name, all_buffers)
-        invoke += "  }\n"
-
-        # Generate function for each input port.
-        for port_id in range(len(inports)):
-            port = inports[port_id]
-            argtypes = port.argtypes
-
-            # Function arguments.
-            types_args = []
-            args = []
-            for i in range(len(argtypes)):
-                args.append("arg%d" % (i))
-                types_args.append("%s arg%d" % (argtypes[i], i))
-
-            src += "void %s_%s(%s) {\n" % (ele_name, port.name, ",".join(types_args))
-            # Runtime check.
-            src += "  if(%s == 1) { printf(\"Join failed (overwriting some values).\\n\"); exit(-1); }\n" \
-                   % avails[port_id]
-            for i in range(len(argtypes)):
-                src += "  %s = %s;\n" % (get_element_port_arg_name(ele_name, port.name, i), args[i])
-            src += "  %s = 1;\n" % avails[port_id]
-            src += invoke
-            src += "}\n"
-
-    print src
-    return src
 
 def generate_graph(program, resource=True):
     """
@@ -385,6 +394,9 @@ def generate_graph(program, resource=True):
 
     # Annotate join information
     annotate_join_info(gen.graph)
+
+    # Annotate API information
+    annotate_api_info(gen.graph)
 
     return gen.graph
 
@@ -410,6 +422,11 @@ def generate_code(graph):
         if instance.join_ports_same_thread:
             generate_join_save_function(instance.name, instance.join_ports_same_thread)
 
+    # Generate functions to produce API return state
+    for api in graph.APIs:
+        if api.state_name:
+            generate_API_return_state(api, graph)
+
     # Generate signatures.
     for name in graph.instances:
         instance = graph.instances[name]
@@ -423,9 +440,9 @@ def generate_code(graph):
         state_rename = []
         for i in range(len(instance.state_args)):
             state_rename.append((e.state_params[i][1],instance.state_args[i]))
-        #element_to_function(e.code, name, e.inports, instance.output2ele, e.local_state, state_rename)
         element_to_function(instance, state_rename, graph)
 
-    for code in graph.APIcode.values():
-        print code
+    # Generate API functions.
+    for api in graph.APIs:
+        generate_API_function(api, graph)
 

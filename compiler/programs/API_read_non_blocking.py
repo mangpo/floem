@@ -11,8 +11,11 @@ p = Program(
             [("Buffer", "this")]),
     Element("Load",
             [],
-            [Port("out", ["int"])],
-            r'''if(this.avail==1) { int x = this.x; this.avail=0; out(x); }''',
+            [Port("out", ["Buffer"])],
+            r'''
+            Buffer buff = {0,0};
+            if(this.avail==1) { buff.x = this.x; buff.avail = 1; this.avail = 0; }
+            out(buff);''',
             None,
             [("Buffer", "this")]),
     StateInstance("Buffer", "b"),

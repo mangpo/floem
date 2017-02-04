@@ -55,11 +55,17 @@ class ElementNode:
         self.state_args = state_args
         self.thread = None
 
+        # Join information
         self.join_ports_same_thread = None
         self.join_state_create = []  # which join buffers need to be created
         self.join_func_params = []   # which join buffers need to be passed as params
         self.join_output2save = {}   # which output ports need to be saved into join buffers
         self.join_call = []          # = 1 if this node needs to invoke the join element instance
+
+        # API information
+        self.API_return = None       # which state this node needs to return
+        self.API_return_from = None  # which output node the the return value comes form
+        self.API_return_final = None # which state this node needs to produce for return API value
 
     def __str__(self):
         return self.element.name + "::" + self.name + "---OUT[" + str(self.output2ele) + "]" + "---IN[" + str(self.input2ele) + "]"
@@ -136,7 +142,7 @@ class Graph:
             self.states[s.name] = s
 
         self.identity = {}
-        self.APIcode = None
+        self.APIs = []
 
     def __str__(self):
         s = "Graph:\n"
@@ -148,6 +154,9 @@ class Graph:
         for x in self.instances.values():
             s += "    " + str(x) + "\n"
         return s
+
+    def is_state(self, state_name):
+        return state_name in self.states
 
     def has_element_instance(self, instance_name):
         return instance_name in self.instances

@@ -2,7 +2,7 @@ from graph import *
 
 
 class ThreadAllocator:
-    def __init__(self, graph, threads_api, threads_internal, APIs):
+    def __init__(self, graph, threads_api, threads_internal):
         self.threads_api = threads_api
         self.threads_internal = threads_internal
         self.threads_entry_point = threads_api.union(threads_internal)
@@ -11,9 +11,6 @@ class ThreadAllocator:
 
         self.graph = graph
         self.instances = graph.instances
-
-        self.APIs = APIs
-        self.APIcode = dict()
 
     """
     def external_api(self, name):
@@ -83,7 +80,7 @@ class ThreadAllocator:
                 self.assign_thread_dfs(next, entry_points, name)
 
     def check_APIs(self):
-        for api in self.APIs:
+        for api in self.graph.APIs:
             # Call and return are at the same thread.
             if not self.instances[api.call_instance].thread == self.instances[api.return_instance].thread:
                 raise Exception("API '%s' -- call element instance '%s' must be on the same thread as return element instance '%s'."
@@ -200,7 +197,7 @@ class ThreadAllocator:
                 self.threads_entry_point.remove(instance.name)
                 self.threads_internal.add(new_name)
                 self.threads_entry_point.add(new_name)
-            for api in self.APIs:
+            for api in self.graph.APIs:
                 if api.call_instance == instance.name:
                     api.call_instance = new_name
 
@@ -332,88 +329,87 @@ class ThreadAllocator:
             new_instance.thread = instance.thread
         return ele_name
 
-
-    def insert_buffer_return_element(self, instance):
-        for api in self.APIs:
-            if api.return_instance == instance.name:
-
-                if api.name in self.APIcode:
-                    raise Exception("API '%s' has more than one instantiation. This is illegal." % api.name)
-
-                st_name = None
-                st_instance_name = None
-                if api.return_port:
-                    st_name = api.state_name
-                    st_instance_name = '_' + st_name + '_' + instance.name
-
-                # Create element to store return values
-                if api.return_port:
-                    instance = self.instances[api.return_instance]
-                    outport = [port for port in instance.element.outports if port.name == api.return_port][0]
-
-                    # Generate buffer variables.
-                    buffers = []
-                    argtypes = outport.argtypes
-                    types_buffers = []
-                    for i in range(len(argtypes)):
-                        buffer = "arg%d" % i
-                        buffers.append(buffer)
-                        types_buffers.append("%s %s" % (argtypes[i], buffer))
-
-                    # State content
-                    avail = "avail"
-                    st_content = ""
-                    st_init = "0," + ",".join(["0" for i in range(len(buffers))])
-                    st_content += "int %s; " % avail
-                    for i in range(len(buffers)):
-                        st_content += "%s %s; " % (argtypes[i], buffers[i])
-
-                    # Create state
-                    state = State(st_name, st_content, st_init)
-                    self.graph.addState(state)
-                    self.graph.newStateInstance(st_name, st_instance_name)
-
-                    # Runtime check.
-                    src = "  (%s) = in();" % ",".join(types_buffers)
-                    # Only check if it's the first port.
-                    src += "  if(this.%s == 1) { printf(\"Join failed (overwriting some values).\\n\"); exit(-1); }\n" \
-                           % avail
-                    for i in range(len(argtypes)):
-                        src += "  this.%s = %s;\n" % (buffers[i], buffers[i])
-                    src += "  this.%s = 1;\n" % avail
-
-                    # Create element
-                    ele_name = st_instance_name + "_write"
-                    ele = Element(ele_name, [Port("in", argtypes)], [],
-                                  src, None, [(st_name, "this")])
-                    self.graph.addElement(ele)
-                    self.graph.newElementInstance(ele.name, ele.name, [st_instance_name])
-                    self.graph.connect(instance.name, ele.name, outport.name, None, True)
-
-
-                # Create API function
-                args = []
-                types_args = []
-                call_instance = self.instances[api.call_instance]
-
-                if api.call_port:
-                    inport = [port for port in instance.element.inports if port.name == api.call_port][0]
-                    for i in range(len(inport.argtypes)):
-                        arg = "arg%d" % i
-                        args.append(arg)
-                        types_args.append("%s %s" % (inport.argtypes[i], arg))
-
-                src = ""
-                if api.return_port is None:
-                    src += "void"
-                else:
-                    src += "struct " + api.state_name
-                src += " %s(%s) {\n" % (api.name, ",".join(types_args))
-                src += "  %s(%s);\n" % (api.call_instance, ",".join(args))
-                if api.return_port:
-                    # TODO: optimization
-                    src += "  struct %s temp = %s;\n" % (api.state_name, st_instance_name)
-                    src += "  %s.avail = 0;\n" % st_instance_name
-                    src += "  return temp;\n"
-                src += "}\n"
-                self.APIcode[api.name] = src
+    # def insert_buffer_return_element(self, instance):
+    #     for api in self.APIs:
+    #         if api.return_instance == instance.name:
+    #
+    #             if api.name in self.APIcode:
+    #                 raise Exception("API '%s' has more than one instantiation. This is illegal." % api.name)
+    #
+    #             st_name = None
+    #             st_instance_name = None
+    #             if api.return_port:
+    #                 st_name = api.state_name
+    #                 st_instance_name = '_' + st_name + '_' + instance.name
+    #
+    #             # Create element to store return values
+    #             if api.return_port:
+    #                 instance = self.instances[api.return_instance]
+    #                 outport = [port for port in instance.element.outports if port.name == api.return_port][0]
+    #
+    #                 # Generate buffer variables.
+    #                 buffers = []
+    #                 argtypes = outport.argtypes
+    #                 types_buffers = []
+    #                 for i in range(len(argtypes)):
+    #                     buffer = "arg%d" % i
+    #                     buffers.append(buffer)
+    #                     types_buffers.append("%s %s" % (argtypes[i], buffer))
+    #
+    #                 # State content
+    #                 avail = "avail"
+    #                 st_content = ""
+    #                 st_init = "0," + ",".join(["0" for i in range(len(buffers))])
+    #                 st_content += "int %s; " % avail
+    #                 for i in range(len(buffers)):
+    #                     st_content += "%s %s; " % (argtypes[i], buffers[i])
+    #
+    #                 # Create state
+    #                 state = State(st_name, st_content, st_init)
+    #                 self.graph.addState(state)
+    #                 self.graph.newStateInstance(st_name, st_instance_name)
+    #
+    #                 # Runtime check.
+    #                 src = "  (%s) = in();" % ",".join(types_buffers)
+    #                 # Only check if it's the first port.
+    #                 src += "  if(this.%s == 1) { printf(\"Join failed (overwriting some values).\\n\"); exit(-1); }\n" \
+    #                        % avail
+    #                 for i in range(len(argtypes)):
+    #                     src += "  this.%s = %s;\n" % (buffers[i], buffers[i])
+    #                 src += "  this.%s = 1;\n" % avail
+    #
+    #                 # Create element
+    #                 ele_name = st_instance_name + "_write"
+    #                 ele = Element(ele_name, [Port("in", argtypes)], [],
+    #                               src, None, [(st_name, "this")])
+    #                 self.graph.addElement(ele)
+    #                 self.graph.newElementInstance(ele.name, ele.name, [st_instance_name])
+    #                 self.graph.connect(instance.name, ele.name, outport.name, None, True)
+    #
+    #
+    #             # Create API function
+    #             args = []
+    #             types_args = []
+    #             call_instance = self.instances[api.call_instance]
+    #
+    #             if api.call_port:
+    #                 inport = [port for port in instance.element.inports if port.name == api.call_port][0]
+    #                 for i in range(len(inport.argtypes)):
+    #                     arg = "arg%d" % i
+    #                     args.append(arg)
+    #                     types_args.append("%s %s" % (inport.argtypes[i], arg))
+    #
+    #             src = ""
+    #             if api.return_port is None:
+    #                 src += "void"
+    #             else:
+    #                 src += "struct " + api.state_name
+    #             src += " %s(%s) {\n" % (api.name, ",".join(types_args))
+    #             src += "  %s(%s);\n" % (api.call_instance, ",".join(args))
+    #             if api.return_port:
+    #                 # TODO: optimization
+    #                 src += "  struct %s temp = %s;\n" % (api.state_name, st_instance_name)
+    #                 src += "  %s.avail = 0;\n" % st_instance_name
+    #                 src += "  return temp;\n"
+    #             src += "}\n"
+    #             self.APIcode[api.name] = src

@@ -25,8 +25,8 @@ p = Program(
     Connect("Fork", "Add", "to_add"),
     Connect("Fork", "Sub", "to_sub"),
     Connect("Add", "Print", "out", "in1"),
-    Connect("Sub", "Print", "out", "in2")
-    #, InternalThread("Sub")
+    Connect("Sub", "Print", "out", "in2"),
+    InternalTrigger("Print")
 )
 
 

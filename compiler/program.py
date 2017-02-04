@@ -83,7 +83,6 @@ class GraphGenerator:
 
         self.threads_api = set()
         self.threads_internal = set()
-        self.APIs = []
 
     def check_composite_port(self, composite_name, port_name, port_value):
         if not len(port_value) == 2:
@@ -179,7 +178,7 @@ class GraphGenerator:
             call_instance, call_port = self.convert_to_element_ports(x.call_instance, x.call_port, stack)
             return_instance, return_port = self.convert_to_element_ports(x.return_instance, x.return_port, stack)
             self.threads_api.add(call_instance)
-            self.APIs.append(APIFunction(x.name, call_instance, call_port, return_instance, return_port, x.state_name))
+            self.graph.APIs.append(APIFunction(x.name, call_instance, call_port, return_instance, return_port, x.state_name))
         else:
             raise Exception("GraphGenerator: unimplemented for %s." % x)
 
@@ -338,6 +337,6 @@ class GraphGenerator:
         if len(intersect) > 0:
             raise Exception("Element instance %s cannot be triggered by both internal and external triggers."
                             % intersect)
-        t = ThreadAllocator(self.graph, self.threads_api, self.threads_internal, self.APIs)
+        t = ThreadAllocator(self.graph, self.threads_api, self.threads_internal)
         t.transform()
-        self.graph.APIcode = t.APIcode
+        #self.graph.APIcode = t.APIcode
