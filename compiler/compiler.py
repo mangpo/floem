@@ -386,6 +386,7 @@ def generate_graph(program, resource=True):
     """
     Compile program to data-flow graph and insert necessary elements for resource mapping and join elements.
     :param program: program AST
+    :param resource: True if compile with resource mapping
     :return: data-flow graph
     """
     # Generate data-flow graph.
@@ -393,17 +394,19 @@ def generate_graph(program, resource=True):
     gen.interpret(program)
     gen.graph.check_input_ports()
 
-    # Insert necessary elements for resource mapping.
     if resource:
+        # Insert necessary elements for resource mapping.
         gen.allocate_resources()
+        # Annotate APIs information. APIs ony make sense with resource mapping.
+        annotate_api_info(gen.graph)
+    else:
+        gen.graph.clear_APIs()
 
     # Annotate join information
     annotate_join_info(gen.graph)
 
-    # Annotate API information
-    annotate_api_info(gen.graph)
-
     return gen.graph
+
 
 def generate_code(graph):
     """

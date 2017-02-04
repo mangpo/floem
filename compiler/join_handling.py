@@ -15,6 +15,19 @@ def find_roots(g):
 
 
 def dfs_dominant(g, name, target, answer):
+    """
+    Find a dominant node D of the target node T in the graph.
+    D dominates T if all nodes in the graph that can reach T has to pass D.
+
+    :param g: graph
+    :param name: current node
+    :param target: target node
+    :param answer: a map of (node, local D). This function constructs this map.
+    For each node V, it stores a dominant node with respect to the local view of V.
+    :return: (D, last_call)
+    D         -- the dominant node
+    last_call -- the last node that immediately reach D, last in term of the order of execution in the code.
+    """
     if name == target:
         return True, None
     if name in answer:
@@ -34,9 +47,13 @@ def dfs_dominant(g, name, target, answer):
             elif ret:
                 if ans:
                     if not ret == ans:
+                        # If the return nodes from its children are no the same,
+                        # then the node itself is a dominant node.
                         ans = name
                         my_last[0] = last
                 else:
+                    # When there is no current dominant node,
+                    # a dominant node returned from a child can be a dominant node.
                     ans = ret
                     my_last[0] = last
     answer[name] = ans, my_last[0]
@@ -44,6 +61,19 @@ def dfs_dominant(g, name, target, answer):
 
 
 def annotate_for_instance(instance, g, roots, save):
+    """
+    Mark each node an information about the given join element instance:
+    1. if it needs to create the buffer state for the join node (instance.join_state_create)
+    2. if it needs to receive the buffer point as a parameter (instance.join_func_params)
+    3. if it needs to save any port data to the buffer state (instance.join_output2save)
+    4. if it needs to invoke the join node (instance.join_call)
+
+    :param instance: join element instance (node)
+    :param g: graph
+    :param roots: roots of the graph
+    :param save: a map of (node, ports) where node needs to save ports' content to the buffer state
+    :return: void
+    """
     target = instance.name
     answer = {}
     dominant, last_call = dfs_dominant(g, roots[0], target, answer)
@@ -52,6 +82,7 @@ def annotate_for_instance(instance, g, roots, save):
         if not ret == dominant:
             raise Exception("There is no dominant element instance for the join element instance '%s'" % instance.name)
 
+    # Find all nodes between the dominant node and the target node.
     passing_nodes = []
     for name in answer:
         if answer[name][0] and not answer[name][0] == dominant:
@@ -73,10 +104,17 @@ def annotate_for_instance(instance, g, roots, save):
         for port in ports:
             g.instances[node].join_output2save[port] = target
 
+
 def get_join_buffer_name(name):
     return "_%s_join_buffer" % name
 
+
 def annotate_join_info(g):
+    """
+    Annotate element instances in the given graph on information necessary to handle join nodes.
+    :param g: graph
+    :return: void
+    """
     roots = find_roots(g)
     for instance in g.instances.values():
         nodes_same_thread = []

@@ -202,6 +202,9 @@ class TestThreadStateComposite(unittest.TestCase):
             InternalTrigger("Print")
         )
 
+        g = generate_graph(p, False)
+        self.assertEqual(4, len(g.instances))
+
         g = generate_graph(p, True)
         self.assertEqual(7, len(g.instances))
         roots = self.find_roots(g)
@@ -243,6 +246,9 @@ class TestThreadStateComposite(unittest.TestCase):
             Connect("Sub", "Print", "out", "in2"),
             InternalTrigger("Sub")
         )
+
+        g = generate_graph(p, False)
+        self.assertEqual(4, len(g.instances))
 
         g = generate_graph(p, True)
         self.assertEqual(8, len(g.instances))
@@ -727,6 +733,7 @@ class TestThreadStateComposite(unittest.TestCase):
             APIFunction("func", "dup", "in", "dup", "out2", "int")
         )
         g = generate_graph(p)
+        generate_code(g)
         self.assertEqual(4, len(g.instances))
         self.assertEqual(1, len(g.states))
         roots = self.find_roots(g)

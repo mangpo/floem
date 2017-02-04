@@ -1,7 +1,19 @@
 from graph import State
 import ctypes
 
+
 def dfs_find_path(g, name, target_name, path):
+    """
+    Construct a map that will be sued to construct a path to the target node.
+
+    :param g: graph
+    :param name: current node
+    :param target_name: target node
+    :param path: A map that stores an edge to the next node in the API path.
+                 This map will be used to construct a path to the target node.
+                 This function is creating this map.
+    :return: the next node in the path from this node to target.
+    """
     if name in path:
         return path[name]
 
@@ -21,7 +33,20 @@ def dfs_find_path(g, name, target_name, path):
     path[name] = my_ans[0]
     return my_ans[0]
 
+
 def mark_return(g, name, path, api):
+    """
+    Given a path, mark each node along with path:
+    1. what return state it should return (instance.API_return)
+    2. which node it receives the return state from (instance.API_return_from)
+    3. does it need to construct the return state (instance.API_return_final)
+
+    :param g: graph
+    :param name: current node
+    :param path: a map that stores an edge to the next node in the API path.
+    :param api: APIFunction
+    :return: void
+    """
     instance = g.instances[name]
     if instance.API_return:
         raise Exception("Element instance '%s' can only compose one API. However, it is parts of APIs that return '%s' and '%s'."
@@ -36,13 +61,21 @@ def mark_return(g, name, path, api):
         instance.API_return_from = next
         mark_return(g, next, path, api)
 
+
 def annotate_api_info(g):
+    """
+    Annotate element instances in the given graph on information necessary to create API functions.
+    :param g: computation graph
+    :return: void
+    """
     for api in g.APIs:
         if api.state_name:
+            # Find a path from call node to return node. This path is used for passing the return value.
             path = {}
             dfs_find_path(g, api.call_instance, api.return_instance, path)
             mark_return(g, api.call_instance, path, api)
 
+            # Create return state.
             content = " "
             for port in g.instances[api.return_instance].element.outports:
                 if port.name == api.return_port:

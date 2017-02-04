@@ -158,6 +158,9 @@ class Graph:
     def is_state(self, state_name):
         return state_name in self.states
 
+    def clear_APIs(self):
+        self.APIs = []
+
     def has_element_instance(self, instance_name):
         return instance_name in self.instances
 
