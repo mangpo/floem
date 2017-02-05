@@ -1,5 +1,5 @@
 from graph import *
-import ctypes
+import common
 
 
 class ThreadAllocator:
@@ -130,7 +130,7 @@ class ThreadAllocator:
                     % (api.name, api.return_instance, api.return_port))
 
             # Return type
-            if api.state_name in ctypes.primitive_types or self.graph.is_state(api.state_name):
+            if api.state_name in common.primitive_types or self.graph.is_state(api.state_name):
                 ports = [x for x in instance.element.outports if x.name in port_names]
                 return_types = []
                 for port in ports:
@@ -206,14 +206,7 @@ class ThreadAllocator:
             clear += "  %s = 0;\n" % this_avail
 
         # Generate buffer variables.
-        buffers = []
-        buffers_types = []
-        for port in need_buffer:
-            argtypes = port.argtypes
-            for i in range(len(argtypes)):
-                buffer = "%s_arg%d" % (port.name, i)
-                buffers.append(buffer)
-                buffers_types.append(argtypes[i])
+        buffers_types, buffers = common.types_args_port_list(need_buffer, common.standard_arg_format)
 
         # State content
         st_content = ""
@@ -230,22 +223,12 @@ class ThreadAllocator:
         self.graph.newStateInstance(st_name, '_'+st_name)
 
         # All args
-        all_types = []
-        all_args = []
-        for port in instance.element.inports:
-            for i in range(len(port.argtypes)):
-                all_args.append("%s_arg%d" % (port.name, i))
-                all_types.append(port.argtypes[i])
+        all_types, all_args = common.types_args_port_list(instance.element.inports, common.standard_arg_format)
 
         # Read from input ports
         invoke = ""
         for port in no_buffer:
-            args = []
-            types_args = []
-            for i in range(len(port.argtypes)):
-                arg = "%s_arg%d" % (port.name, i)
-                args.append(arg)
-                types_args.append("%s %s" % (port.argtypes[i], arg))
+            types_args, args = common.types_args_one_port(port, common.standard_arg_format)
             invoke += "  (%s) = %s();\n" % (",".join(types_args), port.name)
 
         # Generate code to invoke the main element and clear available indicators.
@@ -295,7 +278,7 @@ class ThreadAllocator:
         types_buffers = []
         buffers = []
         for i in range(len(port.argtypes)):
-            buffer = "%s_arg%d" % (next_port, i)
+            buffer = common.standard_arg_format.format(next_port, i)
             buffers.append(buffer)
             types_buffers.append("%s %s" % (port.argtypes[i], buffer))
 

@@ -220,11 +220,8 @@ def element_to_function(instance, state_rename, graph):
     # Call join element
     join_call = ""
     for join in instance.join_call:
-        args = []
-        for port in graph.instances[join].join_ports_same_thread:
-            for i in range(len(port.argtypes)):
-                arg = "_p_%s->%s_arg%d" % (join, port.name, i)
-                args.append(arg)
+        types, args = common.types_args_port_list(graph.instances[join].join_ports_same_thread,
+                                                  "_p_%s->{0}_arg{1}" % join)
 
         if instance.API_return_from == join:
             join_call += "%s ret =" % instance.API_return
@@ -294,13 +291,7 @@ def generate_join_save_function(name, join_ports_same_thread):
 
     st_name = get_join_buffer_name(name)
     for port in join_ports_same_thread:
-        types_args = []
-        args = []
-        for i in range(len(port.argtypes)):
-            arg = "%s_arg%d" % (port.name, i)
-            args.append(arg)
-            types_args.append("%s %s" % (port.argtypes[i], arg))
-
+        types_args, args = common.types_args_one_port(port, common.standard_arg_format)
         src += "void %s_%s_save(%s *p, %s) {\n" % (st_name, port.name, st_name, ", ".join(types_args))
         for arg in args:
             src += "  p->%s = %s;\n" % (arg, arg)
@@ -315,10 +306,9 @@ def generate_API_return_state(api, g):
     args = []
     for port in g.instances[api.return_instance].element.outports:
         if port.name == api.return_port:
-            for i in range(len(port.argtypes)):
-                arg = "%s_arg%d" % (port.name, i)
-                args.append(arg)
-                types_args.append("%s %s" % (port.argtypes[i], arg))
+            l_types_args, l_args = common.types_args_one_port(port, common.standard_arg_format)
+            types_args += l_types_args
+            args += l_args
 
     src = ""
     src += "%s _get_%s(%s) {\n" % (api.state_name, api.state_name, ", ".join(types_args))
@@ -333,16 +323,14 @@ def generate_API_identity_macro(api):
     print src
     return src
 
+
 def generate_API_function(api, g):
     args = []
     types_args = []
     if api.call_port:
         instance = g.instances[api.call_instance]
         port = [port for port in instance.element.inports if port.name == api.call_port][0]
-        for i in range(len(port.argtypes)):
-            arg = "arg%d" % i
-            args.append(arg)
-            types_args.append("%s %s" % (port.argtypes[i], arg))
+        types_args, args = common.types_args_one_port(port, "arg{1}")
 
     src = ""
     if api.return_port:
@@ -435,7 +423,7 @@ def generate_code(graph):
     for api in graph.APIs:
         if api.state_name and api.state_name not in return_funcs:
             return_funcs.append(api.state_name)
-            if api.state_name in ctypes.primitive_types or not api.new_state_type:
+            if api.state_name in common.primitive_types or not api.new_state_type:
                 generate_API_identity_macro(api)
             else:
                 generate_API_return_state(api, graph)

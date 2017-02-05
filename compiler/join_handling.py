@@ -146,6 +146,9 @@ def annotate_join_info(g):
                 if port.name not in instance.input2ele:
                     raise Exception("Input port '%s' of join element instance '%s' is not connected to any instance."
                                     % (port.name, instance.name))
+                elif len(instance.input2ele[port.name]) > 1:
+                    raise Exception("Input port '%s' of join element instance '%s' is connected to more than one port."
+                                    % (port.name, instance.name))
 
             instance.join_ports_same_thread = ports_same_thread
             annotate_for_instance(instance, g, roots, save)

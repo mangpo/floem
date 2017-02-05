@@ -9,7 +9,7 @@ p = Program(
     Composite("Unit",
               [Port("in", ("f1", "in"))],
               [Port("out", ("f2", "out"))],
-              [Port("tin", ("f2", None))],  # TODO: check if it is in external_api
+              [Port("tin", ("f2", None))],
               [],
               Program(
                   ElementInstance("Forward", "f1"),
@@ -18,7 +18,7 @@ p = Program(
                   ExternalTrigger("f2")
               )),
     CompositeInstance("Unit","u"),
-    APIFunction("read", "u", "tin", "u", "out", "ReadReturn")
+    APIFunction("read", "u", "tin", "u", "out", "int")
 )
 
 g = generate_graph(p)

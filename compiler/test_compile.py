@@ -16,8 +16,15 @@ class TestCompile(unittest.TestCase):
                  "parallel_pipeline.py",
                  "state_local.py",
                  "state_shared.py",
+                 "state_nested_composite.py",
                  "composite.py",
-                 "state_nested_composite.py"]
+                 "composite_thread_port.py",
+                 "state_nested_composite.py",
+                 "API_increment.py",
+                 "API_read_blocking.py",
+                 "API_read_non_blocking.py",
+                 "API_read_non_blocking2.py"
+                 ]
 
         for test in tests:
             exit = os.system("python programs/" + test)

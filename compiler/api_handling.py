@@ -1,5 +1,5 @@
 from graph import State
-import ctypes
+import common
 
 
 def dfs_find_path(g, name, target_name, path):
@@ -82,6 +82,6 @@ def annotate_api_info(g):
                     for i in range(len(port.argtypes)):
                         type_arg = "%s %s_arg%d; " % (port.argtypes[i], port.name, i)
                         content += type_arg
-            if api.state_name not in ctypes.primitive_types and not g.is_state(api.state_name):
+            if api.state_name not in common.primitive_types and not g.is_state(api.state_name):
                 api.new_state_type = True
                 g.addState(State(api.state_name, content, init=None))

@@ -424,6 +424,42 @@ class TestThreadStateComposite(unittest.TestCase):
 
         self.check_join_call(g, [("f2", ["add1"]), ("f3", ["add2"])])
 
+    def test_join_error(self):
+        p = Program(
+            Element("Fork",
+                    [Port("in", ["int"])],
+                    [Port("out1", ["int"]), Port("out2", ["int"])],
+                    r'''(int x) = in(); out1(x); out2(x);'''),
+            Element("Forward",
+                    [Port("in", ["int"])],
+                    [Port("out", ["int"])],
+                    r'''out(in());'''),
+            Element("Add",
+                    [Port("in1", ["int"]), Port("in2", ["int"])],
+                    [Port("out", ["int"])],
+                    r'''out(in1() + in2());'''),
+            ElementInstance("Fork", "fork1"),
+            ElementInstance("Fork", "fork2"),
+            ElementInstance("Forward", "f1"),
+            ElementInstance("Forward", "f2"),
+            ElementInstance("Forward", "f3"),
+            ElementInstance("Add", "add1"),
+            Connect("fork1", "f1", "out1"),
+            Connect("fork1", "fork2", "out2"),
+            Connect("fork2", "f2", "out1"),
+            Connect("fork2", "f3", "out2"),
+            Connect("f1", "add1", "out", "in1"),
+            Connect("f2", "add1", "out", "in2"),
+            Connect("f3", "add1", "out", "in2")
+        )
+        try:
+            g = generate_graph(p, True)
+        except Exception as e:
+            self.assertNotEqual(e.message.find("cannot be connected to multiple element instances"), -1)
+            self.assertNotEqual(e.message.find("because 'add1' is a join element"), -1)
+        else:
+            self.fail('Exception is not raised.')
+
     def test_shared_state(self):
         p = Program(
             State("Shared", "int sum;", "100"),
