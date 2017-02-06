@@ -240,7 +240,7 @@ class ThreadAllocator:
                 this_buffer = "this." + buffer
                 invoke += "  %s %s = %s;\n" % (port.argtypes[i], buffer, this_buffer)
         invoke += clear
-        invoke += "  out(%s);\n" % ",".join(all_args)
+        invoke += "  output { out(%s); }\n" % ",".join(all_args)
 
         # Create element
         ele = Element(st_name+'_read', no_buffer, [Port("out", all_types)],

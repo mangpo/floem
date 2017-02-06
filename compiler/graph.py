@@ -21,7 +21,12 @@ class Element:
         self.code = '  ' + code
         self.local_state = local_state
         self.state_params = state_params
-        self.reorder_outports()
+
+        self.output_fire = None
+        self.output_code = None
+
+        self.analyze_output_type()
+        #self.reorder_outports()
 
     def __str__(self):
         return self.name
@@ -30,6 +35,141 @@ class Element:
         return (self.__class__ == other.__class__ and self.name == other.name and
                 self.inports == other.inports and self.outports == other.outports and self.code == other.code and
                 self.local_state == other.local_state and self.state_params == other.state_params)
+
+    def count_ports_occurrence(self, code):
+        occurrence = []
+        for port in self.outports:
+            occurrence.append((port.name, self.count_occurrence(code, port.name)))
+        return occurrence
+
+    def count_occurrence(self, code, name):
+        code = code
+        m = re.search('[^a-zA-Z0-9_]' + name + '[^a-zA-Z0-9_]', code)
+        if m:
+            return 1 + self.count_occurrence(code[m.end(0):], name)
+        else:
+            return 0
+
+    def analyze_output_type(self):
+        m = re.search('output[ ]*\{([^}]*)}', self.code)
+        if m:
+            # output { ... }
+            self.output_fire = "all"
+            program_code = self.code[:m.start(0)]
+            out_code = ' ' + m.group(1)
+            occurrence_out = self.count_ports_occurrence(out_code)
+
+            for name, count in occurrence_out:
+                if not count == 1:
+                    raise Exception("Element '%s' must fire port '%s' exactly once, but it fires '%s' %d times."
+                                    % (self.name, name, name, count))
+
+            name2call = {}
+            for port in self.outports:
+                m = re.search('[^a-zA-Z0-9_](' + port.name + '[ ]*\([^)]*\))', out_code)
+                name2call[port.name] = m.group(1)
+
+            self.output_code = name2call
+
+        else:
+            m = re.search('output[ ]+switch[ ]*\{([^}]*)}', self.code)
+            if m:
+                # output switch { ... }
+                program_code = self.code[:m.start(0)]
+                out_code = self.code[m.start(1):m.end(1)]
+                cases = out_code.split(';')
+                re.search('^[ ]*$', cases[-1])
+                if re.search('^[ ]*$', cases[-1]) is None:
+                    raise Exception("Illegal form of output { ... } block in element '%s'." % self.name)
+                count = {}
+                cases = cases[:-1]
+
+                m = re.search('^[ ]*else[ ]*:[ ]*([a-zA-Z0-9_]+)(\([^)]*\))[ ]*$', cases[-1])
+                if m:
+                    # has else
+                    self.output_fire = "one"
+                    count[m.group(1)] = 1
+                    cases = cases[:-1]
+                    else_expr = m.group(1) + m.group(2)
+                else:
+                    # no else
+                    self.output_one_or_zero = "zero_or_one"
+                    else_expr = None
+
+                cases_exprs = []
+                for case in cases:
+                    m = re.search('^[ ]*case([^:]+):[ ]*([a-zA-Z0-9_]+)(\([^)]*\))[ ]*$', case)
+                    if m:
+                        cases_exprs.append((m.group(1), m.group(2) + m.group(3)))
+                        if m.group(1) in count:
+                            count[m.group(2)] += 1
+                        else:
+                            count[m.group(2)] = 1
+                    else:
+                        raise Exception("Illegal form of 'case' in the output block in element '%s': %s"
+                                        % (self.name, case))
+                if else_expr:
+                    cases_exprs.append(("else", else_expr))
+
+                for port in self.outports:
+                    if port.name not in count:
+                        raise Exception("Element '%s' never fire port '%s'." % (self.name, port.name))
+
+                self.output_code = cases_exprs
+            else:
+                # no output area
+                if len(self.outports) > 0:
+                    raise Exception("Element '%s' does not have output { ... } block." % self.name)
+                program_code = self.code
+
+        # Check that it doesn't fire output port in program area.
+        occurrence_program = self.count_ports_occurrence(program_code)
+        for name, count in occurrence_program:
+            if count > 0:
+                raise Exception("Element '%s' fires port '%s' outside output { ... } block." % (self.name, name))
+
+        self.code = program_code
+
+    def get_output_code(self, order):
+        src = ""
+        if self.output_fire is None:
+            if self.output_code:
+                raise Exception("Element's output_fire is None, but its output_code is not None.")
+            return src
+
+        elif self.output_fire == "all":
+            if len(order) == 0:
+                for port in self.outports:
+                    expr = self.output_code[port.name]
+                    src += "  %s;\n" % expr
+            elif len(order) == len(self.outports):
+                for port_name in order:
+                    expr = self.output_code[port_name]
+                    src += "  %s;\n" % expr
+            else:
+                raise Exception("Element '%s' has %d output ports, but the order of ports only include %d ports."
+                                % (self.name, len(self.outports), len(order)))
+            return src
+
+        else:
+            cases_exprs = self.output_code
+            if self.output_fire == "one":
+                else_expr = None
+            else:
+                else_expr = cases_exprs[-1][1]
+                cases_exprs = cases_exprs[:-1]
+
+            src += self.generate_nested_if(cases_exprs, else_expr)
+            return src
+
+    def generate_nested_if(self, cases, else_expr):
+        src = "  if(%s) %s;\n" % cases[0][0], cases[0][1]
+        for case_expr in cases[1:]:
+            src += "  else if(%s) %s;\n" % case_expr[0], case_expr[1]
+
+        if else_expr:
+            src += "  else %s;\n" % else_expr
+        return src
 
     def reorder_outports(self):
         if len(self.outports) > 1:
@@ -61,6 +201,7 @@ class ElementNode:
         self.join_func_params = []   # which join buffers need to be passed as params
         self.join_output2save = {}   # which output ports need to be saved into join buffers
         self.join_call = []          # = 1 if this node needs to invoke the join element instance
+        self.join_partial_order = []
 
         # API information
         self.API_return = None        # which state this node needs to return

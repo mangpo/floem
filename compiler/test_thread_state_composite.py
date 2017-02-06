@@ -3,6 +3,23 @@ from program import *
 from compiler import *
 
 
+Fork2 = Element("Fork2",
+                [Port("in", ["int"])],
+                [Port("out1", ["int"]), Port("out2", ["int"])],
+                r'''(int x) = in(); output { out1(x); out2(x); }''')
+Fork3 = Element("Fork3",
+                [Port("in", ["int"])],
+                [Port("out1", ["int"]), Port("out2", ["int"]), Port("out3", ["int"])],
+                r'''(int x) = in(); output { out1(x); out2(x); out3(x); }''')
+Forward = Element("Forward",
+                  [Port("in", ["int"])],
+                  [Port("out", ["int"])],
+                  r'''int x = in(); output { out(x); }''')
+Add = Element("Add",
+              [Port("in1", ["int"]), Port("in2", ["int"])],
+              [Port("out", ["int"])],
+              r'''int x = in1() + in2(); output { out(x); }''')
+
 class TestThreadStateComposite(unittest.TestCase):
 
     def find_roots(self, g):
@@ -129,15 +146,15 @@ class TestThreadStateComposite(unittest.TestCase):
             Element("Fork",
                     [Port("in", ["int", "int"])],
                     [Port("to_add", ["int", "int"]), Port("to_sub", ["int", "int"])],
-                    r'''(int x, int y) = in(); to_add(x,y); to_sub(x,y);'''),
+                    r'''(int x, int y) = in(); output { to_add(x,y); to_sub(x,y); }'''),
             Element("Add",
                     [Port("in", ["int", "int"])],
                     [Port("out", ["int"])],
-                    r'''(int x, int y) = in(); out(x+y);'''),
+                    r'''(int x, int y) = in(); output { out(x+y); }'''),
             Element("Sub",
                     [Port("in", ["int", "int"])],
                     [Port("out", ["int"])],
-                    r'''(int x, int y) = in(); out(x-y);'''),
+                    r'''(int x, int y) = in(); output { out(x-y); }'''),
             Element("Print",
                     [Port("in1", ["int"]), Port("in2", ["int"])],
                     [],
@@ -178,15 +195,15 @@ class TestThreadStateComposite(unittest.TestCase):
             Element("Fork",
                     [Port("in", ["int", "int"])],
                     [Port("to_add", ["int", "int"]), Port("to_sub", ["int", "int"])],
-                    r'''(int x, int y) = in(); to_add(x,y); to_sub(x,y);'''),
+                    r'''(int x, int y) = in(); output { to_add(x,y); to_sub(x,y); }'''),
             Element("Add",
                     [Port("in", ["int", "int"])],
                     [Port("out", ["int"])],
-                    r'''(int x, int y) = in(); out(x+y);'''),
+                    r'''(int x, int y) = in(); output { out(x+y); }'''),
             Element("Sub",
                     [Port("in", ["int", "int"])],
                     [Port("out", ["int"])],
-                    r'''(int x, int y) = in(); out(x-y);'''),
+                    r'''(int x, int y) = in(); output { out(x-y); }'''),
             Element("Print",
                     [Port("in1", ["int"]), Port("in2", ["int"])],
                     [],
@@ -223,15 +240,15 @@ class TestThreadStateComposite(unittest.TestCase):
             Element("Fork",
                     [Port("in", ["int", "int"])],
                     [Port("to_add", ["int", "int"]), Port("to_sub", ["int", "int"])],
-                    r'''(int x, int y) = in(); to_add(x,y); to_sub(x,y);'''),
+                    r'''(int x, int y) = in(); output { to_add(x,y); to_sub(x,y); }'''),
             Element("Add",
                     [Port("in", ["int", "int"])],
                     [Port("out", ["int"])],
-                    r'''(int x, int y) = in(); out(x+y);'''),
+                    r'''(int x, int y) = in(); output { out(x+y); }'''),
             Element("Sub",
                     [Port("in", ["int", "int"])],
                     [Port("out", ["int"])],
-                    r'''(int x, int y) = in(); out(x-y);'''),
+                    r'''(int x, int y) = in(); output { out(x-y); }'''),
             Element("Print",
                     [Port("in1", ["int"]), Port("in2", ["int"])],
                     [],
@@ -266,7 +283,7 @@ class TestThreadStateComposite(unittest.TestCase):
             Element("Forwarder",
                     [Port("in", ["int"])],
                     [Port("out", ["int"])],
-                    r'''out(in());'''),
+                    r'''int x = in(); output { out(x); }'''),
             Element("Print",
                     [Port("in1", ["int"]), Port("in2", ["int"])],
                     [],
@@ -312,22 +329,7 @@ class TestThreadStateComposite(unittest.TestCase):
 
     def test_multi_joins(self):
         p = Program(
-            Element("Fork2",
-                    [Port("in", ["int"])],
-                    [Port("out1", ["int"]), Port("out2", ["int"])],
-                    r'''(int x) = in(); out1(x); out2(x);'''),
-            Element("Fork3",
-                    [Port("in", ["int"])],
-                    [Port("out1", ["int"]), Port("out2", ["int"]), Port("out3", ["int"])],
-                    r'''(int x) = in(); out1(x); out2(x); out3(x);'''),
-            Element("Forward",
-                    [Port("in", ["int"])],
-                    [Port("out", ["int"])],
-                    r'''out(in());'''),
-            Element("Add",
-                    [Port("in1", ["int"]), Port("in2", ["int"])],
-                    [Port("out", ["int"])],
-                    r'''out(in1() + in2());'''),
+            Fork2, Fork3, Forward, Add,
             ElementInstance("Fork3", "fork3"),
             ElementInstance("Fork2", "fork2"),
             ElementInstance("Forward", "f1"),
@@ -365,22 +367,11 @@ class TestThreadStateComposite(unittest.TestCase):
         self.assertEqual(g.instances["add1"].join_output2save, {})
         self.assertEqual(g.instances["add2"].join_output2save, {})
 
-        self.check_join_call(g, [("fork2", ["add1"]), ("f2", ["add2"])])
+        self.check_join_call(g, [("f1", ["add1"]), ("f2", ["add2"])])
 
-    def test_nested_joins(self):
+    def test_nested_joins(self):  # TODO: currently fails this test
         p = Program(
-            Element("Fork2",
-                    [Port("in", ["int"])],
-                    [Port("out1", ["int"]), Port("out2", ["int"])],
-                    r'''(int x) = in(); out1(x); out2(x);'''),
-            Element("Forward",
-                    [Port("in", ["int"])],
-                    [Port("out", ["int"])],
-                    r'''out(in());'''),
-            Element("Add",
-                    [Port("in1", ["int"]), Port("in2", ["int"])],
-                    [Port("out", ["int"])],
-                    r'''out(in1() + in2());'''),
+            Fork2, Forward, Add,
             ElementInstance("Fork2", "fork1"),
             ElementInstance("Fork2", "fork2"),
             ElementInstance("Forward", "f1"),

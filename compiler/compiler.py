@@ -112,6 +112,23 @@ def remove_expr(src,port2args,port,p_start, p_end, inport_types):
     return src[:p_start] + name + src[p_end:]
 
 
+def rename_state(src, rename):
+    """
+    Given a list of (old_str, new_str), replace old_strin src with new_str.
+    :param src: code
+    :param rename: a list of (old_str, new_str)
+    :return: renamed src
+    """
+    for (old, new) in rename:
+        match = True
+        index = 0
+        while match:
+            match = re.search('[^a-zA-Z0-9_]('+old+').', src[index:])
+            if match:
+                src = src[:index+match.start(1)] + new + src[index+match.end(1):]
+                index = index + match.start(1) + len(old)
+    return src
+
 def element_to_function(instance, state_rename, graph):
     """
     Turn an element into a function.
@@ -123,10 +140,34 @@ def element_to_function(instance, state_rename, graph):
     """
     element = instance.element
     src = element.code
+    out_src = element.get_output_code(instance.join_partial_order)
     funcname = instance.name
     inports = element.inports
     output2func = instance.output2ele
     local_state = element.local_state
+
+    # Create join buffer
+    join_create = ""
+    for join in instance.join_state_create:
+        join_buffer_name = get_join_buffer_name(join)
+        join_create += "  %s *_p_%s = malloc(sizeof(%s));\n" % (join_buffer_name, join, join_buffer_name)
+        # struct Vector *retVal = malloc (sizeof (struct Vector));
+
+    # Call join element
+    join_call = ""
+    for join in instance.join_call:
+        types, args = common.types_args_port_list(graph.instances[join].join_ports_same_thread,
+                                                  "_p_%s->{0}_arg{1}" % join)
+
+        if instance.API_return_from == join:
+            join_call += "%s ret =" % instance.API_return
+        join_call += "  %s(" % join
+        for o in output2func:
+            (f, fport) = output2func[o]
+            for other_join in graph.instances[f].join_func_params:
+                join_call += "_p_%s, " % other_join
+        join_call += ", ".join(args)
+        join_call += ");\n"
 
     src += '\n'
     # A dictionary to collect function arguments.
@@ -166,10 +207,9 @@ def element_to_function(instance, state_rename, graph):
 
     # Replace output ports with function calls
     for o in output2func:
-        m = re.search(o + '[ ]*\(',src)
+        m = re.search('(' + o + '[ ]*\()[^)]*\)[ ]*;', out_src)
         if m is None:
             raise Exception("Element '%s' never send data from output port '%s'." % (funcname,o))
-        p = m.start(0)
         (f, fport) = output2func[o]
         if o in instance.join_output2save:
             if isinstance(fport, list):
@@ -179,6 +219,10 @@ def element_to_function(instance, state_rename, graph):
             # Save output to join buffer instead of calling the next function
             join = instance.join_output2save[o]
             call = get_join_buffer_name(join) + "_" + fport + "_save(_p_" + join + ", "
+
+            # Insert join_call right after saving the buffer for it.
+            # This is to preserve the right order of function calls.
+            out_src = out_src[:m.end(1)] + call + out_src[m.end(1):m.end(0)] + join_call + out_src[m.end(0):]
         else:
             call = ""
             if instance.API_return_from == f:
@@ -186,52 +230,22 @@ def element_to_function(instance, state_rename, graph):
             call += f + "("
             for join in graph.instances[f].join_func_params:
                 call += "_p_%s, " % join
-        src = src[:p] + call + src[m.end(0):]
+            out_src = out_src[:m.end(1)] + call + out_src[m.end(1):]
 
     # Replace API output port with function to create return state
     if instance.API_return_final:
         #o = instance.element.outports[0].name
         o = instance.API_return_final.return_port
-        m = re.search(o + '[ ]*\(', src)
+        m = re.search(o + '[ ]*\(', out_src)
         if m is None:
             raise Exception("Element '%s' never send data from output port '%s'." % (funcname, o))
         p = m.start(0)
         call = "%s ret = _get_%s(" % (instance.API_return, instance.API_return)
-        src = src[:p] + call + src[m.end(0):]
-
+        out_src = out_src[:p] + call + out_src[m.end(0):]
 
     # Replace old state name with new state name
-    for (old,new) in state_rename:
-        match = True
-        index = 0
-        while match:
-            match = re.search('[^a-zA-Z0-9_]('+old+').', src[index:])
-            if match:
-                src = src[:index+match.start(1)] + new + src[index+match.end(1):]
-                index = index + match.start(1) + len(old)
-
-    # Create join buffer
-    join_create = ""
-    for join in instance.join_state_create:
-        join_buffer_name = get_join_buffer_name(join)
-        join_create += "  %s *_p_%s = malloc(sizeof(%s));\n" % (join_buffer_name, join, join_buffer_name)
-        # struct Vector *retVal = malloc (sizeof (struct Vector));
-
-    # Call join element
-    join_call = ""
-    for join in instance.join_call:
-        types, args = common.types_args_port_list(graph.instances[join].join_ports_same_thread,
-                                                  "_p_%s->{0}_arg{1}" % join)
-
-        if instance.API_return_from == join:
-            join_call += "%s ret =" % instance.API_return
-        join_call += "  %s(" % join
-        for o in output2func:
-            (f, fport) = output2func[o]
-            for other_join in graph.instances[f].join_func_params:
-                join_call += "_p_%s, " % other_join
-        join_call += ", ".join(args)
-        join_call += ");\n"
+    src = rename_state(state_rename, src)
+    out_src = rename_state(state_rename, out_src)
 
     # API Return
     api_return = ""
@@ -263,7 +277,7 @@ def element_to_function(instance, state_rename, graph):
     else:
         return_type = "void"
     code = "%s %s(%s) {\n" % (return_type, funcname, ", ".join(args))
-    code += state_src + join_create + src + join_call + api_return
+    code += state_src + join_create + src + out_src + api_return
     code += "}\n"
     print code
     return code
@@ -377,6 +391,7 @@ def generate_graph(program, resource=True):
     :param resource: True if compile with resource mapping
     :return: data-flow graph
     """
+    print "generate_graph"
     # Generate data-flow graph.
     gen = GraphGenerator()
     gen.interpret(program)
