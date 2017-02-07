@@ -1,11 +1,8 @@
 from compiler import *
-from thread_allocation import *
+from standard_elements import *
 
 p = Program(
-    Element("Inc",
-            [Port("in", ["int"])],
-            [Port("out", ["int"])],
-            r'''out(in() + 1);'''),
+    Inc,
     ElementInstance("Inc", "inc1"),
     ElementInstance("Inc", "inc2"),
     Connect("inc1", "inc2"),

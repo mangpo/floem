@@ -1,11 +1,8 @@
 from compiler import *
-from thread_allocation import *
+from standard_elements import *
 
 p = Program(
-    Element("Forward",
-            [Port("in", ["int"])],
-            [Port("out", ["int"])],
-            r'''out(in());'''),
+    Forward,
     Composite("Unit",
               [Port("in", ("f1", "in"))],
               [Port("out", ("f2", "out"))],

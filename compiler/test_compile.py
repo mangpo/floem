@@ -1,9 +1,8 @@
 from compiler import *
-from graph import *
 from program import *
+from standard_elements import *
 import os
 import unittest
-
 
 class TestCompile(unittest.TestCase):
 
@@ -42,12 +41,9 @@ class TestCompile(unittest.TestCase):
 
     def test_undefined_element_port(self):
         p = Program(
-            Element("ID",
-                    [Port("in", ["int"])],
-                    [Port("out", ["int"])],
-                    r'''out(in());'''),
-            ElementInstance("ID", "x"),
-            ElementInstance("ID", "y"),
+            Forward,
+            ElementInstance("Forward", "x"),
+            ElementInstance("Forward", "y"),
             Connect("x","y", "out..."))
         try:
             g = generate_graph(p)
@@ -59,13 +55,10 @@ class TestCompile(unittest.TestCase):
 
     def test_undefined_composite_port(self):
         p = Program(
-            Element("ID",
-                    [Port("in", ["int"])],
-                    [Port("out", ["int"])],
-                    r'''out(in());'''),
+            Forward,
             Composite("Unit", [Port("in", ("x", "in", "extra"))], [Port("out", ("x", "out"))], [], [],
                       Program(
-                          ElementInstance("ID", "x"))),
+                          ElementInstance("Forward", "x"))),
             CompositeInstance("Unit", "u"))
         try:
             g = generate_graph(p)
@@ -76,13 +69,10 @@ class TestCompile(unittest.TestCase):
 
     def test_undefined_composite_port2(self):
         p = Program(
-            Element("ID",
-                    [Port("in", ["int"])],
-                    [Port("out", ["int"])],
-                    r'''out(in());'''),
+            Forward,
             Composite("Unit", [Port("in", ("x", "in"))], [Port("out", ("x", "out"))], [], [],
                       Program(
-                          ElementInstance("ID", "x"))),
+                          ElementInstance("Forward", "x"))),
             CompositeInstance("Unit", "u1"),
             CompositeInstance("Unit", "u2"),
             Connect("u1", "u2", "out...")
@@ -97,13 +87,10 @@ class TestCompile(unittest.TestCase):
 
     def test_conflict_output(self):
         p = Program(
-            Element("Forwarder",
-                    [Port("in", ["int"])],
-                    [Port("out", ["int"])],
-                    r'''out(in());'''),
-            ElementInstance("Forwarder", "f1"),
-            ElementInstance("Forwarder", "f2"),
-            ElementInstance("Forwarder", "f3"),
+            Forward,
+            ElementInstance("Forward", "f1"),
+            ElementInstance("Forward", "f2"),
+            ElementInstance("Forward", "f3"),
             Connect("f1", "f2"),
             Connect("f1", "f3"),
         )
@@ -119,15 +106,15 @@ class TestCompile(unittest.TestCase):
             Element("Fork",
                     [Port("in", ["int", "int"])],
                     [Port("to_add", ["int", "int"]), Port("to_sub", ["int", "int"])],
-                    r'''(int x, int y) = in(); to_add(x,y); to_sub(x,y);'''),
+                    r'''(int x, int y) = in(); output { to_add(x,y); to_sub(x,y); }'''),
             Element("Add",
                     [Port("in", ["int", "int"])],
                     [Port("out", ["int"])],
-                    r'''(int x, int y) = in(); out(x+y);'''),
+                    r'''(int x, int y) = in(); output { out(x+y); }'''),
             Element("Sub",
                     [Port("in", ["int", "int"])],
                     [Port("out", ["int"])],
-                    r'''(int x, int y) = in(); out(x-y);'''),
+                    r'''(int x, int y) = in(); output { out(x-y); }'''),
             Element("Print",
                     [Port("in1", ["int"]), Port("in2", ["int"])],
                     [],

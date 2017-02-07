@@ -15,7 +15,7 @@ p = Program(
             r'''
             int x = 0; int avail = 0;
             if(this.avail==1) { x = this.x; avail = 1; this.avail = 0; }
-            out(x, avail);''',
+            output { out(x, avail); }''',
             None,
             [("Buffer", "this")]),
     StateInstance("Buffer", "b"),

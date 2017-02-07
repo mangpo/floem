@@ -1,24 +1,7 @@
 import unittest
-from program import *
+from standard_elements import *
 from compiler import *
 
-
-Fork2 = Element("Fork2",
-                [Port("in", ["int"])],
-                [Port("out1", ["int"]), Port("out2", ["int"])],
-                r'''(int x) = in(); output { out1(x); out2(x); }''')
-Fork3 = Element("Fork3",
-                [Port("in", ["int"])],
-                [Port("out1", ["int"]), Port("out2", ["int"]), Port("out3", ["int"])],
-                r'''(int x) = in(); output { out1(x); out2(x); out3(x); }''')
-Forward = Element("Forward",
-                  [Port("in", ["int"])],
-                  [Port("out", ["int"])],
-                  r'''int x = in(); output { out(x); }''')
-Add = Element("Add",
-              [Port("in1", ["int"]), Port("in2", ["int"])],
-              [Port("out", ["int"])],
-              r'''int x = in1() + in2(); output { out(x); }''')
 
 class TestThreadStateComposite(unittest.TestCase):
 
@@ -106,15 +89,12 @@ class TestThreadStateComposite(unittest.TestCase):
 
     def test_pipeline(self):
         p = Program(
-            Element("Forwarder",
-                    [Port("in", ["int"])],
-                    [Port("out", ["int"])],
-                    r'''out(in());'''),
+            Forward,
             Element("Comsumer",
                     [Port("in", ["int"])],
                     [],
                     r'''printf("%d\n", in());'''),
-            ElementInstance("Forwarder", "Forwarder"),
+            ElementInstance("Forward", "Forwarder"),
             ElementInstance("Comsumer", "Comsumer"),
             Connect("Forwarder", "Comsumer")
             , ExternalTrigger("Forwarder")
@@ -369,7 +349,7 @@ class TestThreadStateComposite(unittest.TestCase):
 
         self.check_join_call(g, [("f1", ["add1"]), ("f2", ["add2"])])
 
-    def test_nested_joins(self):  # TODO: currently fails this test
+    def test_nested_joins(self):
         p = Program(
             Fork2, Forward, Add,
             ElementInstance("Fork2", "fork1"),
@@ -417,20 +397,9 @@ class TestThreadStateComposite(unittest.TestCase):
 
     def test_join_error(self):
         p = Program(
-            Element("Fork",
-                    [Port("in", ["int"])],
-                    [Port("out1", ["int"]), Port("out2", ["int"])],
-                    r'''(int x) = in(); out1(x); out2(x);'''),
-            Element("Forward",
-                    [Port("in", ["int"])],
-                    [Port("out", ["int"])],
-                    r'''out(in());'''),
-            Element("Add",
-                    [Port("in1", ["int"]), Port("in2", ["int"])],
-                    [Port("out", ["int"])],
-                    r'''out(in1() + in2());'''),
-            ElementInstance("Fork", "fork1"),
-            ElementInstance("Fork", "fork2"),
+            Fork2, Forward, Add,
+            ElementInstance("Fork2", "fork1"),
+            ElementInstance("Fork2", "fork2"),
             ElementInstance("Forward", "f1"),
             ElementInstance("Forward", "f2"),
             ElementInstance("Forward", "f3"),
@@ -476,7 +445,7 @@ class TestThreadStateComposite(unittest.TestCase):
             Element("Identity",
                     [Port("in", ["int"])],
                     [Port("out", ["int"])],
-                    r'''local.count++; global.count++; out(in());''',
+                    r'''local.count++; global.count++; int x = in(); output { out(x); }''',
                     None,
                     [("Count", "local"), ("Count", "global")]
                     ),
@@ -514,7 +483,7 @@ class TestThreadStateComposite(unittest.TestCase):
             Element("Identity",
                     [Port("in", ["int"])],
                     [Port("out", ["int"])],
-                    r'''this.count++; out(in());''',
+                    r'''this.count++; int x = in(); output { out(x); }''',
                     None,
                     [("Count", "this")]
                     ),
@@ -552,14 +521,11 @@ class TestThreadStateComposite(unittest.TestCase):
     def test_composite_with_threads(self):
 
         p = Program(
-            Element("Forwarder",
-                    [Port("in", ["int"])],
-                    [Port("out", ["int"])],
-                    r'''out(in());'''),
+            Forward,
             Composite("Unit", [Port("in", ("f1", "in"))], [Port("out", ("f2", "out"))], [], [],
                       Program(
-                          ElementInstance("Forwarder", "f1"),
-                          ElementInstance("Forwarder", "f2"),
+                          ElementInstance("Forward", "f1"),
+                          ElementInstance("Forward", "f2"),
                           Connect("f1", "f2"),
                           InternalTrigger("f2")
                       )),
@@ -575,13 +541,10 @@ class TestThreadStateComposite(unittest.TestCase):
 
     def test_nonconflict_input(self):
         p = Program(
-            Element("Forwarder",
-                    [Port("in", ["int"])],
-                    [Port("out", ["int"])],
-                    r'''out(in());'''),
-            ElementInstance("Forwarder", "f1"),
-            ElementInstance("Forwarder", "f2"),
-            ElementInstance("Forwarder", "f3"),
+            Forward,
+            ElementInstance("Forward", "f1"),
+            ElementInstance("Forward", "f2"),
+            ElementInstance("Forward", "f3"),
             Connect("f1", "f3"),
             Connect("f2", "f3"),
         )
@@ -595,13 +558,10 @@ class TestThreadStateComposite(unittest.TestCase):
 
     def test_nonconflict_input_thread(self):
         p = Program(
-            Element("Forwarder",
-                    [Port("in", ["int"])],
-                    [Port("out", ["int"])],
-                    r'''out(in());'''),
-            ElementInstance("Forwarder", "f1"),
-            ElementInstance("Forwarder", "f2"),
-            ElementInstance("Forwarder", "f3"),
+            Forward,
+            ElementInstance("Forward", "f1"),
+            ElementInstance("Forward", "f2"),
+            ElementInstance("Forward", "f3"),
             Connect("f1", "f3"),
             Connect("f2", "f3"),
             InternalTrigger("f3")
@@ -617,10 +577,7 @@ class TestThreadStateComposite(unittest.TestCase):
 
     def test_error_both_internal_external(self):
         p = Program(
-            Element("Forward",
-                    [Port("in", ["int"])],
-                    [Port("out", ["int"])],
-                    r'''out(in());'''),
+            Forward,
             ElementInstance("Forward", "f1"),
             ExternalTrigger("f1"),
             InternalTrigger("f1")
@@ -637,7 +594,7 @@ class TestThreadStateComposite(unittest.TestCase):
             Element("Inc",
                     [Port("in", ["int"])],
                     [Port("out", ["int"])],
-                    r'''out(in() + 1);'''),
+                    r'''int x = in() + 1; output { out(x); }'''),
             Element("Print",
                     [Port("in", ["int"])],
                     [],
@@ -661,7 +618,7 @@ class TestThreadStateComposite(unittest.TestCase):
             Element("Inc",
                     [Port("in", ["int"])],
                     [Port("out", ["int"])],
-                    r'''out(in() + 1);'''),
+                    r'''int x = in() + 1; output { out(x); }'''),
             ElementInstance("Inc", "inc1"),
             ElementInstance("Inc", "inc2"),
             Connect("inc1", "inc2"),
@@ -679,10 +636,7 @@ class TestThreadStateComposite(unittest.TestCase):
 
     def test_API_blocking_read(self):
         p = Program(
-            Element("Forward",
-                    [Port("in", ["int"])],
-                    [Port("out", ["int"])],
-                    r'''out(in());'''),
+            Forward,
             ElementInstance("Forward", "f1"),
             ElementInstance("Forward", "f2"),
             Connect("f1", "f2"),
@@ -702,10 +656,7 @@ class TestThreadStateComposite(unittest.TestCase):
 
     def test_API_return_error(self):
         p = Program(
-            Element("Forward",
-                    [Port("in", ["int"])],
-                    [Port("out", ["int"])],
-                    r'''out(in());'''),
+            Forward,
             ElementInstance("Forward", "f1"),
             ElementInstance("Forward", "f2"),
             Connect("f1", "f2"),
@@ -714,17 +665,13 @@ class TestThreadStateComposite(unittest.TestCase):
         try:
             g = generate_graph(p)
         except Exception as e:
-            print e.message
             self.assertNotEqual(e.message.find("return element instance 'f1' has a continuing element instance"), -1)
         else:
             self.fail('Exception is not raised.')
 
     def test_API_no_return_okay(self):
         p = Program(
-            Element("Forward",
-                    [Port("in", ["int"])],
-                    [Port("out", ["int"])],
-                    r'''out(in());'''),
+            Forward,
             ElementInstance("Forward", "f1"),
             ElementInstance("Forward", "f2"),
             Connect("f1", "f2"),
@@ -745,22 +692,14 @@ class TestThreadStateComposite(unittest.TestCase):
 
     def test_API_return_okay(self):
         p = Program(
-            Element("Dup",
-                    [Port("in", ["int"])],
-                    [Port("out1", ["int"]), Port("out2", ["int"])],
-                    r'''int x = in(); out1(x); out2(x);'''),
-            Element("Forward",
-                    [Port("in", ["int"])],
-                    [Port("out", ["int"])],
-                    r'''out(in());'''),
-            ElementInstance("Dup", "dup"),
+            Fork2, Forward,
+            ElementInstance("Fork2", "dup"),
             ElementInstance("Forward", "fwd"),
             Connect("dup", "fwd", "out1"),
             InternalTrigger("fwd"),
             APIFunction("func", "dup", "in", "dup", "out2", "int")
         )
         g = generate_graph(p)
-        generate_code(g)
         self.assertEqual(4, len(g.instances))
         self.assertEqual(1, len(g.states))
         roots = self.find_roots(g)
@@ -774,10 +713,7 @@ class TestThreadStateComposite(unittest.TestCase):
 
     def test_composite_scope(self):
         p = Program(
-            Element("Forward",
-                    [Port("in", ["int"])],
-                    [Port("out", ["int"])],
-                    r'''out(in());'''),
+            Forward,
             Composite("Unit1",
                       [Port("in", ("aa", "in"))],
                       [Port("out", ("aa", "out"))],

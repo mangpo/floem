@@ -1,23 +1,8 @@
 from compiler import *
-from thread_allocation import *
+from standard_elements import *
 
 p = Program(
-            Element("Fork2",
-                    [Port("in", ["int"])],
-                    [Port("out1", ["int"]), Port("out2", ["int"])],
-                    r'''(int x) = in(); out1(x); out2(x);'''),
-            Element("Fork3",
-                    [Port("in", ["int"])],
-                    [Port("out1", ["int"]), Port("out2", ["int"]), Port("out3", ["int"])],
-                    r'''(int x) = in(); out1(x); out2(x); out3(x);'''),
-            Element("Forward",
-                    [Port("in", ["int"])],
-                    [Port("out", ["int"])],
-                    r'''out(in());'''),
-            Element("Add",
-                    [Port("in1", ["int"]), Port("in2", ["int"])],
-                    [Port("out", ["int"])],
-                    r'''out(in1() + in2());'''),
+            Fork2, Fork3, Forward, Add,
             ElementInstance("Fork3", "fork3"),
             ElementInstance("Fork2", "fork2"),
             ElementInstance("Forward", "f1"),

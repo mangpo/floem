@@ -1,5 +1,6 @@
 from compiler import element_to_function
 from graph import *
+from standard_elements import *
 import unittest
 
 def test_element(e):
@@ -15,15 +16,11 @@ class TestElementToFunction(unittest.TestCase):
         e1 = Element("Power",
                      [Port("in", ["int"])],
                      [Port("out", ["int"])], 
-                     r'''int x = in(); out(x*x);''')
+                     r'''int x = in(); output { out(x*x); }''')
         test_element(e1)
 
     def test_input_expr(self):
-        e2 = Element("Add1",
-                     [Port("in", ["int"])],
-                     [Port("out", ["int"])], 
-                     r'''out(in()+1);''')
-        test_element(e2)
+        test_element(Inc)
 
     def test_multi_ports(self):
         e3 = Element("AddSub",
@@ -31,7 +28,7 @@ class TestElementToFunction(unittest.TestCase):
                      [Port("add_out", ["int"]), Port("sub_out", ["int"])], 
                      r'''
                      int a = in1(); int b = in2();
-                     add_out(a+b); sub_out(a-b);
+                     output { add_out(a+b); sub_out(a-b); }
                      ''')
         test_element(e3)
 
@@ -39,7 +36,7 @@ class TestElementToFunction(unittest.TestCase):
         e4 = Element("Print",
                      [Port("in", [])],
                      [Port("out", [])], 
-                     r'''in(); printf("hello\n"); out();''')
+                     r'''in(); printf("hello\n"); output { out(); }''')
         test_element(e4)
 
     def expect_exception(self,e,s):
@@ -68,14 +65,14 @@ class TestElementToFunction(unittest.TestCase):
         e = Element("Print",
                     [Port("in", [])],
                     [Port("out",["int"])], 
-                    r'''out(in());''')
+                    r'''int x = in(); output { out(x); }''')
         self.expect_exception(e,"It cannot be used as an expression.")
 
     def test_two_values_in_expr(self):
         e = Element("Print",
                     [Port("in", ["int", "int"])],
                     [Port("out",["int"])], 
-                    r'''out(in());''')
+                    r'''int x = in(); output { out(x); }''')
         self.expect_exception(e,"It cannot be used as an expression.")
         
 

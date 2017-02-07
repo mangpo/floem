@@ -11,7 +11,7 @@ p = Program(
             [("Buffer", "this")]),
     Element("BlockingRead",
             [],
-            [Port("in", ["int"])],
+            [],
             r'''while(this.avail==0); int x = this.x; this.avail = 0; printf("%d\n", x);''',
             None,
             [("Buffer", "this")]),

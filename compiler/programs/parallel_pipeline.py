@@ -1,16 +1,13 @@
 from compiler import *
-from thread_allocation import *
+from standard_elements import *
 
 p = Program(
-    Element("Forwarder",
-            [Port("in", ["int"])],
-            [Port("out", ["int"])],
-            r'''out(in());'''),
+    Forward,
     Element("Comsumer",
             [Port("in", ["int"])],
             [],
             r'''printf("%d\n", in());'''),
-    ElementInstance("Forwarder", "Forwarder"),
+    ElementInstance("Forward", "Forwarder"),
     ElementInstance("Comsumer", "Comsumer"),
     Connect("Forwarder", "Comsumer")
     , ExternalTrigger("Forwarder")

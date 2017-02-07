@@ -418,10 +418,19 @@ class Graph:
         if name in self.identity:
             return self.identity[name]
 
+        args = []
+        types_args = []
+        for i in range(len(argtypes)):
+            arg = "arg%d" % i
+            args.append(arg)
+            types_args.append("%s %s" % (argtypes[i], arg))
+
+        src = "(%s) = in(); output { out(%s); }\n" % (", ".join(types_args), ", ".join(args))
+
         e = Element(name,
                     [Port("in", argtypes)],
                     [Port("out", argtypes)],
-                    r'''out(in());''') # TODO
+                    src)
 
         self.identity[name] = e
         return e

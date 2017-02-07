@@ -6,7 +6,7 @@ p = Program(
     Element("Identity",
             [Port("in", ["int"])],
             [Port("out", ["int"])],
-            r'''this.count++; out(in());''',
+            r'''this.count++; int x = in(); output { out(x); }''',
             None,
             [("Count", "this")]
             ),

@@ -1,15 +1,9 @@
 from compiler import *
+from standard_elements import *
 
 p = Program(
-            Element("Dup",
-                    [Port("in", ["int"])],
-                    [Port("out1", ["int"]), Port("out2", ["int"])],
-                    r'''int x = in(); out1(x); out2(x);'''),
-            Element("Forward",
-                    [Port("in", ["int"])],
-                    [Port("out", ["int"])],
-                    r'''out(in());'''),
-            ElementInstance("Dup", "dup"),
+            Fork2, Forward,
+            ElementInstance("Fork2", "dup"),
             ElementInstance("Forward", "fwd"),
             Connect("dup", "fwd", "out1"),
             #InternalTrigger("fwd"),
