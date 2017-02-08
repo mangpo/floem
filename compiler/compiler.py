@@ -163,10 +163,8 @@ def element_to_function(instance, state_rename, graph):
         if instance.API_return_from == join:
             join_call += "%s ret =" % instance.API_return
         join_call += "  %s(" % join
-        for o in output2func:
-            (f, fport) = output2func[o]
-            for other_join in graph.instances[f].join_func_params:
-                join_call += "_p_%s, " % other_join
+        for other_join in graph.instances[join].join_func_params:
+            join_call += "_p_%s, " % other_join
         join_call += ", ".join(args)
         join_call += ");\n"
         join_call_map[join] = join_call

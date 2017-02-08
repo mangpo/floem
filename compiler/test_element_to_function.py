@@ -3,6 +3,7 @@ from graph import *
 from standard_elements import *
 import unittest
 
+
 def test_element(e):
     g = Graph()
     g.addElement(e)

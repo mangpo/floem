@@ -1,10 +1,14 @@
 from graph import State
 
+
 class InstancePart:
+    """
+    This class represents a subset of input ports of an element instance (part of instance).
+    """
     def __init__(self, instance, ports, total):
         self.instance = instance
         self.ports = ports  # set
-        self.total = total
+        self.total = total  # number of input ports
 
     def __eq__(self, other):
         return self.__class__ == other.__class__ and self.instance == other.instance and self.ports == other.ports
@@ -31,8 +35,18 @@ class InstancePart:
 
 
 class FlowCollection:
+    """
+    This class represents a piece of data required to fire a join node.
+    self.collection is a list of lists of InstancePart.
+    A list of InstancePart represents a piece of data to the join node
+    (an incomplete join nodes along a reversed path the join node -- we ignore complete join nodes).
+    For example, [InstancePart(A, set(0), 2), InstancePart(B, set(1), 2)]
+    represents a data from input port 0 of A to input port 1 of B.
+    All instances in InstancePart are join nodes.
+    FlowCollection with all data is a list of one entry [A].
+    """
 
-    def __init__(self, instance, total, port=None, is_port=True):
+    def __init__(self, instance, total, port=None, is_port=True, goal=False):
         if port is None:
             self.collection = []
         else:
@@ -42,6 +56,7 @@ class FlowCollection:
                 self.collection = port
         self.target = instance
         self.total = total
+        self.goal = goal  # True indicate if this FlowCollection ever reach the target instance whether complete or not
 
     def __str__(self):
         s = "["
@@ -49,12 +64,10 @@ class FlowCollection:
             if isinstance(x, str):
                 s += x
             else:
-                print x
                 s += "[" + ", ".join([str(p) for p in x]) + "]"
             s += ", "
         s += "]"
         return s
-
 
     def clone(self):
         collection = []
@@ -63,10 +76,16 @@ class FlowCollection:
                 collection.append(l)
             else:
                 collection.append(l[:])
-        return FlowCollection(self.target, self.total, collection, False)
+        return FlowCollection(self.target, self.total, collection, False, self.goal)
 
     def add(self, y):
+        """
+        Add a piece of data.
+        :param y: a piece of data, either a list of InstancePart, or a name of instance (all data)
+        :return: void
+        """
         if isinstance(y, str):
+            # y is a name of instance, it represent all data. There can't be other data.
             if len(self.collection) == 0:
                 self.collection.append(y)
                 return
@@ -83,14 +102,18 @@ class FlowCollection:
                 prefix_x = x[:-1]
                 prefix_y = y[:-1]
                 if prefix_x == prefix_y:
+                    # When everything else is the same except the last InstancePart,
+                    # try to merge them into a bigger piece of data.
                     intersect = x[-1].intersection(y[-1])
                     if intersect:
                         raise Exception("Port %s of the join instance '%s' is fired more than once in one run."
                                         % (x, self.target))
                     temp = x[-1].union(y[-1])
                     if temp:
-                        if isinstance(temp, str):
+                        if isinstance(temp, str):  # The last part is complete. Remove it from the list.
                             if len(prefix_x) == 0:
+                                # If the prefix is empty, then the data is complete
+                                # (which represents with the name of the join instance).
                                 new_flow = self.target
                             else:
                                 new_flow = prefix_x
@@ -104,12 +127,23 @@ class FlowCollection:
             self.collection.append(y)
 
     def union(self, other):
+        """
+        Union data collections
+        :param other: FlowCollection
+        :return: FlowCollection, the result of the union
+        """
         new_o = self.clone()
         for x in other.collection:
             new_o.add(x)
+        new_o.goal = self.goal or other.goal
         return new_o
 
     def intersection(self, other):
+        """
+        Intersect data collections
+        :param other: FlowCollection
+        :return: FlowCollection, the result of the intersection
+        """
         collection = []
         for lx in self.collection:
             for ly in other.collection:
@@ -119,9 +153,14 @@ class FlowCollection:
                     temp = lx[-1].intersection(ly[-1])
                     if temp:
                         collection.append(lx[:-1] + [temp])
-        return FlowCollection(self.target, self.total, collection, is_port=False)
+        return FlowCollection(self.target, self.total, collection, is_port=False, goal=(self.goal or other.goal))
 
     def append(self, x):
+        """
+        Append InstancePart to the end of all pieces of data in the collection.
+        :param x: InstancePart
+        :return: void
+        """
         for l in self.collection:
             l.append(x)
 
@@ -132,6 +171,11 @@ class FlowCollection:
         return len(self.collection) == 0
 
     def happens_before(self, other):
+        """
+        Check if this FlowCollection should be ordered before the other one.
+        :param other: other FlowCollection
+        :return: True if it should be ordered before.
+        """
         my_max_port = -1
         for l in self.collection:
             if isinstance(l[0], InstancePart):
@@ -146,7 +190,14 @@ class FlowCollection:
                 if temp > other_max_port:
                     other_max_port = temp
 
-        return (other_max_port == self.total - 1) and (my_max_port >= 0) and (my_max_port < other_max_port)
+        # self should be ordered before other, if the other contains the last call to the target.
+        if (other_max_port == self.total - 1) and (my_max_port >= 0):
+            return my_max_port < other_max_port
+
+        # self should be ordered before other, if self is involved in calling the target but already complete,
+        # and other is involved in calling the target but not yet complete.
+        # see test_join_both_both_order in test_join_handling.py
+        return (other_max_port >= 0) and self.goal and (my_max_port == -1)
 
 
 def find_roots(g):
@@ -163,57 +214,20 @@ def find_roots(g):
     return [x for x in roots]
 
 
-# def dfs_dominant(g, name, target, answer):
-#     """
-#     Find a dominant node D of the target node T in the graph.
-#     D dominates T if all nodes in the graph that can reach T has to pass D.
-#
-#     :param g: graph
-#     :param name: current node
-#     :param target: target node
-#     :param answer: a map of (node, local D). This function constructs this map.
-#     For each node V, it stores a dominant node with respect to the local view of V.
-#     :return: (D, last_call)
-#     D         -- the dominant node
-#     last_call -- the last node that immediately reach D, last in term of the order of execution in the code.
-#     """
-#     if name == target:
-#         return True, None
-#     if name in answer:
-#         return answer[name]
-#
-#     instance = g.instances[name]
-#     ans = False
-#     my_last = [None]
-#     # Traverse the children based on the order of output ports, which is the order of calls inside the code.
-#     for port in instance.element.outports:
-#         if port.name in instance.output2ele:
-#             next_name, next_port = instance.output2ele[port.name]
-#             ret, last = dfs_dominant(g, next_name, target, answer)
-#             if ret is True:
-#                 ans = name
-#                 my_last[0] = name
-#             elif ret:
-#                 if ans:
-#                     if not ret == ans:
-#                         # If the return nodes from its children are no the same,
-#                         # then the node itself is a dominant node.
-#                         ans = name
-#                         my_last[0] = last
-#                 else:
-#                     # When there is no current dominant node,
-#                     # a dominant node returned from a child can be a dominant node.
-#                     ans = ret
-#                     my_last[0] = last
-#     answer[name] = ans, my_last[0]
-#     return ans, my_last[0]
-#
-
 def wrap_port(cover, instance, target, num_ports, port_name):
+    """
+    If instance is a join node, then return a part of the cover.
+    :param cover: FlowCollection
+    :param instance:
+    :param target: target join node
+    :param num_ports: number of input ports of the target join node
+    :param port_name: an input port to instance
+    :return: FlowCollection
+    """
     if cover.full():
-        return FlowCollection(target, num_ports)
+        return FlowCollection(target, num_ports, goal=True)
     else:
-        if instance.join_ports_same_thread:
+        if instance.join_ports_same_thread:  # Join node
             port_names = [port.name for port in instance.element.inports]
             index = port_names.index(port_name)
             temp = cover.clone()
@@ -224,19 +238,29 @@ def wrap_port(cover, instance, target, num_ports, port_name):
 
 
 def dfs_cover(g, node_name, port_name, target, num_ports, answer):
+    """
+    Traverse the graph 'g' and construction cover map 'answer'.
+    :param g: graph of instance connection
+    :param node_name: current node
+    :param port_name: input port to the current node
+    :param target: target join node
+    :param num_ports: number of input ports of the target node
+    :param answer: cover map, mapping node name to FlowCollection (its coverage of data required for the target node)
+    :return: void
+    """
     instance = g.instances[node_name]
     element = instance.element
 
     if node_name == target:
         port_names = [port.name for port in element.inports]
         index = port_names.index(port_name)
-        return FlowCollection(target, num_ports, index) #set([i])
-        # raise Exception("Element '%s' doesn't have input port '%s'." % (ele_name, port_name))
+        return FlowCollection(target, num_ports, index, is_port=True, goal=True)  # Return one part of the full target.
 
     if node_name in answer:
+        # Call wrap_port to return just a part of the full flow if this node is a join node.
         return wrap_port(answer[node_name], instance, target, num_ports, port_name)
 
-    cover = FlowCollection(target, num_ports)
+    cover = FlowCollection(target, num_ports)  # Empty FlowCollection
     cover_map = {}
     for out_port in instance.output2ele:
         next_name, next_port = instance.output2ele[out_port]
@@ -261,10 +285,12 @@ def dfs_cover(g, node_name, port_name, target, num_ports, answer):
                     % (node_name, target))
 
     if element.output_fire == "all":
+        # Use covers of all nodes to get partial orders.
         for out1 in cover_map:
             cover1 = cover_map[out1]
             for out2 in cover_map:
                 cover2 = cover_map[out2]
+                # out1 is called before out2 if cover2 includes a final call to the target node.
                 if cover1.happens_before(cover2):
                     instance.join_partial_order.append((out1, out2))
 
@@ -272,7 +298,18 @@ def dfs_cover(g, node_name, port_name, target, num_ports, answer):
     return wrap_port(cover, instance, target, num_ports, port_name)
 
 
-def annotate_for_instance(instance, g, roots, save):
+def annotate_for_instance(instance, g, roots):
+    """
+    Mark each node an information about the given join element instance:
+    1. if it needs to create the buffer state for the join node (instance.join_state_create)
+    2. if it needs to receive the buffer point as a parameter (instance.join_func_params)
+    3. if it needs to invoke the join node (instance.join_call)
+
+    :param instance: join element instance (node)
+    :param g: graph
+    :param roots: roots of the graph
+    :return: void
+    """
     target = instance.name
     num_ports = len(instance.element.inports)
     answer = {}
@@ -305,14 +342,16 @@ def annotate_for_instance(instance, g, roots, save):
     for node in invoke_nodes:
         g.instances[node].join_call.append(target)
 
-    # Mark which output ports need to be saved into the join buffer.
-    # for node in save:
-    #     ports = save[node]
-    #     for port in ports:
-    #         g.instances[node].join_output2save[port] = target
-
 
 def topo_sort(join_partial_order, order, visit, port_name):
+    """
+    Topologically sort nodes according to the partial orders. The output is saved in 'order'.
+    :param join_partial_order: partial orders
+    :param order: total order under construction
+    :param visit: an array containing nodes that have already visitted
+    :param port_name: current node
+    :return: void
+    """
     if port_name in order:
         return
     if port_name in visit:
@@ -326,60 +365,20 @@ def topo_sort(join_partial_order, order, visit, port_name):
 
 
 def order_function_calls(instance):
+    """
+    Order the output port calls of an element instance according to its partial port orders.
+    :param instance:
+    :return: void
+    """
     if len(instance.join_partial_order) > 0:
         visit = []
         order = []
         iterate = instance.element.outports[:]
-        iterate.reverse()
+        iterate.reverse()  # Reverse because we want to preserve the original order if possible.
         for port in iterate:
             topo_sort(instance.join_partial_order, order, visit, port.name)
         order.reverse()
         instance.join_partial_order = order
-
-#
-# def annotate_for_instance(instance, g, roots, save):
-#     """
-#     Mark each node an information about the given join element instance:
-#     1. if it needs to create the buffer state for the join node (instance.join_state_create)
-#     2. if it needs to receive the buffer point as a parameter (instance.join_func_params)
-#     3. if it needs to save any port data to the buffer state (instance.join_output2save)
-#     4. if it needs to invoke the join node (instance.join_call)
-#
-#     :param instance: join element instance (node)
-#     :param g: graph
-#     :param roots: roots of the graph
-#     :param save: a map of (node, ports) where node needs to save ports' content to the buffer state
-#     :return: void
-#     """
-#     target = instance.name
-#     answer = {}
-#     dominant, last_call = dfs_dominant(g, roots[0], target, answer)
-#     for root in roots[1:]:
-#         ret = dfs_dominant(g, root, target, answer)
-#         if not ret == dominant:
-#             raise Exception("There is no dominant element instance for the join element instance '%s'" % instance.name)
-#
-#     # Find all nodes between the dominant node and the target node.
-#     passing_nodes = []
-#     for name in answer:
-#         if answer[name][0] and not answer[name][0] == dominant:
-#             passing_nodes.append(name)
-#
-#     # Mark this node to create a buffer for target join element.
-#     g.instances[dominant].join_state_create.append(target)
-#
-#     # Mark these nodes to pass pointer to the buffer.
-#     for node in passing_nodes:
-#         g.instances[node].join_func_params.append(target)
-#
-#     # Mark this node to invoke the join element instance.
-#     g.instances[last_call].join_call.append(target)
-#
-#     # Mark which output ports need to be saved into the join buffer.
-#     for node in save:
-#         ports = save[node]
-#         for port in ports:
-#             g.instances[node].join_output2save[port] = target
 
 
 def get_join_buffer_name(name):
@@ -437,10 +436,10 @@ def annotate_join_info(g):
 
     for instance in g.instances.values():
         if instance.join_ports_same_thread:
-            annotate_for_instance(instance, g, roots, save)
+            annotate_for_instance(instance, g, roots)
             args = []
             content = ""
-            for port in ports_same_thread:
+            for port in instance.join_ports_same_thread:
                 for i in range(len(port.argtypes)):
                     arg = "%s_arg%d" % (port.name, i)
                     args.append(arg)

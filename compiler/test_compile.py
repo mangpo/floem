@@ -4,6 +4,7 @@ from standard_elements import *
 import os
 import unittest
 
+
 class TestCompile(unittest.TestCase):
 
     def test_pass(self):
@@ -11,6 +12,9 @@ class TestCompile(unittest.TestCase):
                  "join.py",
                  "join_multiple.py",
                  "join_nested.py",
+                 "join_both_both.py",
+                 "join_call_order.py",
+                 "join_call_order2.py",
                  "buffer.py",
                  "parallel_pipeline.py",
                  "state_local.py",
