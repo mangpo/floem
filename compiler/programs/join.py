@@ -26,10 +26,9 @@ p = Program(
     Connect("Fork", "Sub", "to_sub"),
     Connect("Add", "Print", "out", "in1"),
     Connect("Sub", "Print", "out", "in2"),
-    InternalTrigger("Print")
+    #InternalTrigger("Print")
 )
 
 
 g = generate_graph(p)
-print g
-generate_code(g)
+generate_code_and_run(g, "Fork(10, 7);", [17,3])

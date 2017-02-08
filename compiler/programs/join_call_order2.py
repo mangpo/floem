@@ -19,5 +19,4 @@ p = Program(
         )
 
 g = generate_graph(p)
-print g
-generate_code(g)
+generate_code_and_run(g, "fork1(1);", [3])

@@ -10,4 +10,4 @@ p = Program(
 )
 
 g = generate_graph(p)
-generate_code(g)
+generate_code_and_run(g, "out(add2(11)); out(add2(0));", [13,2])

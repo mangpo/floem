@@ -25,4 +25,4 @@ p = Program(
 )
 
 g = generate_graph(p)
-generate_code(g)
+generate_code_and_run(g, "Buffer x; x = read(); out(x.avail); save(42); x = read(); out(x.avail); out(x.x);", [0,1,42])

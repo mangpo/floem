@@ -1,7 +1,17 @@
 from program import *
 from join_handling import get_join_buffer_name, annotate_join_info
 from api_handling import annotate_api_info
-import re
+import re, sys, os, subprocess
+from contextlib import contextmanager
+
+
+@contextmanager
+def redirect_stdout(new_target):
+    old_target, sys.stdout = sys.stdout, new_target # replace sys.stdout
+    try:
+        yield new_target # run some code with the replaced stdout
+    finally:
+        sys.stdout = old_target # restore to the previous value
 
 var_id = 0
 def fresh_var_name():
@@ -289,7 +299,7 @@ def element_to_function(instance, state_rename, graph):
 
 def generate_state(state):
     src = ""
-    src += "typedef struct { %s } %s;\n" % (state.content, state.name)
+    src += "typedef struct { %s } %s;" % (state.content, state.name)
     print src
     return src
 
@@ -299,7 +309,7 @@ def generate_state_instance(name, state):
     src += "%s %s" % (state.name, name)
     if state.init:
         src += " = {%s}" % state.init
-    src += ";\n"
+    src += ";"
     print src
     return src
 
@@ -337,7 +347,7 @@ def generate_API_return_state(api, g):
 
 
 def generate_API_identity_macro(api):
-    src = "#define _get_%s(X) X\n" % api.state_name
+    src = "#define _get_%s(X) X" % api.state_name
     print src
     return src
 
@@ -373,9 +383,9 @@ def generate_signature(instance, funcname, inports):
         args += port.argtypes
 
     if instance.API_return:
-        src += "%s %s(%s);\n" % (instance.API_return, funcname, ",".join(args))
+        src += "%s %s(%s);" % (instance.API_return, funcname, ",".join(args))
     else:
-        src += "void %s(%s);\n" % (funcname, ",".join(args))
+        src += "void %s(%s);" % (funcname, ",".join(args))
     print src
     return src
 
@@ -414,14 +424,33 @@ def generate_graph(program, resource=True):
     return gen.graph
 
 
-def generate_code(graph):
+def generate_header(testing):
+    src = "#include <stdio.h>\n"
+    src += "#include <stdlib.h>\n\n"
+    if testing:
+        src += "void out(int x) { printf(\"%d\\n\", x); }"
+    print src
+    return src
+
+
+def generate_testing_code(code):
+    src = ""
+    if code:
+        src += "int main() {\n"
+        src += "  " + code
+        src += "\n  return 0;\n"
+        src += "}\n"
+    print src
+    return src
+
+
+def generate_code(graph, testing=False):
     """
     Display C code to stdout
+    :param testing:
     :param graph: data-flow graph
     """
-    src = "#include <stdio.h>\n"
-    src += "#include <stdlib.h>\n"
-    print src
+    generate_header(testing)
 
     # Generate states.
     for state in graph.states.values():
@@ -465,3 +494,27 @@ def generate_code(graph):
     for api in graph.APIs:
         generate_API_function(api, graph)
 
+    generate_testing_code(testing)
+
+def convert_type(result, expect):
+    if isinstance(expect, int):
+        return int(result)
+    elif isinstance(expect, float):
+        return float(result)
+    else:
+        return result
+
+def generate_code_and_run(graph, testing, expect):
+    with open('tmp.c', 'w') as f, redirect_stdout(f):
+        generate_code(graph, testing)
+    status = os.system('gcc -O3 tmp.c -o tmp')
+    if not status == 0:
+        raise Exception("Compile error.")
+    result = subprocess.check_output('./tmp', shell=True).split()
+
+    if not len(result) == len(expect):
+        raise Exception("Expect %s. Actual %s." % (expect, result))
+    for i in range(len(expect)):
+        convert = convert_type(result[i], expect[i])
+        if not expect[i] == convert:
+            raise Exception("Expect %d. Actual %d." % (expect[i], convert))

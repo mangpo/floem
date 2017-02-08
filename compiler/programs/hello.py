@@ -31,5 +31,4 @@ p = Program(
 )
 
 g = generate_graph(p)
-print g
-generate_code(g)
+generate_code_and_run(g, "Fork(10, 7);", [17,3])

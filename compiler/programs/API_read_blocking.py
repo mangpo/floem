@@ -12,4 +12,4 @@ p = Program(
 )
 
 g = generate_graph(p)
-generate_code(g)
+generate_code_and_run(g, "put(42); out(get()); put(123); out(get());", [42,123])

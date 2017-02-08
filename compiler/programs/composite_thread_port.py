@@ -19,4 +19,4 @@ p = Program(
 )
 
 g = generate_graph(p)
-generate_code(g)
+generate_code_and_run(g, "u_in(123); out(read()); u_in(42); out(read());", [123,42])

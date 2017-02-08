@@ -16,12 +16,13 @@ class TestCompile(unittest.TestCase):
                  "join_call_order.py",
                  "join_call_order2.py",
                  "buffer.py",
-                 "parallel_pipeline.py",
                  "state_local.py",
                  "state_shared.py",
                  "state_nested_composite.py",
                  "composite.py",
                  "composite_thread_port.py",
+                 "state_local.py",
+                 "state_shared.py",
                  "state_nested_composite.py",
                  "API_increment.py",
                  "API_read_blocking.py",
@@ -30,15 +31,14 @@ class TestCompile(unittest.TestCase):
                  ]
 
         for test in tests:
-            exit = os.system("python programs/" + test)
-            self.assertEqual(exit, 0, "Error at " + test)
+            status = os.system("python programs/" + test)
+            self.assertEqual(status, 0, "Error at " + test)
 
     def test_undefined_element(self):
         p = Program(ElementInstance("Node", "x"))
         try:
             g = generate_graph(p)
         except Exception as e:
-            print e.message
             self.assertNotEqual(e.message.find("Element 'Node' is undefined."), -1, 'Expect undefined exception.')
         else:
             self.fail('Exception is not raised.')

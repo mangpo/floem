@@ -6,7 +6,7 @@ p = Program(
     Element("Identity",
             [Port("in", ["int"])],
             [Port("out", ["int"])],
-            r'''this.count++; int x = in(); output { out(x); }''',
+            r'''this.count++; int x = in(); output { out(this.count); }''',
             None,
             [("Count", "this")]
             ),
@@ -37,5 +37,4 @@ p = Program(
 )
 
 g = generate_graph(p)
-print g
-generate_code(g)
+generate_code_and_run(g, "u2_in(11); u2_in(22); u2_in(33);", [1,2,3])

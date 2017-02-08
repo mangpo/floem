@@ -6,7 +6,7 @@ p = Program(
     Element("Identity",
             [Port("in", ["int"])],
             [Port("out", ["int"])],
-            r'''local.count++; global.count++; int x = in(); output { out(x); }''',
+            r'''local.count++; global.count++; int x = in(); printf("%d %d\n", local.count, global.count); output { out(x); }''',
             None,
             [("Count", "local"), ("Count", "global")]
             ),
@@ -35,5 +35,4 @@ p = Program(
 )
 
 g = generate_graph(p)
-print g
-generate_code(g)
+generate_code_and_run(g, "u1_in(123); u1_in(42);", [1,1,2,2,1,3,2,4,123, 3,5,4,6,3,7,4,8,42])

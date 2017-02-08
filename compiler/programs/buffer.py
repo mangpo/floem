@@ -21,5 +21,4 @@ p = Program(
 )
 
 g = generate_graph(p)
-print g
-generate_code(g)
+generate_code_and_run(g, "w(42); r(); w(123); r();", [42, 123])
