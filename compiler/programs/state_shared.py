@@ -8,10 +8,10 @@ p = Program(
             r'''this.sum += in(); printf("%d\n", this.sum);''',
             None,
             [("Shared", "this")]),
-    StateInstance("Shared", "s"),
+    StateInstance("Shared", "s", "50"),
     ElementInstance("Sum", "sum1", ["s"]),
     ElementInstance("Sum", "sum2", ["s"])
 )
 
 g = generate_graph(p)
-generate_code_and_run(g, "sum1(1); sum1(2); sum2(0);", [101, 103, 103])
+generate_code_and_run(g, "sum1(1); sum1(2); sum2(0);", [51, 53, 53])

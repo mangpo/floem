@@ -27,7 +27,9 @@ class TestCompile(unittest.TestCase):
                  "API_increment.py",
                  "API_read_blocking.py",
                  "API_read_non_blocking.py",
-                 "API_read_non_blocking2.py"
+                 "API_read_non_blocking2.py",
+                 "probe_simple.py",
+                 "probe_composite.py"
                  ]
 
         for test in tests:

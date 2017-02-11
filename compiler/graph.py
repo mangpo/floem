@@ -12,6 +12,7 @@ class ConflictConnection(Exception):
 class RedefineError(Exception):
     pass
 
+
 class Element:
 
     def __init__(self, name, inports, outports, code, local_state=None, state_params=[]):
@@ -185,6 +186,7 @@ class Element:
                 ports.append(index2port[key])
             self.outports = ports
 
+
 class ElementNode:
     def __init__(self, name, element, state_args):
         self.name = name
@@ -244,7 +246,6 @@ class ElementNode:
         print "}"
 
 
-
 class Port:
     def __init__(self, name, argtypes):
         self.name = name
@@ -271,6 +272,14 @@ class State:
         return (self.__class__ == other.__class__ and
                 self.name == other.name and self.content == other.content and self.init == other.init)
 
+
+class StateNode:
+    def __init__(self, name, state, init):
+        self.name = name
+        self.state = state
+        self.init = init
+
+
 class Graph:
     def __init__(self, elements=[], states=[]):
         self.elements = {}
@@ -288,7 +297,7 @@ class Graph:
     def __str__(self):
         s = "Graph:\n"
         # s += "  states: %s\n" % str(self.states)
-        s += "  states: %s\n" % [str(self.state_instances[x]) + "::" + x for x in self.state_instances.keys()]
+        s += "  states: %s\n" % [str(self.state_instances[x].state) + "::" + x for x in self.state_instances.keys()]
         # s += "  elements: %s\n" % str(self.elements)
         # s += "  elements: %s\n" % [str(x) for x in self.instances.values()]
         s += "  elements:\n"
@@ -341,9 +350,10 @@ class Graph:
             self.elements[element.name] = element
             return True
 
-    def newStateInstance(self, state, name):
+    def newStateInstance(self, state, name, init=False):
         s = self.states[state]
-        self.state_instances[name] = s
+        ret = StateNode(name, s, init)
+        self.state_instances[name] = ret
 
     def newElementInstance(self, element, name, state_args=[]):
         if not element in self.elements:
@@ -359,7 +369,7 @@ class Graph:
         for i in range(len(state_args)):
             (type, local_name) = e.state_params[i]
             s = state_args[i]
-            state = self.state_instances[s]
+            state = self.state_instances[s].state
             if not (state.name == type):
                 raise Exception("Element '%s' expects state '%s'. State '%s' is given." % (e.name, type, state.name))
 
@@ -399,11 +409,11 @@ class Graph:
         # Check types
         if not(in_argtypes == out_argtypes):
             if out1 and in2:
-                raise Exception("Mismatched ports -- output port '%s' of element '%s' and input port '%s' of element '%s'"
-                                % (out1, name1, in2, name2))
+                raise Exception("Mismatched ports -- output port '%s' of element '%s' and input port '%s' of element '%s': %s vs %s"
+                                % (out1, name1, in2, name2, out_argtypes, in_argtypes))
             else:
-                raise Exception("Mismatched ports -- output port of element '%s' and input port of element '%s'"
-                                % (name1, name2))
+                raise Exception("Mismatched ports -- output port of element '%s' and input port of element '%s': %s vs %s"
+                                % (name1, name2, out_argtypes, in_argtypes))
 
         i1.connect_output_port(out1, i2.name, in2, overwrite)
         if isinstance(in2, str):
