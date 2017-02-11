@@ -171,7 +171,6 @@ class GraphGenerator:
         elif isinstance(x, ElementInstance):
             global_name = get_node_name(stack, x.name)
             try:
-                # self.env[x.name] = self.elements[x.element]
                 self.put_instance(x.name, stack, self.elements[x.element])
             except KeyError:
                 raise Exception("Element '%s' is undefined." % x.element)
@@ -182,13 +181,11 @@ class GraphGenerator:
             self.put_state(x.name, x.state, new_name)
             self.graph.newStateInstance(x.state, new_name, x.init)
         elif isinstance(x, Connect):
-            self.interpret_Connect(x, stack)
+            self.interpret_Connect(x)
         elif isinstance(x, Composite):
             self.composites[x.name] = x
         elif isinstance(x, CompositeInstance):
-            local_name = get_node_name(stack, x.name)
             try:
-                # self.env[x.name] = self.composites[x.element]
                 self.put_instance(x.name, stack, self.composites[x.element])
             except KeyError:
                 raise Exception("Composite '%s' is undefined." % x.element)
@@ -206,40 +203,39 @@ class GraphGenerator:
             self.graph.APIs.append(APIFunction(x.name, call_instance, call_port, return_instance, return_port,
                                                x.state_name))
         elif isinstance(x, InjectAndProbe):
-            state_name = "_" + x.probe + "State"
-            state = ProbeState(state_name, x.type, x.storage_size)
-            inject = Inject(x.inject, x.type)
-            probe = Probe(x.probe, x.type, state_name, x.storage_size)
-            self.graph.addState(state)
-            self.graph.addElement(inject)
-            self.graph.addElement(probe)
-
-            # state instance
-            new_name = get_node_name(stack, x.state_instance_name)
-            self.put_state(x.state_instance_name, state_name, new_name)
-            self.graph.newStateInstance(state_name, new_name)
-
-            # element instance
-            # self.env[x.inject] = inject
-            self.put_instance(x.inject, stack, inject)
-            self.graph.newElementInstance(x.inject, get_node_name(stack, x.inject))
-            for i in range(x.n):
-                probe_name = x.probe + str(i+1)
-                # self.env[probe_name] = probe
-                self.put_instance(probe_name, stack, probe)
-                self.graph.newElementInstance(x.probe, get_node_name(stack, probe_name),
-                                              [self.get_state_name(x.state_instance_name)])
+            self.interpret_InjectAndProbe(x, stack)
         else:
             raise Exception("GraphGenerator: unimplemented for %s." % x)
 
-    def interpret_Connect(self, x, stack):
-        #self.current_scope(x.ele1, "Connect")
-        #self.current_scope(x.ele2, "Connect")
+    def interpret_InjectAndProbe(self, x, stack):
+        state_name = "_" + x.probe + "State"
+        state = ProbeState(state_name, x.type, x.storage_size)
+        inject = Inject(x.inject, x.type)
+        probe = Probe(x.probe, x.type, state_name, x.storage_size)
+        self.graph.addState(state)
+        self.graph.addElement(inject)
+        self.graph.addElement(probe)
+
+        # state instance
+        new_name = get_node_name(stack, x.state_instance_name)
+        self.put_state(x.state_instance_name, state_name, new_name)
+        self.graph.newStateInstance(state_name, new_name)
+
+        # element instance
+        self.put_instance(x.inject, stack, inject)
+        self.graph.newElementInstance(x.inject, get_node_name(stack, x.inject))
+        for i in range(x.n):
+            probe_name = x.probe + str(i + 1)
+            self.put_instance(probe_name, stack, probe)
+            self.graph.newElementInstance(x.probe, get_node_name(stack, probe_name),
+                                          [self.get_state_name(x.state_instance_name)])
+
+    def interpret_Connect(self, x):
         (name1, out1) = self.adjust_connection(x.ele1, x.out1, "output")
         (name2, in2) = self.adjust_connection(x.ele2, x.in2, "input")
         stack1 = self.get_instance_stack(x.ele1)
         stack2 = self.get_instance_stack(x.ele2)
-        self.graph.connect(get_node_name(stack1, name1), get_node_name(stack2, name2), out1, in2) # TODO
+        self.graph.connect(get_node_name(stack1, name1), get_node_name(stack2, name2), out1, in2)
 
     def convert_to_element_ports(self, call_instance, call_ports, stack):
         """
@@ -250,7 +246,6 @@ class GraphGenerator:
         :return: (element, ports)
         """
         self.current_scope(call_instance, "APIFunction")
-        #t = self.lookup(call_instance)
         t = self.get_instance_type(call_instance)
         if isinstance(t, Element):
             call_instance = get_node_name(stack, call_instance)
@@ -261,7 +256,6 @@ class GraphGenerator:
 
     def adjust_connection(self, ele_name, port_name, type):
         t = self.get_instance_type(ele_name)
-        #t = self.lookup(ele_name)
         if isinstance(t, Composite):
             if port_name:
                 ports = []
@@ -393,4 +387,3 @@ class GraphGenerator:
                             % intersect)
         t = ThreadAllocator(self.graph, self.threads_api, self.threads_internal)
         t.transform()
-        #self.graph.APIcode = t.APIcode
