@@ -11,6 +11,8 @@ class StateInstance:
 
 class ElementInstance:
     def __init__(self, element, name, args=[]):
+        if not isinstance(args, list):
+            raise TypeError("State arguments of element instance '%s' is not a list of states." % name)
         self.element = element
         self.name = name
         self.args = args
@@ -25,8 +27,18 @@ class Connect:
 
 
 class Program:
-    def __init__(self, *statments):
-        self.statements = statments
+    def __init__(self, *statements):
+        self.statements = statements
+
+
+class Spec:
+    def __init__(self, *statements):
+        self.statements = statements
+
+
+class Impl:
+    def __init__(self, *statements):
+        self.statements = statements
 
 
 class Composite:
@@ -56,14 +68,56 @@ class ExternalTrigger:
         self.element_instance = name
 
 
-class InjectAndProbe:
-    def __init__(self, type, inject, probe, state_instance_name, n, storage_size):
+class Inject:
+    def __init__(self, type, name, size, func):
         self.type = type
-        self.inject = inject
-        self.probe = probe
-        self.state_instance_name = state_instance_name
-        self.n = n
-        self.storage_size = storage_size
+        self.name = name
+        self.size = size
+        self.func = func
+
+
+class Probe:
+    def __init__(self, type, name, size, func):
+        self.type = type
+        self.name = name
+        self.size = size
+        self.func = func
+
+
+class StorageState:
+    def __init__(self, name, state_instance, state, type, size, func):
+        self.name = name
+        self.state_instance = state_instance
+        self.state = state
+        self.type = type
+        self.size = size
+        self.func = func
+        self.spec_instances = {}
+        self.impl_instances = {}
+
+    def add(self, instance):
+        m = re.match('_spec_(.+)', instance)
+        if m:
+            self.spec_instances[m.group(1)] = instance
+        m = re.match('_impl_(.+)', instance)
+        if m:
+            self.impl_instances[m.group(1)] = instance
+
+
+class PopulateState(StorageState):
+    def __init__(self, name, state_instance, state, type, size, func):
+        StorageState.__init__(self, name, state_instance, state, type, size, func)
+
+    def clone(self):
+        return PopulateState(self.name, self.state_instance, self.state, self.type, self.size, self.func)
+
+
+class CompareState(StorageState):
+    def __init__(self, name, state_instance, state, type, size, func):
+        StorageState.__init__(self, name, state_instance, state, type, size, func)
+
+    def clone(self):
+        return CompareState(self.name, self.state_instance, self.state, self.type, self.size, self.func)
 
 
 def get_node_name(stack, name):
@@ -178,6 +232,10 @@ class GraphGenerator:
                                           [self.get_state_name(arg) for arg in x.args])
         elif isinstance(x, StateInstance):
             new_name = get_node_name(stack, x.name)
+            if x.name in self.graph.inject_populates:
+                self.graph.inject_populates[x.name].add(new_name)
+            if x.name in self.graph.probe_compares:
+                self.graph.probe_compares[x.name].add(new_name)
             self.put_state(x.name, x.state, new_name)
             self.graph.newStateInstance(x.state, new_name, x.init)
         elif isinstance(x, Connect):
@@ -202,6 +260,10 @@ class GraphGenerator:
             self.threads_api.add(call_instance)
             self.graph.APIs.append(APIFunction(x.name, call_instance, call_port, return_instance, return_port,
                                                x.state_name))
+        elif isinstance(x, PopulateState):
+            self.graph.inject_populates[x.state_instance] = x.clone()
+        elif isinstance(x, CompareState):
+            self.graph.probe_compares[x.state_instance] = x.clone()
         elif isinstance(x, InjectAndProbe):
             self.interpret_InjectAndProbe(x, stack)
         else:
@@ -210,8 +272,8 @@ class GraphGenerator:
     def interpret_InjectAndProbe(self, x, stack):
         state_name = "_" + x.probe + "State"
         state = ProbeState(state_name, x.type, x.storage_size)
-        inject = Inject(x.inject, x.type)
-        probe = Probe(x.probe, x.type, state_name, x.storage_size)
+        inject = InjectElement(x.inject, x.type)
+        probe = ProbeElement(x.probe, x.type, state_name, x.storage_size)
         self.graph.addState(state)
         self.graph.addElement(inject)
         self.graph.addElement(probe)

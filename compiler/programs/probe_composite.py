@@ -1,9 +1,12 @@
 from compiler import *
 from standard_elements import *
+from desugaring import desugar
 
 p = Program(
     Forward,
-    InjectAndProbe("int", "inject", "probe", "probe_state", 1, 10),
+    #InjectAndProbe("int", "inject", "probe", "probe_state", 1, 10),
+    Inject("int", "inject", 10, "gen_func"),
+    Probe("int", "probe[2]", 10, "cmp_func"),
     Composite("Unit",
               [Port("in", ("f1", "in"))],
               [Port("out", ("f3", "out"))],
@@ -15,16 +18,12 @@ p = Program(
                   ElementInstance("Forward", "f3"),
                   Connect("f1", "inject"),
                   Connect("inject", "f2"),
-                  Connect("f2", "probe1"),
-                  Connect("probe1", "f3"),
+                  Connect("f2", "probe0"),
+                  Connect("probe0", "f3"),
               )),
     CompositeInstance("Unit", "u")
 )
 
-g = generate_graph(p)
-generate_code_and_run(g, r'''
-int i;
-inject(42);
-inject(123);
-for (i=0; i < probe_state.p; i++)
-printf("%d\n", probe_state.data[i]);''', [42, 123, 42, 123])
+dp = desugar(p)
+g = generate_graph(dp)
+generate_code(g)

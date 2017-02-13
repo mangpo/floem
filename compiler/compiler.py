@@ -436,18 +436,56 @@ def generate_header(testing):
     return src
 
 
-def generate_testing_code(code):
+def generate_include(include):
+    if include:
+        print include
+    return include
+
+def generate_testing_code(code, injects, probes):
     src = ""
-    if code:
+    if code or len(injects) or len(probes):
+        inject_src = ""
+        for state_instance in injects:
+            inject = injects[state_instance]
+            for key in inject.spec_instances:
+                inject_src += generate_populate_state(inject, key)
+
+        probe_src = ""
+        for state_instance in probes:
+            probe = probes[state_instance]
+            for key in probe.spec_instances:
+                probe_src += generate_compare_state(probe, key)
+
         src += "int main() {\n"
+        src += inject_src
         src += "  " + code
+        src += probe_src
         src += "\n  return 0;\n"
         src += "}\n"
     print src
     return src
 
 
-def generate_code(graph, testing=False):
+def generate_populate_state(inject, key):
+    src = "  // %s: populate %s and %s\n" % \
+          (inject.name, inject.spec_instances[key], inject.impl_instances[key])
+    src += "  for(int i = 0; i < %d; i++) {\n" % inject.size
+    src += "    %s temp = %s(i);\n" % (inject.type, inject.func)
+    src += "    %s.data[i] = temp;\n" % inject.spec_instances[key]
+    src += "    %s.data[i] = temp;\n" % inject.impl_instances[key]
+    src += "  }\n"
+    return src
+
+
+def generate_compare_state(probe, key):
+    spec = probe.spec_instances[key]
+    impl = probe.impl_instances[key]
+    src = "  // %s: compare %s and %s\n" % \
+          (probe.name, probe.spec_instances[key], probe.impl_instances[key])
+    src += "  {0}({1}.p, {1}.data, {2}.p, {2}.data);\n".format(probe.func, spec, impl)
+    return src
+
+def generate_code(graph, testing=None, include=None):
     """
     Display C code to stdout
     :param testing:
@@ -458,6 +496,8 @@ def generate_code(graph, testing=False):
     # Generate states.
     for state in graph.states.values():
         generate_state(state)
+
+    generate_include(include)
 
     # Generate state instances.
     for name in graph.state_instances:
@@ -497,7 +537,8 @@ def generate_code(graph, testing=False):
     for api in graph.APIs:
         generate_API_function(api, graph)
 
-    generate_testing_code(testing)
+    generate_testing_code(testing, graph.inject_populates, graph.probe_compares)
+
 
 def convert_type(result, expect):
     if isinstance(expect, int):
@@ -507,17 +548,27 @@ def convert_type(result, expect):
     else:
         return result
 
-def generate_code_and_run(graph, testing, expect):
+
+def generate_code_with_test(graph, testing, include=None):
+    generate_code(graph, testing, include)
+
+
+def generate_code_and_run(graph, testing, expect=None, include=None):
     with open('tmp.c', 'w') as f, redirect_stdout(f):
-        generate_code(graph, testing)
+        generate_code(graph, testing, include)
     status = os.system('gcc -O3 tmp.c -o tmp')
     if not status == 0:
         raise Exception("Compile error.")
-    result = subprocess.check_output('./tmp', shell=True).split()
+    try:
+        result = subprocess.check_output('./tmp', stderr=subprocess.STDOUT, shell=True).split()
+        if expect:
+            if not len(result) == len(expect):
+                raise Exception("Expect %s. Actual %s." % (expect, result))
+            for i in range(len(expect)):
+                convert = convert_type(result[i], expect[i])
+                if not expect[i] == convert:
+                    raise Exception("Expect %d. Actual %d." % (expect[i], convert))
+    except subprocess.CalledProcessError as e:
+        print e.output
+        raise e
 
-    if not len(result) == len(expect):
-        raise Exception("Expect %s. Actual %s." % (expect, result))
-    for i in range(len(expect)):
-        convert = convert_type(result[i], expect[i])
-        if not expect[i] == convert:
-            raise Exception("Expect %d. Actual %d." % (expect[i], convert))

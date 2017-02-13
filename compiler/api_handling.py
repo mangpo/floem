@@ -49,17 +49,35 @@ def mark_return(g, name, path, api):
     """
     instance = g.instances[name]
     if instance.API_return:
-        raise Exception("Element instance '%s' can only compose one API. However, it is parts of APIs that return '%s' and '%s'."
-                        % (name, instance.API_return, api.state_name))
+        if not instance.API_return == api.state_name:
+            raise Exception(
+                r'''Element instance '%s' can only compose APIs that return the same state.
+                However, it is parts of APIs that return '%s' and '%s'.'''
+                % (name, instance.API_return, api.state_name))
+
+        next = path[name]
+        if next is True:
+            if not instance.API_return_final.return_port == api.return_port:
+                raise Exception(
+                    r'''Element instance '%s' can only compose APIs that return the same state from the same port.
+                    However, it is parts of APIs that return from ports '%s' and '%s'.'''
+                    % (name, instance.API_return_final.return_port, api.return_portinstance.API_return))
+        else:
+            if not instance.API_return_from == next:
+                raise Exception(
+                    r'''Element instance '%s' can only compose APIs that return the same state from the same port.
+                    However, it is parts of APIs that return from element instances '%s' and '%s'.'''
+                    % (name, instance.API_return_from, next))
+            mark_return(g, next, path, api)
+
     else:
         instance.API_return = api.state_name
-
-    next = path[name]
-    if next is True:
-        instance.API_return_final = api
-    else:
-        instance.API_return_from = next
-        mark_return(g, next, path, api)
+        next = path[name]
+        if next is True:
+            instance.API_return_final = api
+        else:
+            instance.API_return_from = next
+            mark_return(g, next, path, api)
 
 
 def annotate_api_info(g):

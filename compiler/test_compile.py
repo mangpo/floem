@@ -28,8 +28,10 @@ class TestCompile(unittest.TestCase):
                  "API_read_blocking.py",
                  "API_read_non_blocking.py",
                  "API_read_non_blocking2.py",
-                 "probe_simple.py",
-                 "probe_composite.py"
+                 "probe_primitives.py",
+                 "probe_composite.py",
+                 "probe_sugar.py",
+                 "desugar_simple.py"
                  ]
 
         for test in tests:

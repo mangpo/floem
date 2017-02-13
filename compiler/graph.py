@@ -94,7 +94,7 @@ class Element:
                     else_expr = m.group(1) + m.group(2)
                 else:
                     # no else
-                    self.output_one_or_zero = "zero_or_one"
+                    self.output_fire = "zero_or_one"
                     else_expr = None
 
                 cases_exprs = []
@@ -155,18 +155,18 @@ class Element:
         else:
             cases_exprs = self.output_code
             if self.output_fire == "one":
-                else_expr = None
-            else:
                 else_expr = cases_exprs[-1][1]
                 cases_exprs = cases_exprs[:-1]
+            else:
+                else_expr = None
 
             src += self.generate_nested_if(cases_exprs, else_expr)
             return src
 
     def generate_nested_if(self, cases, else_expr):
-        src = "  if(%s) %s;\n" % cases[0][0], cases[0][1]
+        src = "  if(%s) %s;\n" % (cases[0][0], cases[0][1])
         for case_expr in cases[1:]:
-            src += "  else if(%s) %s;\n" % case_expr[0], case_expr[1]
+            src += "  else if(%s) %s;\n" % (case_expr[0], case_expr[1])
 
         if else_expr:
             src += "  else %s;\n" % else_expr
@@ -209,6 +209,7 @@ class ElementNode:
         self.API_return = None        # which state this node needs to return
         self.API_return_from = None   # which output node the the return value comes form
         self.API_return_final = None  # mark that this node has to create the return state
+
 
     def __str__(self):
         return self.element.name + "::" + self.name + "---OUT[" + str(self.output2ele) + "]" + "---IN[" + str(self.input2ele) + "]"
@@ -293,6 +294,10 @@ class Graph:
 
         self.identity = {}
         self.APIs = []
+
+        # Inject and probe
+        self.inject_populates = {}
+        self.probe_compares = {}
 
     def __str__(self):
         s = "Graph:\n"
@@ -388,7 +393,8 @@ class Graph:
                 % (out1, name1, [x.name for x in e1.outports])
             out_argtypes += [x for x in e1.outports if x.name == out1][0].argtypes
         else:
-            assert (len(e1.outports) == 1)
+            assert len(e1.outports) == 1,\
+                "Element instance '%s' has multiple output ports. Please specify which port to connect." % name1
             out1 = e1.outports[0].name
             out_argtypes += e1.outports[0].argtypes
 
