@@ -1,5 +1,4 @@
-#ifndef JENKINS_HASH_H
-#define JENKINS_HASH_H
+// gcc -g -O -I /home/mangpo/lib/dpdk-16.11/build/include -c hashtable.c
 
 /* -*- Mode: C; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
 /*
@@ -12,7 +11,7 @@
  *       or commercial.  It's free."
  *
  */
-#include <stdint.h>
+#include "iokvs.h"
 
 #define ENDIAN_LITTLE 1
 
@@ -433,5 +432,3 @@ uint32_t jenkins_hash( const void *key, size_t length)
 #else /* HASH_XXX_ENDIAN == 1 */
 #error Must define HASH_BIG_ENDIAN or HASH_LITTLE_ENDIAN
 #endif /* HASH_XXX_ENDIAN == 1 */
-
-#endif /* end JENKINS_HASH_H */

@@ -28,6 +28,7 @@ Lookup = Element("Lookup",
 //item *rdits = NULL;
 item *rdits = (item *) malloc(sizeof(item));
 rdits->hv = hash;
+rdits->keylen = 0;
 output { out(rdits); }''')
 
 PrepareResponse = Element("PrepareResponse",
@@ -35,21 +36,20 @@ PrepareResponse = Element("PrepareResponse",
                           [Port("out", ["iokvs_message*"])],
                           r'''
 (iokvs_message* m) = in_packet();
-(item* result) = in_item();
+(item* it) = in_item();
 m->mcr.request.magic = PROTOCOL_BINARY_RES;
 m->mcr.request.keylen = 0;
 m->mcr.request.datatype = PROTOCOL_BINARY_RAW_BYTES;
 m->mcr.request.status = htons(0);
 
-            msglens[i] = sizeof(hdrs[i][0]) + 4; // TODO
-            m->mcr.request.extlen = 4;
-            m->mcr.request.bodylen = htonl(4); // TODO
-            *((uint32_t *)m->payload) = 0;
-            if (result != NULL) {
-                msglens[i] += result->vallen;
-                m->mcr.request.bodylen = htonl(4 + result->vallen); // TODO
-                rte_memcpy(m->payload + 4, item_value(result), result->vallen); // TODO
-            }
+m->mcr.request.extlen = 4;
+m->mcr.request.bodylen = 4;
+*((uint32_t *)m->payload) = 0;
+if (it != NULL) {
+  m->mcr.request.bodylen = 4 + it->vallen;
+  rte_memcpy(m->payload + 4, item_value(it), it->vallen);
+}
+
 output { out(m); }
 ''')
 
