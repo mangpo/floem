@@ -1,6 +1,4 @@
-from standard_elements import *
 from thread_allocation import *
-
 
 class StateInstance:
     def __init__(self, state, name, init=False):
@@ -264,33 +262,8 @@ class GraphGenerator:
             self.graph.inject_populates[x.state_instance] = x.clone()
         elif isinstance(x, CompareState):
             self.graph.probe_compares[x.state_instance] = x.clone()
-        elif isinstance(x, InjectAndProbe):
-            self.interpret_InjectAndProbe(x, stack)
         else:
             raise Exception("GraphGenerator: unimplemented for %s." % x)
-
-    def interpret_InjectAndProbe(self, x, stack):
-        state_name = "_" + x.probe + "State"
-        state = ProbeState(state_name, x.type, x.storage_size)
-        inject = InjectElement(x.inject, x.type)
-        probe = ProbeElement(x.probe, x.type, state_name, x.storage_size)
-        self.graph.addState(state)
-        self.graph.addElement(inject)
-        self.graph.addElement(probe)
-
-        # state instance
-        new_name = get_node_name(stack, x.state_instance_name)
-        self.put_state(x.state_instance_name, state_name, new_name)
-        self.graph.newStateInstance(state_name, new_name)
-
-        # element instance
-        self.put_instance(x.inject, stack, inject)
-        self.graph.newElementInstance(x.inject, get_node_name(stack, x.inject))
-        for i in range(x.n):
-            probe_name = x.probe + str(i + 1)
-            self.put_instance(probe_name, stack, probe)
-            self.graph.newElementInstance(x.probe, get_node_name(stack, probe_name),
-                                          [self.get_state_name(x.state_instance_name)])
 
     def interpret_Connect(self, x):
         (name1, out1) = self.adjust_connection(x.ele1, x.out1, "output")

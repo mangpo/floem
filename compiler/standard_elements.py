@@ -1,5 +1,5 @@
-from graph import Element, Port, State
-
+from graph import *
+from program import *
 
 def Fork(name, n, type):
     outports = [Port("out%d" % (i+1), [type]) for i in range(n)]
@@ -41,14 +41,7 @@ def ProbeElement(name, type, state, size):
     return Element(name, [Port("in", [type])], [Port("out", [type])],
                    src, None, [(state, "this")])
 
-# Fork2 = Element("Fork2",
-#                 [Port("in", ["int"])],
-#                 [Port("out1", ["int"]), Port("out2", ["int"])],
-#                 r'''(int x) = in(); output { out1(x); out2(x); }''')
-# Fork3 = Element("Fork3",
-#                 [Port("in", ["int"])],
-#                 [Port("out1", ["int"]), Port("out2", ["int"]), Port("out3", ["int"])],
-#                 r'''(int x) = in(); output { out1(x); out2(x); out3(x); }''')
+
 Fork2 = Fork("Fork2", 2, "int")
 Fork3 = Fork("Fork3", 3, "int")
 Forward = InjectElement("Forward", "int")
@@ -68,3 +61,74 @@ Drop = Element("Drop",
               r'''in();''')
 
 
+def CircularQueue(name, type, size):
+    enq = Element("Enqueue",
+                  [Port("in", [type])], [],
+                  r'''
+(%s x) = in();
+int next = this.tail + 1;
+if(next >= this.size) next = 0;
+if(next == this.head) {
+  printf("Circular queue is full. A packet is dropped.\n");
+} else {
+  this.data[this.tail] = x;
+  this.tail = next;
+}
+''' % type, None, [("Queue", "this")])
+
+    deq = Element("Dequeue",
+                  [], [Port("out", [type])],
+                  r'''
+%s x = NULL;
+if(this.head == this.tail) {
+  printf("Dequeue an empty circular queue.\n");
+} else {
+    x = this.data[this.head];
+    int next = this.head + 1;
+    if(next >= this.size) next = 0;
+    this.head = next;
+}
+output { out(x); }
+''' % type, None, [("Queue", "this")])
+
+    q = Composite(name,
+                  [Port("in", ("enq", "in"))],
+                  [Port("out", ("deq", "out"))],
+                  [Port("dequeue", ("deq", None))],
+                  [],
+                  Program(
+                      State("Queue", "int head; int tail; int size; %s data[%d];" % (type, size), "0,0,%d,{0}" % size),
+                      enq, deq,
+                      StateInstance("Queue", "queue"),
+                      ElementInstance("Enqueue", "enq", ["queue"]),
+                      ElementInstance("Dequeue", "deq", ["queue"]),
+                  ))
+    return q
+
+def Table(name, val_type, size):
+    return State(name, "{0} data[{1}];".format(val_type, size), "{0}")
+
+def TableInsert(name, state_name, index_type, val_type, size):
+    e = Element(name,
+                [Port("in_index", [index_type]), Port("in_value", [val_type])], [],
+                r'''
+(%s index) = in_index();
+(%s val) = in_value();
+uint32_t key = index % %d;
+if(this.data[key] == NULL) this.data[key] = val;
+else { printf("Hash collision!\n"); exit(-1); }
+''' % (index_type, val_type, size), None, [(state_name, "this")])
+    return e
+
+def TableGetRemove(name, state_name, index_type, val_type, size):
+    e = Element(name,
+                [Port("in", [index_type])], [Port("out", [val_type])],
+                r'''
+(%s index) = in();
+uint32_t key = index % %d;
+%s val = this.data[key];
+if(val == NULL) { printf("No such entry in this table.\n"); exit(-1); }
+this.data[key] = NULL;
+output { out(val); }
+''' % (index_type, size, val_type), None, [(state_name, "this")])
+    return e

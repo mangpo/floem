@@ -1,5 +1,7 @@
 from program import *
 import re
+from standard_elements import InjectProbeState, ProbeElement
+
 
 def desugar(x, mode="impl"):
     # mode: compare, spec, impl

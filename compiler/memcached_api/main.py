@@ -23,14 +23,6 @@ uint32_t hash = jenkins_hash(key, length);
 output { out(key, length, hash); }
 ''')
 
-Lookup = Element("Lookup",
-              [Port("in", ["void*", "size_t", "uint32_t"])],
-              [Port("out", ["item*"])],
-               r'''
-(void* key, size_t length, uint32_t hash) = in();
-item *it = hasht_get(key, length, hash);
-output { out(it); }
-''')
 
 PrepareResponse = Element("PrepareResponse",
                           [Port("in_packet", ["iokvs_message*"]), Port("in_item", ["item*"])],
@@ -63,23 +55,33 @@ uint8_t *key = m->payload + 4;
 printf("%d %d %d\n", m->mcr.request.magic, m->mcr.request.bodylen, key[0]);
 ''')
 
-# Cons: c code has global object (hash table), but the framework has no idea about it.
+TablePut = Element("TablePut",
+                [Port("in", ["iokvs_message*"])],
+                [Port("out", ["uint64_t"])],
+                r'''
+(iokvs_message* m) = in();
+uint8_t *key = m->payload + 4;
+printf("%d %d %d\n", m->mcr.request.magic, m->mcr.request.bodylen, key[0]);
+''', [], [])
 
 p = Program(
-    Jenkins_Hash, Lookup, ForkPacket, GetKey, PrepareResponse, Print,
+    State("opaque_table", "iokvs_message* msgs[64]; "),
+    State("eq_entry", "uint64_t opaque; uint32_t hash; uint16_t keylen; uint8_t key[];"),
+    Jenkins_Hash, ForkPacket, GetKey, CircularQueue("Queue", "eq_entry*", 8), # Print,
     ElementInstance("ForkPacket", "fork"),
     ElementInstance("GetKey", "get_key"),
     ElementInstance("Jenkins_Hash", "hash"),
-    ElementInstance("Lookup", "lookup"),
-    ElementInstance("PrepareResponse", "response"),
-    ElementInstance("Print", "print"),
+    ElementInstance("Pack", "pack"), # TODO
+    CompositeInstance("Queue", "rx_queue"),
+    #ElementInstance("Print", "print"),
 
     Connect("fork", "get_key", "out1"),
-    Connect("fork", "response", "out2", "in_packet"),
     Connect("get_key", "hash"),
-    Connect("hash", "lookup"),
-    Connect("lookup", "response", "out", "in_item"),
-    Connect("response", "print"),
+    Connect("hash", "pack", "out", "in_hash"),
+
+    Connect("fork", "table_put", "out2"),
+    Connect("table_put", "pack", "out", "in_opaque"),
+    Connect("pack", "rx_queue")
 )
 
 testing = r'''
@@ -95,7 +97,7 @@ include = r'''
 #include "protocol_binary.h"
 '''
 
-depend = ['jenkins_hash', 'hashtable']
+depend = ['jenkins_hash']
 
 expect = [1,5,3, 2,5,6, 3,5,9, 100,4,100]
 
