@@ -58,7 +58,7 @@ def first_non_space(s,i):
         return (None,-1)
 
 
-def remove_asgn_stmt(src,port2args,port,p_eq, p_end, inport_types):
+def remove_asgn_stmt(funcname, src,port2args,port,p_eq, p_end, inport_types):
     """
     Remove the reading from port statement from src, and put its LHS of the statement in port2args.
     :param src:       string source code
@@ -79,12 +79,13 @@ def remove_asgn_stmt(src,port2args,port,p_eq, p_end, inport_types):
     argtypes = [x.split()[0] for x in args]
 
     if not(argtypes == inport_types):
-        raise Exception("Argument types mismatch at an input port '%s'." % port)
+        raise Exception("At element instance '%s', types mismatch at an input port '%s'. Expect %s, but got %s."
+                        % (funcname, port, inport_types, argtypes))
         
     return src[:p_start] + src[p_end:]
 
 
-def remove_nonasgn_stmt(src,port2args,port,p_start, p_end, inport_types):
+def remove_nonasgn_stmt(funcname, src,port2args,port,p_start, p_end, inport_types):
     """
     Remove the reading from port statement from src,
     when the reading is not saved in any variable or used in any expression.
@@ -102,7 +103,7 @@ def remove_nonasgn_stmt(src,port2args,port,p_start, p_end, inport_types):
     return src[:p_start] + src[p_end:]
 
 
-def remove_expr(src,port2args,port,p_start, p_end, inport_types):
+def remove_expr(funcname, src,port2args,port,p_start, p_end, inport_types):
     """
     Remove the reading from port expression from src, and replace it with a fresh variable name.
     :param src:       string source code
@@ -115,7 +116,8 @@ def remove_expr(src,port2args,port,p_start, p_end, inport_types):
     """
     n = len(inport_types)
     if n > 1 or n == 0:
-        raise Exception("Input port '%s' returns %d values. It cannot be used as an expression." % (port,n))
+        raise Exception("At element instance '%s', input port '%s' returns %d values. It cannot be used as an expression."
+                        % (funcname, port,n))
 
     name = fresh_var_name()
     port2args[port] = [inport_types[0] + ' ' + name]
@@ -200,11 +202,11 @@ def element_to_function(instance, state_rename, graph):
                 c0, p0 = last_non_space(src,p1-1)
 
                 if c0 == ')' and c1 == '=' and c2 == ';':
-                    src = remove_asgn_stmt(src,port2args,port,p1,p2+1,argtypes)
+                    src = remove_asgn_stmt(funcname, src,port2args,port,p1,p2+1,argtypes)
                 elif (c1 == ';' or c1 is None) and c2 == ';':
-                    src = remove_nonasgn_stmt(src,port2args,port,p1+1,p2+1,argtypes)
+                    src = remove_nonasgn_stmt(funcname, src,port2args,port,p1+1,p2+1,argtypes)
                 else:
-                    src = remove_expr(src,port2args,port,p,m.end(0),argtypes)
+                    src = remove_expr(funcname, src,port2args,port,p,m.end(0),argtypes)
 
                 match = True
             else:
@@ -428,8 +430,9 @@ def generate_graph(program, resource=True):
 
 
 def generate_header(testing):
-    src = "#include <stdio.h>\n"
-    src += "#include <stdlib.h>\n\n"
+    src = ""
+    for file in common.header_files:
+        src += "#include <%s>\n" % file
     if testing:
         src += "void out(int x) { printf(\"%d\\n\", x); }"
     print src
@@ -492,12 +495,12 @@ def generate_code(graph, testing=None, include=None):
     :param graph: data-flow graph
     """
     generate_header(testing)
+    generate_include(include)
 
     # Generate states.
     for state in graph.states.values():
         generate_state(state)
 
-    generate_include(include)
 
     # Generate state instances.
     for name in graph.state_instances:
@@ -553,12 +556,23 @@ def generate_code_with_test(graph, testing, include=None):
     generate_code(graph, testing, include)
 
 
-def generate_code_and_run(graph, testing, expect=None, include=None):
+def generate_code_and_run(graph, testing, expect=None, include=None, depend=None):
     with open('tmp.c', 'w') as f, redirect_stdout(f):
         generate_code(graph, testing, include)
-    status = os.system('gcc -O3 tmp.c -o tmp')
+
+    extra = ""
+    if depend:
+        for f in depend:
+            extra += '%s.o ' % f
+            cmd = 'gcc -O3 -I %s -c %s.c' % (common.dpdk_include, f)
+            status = os.system(cmd)
+            if not status == 0:
+                raise Exception("Compile error: " + cmd)
+
+    cmd = 'gcc -O3 tmp.c %s -o tmp' % extra
+    status = os.system(cmd)
     if not status == 0:
-        raise Exception("Compile error.")
+        raise Exception("Compile error: " + cmd)
     try:
         result = subprocess.check_output('./tmp', stderr=subprocess.STDOUT, shell=True).split()
         if expect:
@@ -571,4 +585,6 @@ def generate_code_and_run(graph, testing, expect=None, include=None):
     except subprocess.CalledProcessError as e:
         print e.output
         raise e
+
+    print "PASSED!"
 

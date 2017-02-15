@@ -33,6 +33,26 @@ extern struct settings settings;
 void settings_init(int argc, char *argv[]);
 
 
+/**
+ * Item.
+ * The item struct is immediately followed by first the key, and then the
+ * associated value.
+ */
+typedef struct _item {
+    /** Next item in the hash chain. */
+    struct _item *next;
+    /** Hash value for this item */
+    uint32_t hv;
+    /** Length of value in bytes */
+    uint32_t vallen;
+    /** Reference count */
+    volatile uint16_t refcount;
+    /** Length of key in bytes */
+    uint16_t keylen;
+    /** Flags (currently unused, but provides padding) */
+    uint32_t flags;
+} item;
+
 /******************************************************************************/
 /* Hash table operations */
 
@@ -52,7 +72,7 @@ void hasht_prefetch2(uint32_t hv);
  * @param hv   Hash of key
  * @return Pointer to item or NULL
  */
-struct item *hasht_get(const void *key, size_t klen, uint32_t hv);
+item *hasht_get(const void *key, size_t klen, uint32_t hv);
 
 /**
  * Insert item into hash table
@@ -60,13 +80,13 @@ struct item *hasht_get(const void *key, size_t klen, uint32_t hv);
  * @param cas If != NULL, will only store `it' if cas is the object currently
  *            stored for the key (compare and set).
  */
-void hasht_put(struct item *it, struct item *cas);
+void hasht_put(item *it, item *cas);
 
 
 /******************************************************************************/
 /* Item Allocation */
 struct segment_header;
-struct item;
+item;
 /**
  * Item allocator struct. Should be considered to be opaque outside ialloc.c
  *
@@ -80,7 +100,7 @@ struct item_allocator {
     /* Reserved segment for log cleaning in case we run out */
     struct segment_header *reserved;
     /* Queue for communication  */
-    struct item **cleanup_queue;
+    item **cleanup_queue;
 
     uint8_t pad_0[48];
     /***********************************************************/
@@ -131,7 +151,7 @@ void ialloc_init_allocator(struct item_allocator *ia);
  * @param cleanup true if this allocation is for a cleanup operation
  * @return Allocated item or NULL.
  */
-struct item *ialloc_alloc(struct item_allocator *ia, size_t total,
+item *ialloc_alloc(struct item_allocator *ia, size_t total,
         bool cleanup);
 
 /**
@@ -139,7 +159,7 @@ struct item *ialloc_alloc(struct item_allocator *ia, size_t total,
  * @param it    Item
  * @param total Total number of bytes (includes item struct)
  */
-void ialloc_free(struct item *it, size_t total);
+void ialloc_free(item *it, size_t total);
 
 /**
  * Get item from cleanup queue for this allocator.
@@ -147,7 +167,7 @@ void ialloc_free(struct item *it, size_t total);
  * @param idle true if there are currently no pending requests, false otherwise
  * @return Item or NULL
  */
-struct item *ialloc_cleanup_item(struct item_allocator *ia, bool idle);
+item *ialloc_cleanup_item(struct item_allocator *ia, bool idle);
 
 /**
  * Resets per-request cleanup counters. Should be called when a new request is
@@ -165,46 +185,27 @@ void ialloc_maintenance(struct item_allocator *ia);
 /******************************************************************************/
 /* Items */
 
-/**
- * Item.
- * The item struct is immediately followed by first the key, and then the
- * associated value.
- */
-struct item {
-    /** Next item in the hash chain. */
-    struct item *next;
-    /** Hash value for this item */
-    uint32_t hv;
-    /** Length of value in bytes */
-    uint32_t vallen;
-    /** Reference count */
-    volatile uint16_t refcount;
-    /** Length of key in bytes */
-    uint16_t keylen;
-    /** Flags (currently unused, but provides padding) */
-    uint32_t flags;
-};
 
 /** Get pointer to the item's key */
-static inline void *item_key(struct item *it)
+static inline void *item_key(item *it)
 {
     return it + 1; // TODO: what is this point ot?
 }
 
 /** Get pointer to the item's value */
-static inline void *item_value(struct item *it)
+static inline void *item_value(item *it)
 {
     return (void *) ((uintptr_t) (it + 1) + it->keylen); // TODO: what is this point ot?
 }
 
 /** Total number of bytes for this item (includes item struct) */
-static inline size_t item_totalsz(struct item *it)
+static inline size_t item_totalsz(item *it)
 {
     return sizeof(*it) + it->vallen + it->keylen;
 }
 
 /** Increment item's refcount (original refcount must not be 0). */
-static inline void item_ref(struct item *it)
+static inline void item_ref(item *it)
 {
     uint16_t old;
     old = __sync_add_and_fetch(&it->refcount, 1);
@@ -215,7 +216,7 @@ static inline void item_ref(struct item *it)
  * Increment item's refcount if it is not zero.
  * @return true if the refcount was increased, false otherwise.
  */
-static inline bool item_tryref(struct item *it)
+static inline bool item_tryref(item *it)
 {
     uint16_t c;
     do {
@@ -231,7 +232,7 @@ static inline bool item_tryref(struct item *it)
  * Decrement item's refcount, and free item if refcount = 0.
  * The original refcount must be > 0.
  */
-static inline void item_unref(struct item *it)
+static inline void item_unref(item *it)
 {
     uint16_t c;
     assert(it->refcount > 0);
@@ -246,14 +247,15 @@ static inline void myt_item_release(void *it)
     item_unref(it);
 }
 
-
+typedef struct {
+    protocol_binary_request_header mcr;
+    uint8_t payload[];
+} __attribute__ ((packed)) iokvs_message;
 
 
 uint32_t jenkins_hash(const void *key, size_t length);
-
-struct iokvs_message {
-    protocol_binary_request_header mcr;
-    uint8_t payload[];
-} __attribute__ ((packed));
+void populate_hasht();
+item* random_item(size_t v);
+iokvs_message* random_request(size_t v);
 
 #endif // ndef IOKVS_H_

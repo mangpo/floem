@@ -1,4 +1,4 @@
-// gcc hashtable.c -I /home/mangpo/lib/dpdk-16.11/build/include jenkins_hash.o
+// gcc -O -I /home/mangpo/lib/dpdk-16.11/build/include -c hashtable.c
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -18,7 +18,7 @@ static_assert(sizeof(rte_spinlock_t) == 4, "Bad spinlock size");
 //#define NOHTLOCKS 1
 
 struct hash_bucket {
-    struct item *items[BUCKET_NITEMS];
+    item *items[BUCKET_NITEMS];
     uint32_t hashes[BUCKET_NITEMS];
     rte_spinlock_t lock;
 } __attribute__((packed));
@@ -49,13 +49,13 @@ void hasht_init(void)
 }
 
 
-static inline bool item_key_matches(struct item *it, const void *key,
+static inline bool item_key_matches(item *it, const void *key,
         size_t klen)
 {
     return klen == it->keylen && !__builtin_memcmp(item_key(it), key, klen);
 }
 
-static inline bool item_hkey_matches(struct item *it, const void *key,
+static inline bool item_hkey_matches(item *it, const void *key,
         size_t klen, uint32_t hv)
 {
     return it->hv == hv && item_key_matches(it, key, klen);
@@ -80,10 +80,10 @@ void hasht_prefetch2(uint32_t hv)
 }
 
 
-struct item *hasht_get(const void *key, size_t klen, uint32_t hv)
+item *hasht_get(const void *key, size_t klen, uint32_t hv)
 {
     struct hash_bucket *b;
-    struct item *it;
+    item *it;
     size_t i;
 
     b = buckets + (hv % nbuckets);
@@ -117,10 +117,10 @@ done:
 }
 
 
-void hasht_put(struct item *nit, struct item *cas)
+void hasht_put(item *nit, item *cas)
 {
     struct hash_bucket *b;
-    struct item *it, *prev;
+    item *it, *prev;
     size_t i, di;
     bool has_direct = false;
     uint32_t hv = nit->hv;
@@ -212,11 +212,11 @@ newits[i]->keylen = keylens[i];
 rte_memcpy(item_key(newits[i]), keys[i], totlens[i]);
 */
 
-struct item* random_item(size_t v) {
+item* random_item(size_t v) {
   size_t keylen = 1;
   size_t vallen = 1;
 
-  struct item *it = (struct item *) malloc(sizeof(struct item) + keylen + vallen);
+  item *it = (item *) malloc(sizeof(item) + keylen + vallen);
   it->keylen = keylen;
   it->vallen = vallen;
   uint8_t *key = item_key(it);
@@ -224,23 +224,44 @@ struct item* random_item(size_t v) {
   for(size_t i=0; i<keylen; i++)
     key[i] = v;
   for(size_t i=0; i<vallen; i++)
-    val[i] = v;
+    val[i] = v * 3;
 
   uint32_t hash = jenkins_hash(key, keylen);
   it->hv = hash;
   it->refcount = 1;
   return it;
-} 
+}
 
-int main() {
+iokvs_message* random_request(size_t v) {
+  size_t keylen = 1;
+  size_t extlen = 4;
+
+  iokvs_message *m = (iokvs_message *) malloc(sizeof(iokvs_message) + extlen + keylen);
+  m->mcr.request.magic = v; // PROTOCOL_BINARY_REQ
+  m->mcr.request.keylen = keylen;
+  m->mcr.request.datatype = PROTOCOL_BINARY_RAW_BYTES;
+  m->mcr.request.status = 0;
+
+  m->mcr.request.extlen = extlen;
+  m->mcr.request.bodylen = extlen + keylen;
+  *((uint32_t *)m->payload) = 0;
+
+  uint8_t* key = m->payload + extlen;
+  for(size_t i=0; i<keylen; i++)
+    key[i] = v;
+
+  return m;
+}
+
+void populate_hasht(size_t n) {
   uint32_t hashes[10];
   uint8_t *keys[10];
   uint8_t *vals[10];
   uint16_t keylens[10];
 
   hasht_init();
-  for(size_t i=0; i<10; i++) {
-    struct item *it = random_item(i);
+  for(size_t i=0; i<n; i++) {
+    item *it = random_item(i);
     hashes[i] = it->hv;
     keylens[i] = it->keylen;
     keys[i] = item_key(it);
@@ -248,19 +269,17 @@ int main() {
     hasht_put(it, NULL);
   }
 
-  for(size_t i=0; i<10; i++) {
-    printf("key[%d] = %d %d\n", i, keys[i][0], vals[i][0]);
-  }
-
-  for(size_t i=0; i<10; i++) {
-    uint32_t hash = jenkins_hash(keys[i], keylens[i]);
-    //printf("compare = %d %d\n", hashes[i], hash);
-    struct item *it = hasht_get(keys[i], keylens[i], hash);
-    printf("it[%d] = %ld\n", i, it);
-  }
-  printf("done\n");
-  struct item *it =hasht_get(keys[0], 0, 0);
-  printf("extra = %ld\n", it);
-  
-  return 0;
+//  for(size_t i=0; i<n; i++) {
+//    printf("key[%d] = %d %d\n", i, keys[i][0], vals[i][0]);
+//  }
+//
+//  for(size_t i=0; i<n; i++) {
+//    uint32_t hash = jenkins_hash(keys[i], keylens[i]);
+//    printf("keylen, hash = %d %d\n", keylens[i], hash);
+//    item *it = hasht_get(keys[i], keylens[i], hash);
+//    //printf("it[%d] = %ld\n", i, it);
+//  }
+//  printf("done\n");
+//  item *it =hasht_get(keys[0], 0, 0);
+//  printf("extra = %ld\n", it);
 }

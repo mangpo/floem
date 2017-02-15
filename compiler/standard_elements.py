@@ -5,7 +5,7 @@ def Fork(name, n, type):
     outports = [Port("out%d" % (i+1), [type]) for i in range(n)]
     calls = ["out%d(x);" % (i+1) for i in range(n)]
     src = "(%s x) = in(); output { %s }" % (type, " ".join(calls))
-    return Element(name, [Port("in", ["int"])], outports, src)
+    return Element(name, [Port("in", [type])], outports, src)
 
 
 def InjectElement(name, type):

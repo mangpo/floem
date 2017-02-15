@@ -1,4 +1,4 @@
-// gcc -g -O -I /home/mangpo/lib/dpdk-16.11/build/include -c hashtable.c
+// gcc -O -I /home/mangpo/lib/dpdk-16.11/build/include -c jenkins_hash.c
 
 /* -*- Mode: C; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
 /*
