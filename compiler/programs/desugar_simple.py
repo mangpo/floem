@@ -1,5 +1,6 @@
 from compiler import *
 from desugaring import desugar
+from standard_elements import Forward
 
 p = Program(
     Forward,

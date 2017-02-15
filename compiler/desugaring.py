@@ -1,6 +1,6 @@
 from program import *
 import re
-from standard_elements import InjectProbeState, ProbeElement
+from standard_elements import InjectProbeState, ProbeElement, InjectElement2
 
 
 def desugar(x, mode="impl"):

@@ -283,20 +283,24 @@ class TestThreadStateComposite(unittest.TestCase):
                     [Port("in", ["int"])],
                     [Port("out", ["int"])],
                     r'''int x = in() + 1; output { out(x); }'''),
-            ElementInstance("Inc", "inc1"),
-            ElementInstance("Inc", "inc2"),
-            Connect("inc1", "inc2"),
-            APIFunction("add2", "inc1", "in", "inc2", "out", "Add2Return")
+            Element("Dup",
+                    [Port("in", ["int"])],
+                    [Port("out", ["int", "int"])],
+                    r'''int x = in(); output { out(x, x); }'''),
+            ElementInstance("Inc", "inc"),
+            ElementInstance("Dup", "dup"),
+            Connect("inc", "dup"),
+            APIFunction("func", "inc", "in", "dup", "out", "Add2Return")
         )
         g = generate_graph(p)
         self.assertEqual(2, len(g.instances))
         self.assertEqual(1, len(g.states))
         roots = self.find_roots(g)
-        self.assertEqual(set(['inc1']), roots)
-        self.assertEqual(set(['inc1', 'inc2']), self.find_subgraph(g, 'inc1', set()))
-        self.check_api_return(g, [("inc1", "Add2Return"), ("inc2", "Add2Return")])
-        self.check_api_return_from(g, [("inc1", "inc2")])
-        self.check_api_return_final(g, ["inc2"])
+        self.assertEqual(set(['inc']), roots)
+        self.assertEqual(set(['inc', 'dup']), self.find_subgraph(g, 'inc', set()))
+        self.check_api_return(g, [("inc", "Add2Return"), ("dup", "Add2Return")])
+        self.check_api_return_from(g, [("inc", "dup")])
+        self.check_api_return_final(g, ["dup"])
 
     def test_API_blocking_read(self):
         p = Program(

@@ -130,14 +130,20 @@ class ThreadAllocator:
                     % (api.name, api.return_instance, api.return_port))
 
             # Return type
-            if api.state_name in common.primitive_types or self.graph.is_state(api.state_name):
-                ports = [x for x in instance.element.outports if x.name in port_names]
-                return_types = []
-                for port in ports:
-                    return_types += port.argtypes
-                if (not len(return_types) == 1) or (not return_types[0] == api.state_name):
+            if api.state_name:
+                argtypes = self.graph.get_outport_argtypes(api.return_instance, api.return_port)
+                if len(argtypes) == 1 and (not argtypes[0] == api.state_name):
                     raise TypeError("API '%s' returns '%s', but '%s' is given as a return type." %
-                                    (api.name, ",".join(return_types), api.state_name))
+                                    (api.name, argtypes[0], api.state_name))
+
+            # if api.state_name in common.primitive_types or self.graph.is_state(api.state_name):
+            #     ports = [x for x in instance.element.outports if x.name in port_names]
+            #     return_types = []
+            #     for port in ports:
+            #         return_types += port.argtypes
+            #     if (not len(return_types) == 1) or (not return_types[0] == api.state_name):
+            #         raise TypeError("API '%s' returns '%s', but '%s' is given as a return type." %
+            #                         (api.name, ",".join(return_types), api.state_name))
 
     def insert_threading_elements(self):
         instances = self.instances.values();

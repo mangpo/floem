@@ -8,7 +8,7 @@ def Fork(name, n, type):
     return Element(name, [Port("in", [type])], outports, src)
 
 
-def InjectElement(name, type):
+def IdentityElement(name, type):
     src = "(%s x) = in(); output { out(x); }" % type
     return Element(name, [Port("in", [type])], [Port("out", [type])], src)
 
@@ -44,7 +44,7 @@ def ProbeElement(name, type, state, size):
 
 Fork2 = Fork("Fork2", 2, "int")
 Fork3 = Fork("Fork3", 3, "int")
-Forward = InjectElement("Forward", "int")
+Forward = IdentityElement("Forward", "int")
 Add = Element("Add",
               [Port("in1", ["int"]), Port("in2", ["int"])],
               [Port("out", ["int"])],
@@ -82,6 +82,7 @@ if(next == this.head) {
 %s x = NULL;
 if(this.head == this.tail) {
   printf("Dequeue an empty circular queue.\n");
+  exit(-1);
 } else {
     x = this.data[this.head];
     int next = this.head + 1;
@@ -114,10 +115,10 @@ def TableInsert(name, state_name, index_type, val_type, size):
                 r'''
 (%s index) = in_index();
 (%s val) = in_value();
-uint32_t key = index % %d;
+uint32_t key = index %s %d;
 if(this.data[key] == NULL) this.data[key] = val;
 else { printf("Hash collision!\n"); exit(-1); }
-''' % (index_type, val_type, size), None, [(state_name, "this")])
+''' % (index_type, val_type, '%', size), None, [(state_name, "this")])
     return e
 
 def TableGetRemove(name, state_name, index_type, val_type, size):
@@ -125,10 +126,32 @@ def TableGetRemove(name, state_name, index_type, val_type, size):
                 [Port("in", [index_type])], [Port("out", [val_type])],
                 r'''
 (%s index) = in();
-uint32_t key = index % %d;
+uint32_t key = index %s %d;
 %s val = this.data[key];
 if(val == NULL) { printf("No such entry in this table.\n"); exit(-1); }
 this.data[key] = NULL;
 output { out(val); }
-''' % (index_type, size, val_type), None, [(state_name, "this")])
+''' % (index_type, '%', size, val_type), None, [(state_name, "this")])
     return e
+
+def get_table_collection(index_type, val_type, size, insert_instance_name, get_instance_name):
+    """
+    :param index_type:
+    :param val_type:
+    :param size:
+    :param insert_instance_name:
+    :param get_instance_name:
+    :return: (state, insert_element, get_element, state_instance, insert_instance, get_instance)
+    """
+    state_name = ("_table_%s_%d" % (val_type, size)).replace('*', '$')
+    state_instance_name = ("_t_%s" % insert_instance_name).replace('*', '$')
+    state = Table(state_name, val_type, size)
+    state_instance = StateInstance(state_name, state_instance_name)
+
+    insert_element = TableInsert("_element_" + insert_instance_name, state_name, index_type, val_type, size)
+    get_element = TableGetRemove("_element_" + get_instance_name, state_name, index_type, val_type, size)
+    insert_instance = ElementInstance("_element_" + insert_instance_name, insert_instance_name, [state_instance_name])
+    get_instance = ElementInstance("_element_" + get_instance_name, get_instance_name, [state_instance_name])
+    return (state, insert_element, get_element, state_instance, insert_instance, get_instance)
+
+

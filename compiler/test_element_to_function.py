@@ -60,7 +60,7 @@ class TestElementToFunction(unittest.TestCase):
                     [Port("in", ["int"])],
                     [], 
                     r'''(float x) = in();''')
-        self.expect_exception(e,"Argument types mismatch")
+        self.expect_exception(e,"types mismatch at an input port")
 
     def test_no_value_in_expr(self):
         e = Element("Print",

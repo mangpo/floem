@@ -286,6 +286,7 @@ class Graph:
         self.elements = {}
         self.instances = {}
         self.states = {}
+        self.state_order = []
         self.state_instances = {}
         for e in elements:
             self.elements[e.name] = e
@@ -344,6 +345,7 @@ class Graph:
             return False
         else:
             self.states[state.name] = state
+            self.state_order.append(state.name)
             return True
 
     def addElement(self,element):

@@ -217,6 +217,13 @@ def element_to_function(instance, state_rename, graph):
             raise Exception("Cannot get data from input port '%s' more than one time in element '%s'."
                             % (port, funcname))
 
+    last_port = {}
+    for port in element.outports:
+        if port.name in output2func:
+            (f, fport) = output2func[port.name]
+            if f in join_call_map:
+                last_port[f] = port.name
+
     # Replace output ports with function calls
     for o in output2func:
         m = re.search('(' + o + '[ ]*\()[^)]*\)[ ]*;', out_src)
@@ -234,7 +241,7 @@ def element_to_function(instance, state_rename, graph):
 
             # Insert join_call right after saving the buffer for it.
             # This is to preserve the right order of function calls.
-            if f in join_call_map:
+            if f in join_call_map and last_port[f] == o:
                 out_src = out_src[:m.start(1)] + call + out_src[m.end(1):m.end(0)] + \
                           join_call_map[f] + out_src[m.end(0):]
             else:
@@ -256,7 +263,7 @@ def element_to_function(instance, state_rename, graph):
         if m is None:
             raise Exception("Element '%s' never send data from output port '%s'." % (funcname, o))
         p = m.start(0)
-        call = "%s ret = _get_%s(" % (instance.API_return, instance.API_return)
+        call = "%s ret = _get_%s(" % (instance.API_return, instance.API_return.replace('*','$'))
         out_src = out_src[:p] + call + out_src[m.end(0):]
 
     # Replace old state name with new state name
@@ -344,7 +351,7 @@ def generate_API_return_state(api, g):
             args += l_args
 
     src = ""
-    src += "%s _get_%s(%s) {\n" % (api.state_name, api.state_name, ", ".join(types_args))
+    src += "%s _get_%s(%s) {\n" % (api.state_name, api.state_name.replace('*','$'), ", ".join(types_args))
     src += "  %s ret = {%s};\n" % (api.state_name, ", ".join(args))
     src += "  return ret; }\n"
     print src
@@ -352,7 +359,7 @@ def generate_API_return_state(api, g):
 
 
 def generate_API_identity_macro(api):
-    src = "#define _get_%s(X) X" % api.state_name
+    src = "#define _get_%s(X) X" % api.state_name.replace('*','$')
     print src
     return src
 
@@ -498,9 +505,8 @@ def generate_code(graph, testing=None, include=None):
     generate_include(include)
 
     # Generate states.
-    for state in graph.states.values():
-        generate_state(state)
-
+    for state_name in graph.state_order:
+        generate_state(graph.states[state_name])
 
     # Generate state instances.
     for name in graph.state_instances:
@@ -516,7 +522,7 @@ def generate_code(graph, testing=None, include=None):
     for api in graph.APIs:
         if api.state_name and api.state_name not in return_funcs:
             return_funcs.append(api.state_name)
-            if api.state_name in common.primitive_types or not api.new_state_type:
+            if graph.get_outport_argtypes(api.return_instance, api.return_port) == [api.state_name]:
                 generate_API_identity_macro(api)
             else:
                 generate_API_return_state(api, graph)
@@ -575,7 +581,7 @@ def generate_code_and_run(graph, testing, expect=None, include=None, depend=None
         raise Exception("Compile error: " + cmd)
     try:
         result = subprocess.check_output('./tmp', stderr=subprocess.STDOUT, shell=True).split()
-        if expect:
+        if expect is not None:
             if not len(result) == len(expect):
                 raise Exception("Expect %s. Actual %s." % (expect, result))
             for i in range(len(expect)):

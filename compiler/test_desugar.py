@@ -1,5 +1,6 @@
 from desugaring import desugar
 from compiler import *
+from standard_elements import *
 import unittest
 
 class TestDesugar(unittest.TestCase):
