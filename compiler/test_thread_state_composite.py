@@ -1,7 +1,7 @@
 import unittest
 from standard_elements import *
 from compiler import *
-
+from desugaring import desugar
 
 class TestThreadStateComposite(unittest.TestCase):
 
@@ -378,6 +378,41 @@ class TestThreadStateComposite(unittest.TestCase):
         self.check_api_return(g, [("dup", "int")])
         self.check_api_return_from(g, [])
         self.check_api_return_final(g, ["dup"])
+
+    def test_API_not_always_return(self):
+        p = Program(
+            Inc, CircularQueue("Queue", "int", 4),
+            ElementInstance("Inc", "inc1"),
+            ElementInstance("Inc", "inc2"),
+            CompositeInstance("Queue", "queue"),
+            Inject("int", "inject", 8, "gen_func"),
+
+            Connect("inject", "inc1"),
+            Connect("inc1", "queue"),
+            Connect("queue", "inc2"),
+            APIFunction("dequeue", "queue", "dequeue", "inc2", "out", "int")
+        )
+        try:
+            g = generate_graph(desugar(p))
+        except Exception as e:
+            self.assertNotEqual(e.message.find("doesn't always return, and the default return value is not provided."), -1, 'Expect undefined exception.')
+        else:
+            self.fail('Exception is not raised.')
+
+    def test_API_not_always_return_but_okay(self):
+        p = Program(
+            Inc, CircularQueue("Queue", "int", 4),
+            ElementInstance("Inc", "inc1"),
+            ElementInstance("Inc", "inc2"),
+            CompositeInstance("Queue", "queue"),
+            Inject("int", "inject", 8, "gen_func"),
+
+            Connect("inject", "inc1"),
+            Connect("inc1", "queue"),
+            Connect("queue", "inc2"),
+            APIFunction("dequeue", "queue", "dequeue", "inc2", "out", "int", -1)
+        )
+        g = generate_graph(desugar(p))
 
     def test_composite_scope(self):
         p = Program(

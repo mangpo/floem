@@ -164,12 +164,12 @@ class Element:
             return src
 
     def generate_nested_if(self, cases, else_expr):
-        src = "  if(%s) %s;\n" % (cases[0][0], cases[0][1])
+        src = "  if(%s) { %s; }\n" % (cases[0][0], cases[0][1])
         for case_expr in cases[1:]:
-            src += "  else if(%s) %s;\n" % (case_expr[0], case_expr[1])
+            src += "  else if(%s) { %s; }\n" % (case_expr[0], case_expr[1])
 
         if else_expr:
-            src += "  else %s;\n" % else_expr
+            src += "  else { %s; }\n" % else_expr
         return src
 
     def reorder_outports(self):
@@ -209,6 +209,7 @@ class ElementNode:
         self.API_return = None        # which state this node needs to return
         self.API_return_from = None   # which output node the the return value comes form
         self.API_return_final = None  # mark that this node has to create the return state
+        self.API_default_val = None   # default return value
 
 
     def __str__(self):
@@ -295,6 +296,7 @@ class Graph:
 
         self.identity = {}
         self.APIs = []
+        self.threads_internal = []
 
         # Inject and probe
         self.inject_populates = {}

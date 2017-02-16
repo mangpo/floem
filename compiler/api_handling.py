@@ -45,9 +45,11 @@ def mark_return(g, name, path, api):
     :param name: current node
     :param path: a map that stores an edge to the next node in the API path.
     :param api: APIFunction
-    :return: void
+    :return: always_return
     """
+    always_return = True
     instance = g.instances[name]
+    next = path[name]
     if instance.API_return:
         if not instance.API_return == api.state_name:
             raise Exception(
@@ -55,7 +57,6 @@ def mark_return(g, name, path, api):
                 However, it is parts of APIs that return '%s' and '%s'.'''
                 % (name, instance.API_return, api.state_name))
 
-        next = path[name]
         if next is True:
             if not instance.API_return_final.return_port == api.return_port:
                 raise Exception(
@@ -68,16 +69,19 @@ def mark_return(g, name, path, api):
                     r'''Element instance '%s' can only compose APIs that return the same state from the same port.
                     However, it is parts of APIs that return from element instances '%s' and '%s'.'''
                     % (name, instance.API_return_from, next))
-            mark_return(g, next, path, api)
+                always_return = mark_return(g, next, path, api)
 
     else:
         instance.API_return = api.state_name
-        next = path[name]
+        instance.API_default_val = api.default_val
         if next is True:
             instance.API_return_final = api
         else:
             instance.API_return_from = next
-            mark_return(g, next, path, api)
+            always_return = mark_return(g, next, path, api)
+    if next is not True:
+        always_return = always_return and (not instance.element.output_fire == "zero_or_one")
+    return always_return
 
 
 def annotate_api_info(g):
@@ -91,7 +95,11 @@ def annotate_api_info(g):
             # Find a path from call node to return node. This path is used for passing the return value.
             path = {}
             dfs_find_path(g, api.call_instance, api.return_instance, path)
-            mark_return(g, api.call_instance, path, api)
+            always_return = mark_return(g, api.call_instance, path, api)
+
+            if api.state_name and (not always_return) and (not api.default_val):
+                raise Exception("API '%s' doesn't always return, and the default return value is not provided." %
+                                api.name)
 
             # Create return state.
             content = " "

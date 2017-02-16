@@ -31,8 +31,10 @@ class TestCompile(unittest.TestCase):
                  "probe_primitives.py",
                  "probe_composite.py",
                  "probe_sugar.py",
+                 "inject_queue.py",
                  "desugar_simple.py",
-                 "circular_queue.py"
+                 "circular_queue.py",
+                 "table.py"
                  ]
 
         for test in tests:

@@ -158,6 +158,7 @@ def element_to_function(instance, state_rename, graph):
     output2func = instance.output2ele
     local_state = element.local_state
 
+
     # Create join buffer
     join_create = ""
     for join in instance.join_state_create:
@@ -173,7 +174,7 @@ def element_to_function(instance, state_rename, graph):
                                                   "_p_%s->{0}_arg{1}" % join)
 
         if instance.API_return_from == join:
-            join_call += "%s ret =" % instance.API_return
+            join_call += "ret ="
         join_call += "  %s(" % join
         for other_join in graph.instances[join].join_func_params:
             join_call += "_p_%s, " % other_join
@@ -249,7 +250,7 @@ def element_to_function(instance, state_rename, graph):
         else:
             call = ""
             if instance.API_return_from == f:
-                call += "%s ret = " % instance.API_return
+                call += "ret = "
             call += f + "("
             for join in graph.instances[f].join_func_params:
                 call += "_p_%s, " % join
@@ -263,12 +264,20 @@ def element_to_function(instance, state_rename, graph):
         if m is None:
             raise Exception("Element '%s' never send data from output port '%s'." % (funcname, o))
         p = m.start(0)
-        call = "%s ret = _get_%s(" % (instance.API_return, instance.API_return.replace('*','$'))
+        call = "ret = _get_%s(" % (instance.API_return.replace('*','$'))
         out_src = out_src[:p] + call + out_src[m.end(0):]
 
     # Replace old state name with new state name
     src = rename_state(state_rename, src)
     out_src = rename_state(state_rename, out_src)
+
+    # Define return value
+    define_ret = ""
+    if instance.API_return:
+        if instance.API_default_val:
+            define_ret += "  %s ret = %s;\n" % (instance.API_return, instance.API_default_val)
+        else:
+            define_ret += "  %s ret;\n" % instance.API_return
 
     # API Return
     api_return = ""
@@ -300,7 +309,7 @@ def element_to_function(instance, state_rename, graph):
     else:
         return_type = "void"
     code = "%s %s(%s) {\n" % (return_type, funcname, ", ".join(args))
-    code += state_src + join_create + src + out_src + api_return
+    code += state_src + join_create + src + define_ret + out_src + api_return
     code += "}\n"
     print code
     return code
@@ -451,7 +460,54 @@ def generate_include(include):
         print include
     return include
 
-def generate_testing_code(code, injects, probes):
+n_threads = 0
+def thread_func_create_cancel(func, size=None):
+    thread = "pthread_t _thread_%s;\n" % func
+    if size:
+        func_src = "void *_run_%s(void *threadid) { for(int i=0; i<%d; i++) { %s(); usleep(1000); } pthread_exit(NULL); }\n" \
+                   % (func, size, func)
+    else:
+        func_src = "void *_run_%s(void *threadid) { while(true) { %s(); usleep(1000); } }\n" % (func, func)
+    create = "pthread_create(&_thread_%s, NULL, _run_%s, NULL);\n" % (func, func)
+    cancel = "pthread_cancel(_thread_%s);\n" % func
+    return (thread, func_src, create, cancel)
+
+
+def generate_internal_triggers(threads_internal, injects):
+    spec_injects = []
+    impl_injects = []
+    all_injects = []
+    for inject in injects.values():
+        spec_injects += [(x, inject.size) for x in inject.spec_ele_instances]
+        impl_injects += [(x, inject.size) for x in inject.impl_ele_instances]
+        all_injects += inject.spec_ele_instances
+        all_injects += inject.impl_ele_instances
+
+    all_injects = set(all_injects)
+    forever = threads_internal.difference(all_injects)
+
+    src = ""
+    src += "  // spec inject: %s\n" % spec_injects
+    src += "  // impl inject: %s\n" % impl_injects
+    src += "  // rest: %s\n" % forever
+
+    global_src = ""
+    run_src = "void run() {\n"
+    final_src = "void finalize() {\n"
+
+    for (func, size) in spec_injects + impl_injects:
+        (thread, func_src, create, cancel) = thread_func_create_cancel(func, size)
+        global_src += thread
+        global_src += func_src
+        run_src += create
+        final_src += cancel
+
+    run_src += "}\n"
+    final_src += "}\n"
+
+    return global_src + run_src + final_src
+
+def generate_testing_code(code, injects, probes, threads_internal):
     src = ""
     if code or len(injects) or len(probes):
         inject_src = ""
@@ -466,10 +522,25 @@ def generate_testing_code(code, injects, probes):
             for key in probe.spec_instances:
                 probe_src += generate_compare_state(probe, key)
 
-        src += "int main() {\n"
+        threads_src = generate_internal_triggers(threads_internal, injects)
+
+        src += "void init() {\n"
         src += inject_src
-        src += "  " + code
+        src += "}\n\n"
+
+        src += threads_src
+
+        src += "void check() {\n"
         src += probe_src
+        src += "}\n\n"
+
+        src += "int main() {\n"
+        src += "  init();\n"
+        #src += "  run();\n"
+        if code:
+            src += "  " + code
+        #src += "  finalize();\n"
+        src += "  check();\n"
         src += "\n  return 0;\n"
         src += "}\n"
     print src
@@ -477,22 +548,25 @@ def generate_testing_code(code, injects, probes):
 
 
 def generate_populate_state(inject, key):
-    src = "  // %s: populate %s and %s\n" % \
-          (inject.name, inject.spec_instances[key], inject.impl_instances[key])
-    src += "  for(int i = 0; i < %d; i++) {\n" % inject.size
+    # src = "  // %s: populate %s and %s\n" % \
+    #       (inject.name, inject.spec_instances[key], inject.impl_instances[key])
+    src = "  for(int i = 0; i < %d; i++) {\n" % inject.size
     src += "    %s temp = %s(i);\n" % (inject.type, inject.func)
     src += "    %s.data[i] = temp;\n" % inject.spec_instances[key]
-    src += "    %s.data[i] = temp;\n" % inject.impl_instances[key]
+    if key in inject.impl_instances:
+        src += "    %s.data[i] = temp;\n" % inject.impl_instances[key]
     src += "  }\n"
     return src
 
 
 def generate_compare_state(probe, key):
+    if key not in probe.impl_instances:
+        return ""
     spec = probe.spec_instances[key]
     impl = probe.impl_instances[key]
-    src = "  // %s: compare %s and %s\n" % \
-          (probe.name, probe.spec_instances[key], probe.impl_instances[key])
-    src += "  {0}({1}.p, {1}.data, {2}.p, {2}.data);\n".format(probe.func, spec, impl)
+    # src = "  // %s: compare %s and %s\n" % \
+    #       (probe.name, probe.spec_instances[key], probe.impl_instances[key])
+    src = "  {0}({1}.p, {1}.data, {2}.p, {2}.data);\n".format(probe.func, spec, impl)
     return src
 
 def generate_code(graph, testing=None, include=None):
@@ -546,7 +620,7 @@ def generate_code(graph, testing=None, include=None):
     for api in graph.APIs:
         generate_API_function(api, graph)
 
-    generate_testing_code(testing, graph.inject_populates, graph.probe_compares)
+    generate_testing_code(testing, graph.inject_populates, graph.probe_compares, graph.threads_internal)
 
 
 def convert_type(result, expect):
@@ -575,19 +649,22 @@ def generate_code_and_run(graph, testing, expect=None, include=None, depend=None
             if not status == 0:
                 raise Exception("Compile error: " + cmd)
 
-    cmd = 'gcc -O3 tmp.c %s -o tmp' % extra
+    cmd = 'gcc -O3 -pthread tmp.c %s -o tmp' % extra
     status = os.system(cmd)
     if not status == 0:
         raise Exception("Compile error: " + cmd)
     try:
-        result = subprocess.check_output('./tmp', stderr=subprocess.STDOUT, shell=True).split()
+        result = subprocess.check_output('./tmp', stderr=subprocess.STDOUT, shell=True)
         if expect is not None:
+            result = result.split()
             if not len(result) == len(expect):
                 raise Exception("Expect %s. Actual %s." % (expect, result))
             for i in range(len(expect)):
                 convert = convert_type(result[i], expect[i])
                 if not expect[i] == convert:
                     raise Exception("Expect %d. Actual %d." % (expect[i], convert))
+        else:
+            print result
     except subprocess.CalledProcessError as e:
         print e.output
         raise e

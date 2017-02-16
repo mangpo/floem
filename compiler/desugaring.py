@@ -1,6 +1,6 @@
 from program import *
 import re
-from standard_elements import InjectProbeState, ProbeElement, InjectElement2
+from standard_elements import InjectProbeState, ProbeElement, InjectElement
 
 
 def desugar(x, mode="impl"):
@@ -21,9 +21,15 @@ def desugar(x, mode="impl"):
         statements += [spec, impl, spec_instance, impl_instance]
         return Program(*statements)
     elif mode == "spec":
-        return Desugar(True).process(x)
+        D = Desugar(True)
+        statements = D.process(x).statements
+        statements = D.populates + [x for x in statements]
+        return Program(*statements)
     elif mode == "impl":
-        return Desugar(False).process(x)
+        D = Desugar(False)
+        statements = D.process(x).statements
+        statements = D.populates + [x for x in statements]
+        return Program(*statements)
 
 def need_desugar(x):
     if isinstance(x, Program):
@@ -248,19 +254,21 @@ class Desugar:
                     raise Exception("Parameterized API '%s' has %d call instances but %d return instances."
                                     % (n_call, n_return))
                 return [APIFunction(m.group(1) + str(i), m_call.group(1) + str(i), x.call_port,
-                                    m_return.group(1) + str(i), x.return_port, x.state_name) for i in range(n_call)]
+                                    m_return.group(1) + str(i), x.return_port, x.state_name, x.default_val)
+                        for i in range(n_call)]
             elif m_call:
                 n_call = self.lookup(m_call.group(1))
                 return [APIFunction(m.group(1) + str(i), m_call.group(1) + str(i), x.call_port,
-                                    x.return_instance, x.return_port, x.state_name) for i in range(n_call)]
+                                    x.return_instance, x.return_port, x.state_name, x.default_val)
+                        for i in range(n_call)]
             elif m_return:
                 n_return = self.lookup(m_return.group(1))
                 return [APIFunction(m.group(1) + str(i), x.call_instance, x.call_port,
-                                    m_return.group(1) + str(i), x.return_port, x.state_name) for i in range(n_return)]
+                                    m_return.group(1) + str(i), x.return_port, x.state_name, x.default_val)
+                        for i in range(n_return)]
             else:
                 return APIFunction(x.name, desugar_name(x.call_instance), x.call_port,
-                                   desugar_name(x.return_instance), x.return_port, x.state_name)
-                #return x
+                                   desugar_name(x.return_instance), x.return_port, x.state_name, x.default_val)
 
         elif isinstance(x, Inject):
             m = re.match('([a-zA-Z0-9_]+)\[([0-9]+)]', x.name)
@@ -274,7 +282,7 @@ class Desugar:
             ele_name = "_Element_%s" % pure_name
             state = InjectProbeState(st_name, x.type, x.size)
             state_instance = StateInstance(st_name, st_instance_name)
-            element = InjectElement2(ele_name, x.type, st_name, x.size)
+            element = InjectElement(ele_name, x.type, st_name, x.size)
             element_instance = ElementInstance(ele_name, x.name, [st_instance_name])
             self.populates.append(PopulateState(x.name, st_instance_name, st_name, x.type, x.size, x.func))
 

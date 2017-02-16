@@ -23,6 +23,7 @@ class ThreadAllocator:
         self.check_APIs()
         #self.print_threads_info()
         self.insert_threading_elements()
+        return self.roots.difference(self.threads_api)
 
     def find_roots(self):
         """
@@ -97,9 +98,10 @@ class ThreadAllocator:
             elif api.call_instance in self.threads_api:
                 if not api.call_port == None:
                     raise TypeError(
-                        "API '%s' -- call element instance '%s' takes no arguments. The given argument port is '%s'."
+                        "API '%s' -- call element instance '%s' should take no arguments, because inport port '%s' has already been connected."
                     % (api.name, api.call_instance, api.call_port))
-            else:
+            # else:
+            elif api.call_instance in self.threads_internal:
                 raise TypeError(
                     "API '%s' -- call element instance '%s' is not marked as external trigger."
                     % (api.name, api.call_instance))

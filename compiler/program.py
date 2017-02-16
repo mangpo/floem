@@ -97,17 +97,33 @@ class StorageState:
         m = re.match('_spec_(.+)', instance)
         if m:
             self.spec_instances[m.group(1)] = instance
-        m = re.match('_impl_(.+)', instance)
-        if m:
-            self.impl_instances[m.group(1)] = instance
+        else:
+            m = re.match('_impl_(.+)', instance)
+            if m:
+                self.impl_instances[m.group(1)] = instance
+            else:
+                self.spec_instances[instance] = instance
 
 
 class PopulateState(StorageState):
     def __init__(self, name, state_instance, state, type, size, func):
         StorageState.__init__(self, name, state_instance, state, type, size, func)
+        self.spec_ele_instances = []
+        self.impl_ele_instances = []
 
     def clone(self):
         return PopulateState(self.name, self.state_instance, self.state, self.type, self.size, self.func)
+
+    def add_element_instance(self, instance):
+        m = re.match('_spec_(.+)', instance)
+        if m:
+            self.spec_ele_instances.append(instance)
+        else:
+            m = re.match('_impl_(.+)', instance)
+            if m:
+                self.impl_ele_instances.append(instance)
+            else:
+                self.spec_ele_instances.append(instance)
 
 
 class CompareState(StorageState):
@@ -126,15 +142,14 @@ def get_node_name(stack, name):
 
 
 class APIFunction:
-    def __init__(self, name, call_instance, call_port, return_instance, return_port, state_name=None):
-        if (return_port) and (state_name is None):
-            raise Exception("API function '%s' needs a return state when it has return ports." % name)
+    def __init__(self, name, call_instance, call_port, return_instance, return_port, state_name=None, default_val=None):
         self.name = name
         self.call_instance = call_instance
         self.call_port = call_port
         self.return_instance = return_instance
         self.return_port = return_port
         self.state_name = state_name
+        self.default_val = default_val
         self.new_state_type = False
 
 
@@ -221,15 +236,19 @@ class GraphGenerator:
         elif isinstance(x, State):
             self.graph.addState(x)
         elif isinstance(x, ElementInstance):
-            global_name = get_node_name(stack, x.name)
+            new_name = get_node_name(stack, x.name)
+            # Collect inject information
+            if len(x.args) == 1 and x.args[0] in self.graph.inject_populates:
+                self.graph.inject_populates[x.args[0]].add_element_instance(new_name)
             try:
                 self.put_instance(x.name, stack, self.elements[x.element])
             except KeyError:
                 raise Exception("Element '%s' is undefined." % x.element)
-            self.graph.newElementInstance(x.element, global_name,
+            self.graph.newElementInstance(x.element, new_name,
                                           [self.get_state_name(arg) for arg in x.args])
         elif isinstance(x, StateInstance):
             new_name = get_node_name(stack, x.name)
+            # Collect inject information
             if x.name in self.graph.inject_populates:
                 self.graph.inject_populates[x.name].add(new_name)
             if x.name in self.graph.probe_compares:
@@ -257,7 +276,7 @@ class GraphGenerator:
             return_instance, return_port = self.convert_to_element_ports(x.return_instance, x.return_port, stack)
             self.threads_api.add(call_instance)
             self.graph.APIs.append(APIFunction(x.name, call_instance, call_port, return_instance, return_port,
-                                               x.state_name))
+                                               x.state_name, x.default_val))
         elif isinstance(x, PopulateState):
             self.graph.inject_populates[x.state_instance] = x.clone()
         elif isinstance(x, CompareState):
@@ -421,4 +440,4 @@ class GraphGenerator:
             raise Exception("Element instance %s cannot be triggered by both internal and external triggers."
                             % intersect)
         t = ThreadAllocator(self.graph, self.threads_api, self.threads_internal)
-        t.transform()
+        self.graph.threads_internal = t.transform()

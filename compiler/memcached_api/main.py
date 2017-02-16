@@ -69,13 +69,30 @@ entry->key = key;
 output { out(entry); }
                ''')
 
-Print = Element("Print",
-                [Port("in", ["eq_entry*"])],
-                [],
-                r'''
-(eq_entry* m) = in();
-printf("%ld %d %d\n", m->opaque, *((uint8_t *) m->key), m->hash);
-''')
+Unpack = Element("Unpack",
+                 [Port("in", ["cq_entry*"])],
+                 [Port("out_opaque", ["uint64_t"]), Port("out_item", ["item*"])],
+                 r'''
+(cq_entry* entry) = in();
+output { out_opaque(entry->opaque); out_item(entry->it); }
+                 ''')
+
+PrintEntry = Element("PrintEntry",
+                     [Port("in", ["eq_entry*"])],
+                     [],
+                     r'''
+     (eq_entry* m) = in();
+     printf("%ld %d %d\n", m->opaque, *((uint8_t *) m->key), m->hash);
+     ''')
+
+PrintMsg = Element("PrintMsg",
+                   [Port("in", ["iokvs_message*"])],
+                   [],
+                   r'''
+   (iokvs_message* m) = in();
+   uint8_t *key = m->payload + 4;
+   printf("%d %d %d\n", m->mcr.request.magic, m->mcr.request.bodylen, key[0]);
+   ''')
 
 (t_state, t_insert_element, t_get_element, t_state_instance, t_insert_instance, t_get_instance) = \
     get_table_collection("uint64_t", "iokvs_message*", 64, "msg_put", "msg_get")
@@ -83,17 +100,21 @@ printf("%ld %d %d\n", m->opaque, *((uint8_t *) m->key), m->hash);
 p = Program(
     t_state, t_state_instance,
     State("eq_entry", "uint64_t opaque; uint32_t hash; uint16_t keylen; void* key;"),
-    Jenkins_Hash, ForkPacket, ForkOpaque, GetKey, CircularQueue("Queue", "eq_entry*", 4), Pack, GetOpaque, Print,
+    State("cq_entry", "uint64_t opaque; item* it;"),
+
+    CircularQueue("RXQueue", "eq_entry*", 4),
+    Jenkins_Hash, ForkPacket, ForkOpaque, GetKey,  Pack, GetOpaque, PrintEntry, PrintMsg,
+    ElementInstance("PrintMsg", "print_msg"),
+    ElementInstance("PrintEntry", "print_entry"),
 
     ElementInstance("ForkPacket", "fork"),
     ElementInstance("ForkOpaque", "fork_opaque"),
     ElementInstance("GetKey", "get_key"),
     ElementInstance("Jenkins_Hash", "hash"),
     ElementInstance("Pack", "rx_pack"),
-    CompositeInstance("Queue", "rx_queue"),
+    CompositeInstance("RXQueue", "rx_queue"),
     ElementInstance("GetOpaque", "get_opaque"),
     t_insert_element,t_get_element,  t_insert_instance, t_get_instance,
-    ElementInstance("Print", "print"),
 
     Connect("fork", "get_key", "out1"),
     Connect("get_key", "hash"),
@@ -107,34 +128,62 @@ p = Program(
 
     Connect("rx_pack", "rx_queue"),
 
-    APIFunction("extract_request", "rx_queue", "dequeue", "rx_queue", "out", "eq_entry*"),
+    APIFunction("get_eq", "rx_queue", "dequeue", "rx_queue", "dequeue_out", "eq_entry*"),
+
+    CircularQueue("TXQueue", "cq_entry*", 4), Unpack, PrepareResponse,
+    CompositeInstance("TXQueue", "tx_queue"),
+    ElementInstance("Unpack", "unpack"),
+    ElementInstance("PrepareResponse", "response"),
+
+    Connect("tx_queue", "unpack"),
+    Connect("unpack", "msg_get", "out_opaque"),
+    Connect("msg_get", "response", "out", "in_packet"),
+    Connect("unpack", "response", "out_item", "in_item"),
+    Connect("response", "print_msg"),
+    APIFunction("send_cq", "tx_queue", "enqueue", "tx_queue", "enqueue_out"),
+    APIFunction("send_response", "tx_queue", "dequeue", "print_msg", None)
 )
 
-testing = r'''
-fork(random_request(1));
-fork(random_request(2));
-fork(random_request(3));
-
-print(extract_request());
-print(extract_request());
-print(extract_request());
-
-fork(random_request(101));
-fork(random_request(102));
-print(extract_request());
-print(extract_request());
-'''
 
 include = r'''
 #include "iokvs.h"
 #include "protocol_binary.h"
 '''
 
-depend = ['jenkins_hash']
+def run():
+    testing = r'''
+    populate_hasht(10);
 
-expect = ['1', '1', '82610235', '2', '2', '-544296261', '3', '3', '-1151292978', '101', '101', '1187334374', '102', '102', '-1276648593']
+    fork(random_request(1));
+    fork(random_request(2));
+    fork(random_request(3));
 
-dp = desugar(p)
-g = generate_graph(dp)
-#generate_code_with_test(g, testing, include)
-generate_code_and_run(g, testing, expect, include, depend)
+    eq_entry* e = get_eq();
+    print_entry(e);
+    print_entry(get_eq());
+    print_entry(get_eq());
+
+    fork(random_request(101));
+    fork(random_request(102));
+    print_entry(get_eq());
+    print_entry(get_eq());
+
+    item *it = hasht_get(e->key, e->keylen, e->hash);
+    cq_entry* c = (cq_entry*) malloc(sizeof(cq_entry));
+    c->it = it;
+    c->opaque = e->opaque;
+    send_cq(c);
+    send_response();
+    '''
+
+    depend = ['jenkins_hash', 'hashtable']
+
+    expect = [1, 1, 82610235,   2, 2, -544296261,   3, 3, -1151292978,    101, 101, 1187334374,    102, 102, -1276648593,
+            1, 5, 3]
+
+    dp = desugar(p)
+    g = generate_graph(dp)
+    #generate_code_with_test(g, testing, include)
+    generate_code_and_run(g, testing, expect, include, depend)
+
+run()

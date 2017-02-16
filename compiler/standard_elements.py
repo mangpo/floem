@@ -13,7 +13,7 @@ def IdentityElement(name, type):
     return Element(name, [Port("in", [type])], [Port("out", [type])], src)
 
 
-def InjectElement2(name, type, state, size):
+def InjectElement(name, type, state, size):
     src = r'''
     if(this.p >= %d) { printf("Error: inject more than available entries.\n"); exit(-1); }
     int temp = this.p;
@@ -62,7 +62,9 @@ Drop = Element("Drop",
 
 
 def CircularQueue(name, type, size):
-    enq = Element("Enqueue",
+    prefix = "_%s_" % name
+    state_name = prefix + "queue"
+    enq = Element(prefix+ "enqueue",
                   [Port("in", [type])], [],
                   r'''
 (%s x) = in();
@@ -74,35 +76,37 @@ if(next == this.head) {
   this.data[this.tail] = x;
   this.tail = next;
 }
-''' % type, None, [("Queue", "this")])
+''' % type, None, [(state_name, "this")])
 
-    deq = Element("Dequeue",
+    deq = Element(prefix + "dequeue",
                   [], [Port("out", [type])],
                   r'''
-%s x = NULL;
+%s x;
+bool avail = false;
 if(this.head == this.tail) {
-  printf("Dequeue an empty circular queue.\n");
-  exit(-1);
+  printf("Dequeue an empty circular queue. Default value is returned (for API call).\n");
+  //exit(-1);
 } else {
+    avail = true;
     x = this.data[this.head];
     int next = this.head + 1;
     if(next >= this.size) next = 0;
     this.head = next;
 }
-output { out(x); }
-''' % type, None, [("Queue", "this")])
+output switch { case avail: out(x); }
+''' % type, None, [(state_name, "this")])
 
     q = Composite(name,
-                  [Port("in", ("enq", "in"))],
-                  [Port("out", ("deq", "out"))],
-                  [Port("dequeue", ("deq", None))],
+                  [Port("enqueue", ("enq", "in"))],
+                  [Port("dequeue_out", ("deq", "out"))],
+                  [Port("enqueue_out", ("enq", None)), Port("dequeue", ("deq", None))],
                   [],
                   Program(
-                      State("Queue", "int head; int tail; int size; %s data[%d];" % (type, size), "0,0,%d,{0}" % size),
+                      State(state_name, "int head; int tail; int size; %s data[%d];" % (type, size), "0,0,%d,{0}" % size),
                       enq, deq,
-                      StateInstance("Queue", "queue"),
-                      ElementInstance("Enqueue", "enq", ["queue"]),
-                      ElementInstance("Dequeue", "deq", ["queue"]),
+                      StateInstance(state_name, "queue"),
+                      ElementInstance(prefix + "enqueue", "enq", ["queue"]),
+                      ElementInstance(prefix + "dequeue", "deq", ["queue"]),
                   ))
     return q
 

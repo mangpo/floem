@@ -12,7 +12,7 @@ p = Program(
               Program(
                   Forward, Drop,
                   InjectProbeState("InjectState", "int", 10),
-                  InjectElement2("Inject", "int", "InjectState", 10),
+                  InjectElement("Inject", "int", "InjectState", 10),
                   ProbeElement("Probe", "int", "InjectState", 10),
                   ElementInstance("Forward", "f1"),
                   ElementInstance("Forward", "f2"),
@@ -37,7 +37,7 @@ p = Program(
               Program(
                   Forward,
                   InjectProbeState("InjectState", "int", 10),
-                  InjectElement2("Inject", "int", "InjectState", 10),
+                  InjectElement("Inject", "int", "InjectState", 10),
                   ProbeElement("Probe", "int", "InjectState", 10),
                   ElementInstance("Forward", "f1"),
                   ElementInstance("Forward", "f2"),
