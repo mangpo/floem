@@ -51,7 +51,7 @@ output switch { case avail: out(x); }
     return [one_core, multi_core, state_instance, states_instance, enq, deq, enq_instance, deq_instance], \
            enq_instance, deq_instance
 
-def CircularQueueManytoOne(name, type, size, n_cores):
+def CircularQueueManyToOne(name, type, size, n_cores):
     prefix = "_%s_" % name
     state_name = prefix + "queue"
     states_name = prefix + "queues"

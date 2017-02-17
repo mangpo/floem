@@ -4,7 +4,7 @@ from desugaring import desugar
 from queue import *
 
 instances, enq, deq = CircularQueueOneToMany("queue", "int", 4, 4)
-tx_instances, tx_enq, tx_deq = CircularQueueManytoOne("tx_queue", "int", 4, 4)
+tx_instances, tx_enq, tx_deq = CircularQueueManyToOne("tx_queue", "int", 4, 4)
 statements = instances + tx_instances + \
              [
                  Element("ComputeCore",

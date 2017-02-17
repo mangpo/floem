@@ -107,7 +107,9 @@ PrintMsg = Element("PrintMsg",
 (t_state, t_insert_element, t_get_element, t_state_instance, t_insert_instance, t_get_instance) = \
     get_table_collection("uint64_t", "iokvs_message*", 64, "msg_put", "msg_get")
 
-rx_steer_instances, rx_steer_enq, rx_steer_deq = CircularQueueOneToMany("queue", "eq_entry*", 4, 4)
+rx_steer_instances, rx_steer_enq, rx_steer_deq = CircularQueueOneToMany("rx_queue", "eq_entry*", 4, 4)
+tx_steer_instances, tx_steer_enq, tx_steer_deq = CircularQueueManyToOne("tx_queue", "cq_entry*", 4, 4)
+
 
 p = Program(
     t_state, t_state_instance,
@@ -157,18 +159,29 @@ p = Program(
         ])
     ),
 
-    CircularQueue("TXQueue", "cq_entry*", 4), Unpack, PrepareResponse,
-    CompositeInstance("TXQueue", "tx_queue"),
+    Unpack, PrepareResponse,
     ElementInstance("Unpack", "unpack"),
     ElementInstance("PrepareResponse", "response"),
 
-    Connect("tx_queue", "unpack"),
+    Spec(
+        CircularQueue("TXQueue", "cq_entry*", 4),
+        CompositeInstance("TXQueue", "tx_queue"),
+        Connect("tx_queue", "unpack"),
+        APIFunction("send_cq", "tx_queue", "enqueue", "tx_queue", "enqueue_out"),
+        InternalTrigger("tx_queue", "dequeue"),
+    ),
+    Impl(
+        *(tx_steer_instances + [
+            Connect(tx_steer_deq.name, "unpack"),
+            APIFunction("send_cq[i]", tx_steer_enq.name.replace('[4]','[i]'), "in",
+                        tx_steer_enq.name.replace('[4]','[i]'), None),
+            InternalTrigger(tx_steer_deq.name),
+        ])
+    ),
     Connect("unpack", "msg_get", "out_opaque"),
     Connect("msg_get", "response", "out", "in_packet"),
     Connect("unpack", "response", "out_item", "in_item"),
     Connect("response", "print_msg"),
-    APIFunction("send_cq", "tx_queue", "enqueue", "tx_queue", "enqueue_out"),
-    InternalTrigger("tx_queue", "dequeue"),
 )
 
 
@@ -176,16 +189,22 @@ include = r'''
 #include "iokvs.h"
 #include "protocol_binary.h"
 '''
+testing = ""
+depend = ['jenkins_hash', 'hashtable']
 
 
-def run():
-    testing = r'''
-    '''
-    depend = ['jenkins_hash', 'hashtable']
+def run_spec():
     dp = desugar(p, "spec")
     g = generate_graph(dp)
     generate_code_as_header(g, testing, include)
     compile_and_run("test", depend)
 
+def run_impl():
+    dp = desugar(p, "impl")
+    g = generate_graph(dp)
+    generate_code_as_header(g, testing, include, True, "tmp_impl.h")
+    #compile_and_run("test", depend)
 
-run()
+
+#run_spec()
+run_impl()
