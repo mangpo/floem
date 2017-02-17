@@ -173,9 +173,10 @@ class Desugar:
                 name = m.group(1)
                 n = int(m.group(2))
                 self.env[name] = n
-                return [StateInstance(x.state, name + str(i), x.init) for i in range(n)]
+                return [StateInstance(x.state, name + str(i), concretize_init_as(x.init, str(i), str(n)))
+                        for i in range(n)]
             else:
-                return x
+                return StateInstance(x.state, x.name, concretize_init(x.init))
 
         elif isinstance(x, Connect):
             m1 = re.match('([a-zA-Z0-9_]+)\[([a-zA-Z]+)]', x.ele1)

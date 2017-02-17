@@ -145,3 +145,40 @@ class TestDesugar(unittest.TestCase):
         g = generate_graph(dp, True)
         self.assertEqual(10, len(g.instances))
         self.assertEqual(set(['_spec_u_in', '_impl_u_in', '_buffer__impl_u_g_read']), self.find_roots(g))
+
+    def test_init(self):
+        self.assertEqual(concretize_init("s[4]"), ['s0','s1', 's2', 's3'])
+
+        init = concretize_init(AddressOf('s[4]'))
+        expect = [AddressOf('s{0}'.format(x)) for x in range(4)]
+        self.assertEqual(init, expect)
+
+        init = concretize_init([AddressOf('s[4]')])
+        expect = [[AddressOf('s{0}'.format(x)) for x in range(4)]]
+        expect_str = '{{' + ','.join(['&s{0}'.format(x) for x in range(4)]) + '}}'
+        self.assertEqual(init, expect)
+        self.assertEqual(expect_str, get_str_init(init))
+
+    def test_init_end2end(self):
+        p = Program(
+            State("One", "int x;"),
+            State("Multi", "One* cores[4];"),
+            StateInstance("One", "one[4]"),
+            StateInstance("Multi", "all", [AddressOf("one[4]")])
+        )
+        dp = desugar(p)
+        g = generate_graph(dp)
+        all = g.state_instances["all"]
+        self.assertEqual("{{&one0,&one1,&one2,&one3}}", all.init)
+
+    def test_init_end2end_another(self):
+        p = Program(
+            State("One", "int x;"),
+            State("Multi", "One* core;"),
+            StateInstance("One", "one[4]"),
+            StateInstance("Multi", "all[4]", [AddressOf("one[4]")])
+        )
+        dp = desugar(p)
+        g = generate_graph(dp)
+        all = g.state_instances["all0"]
+        self.assertEqual("{&one0}", all.init)

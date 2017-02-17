@@ -34,6 +34,7 @@ class TestCompile(unittest.TestCase):
                  "inject_queue.py",
                  "desugar_simple.py",
                  "circular_queue.py",
+                 "circular_queue_multicore.py",
                  "table.py"
                  ]
 

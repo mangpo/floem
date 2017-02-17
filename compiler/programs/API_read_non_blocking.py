@@ -2,7 +2,7 @@ from compiler import *
 from thread_allocation import *
 
 p = Program(
-    State("Buffer", "int x; int avail;", "0,0"),
+    State("Buffer", "int x; int avail;", [0,0]),
     Element("Save",
             [Port("in", ["int"])],
             [],

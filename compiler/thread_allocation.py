@@ -218,7 +218,7 @@ class ThreadAllocator:
 
         # State content
         st_content = ""
-        st_init = ",".join(["0" for i in range(len(avails) + len(buffers))])
+        st_init = [0 for i in range(len(avails) + len(buffers))]
         for avail in avails:
             st_content += "int %s; " % avail
         for i in range(len(buffers)):

@@ -2,7 +2,7 @@ from compiler import *
 from thread_allocation import *
 
 p = Program(
-    State("Count", "int count;", "0"),
+    State("Count", "int count;", "{0}"),
     Element("Identity",
             [Port("in", ["int"])],
             [Port("out", ["int"])],

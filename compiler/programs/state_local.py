@@ -11,4 +11,5 @@ p = Program(
 )
 
 g = generate_graph(p)
+generate_code(g)
 generate_code_and_run(g, "sum1(1); sum1(2); sum2(0);", [101, 103, 100])

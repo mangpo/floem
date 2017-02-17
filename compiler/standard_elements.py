@@ -24,11 +24,11 @@ def InjectElement(name, type, state, size):
 
 
 def ProbeState(name, type, size):
-    return State(name, "%s data[%d]; int p;" % (type, size), "0,0")
+    return State(name, "%s data[%d]; int p;" % (type, size), "{{0},0}")
 
 
 def InjectProbeState(name, type, size):
-    return State(name, "%s data[%d]; int p;" % (type, size), "0,0")
+    return State(name, "%s data[%d]; int p;" % (type, size), "{{0},0}")
 
 
 def ProbeElement(name, type, state, size):
@@ -102,7 +102,8 @@ output switch { case avail: out(x); }
                   [Port("enqueue_out", ("enq", None)), Port("dequeue", ("deq", None))],
                   [],
                   Program(
-                      State(state_name, "int head; int tail; int size; %s data[%d];" % (type, size), "0,0,%d,{0}" % size),
+                      State(state_name, "int head; int tail; int size; %s data[%d];" % (type, size),
+                            "{0,0,%d,{0}}" % size),
                       enq, deq,
                       StateInstance(state_name, "queue"),
                       ElementInstance(prefix + "enqueue", "enq", ["queue"]),
@@ -110,8 +111,10 @@ output switch { case avail: out(x); }
                   ))
     return q
 
+
 def Table(name, val_type, size):
-    return State(name, "{0} data[{1}];".format(val_type, size), "{0}")
+    return State(name, "{0} data[{1}];".format(val_type, size), "{{0}}")
+
 
 def TableInsert(name, state_name, index_type, val_type, size):
     e = Element(name,
@@ -125,6 +128,7 @@ else { printf("Hash collision!\n"); exit(-1); }
 ''' % (index_type, val_type, '%', size), None, [(state_name, "this")])
     return e
 
+
 def TableGetRemove(name, state_name, index_type, val_type, size):
     e = Element(name,
                 [Port("in", [index_type])], [Port("out", [val_type])],
@@ -137,6 +141,7 @@ this.data[key] = NULL;
 output { out(val); }
 ''' % (index_type, '%', size, val_type), None, [(state_name, "this")])
     return e
+
 
 def get_table_collection(index_type, val_type, size, insert_instance_name, get_instance_name):
     """
@@ -156,6 +161,6 @@ def get_table_collection(index_type, val_type, size, insert_instance_name, get_i
     get_element = TableGetRemove("_element_" + get_instance_name, state_name, index_type, val_type, size)
     insert_instance = ElementInstance("_element_" + insert_instance_name, insert_instance_name, [state_instance_name])
     get_instance = ElementInstance("_element_" + get_instance_name, get_instance_name, [state_instance_name])
-    return (state, insert_element, get_element, state_instance, insert_instance, get_instance)
+    return state, insert_element, get_element, state_instance, insert_instance, get_instance
 
 

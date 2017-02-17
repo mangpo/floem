@@ -459,3 +459,65 @@ class Graph:
     def check_input_ports(self):
         for instance in self.instances.values():
             instance.check_input_ports()
+
+'''
+State initialization related functions
+'''
+class AddressOf:
+    def __init__(self, of):
+        self.of = of
+
+    def __eq__(self, other):
+        return self.__class__ == other.__class__ and self.of == other.of
+
+
+def concretize_init(init):
+    if isinstance(init, str):
+        m = re.match('([a-zA-Z0-9_]+)\[([0-9]+)]', init)
+        if m:
+            return [m.group(1) + str(i) for i in range(int(m.group(2)))]
+        else:
+            return init
+    elif isinstance(init, list) or isinstance(init, tuple):
+        return [concretize_init(x) for x in init]
+    elif isinstance(init, AddressOf):
+        m = re.match('([a-zA-Z0-9_]+)\[([0-9]+)]', init.of)
+        if m:
+            return [AddressOf(m.group(1) + str(i)) for i in range(int(m.group(2)))]
+        else:
+            return init
+    else:
+        return init
+
+def concretize_init_as(init, i, n):
+    if isinstance(init, str):
+        m = re.match('([a-zA-Z0-9_]+)\[([0-9]+)]', init)
+        if m:
+            assert n == m.group(2), "The index of %s should be %s." % (init, n)
+            return m.group(1) + i
+        else:
+            return init
+    elif isinstance(init, list) or isinstance(init, tuple):
+        return [concretize_init_as(x, i, n) for x in init]
+    elif isinstance(init, AddressOf):
+        m = re.match('([a-zA-Z0-9_]+)\[([0-9]+)]', init.of)
+        if m:
+            assert n == m.group(2), "The index of %s should be %s." % (init.of, n)
+            return AddressOf(m.group(1) + i)
+        else:
+            return init
+    else:
+        return init
+
+
+def get_str_init(init):
+    if isinstance(init, str):
+        return init
+    elif isinstance(init, list) or isinstance(init, tuple):
+        ret = ','.join([get_str_init(x) for x in init])
+        return '{' + ret + '}'
+    elif isinstance(init, AddressOf):
+        return '&' + init.of
+    else:
+        return str(init)
+

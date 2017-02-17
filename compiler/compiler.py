@@ -327,9 +327,10 @@ def generate_state_instance(name, state_instance):
     src = ""
     src += "%s %s" % (state.name, name)
     if state_instance.init:
-        src += " = {%s}" % state_instance.init
+        ret = get_str_init(state_instance.init)
+        src += " = %s" % get_str_init(state_instance.init)
     elif state.init:
-        src += " = {%s}" % state.init
+        src += " = %s" % get_str_init(state.init)
     src += ";"
     print src
     return src
