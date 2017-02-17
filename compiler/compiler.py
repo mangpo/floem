@@ -608,7 +608,7 @@ def generate_code(graph, testing=None, include=None):
         generate_state(graph.states[state_name])
 
     # Generate state instances.
-    for name in graph.state_instances:
+    for name in graph.state_instance_order:
         generate_state_instance(name, graph.state_instances[name])
 
     # Generate functions to save join buffers.

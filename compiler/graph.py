@@ -289,6 +289,7 @@ class Graph:
         self.states = {}
         self.state_order = []
         self.state_instances = {}
+        self.state_instance_order = []
         for e in elements:
             self.elements[e.name] = e
         for s in states:
@@ -364,6 +365,7 @@ class Graph:
         s = self.states[state]
         ret = StateNode(name, s, init)
         self.state_instances[name] = ret
+        self.state_instance_order.append(name)
 
     def newElementInstance(self, element, name, state_args=[]):
         if not element in self.elements:

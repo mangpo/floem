@@ -1,9 +1,11 @@
 from compiler import *
 from desugaring import desugar
 from standard_elements import *
+from queue import *
 
 ForkPacket = Fork("ForkPacket", 3, "iokvs_message*")
 ForkOpaque = Fork("ForkOpaque", 2, "uint64_t")
+ForkEQ = Fork("ForkEQ", 2, "eq_entry*")
 
 GetKey = Element("GetKey",
               [Port("in", ["iokvs_message*"])],
@@ -77,6 +79,14 @@ Unpack = Element("Unpack",
 output { out_opaque(entry->opaque); out_item(entry->it); }
                  ''')
 
+GetCore = Element("GetCore",
+                 [Port("in", ["eq_entry*"])],
+                 [Port("out", ["size_t"])],
+                 r'''
+(eq_entry* entry) = in();
+output { out(entry->hash % 4); }  // reta[entry->key_hash & 0xff];
+                 ''')  # TODO: reta
+
 PrintEntry = Element("PrintEntry",
                      [Port("in", ["eq_entry*"])],
                      [],
@@ -97,12 +107,13 @@ PrintMsg = Element("PrintMsg",
 (t_state, t_insert_element, t_get_element, t_state_instance, t_insert_instance, t_get_instance) = \
     get_table_collection("uint64_t", "iokvs_message*", 64, "msg_put", "msg_get")
 
+rx_steer_instances, rx_steer_enq, rx_steer_deq = CircularQueueOneToMany("queue", "eq_entry*", 4, 4)
+
 p = Program(
     t_state, t_state_instance,
     State("eq_entry", "uint64_t opaque; uint32_t hash; uint16_t keylen; void* key;"),
     State("cq_entry", "uint64_t opaque; item* it;"),
 
-    CircularQueue("RXQueue", "eq_entry*", 4),
     Jenkins_Hash, ForkPacket, ForkOpaque, GetKey,  Pack, GetOpaque, PrintEntry, PrintMsg,
     ElementInstance("PrintMsg", "print_msg"),
     ElementInstance("PrintEntry", "print_entry"),
@@ -112,7 +123,6 @@ p = Program(
     ElementInstance("GetKey", "get_key"),
     ElementInstance("Jenkins_Hash", "hash"),
     ElementInstance("Pack", "rx_pack"),
-    CompositeInstance("RXQueue", "rx_queue"),
     ElementInstance("GetOpaque", "get_opaque"),
     t_insert_element,t_get_element,  t_insert_instance, t_get_instance,
     Inject("iokvs_message*", "inject", 8, "random_request"),
@@ -128,9 +138,24 @@ p = Program(
     Connect("fork_opaque", "msg_put", "out1", "in_index"),
     Connect("fork_opaque", "rx_pack", "out2", "in_opaque"),
 
-    Connect("rx_pack", "rx_queue"),
-
-    APIFunction("get_eq", "rx_queue", "dequeue", "rx_queue", "dequeue_out", "eq_entry*", "NULL"),
+    Spec(
+        CircularQueue("RXQueue", "eq_entry*", 4),
+        CompositeInstance("RXQueue", "rx_queue"),
+        Connect("rx_pack", "rx_queue"),
+        APIFunction("get_eq", "rx_queue", "dequeue", "rx_queue", "dequeue_out", "eq_entry*", "NULL"),
+    ),
+    Impl(
+        *(rx_steer_instances + [
+            ForkEQ, ElementInstance("ForkEQ", "fork_eq"),
+            GetCore, ElementInstance("GetCore", "core"),
+            Connect("rx_pack", "fork_eq"),
+            Connect("fork_eq", "core", "out1"),
+            Connect("core", rx_steer_enq.name, "out", "in_core"),
+            Connect("fork_eq", rx_steer_enq.name, "out2", "in_entry"),
+            APIFunction("get_eq[i]", rx_steer_deq.name.replace('[4]','[i]'), None,
+                        rx_steer_deq.name.replace('[4]','[i]'), "out", "eq_entry*", "NULL")
+        ])
+    ),
 
     CircularQueue("TXQueue", "cq_entry*", 4), Unpack, PrepareResponse,
     CompositeInstance("TXQueue", "tx_queue"),
@@ -157,7 +182,7 @@ def run():
     testing = r'''
     '''
     depend = ['jenkins_hash', 'hashtable']
-    dp = desugar(p)
+    dp = desugar(p, "spec")
     g = generate_graph(dp)
     generate_code_as_header(g, testing, include)
     compile_and_run("test", depend)
