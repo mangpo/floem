@@ -41,7 +41,7 @@ class FlowCollection:
     A list of InstancePart represents a piece of data to the join node
     (an incomplete join nodes along a reversed path the join node -- we ignore complete join nodes).
     For example, [InstancePart(A, set(0), 2), InstancePart(B, set(1), 2)]
-    represents a data from input port 0 of A to input port 1 of B.
+    represents a data from input port 1 of B to input port 0 of A.
     All instances in InstancePart are join nodes.
     FlowCollection with all data is a list of one entry [A].
     """
@@ -280,7 +280,7 @@ def dfs_cover(g, node_name, port_name, target, num_ports, answer):
             if cover_empty:
                 cover = l_cover
         else:
-            if len(l_cover) > 0:
+            if not l_cover.full() and not l_cover.empty():
                 raise Exception("When element instance '%s' fire zero or one port. Each of its output ports must fire none or all input ports of the join instance '%s'."
                     % (node_name, target))
 

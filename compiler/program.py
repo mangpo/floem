@@ -57,13 +57,15 @@ class CompositeInstance:
 
 
 class InternalTrigger:
-    def __init__(self, name):
+    def __init__(self, name, port=None):
         self.element_instance = name
+        self.port = port
 
 
 class ExternalTrigger:
-    def __init__(self, name):
+    def __init__(self, name, port=None):
         self.element_instance = name
+        self.port = port
 
 
 class Inject:
@@ -226,6 +228,15 @@ class GraphGenerator:
             raise Exception("Instance '%s' must be defined in the same local scope as '%s' command."
                             % (name, construct))
 
+    def get_element_instance_name(self, trigger):
+        t = self.get_instance_type(trigger.element_instance)
+        if isinstance(t, Element):
+            new_name = get_node_name(self.get_instance_stack(trigger.element_instance), trigger.element_instance)
+        else:
+            new_name, port = self.lookup((trigger.element_instance, trigger.port))
+
+        return new_name
+
     def interpret(self, x, stack=[]):
         if isinstance(x, Program):
             for s in x.statements:
@@ -266,11 +277,13 @@ class GraphGenerator:
                 raise Exception("Composite '%s' is undefined." % x.element)
             self.interpret_CompositeInstance(x, stack)
         elif isinstance(x, InternalTrigger):
+            ele_name = self.get_element_instance_name(x)
             self.current_scope(x.element_instance, "InternalTrigger")
-            self.threads_internal.add(get_node_name(stack, x.element_instance))
+            self.threads_internal.add(ele_name)
         elif isinstance(x, ExternalTrigger):
+            ele_name = self.get_element_instance_name(x)
             self.current_scope(x.element_instance, "ExternalTrigger")
-            self.threads_api.add(get_node_name(stack, x.element_instance))
+            self.threads_api.add(ele_name)
         elif isinstance(x, APIFunction):
             call_instance, call_port = self.convert_to_element_ports(x.call_instance, x.call_port, stack)
             return_instance, return_port = self.convert_to_element_ports(x.return_instance, x.return_port, stack)
@@ -440,4 +453,5 @@ class GraphGenerator:
             raise Exception("Element instance %s cannot be triggered by both internal and external triggers."
                             % intersect)
         t = ThreadAllocator(self.graph, self.threads_api, self.threads_internal)
-        self.graph.threads_internal = t.transform()
+        self.graph.threads_roots = t.transform()
+        self.graph.threads_internal = self.threads_internal

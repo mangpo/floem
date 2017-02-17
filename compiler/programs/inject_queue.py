@@ -21,13 +21,12 @@ g = generate_graph(desugar(p))
 #generate_code_and_run(g, "enqueue(1); enqueue(4); enqueue(9); out(dequeue()); out(dequeue()); out(dequeue()); enqueue(0); enqueue(2); out(dequeue()); out(dequeue());", [3, 6, 11, 2, 4])
 
 testing = r'''
-run();
+run_threads();
 for(int i=0; i<8; i++) {
     usleep(1000);
     printf("%d\n", dequeue());
 }
-finalize();
+kill_threads();
 '''
 
-generate_code_with_test(g, "run(); finalize();", include)
 generate_code_and_run(g, testing, None, include)

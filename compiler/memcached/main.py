@@ -67,15 +67,15 @@ printf("%d %d %d\n", m->mcr.request.magic, m->mcr.request.bodylen, key[0]);
 
 p = Program(
     Jenkins_Hash, Lookup, ForkPacket, GetKey, PrepareResponse, Print,
-    ElementInstance("ForkPacket", "fork"),
+    ElementInstance("ForkPacket", "fork_pkt"),
     ElementInstance("GetKey", "get_key"),
     ElementInstance("Jenkins_Hash", "hash"),
     ElementInstance("Lookup", "lookup"),
     ElementInstance("PrepareResponse", "response"),
     ElementInstance("Print", "print"),
 
-    Connect("fork", "get_key", "out1"),
-    Connect("fork", "response", "out2", "in_packet"),
+    Connect("fork_pkt", "get_key", "out1"),
+    Connect("fork_pkt", "response", "out2", "in_packet"),
     Connect("get_key", "hash"),
     Connect("hash", "lookup"),
     Connect("lookup", "response", "out", "in_item"),
@@ -84,10 +84,10 @@ p = Program(
 
 testing = r'''
 populate_hasht(10);
-fork(random_request(1));
-fork(random_request(2));
-fork(random_request(3));
-fork(random_request(100));
+fork_pkt(random_request(1));
+fork_pkt(random_request(2));
+fork_pkt(random_request(3));
+fork_pkt(random_request(100));
 '''
 
 include = r'''

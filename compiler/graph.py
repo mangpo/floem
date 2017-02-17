@@ -296,7 +296,8 @@ class Graph:
 
         self.identity = {}
         self.APIs = []
-        self.threads_internal = []
+        self.threads_internal = None
+        self.threads_roots = None
 
         # Inject and probe
         self.inject_populates = {}

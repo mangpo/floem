@@ -213,18 +213,18 @@ class Desugar:
             m = re.match('([a-zA-Z0-9_]+)\[([a-zA-Z]+)]', x.element_instance)
             if m:
                 n = self.lookup(m.group(1))
-                return [InternalTrigger(m.group(1) + str(i)) for i in range(n)]
+                return [InternalTrigger(m.group(1) + str(i), x.port) for i in range(n)]
             else:
-                return InternalTrigger(desugar_name(x.element_instance))
+                return InternalTrigger(desugar_name(x.element_instance), x.port)
                 #return x
 
         elif isinstance(x, ExternalTrigger):
             m = re.match('([a-zA-Z0-9_]+)\[([a-zA-Z]+)]', x.element_instance)
             if m:
                 n = self.lookup(m.group(1))
-                return [ExternalTrigger(m.group(1) + str(i)) for i in range(n)]
+                return [ExternalTrigger(m.group(1) + str(i), x.port) for i in range(n)]
             else:
-                return ExternalTrigger(desugar_name(x.element_instance))
+                return ExternalTrigger(desugar_name(x.element_instance), x.port)
                 #return x
 
         elif isinstance(x, APIFunction):
@@ -277,7 +277,7 @@ class Desugar:
             else:
                 pure_name = x.name
 
-            st_name = "_Inject_%s%s" % (x.type, x.size)
+            st_name = "_Inject_%s%s" % (x.type.replace('*', '$'), x.size)
             st_instance_name = "_State_%s" % pure_name
             ele_name = "_Element_%s" % pure_name
             state = InjectProbeState(st_name, x.type, x.size)

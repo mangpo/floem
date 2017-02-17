@@ -107,7 +107,7 @@ p = Program(
     ElementInstance("PrintMsg", "print_msg"),
     ElementInstance("PrintEntry", "print_entry"),
 
-    ElementInstance("ForkPacket", "fork"),
+    ElementInstance("ForkPacket", "fork_pkt"),
     ElementInstance("ForkOpaque", "fork_opaque"),
     ElementInstance("GetKey", "get_key"),
     ElementInstance("Jenkins_Hash", "hash"),
@@ -115,20 +115,22 @@ p = Program(
     CompositeInstance("RXQueue", "rx_queue"),
     ElementInstance("GetOpaque", "get_opaque"),
     t_insert_element,t_get_element,  t_insert_instance, t_get_instance,
+    Inject("iokvs_message*", "inject", 8, "random_request"),
 
-    Connect("fork", "get_key", "out1"),
+    Connect("inject", "fork_pkt"),
+    Connect("fork_pkt", "get_key", "out1"),
     Connect("get_key", "hash"),
     Connect("hash", "rx_pack", "out", "in_hash"),
 
-    Connect("fork", "msg_put", "out2", "in_value"),
-    Connect("fork", "get_opaque", "out3"),
+    Connect("fork_pkt", "msg_put", "out2", "in_value"),
+    Connect("fork_pkt", "get_opaque", "out3"),
     Connect("get_opaque", "fork_opaque"),
     Connect("fork_opaque", "msg_put", "out1", "in_index"),
     Connect("fork_opaque", "rx_pack", "out2", "in_opaque"),
 
     Connect("rx_pack", "rx_queue"),
 
-    APIFunction("get_eq", "rx_queue", "dequeue", "rx_queue", "dequeue_out", "eq_entry*"),
+    APIFunction("get_eq", "rx_queue", "dequeue", "rx_queue", "dequeue_out", "eq_entry*", "NULL"),
 
     CircularQueue("TXQueue", "cq_entry*", 4), Unpack, PrepareResponse,
     CompositeInstance("TXQueue", "tx_queue"),
@@ -141,7 +143,7 @@ p = Program(
     Connect("unpack", "response", "out_item", "in_item"),
     Connect("response", "print_msg"),
     APIFunction("send_cq", "tx_queue", "enqueue", "tx_queue", "enqueue_out"),
-    APIFunction("send_response", "tx_queue", "dequeue", "print_msg", None)
+    InternalTrigger("tx_queue", "dequeue"),
 )
 
 
@@ -150,40 +152,15 @@ include = r'''
 #include "protocol_binary.h"
 '''
 
+
 def run():
     testing = r'''
-    populate_hasht(10);
-
-    fork(random_request(1));
-    fork(random_request(2));
-    fork(random_request(3));
-
-    eq_entry* e = get_eq();
-    print_entry(e);
-    print_entry(get_eq());
-    print_entry(get_eq());
-
-    fork(random_request(101));
-    fork(random_request(102));
-    print_entry(get_eq());
-    print_entry(get_eq());
-
-    item *it = hasht_get(e->key, e->keylen, e->hash);
-    cq_entry* c = (cq_entry*) malloc(sizeof(cq_entry));
-    c->it = it;
-    c->opaque = e->opaque;
-    send_cq(c);
-    send_response();
     '''
-
     depend = ['jenkins_hash', 'hashtable']
-
-    expect = [1, 1, 82610235,   2, 2, -544296261,   3, 3, -1151292978,    101, 101, 1187334374,    102, 102, -1276648593,
-            1, 5, 3]
-
     dp = desugar(p)
     g = generate_graph(dp)
-    #generate_code_with_test(g, testing, include)
-    generate_code_and_run(g, testing, expect, include, depend)
+    generate_code_as_header(g, testing, include)
+    compile_and_run("test", depend)
+
 
 run()

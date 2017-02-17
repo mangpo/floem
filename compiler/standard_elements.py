@@ -71,12 +71,12 @@ def CircularQueue(name, type, size):
 int next = this.tail + 1;
 if(next >= this.size) next = 0;
 if(next == this.head) {
-  printf("Circular queue is full. A packet is dropped.\n");
+  printf("Circular queue '%s' is full. A packet is dropped.\n");
 } else {
   this.data[this.tail] = x;
   this.tail = next;
 }
-''' % type, None, [(state_name, "this")])
+''' % (type, name), None, [(state_name, "this")])
 
     deq = Element(prefix + "dequeue",
                   [], [Port("out", [type])],
@@ -84,7 +84,7 @@ if(next == this.head) {
 %s x;
 bool avail = false;
 if(this.head == this.tail) {
-  printf("Dequeue an empty circular queue. Default value is returned (for API call).\n");
+  printf("Dequeue an empty circular queue '%s'. Default value is returned (for API call).\n");
   //exit(-1);
 } else {
     avail = true;
@@ -94,7 +94,7 @@ if(this.head == this.tail) {
     this.head = next;
 }
 output switch { case avail: out(x); }
-''' % type, None, [(state_name, "this")])
+''' % (type, name), None, [(state_name, "this")])
 
     q = Composite(name,
                   [Port("enqueue", ("enq", "in"))],

@@ -468,12 +468,15 @@ def thread_func_create_cancel(func, size=None):
                    % (func, size, func)
     else:
         func_src = "void *_run_%s(void *threadid) { while(true) { %s(); usleep(1000); } }\n" % (func, func)
-    create = "pthread_create(&_thread_%s, NULL, _run_%s, NULL);\n" % (func, func)
-    cancel = "pthread_cancel(_thread_%s);\n" % func
+    create = "  pthread_create(&_thread_%s, NULL, _run_%s, NULL);\n" % (func, func)
+    cancel = "  pthread_cancel(_thread_%s);\n" % func
     return (thread, func_src, create, cancel)
 
 
-def generate_internal_triggers(threads_internal, injects):
+def generate_internal_triggers(graph, triggers):
+    threads_internal = graph.threads_internal
+    injects = graph.inject_populates
+
     spec_injects = []
     impl_injects = []
     all_injects = []
@@ -492,8 +495,8 @@ def generate_internal_triggers(threads_internal, injects):
     src += "  // rest: %s\n" % forever
 
     global_src = ""
-    run_src = "void run() {\n"
-    final_src = "void finalize() {\n"
+    run_src = "void run_threads() {\n"
+    final_src = "void kill_threads() {\n"
 
     for (func, size) in spec_injects + impl_injects:
         (thread, func_src, create, cancel) = thread_func_create_cancel(func, size)
@@ -502,14 +505,34 @@ def generate_internal_triggers(threads_internal, injects):
         run_src += create
         final_src += cancel
 
+    if triggers:
+        no_triggers = graph.threads_roots.difference(forever).difference(all_injects)
+        if len(no_triggers) > 0:
+            sys.stderr.write(
+                "run() function doesn't invoke %s. To include them in run(), call InternalTrigger(instance).\n"
+                % no_triggers)
+
+        for func in forever:
+            if len(graph.instances[func].element.inports) > 0:
+                raise Exception("The input port of element instance '%s' is not connected to anything." % func)
+
+            (thread, func_src, create, cancel) = thread_func_create_cancel(func)
+            global_src += thread
+            global_src += func_src
+            run_src += create
+            final_src += cancel
+
     run_src += "}\n"
     final_src += "}\n"
 
+    print global_src + run_src + final_src
     return global_src + run_src + final_src
 
-def generate_testing_code(code, injects, probes, threads_internal):
+def generate_inject_probe_code(graph):
+    injects = graph.inject_populates
+    probes = graph.probe_compares
     src = ""
-    if code or len(injects) or len(probes):
+    if len(injects) or len(probes):
         inject_src = ""
         for state_instance in injects:
             inject = injects[state_instance]
@@ -522,27 +545,29 @@ def generate_testing_code(code, injects, probes, threads_internal):
             for key in probe.spec_instances:
                 probe_src += generate_compare_state(probe, key)
 
-        threads_src = generate_internal_triggers(threads_internal, injects)
-
         src += "void init() {\n"
         src += inject_src
         src += "}\n\n"
 
-        src += threads_src
-
-        src += "void check() {\n"
+        src += "void finalize_and_check() {\n"
         src += probe_src
         src += "}\n\n"
+    else:
+        src += "void init() {}\n"
+        src += "void finalize_and_check() {}\n"
 
-        src += "int main() {\n"
-        src += "  init();\n"
-        #src += "  run();\n"
-        if code:
-            src += "  " + code
-        #src += "  finalize();\n"
-        src += "  check();\n"
-        src += "\n  return 0;\n"
-        src += "}\n"
+    print src
+    return src
+
+def generate_testing_code(code):
+    src = "int main() {\n"
+    src += "  init();\n"
+    if code:
+        src += "  " + code
+    #src += "  finalize();\n"
+    src += "  finalize_and_check();\n"
+    src += "\n  return 0;\n"
+    src += "}\n"
     print src
     return src
 
@@ -572,7 +597,6 @@ def generate_compare_state(probe, key):
 def generate_code(graph, testing=None, include=None):
     """
     Display C code to stdout
-    :param testing:
     :param graph: data-flow graph
     """
     generate_header(testing)
@@ -620,7 +644,7 @@ def generate_code(graph, testing=None, include=None):
     for api in graph.APIs:
         generate_API_function(api, graph)
 
-    generate_testing_code(testing, graph.inject_populates, graph.probe_compares, graph.threads_internal)
+    #generate_testing_code(graph, testing, graph.inject_populates, graph.probe_compares, graph.threads_internal, triggers)
 
 
 def convert_type(result, expect):
@@ -632,13 +656,25 @@ def convert_type(result, expect):
         return result
 
 
-def generate_code_with_test(graph, testing, include=None):
+def generate_code_with_test(graph, testing, include=None, triggers=False):
     generate_code(graph, testing, include)
+    generate_inject_probe_code(graph)
+    generate_internal_triggers(graph, triggers)
 
 
-def generate_code_and_run(graph, testing, expect=None, include=None, depend=None):
+def generate_code_as_header(graph, testing, include=None, triggers=True, header='tmp.h'):
+    with open(header, 'w') as f, redirect_stdout(f):
+        generate_code(graph, testing, include)
+        generate_inject_probe_code(graph)
+        generate_internal_triggers(graph, triggers)
+
+
+def generate_code_and_run(graph, testing, expect=None, include=None, depend=None, triggers=False):
     with open('tmp.c', 'w') as f, redirect_stdout(f):
         generate_code(graph, testing, include)
+        generate_inject_probe_code(graph)
+        generate_internal_triggers(graph, triggers)
+        generate_testing_code(testing)
 
     extra = ""
     if depend:
@@ -671,3 +707,23 @@ def generate_code_and_run(graph, testing, expect=None, include=None, depend=None
 
     print "PASSED!"
 
+
+def compile_and_run(name, depend):
+    extra = ""
+    if depend:
+        for f in depend:
+            extra += '%s.o ' % f
+            cmd = 'gcc -O3 -I %s -c %s.c' % (common.dpdk_include, f)
+            status = os.system(cmd)
+            if not status == 0:
+                raise Exception("Compile error: " + cmd)
+
+    cmd = 'gcc -O3 -pthread %s.c %s -o %s' % (name, extra, name)
+    status = os.system(cmd)
+    if not status == 0:
+        raise Exception("Compile error: " + cmd)
+    status = os.system('./%s' % name)
+    if not status == 0:
+        raise Exception("Runtime error")
+
+    print "PASSED!"

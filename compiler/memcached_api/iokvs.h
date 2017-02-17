@@ -3,6 +3,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include <stdbool.h>
 #include <assert.h>
 #include "protocol_binary.h"
@@ -257,8 +258,8 @@ uint32_t jenkins_hash(const void *key, size_t length);
 void populate_hasht();
 
 static item* random_item(size_t v) {
-  size_t keylen = 1;
-  size_t vallen = 1;
+  size_t keylen = (v % 4) + 1;
+  size_t vallen = (v % 4) + 1;
 
   item *it = (item *) malloc(sizeof(item) + keylen + vallen);
   it->keylen = keylen;
@@ -277,7 +278,7 @@ static item* random_item(size_t v) {
 }
 
 static iokvs_message* random_request(size_t v) {
-  size_t keylen = 1;
+  size_t keylen = (v % 4) + 1;
   size_t extlen = 4;
 
   iokvs_message *m = (iokvs_message *) malloc(sizeof(iokvs_message) + extlen + keylen);
