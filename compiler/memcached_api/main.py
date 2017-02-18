@@ -101,7 +101,7 @@ PrintMsg = Element("PrintMsg",
                    r'''
    (iokvs_message* m) = in();
    uint8_t *key = m->payload + 4;
-   printf("%d %d %d\n", m->mcr.request.magic, m->mcr.request.bodylen, key[0]);
+   printf("OPAQUE: %d, len: %d, key:%d\n", m->mcr.request.magic, m->mcr.request.bodylen, key[0]);
    ''')
 
 (t_state, t_insert_element, t_get_element, t_state_instance, t_insert_instance, t_get_instance) = \
@@ -203,7 +203,7 @@ def run_impl():
     dp = desugar(p, "impl")
     g = generate_graph(dp)
     generate_code_as_header(g, testing, include, True, "tmp_impl.h")
-    #compile_and_run("test", depend)
+    compile_and_run("test_impl", depend)
 
 
 #run_spec()

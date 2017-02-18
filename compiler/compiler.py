@@ -446,10 +446,13 @@ def generate_graph(program, resource=True):
     return gen.graph
 
 
-def generate_header(testing):
+def generate_header(testing, triggers):
     src = ""
     for file in common.header_files:
         src += "#include <%s>\n" % file
+    if triggers:
+        for file in common.header_files_triggers:
+            src += "#include <%s>\n" % file
     if testing:
         src += "void out(int x) { printf(\"%d\\n\", x); }"
     print src
@@ -595,12 +598,12 @@ def generate_compare_state(probe, key):
     src = "  {0}({1}.p, {1}.data, {2}.p, {2}.data);\n".format(probe.func, spec, impl)
     return src
 
-def generate_code(graph, testing=None, include=None):
+def generate_code(graph, testing=None, include=None, triggers=None):
     """
     Display C code to stdout
     :param graph: data-flow graph
     """
-    generate_header(testing)
+    generate_header(testing, triggers)
     generate_include(include)
 
     # Generate states.
@@ -658,21 +661,21 @@ def convert_type(result, expect):
 
 
 def generate_code_with_test(graph, testing, include=None, triggers=False):
-    generate_code(graph, testing, include)
+    generate_code(graph, testing, include, triggers)
     generate_inject_probe_code(graph)
     generate_internal_triggers(graph, triggers)
 
 
 def generate_code_as_header(graph, testing, include=None, triggers=True, header='tmp.h'):
     with open(header, 'w') as f, redirect_stdout(f):
-        generate_code(graph, testing, include)
+        generate_code(graph, testing, include, triggers)
         generate_inject_probe_code(graph)
         generate_internal_triggers(graph, triggers)
 
 
 def generate_code_and_run(graph, testing, expect=None, include=None, depend=None, triggers=False):
     with open('tmp.c', 'w') as f, redirect_stdout(f):
-        generate_code(graph, testing, include)
+        generate_code(graph, testing, include, triggers)
         generate_inject_probe_code(graph)
         generate_internal_triggers(graph, triggers)
         generate_testing_code(testing)
