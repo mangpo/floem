@@ -169,7 +169,8 @@ class TestDesugar(unittest.TestCase):
         dp = desugar(p)
         g = generate_graph(dp)
         all = g.state_instances["all"]
-        self.assertEqual("{{&one0,&one1,&one2,&one3}}", all.init)
+        expect = [[AddressOf("one" + str(i)) for i in range(4)]]
+        self.assertEqual(expect, all.init)
 
     def test_init_end2end_another(self):
         p = Program(
@@ -181,4 +182,4 @@ class TestDesugar(unittest.TestCase):
         dp = desugar(p)
         g = generate_graph(dp)
         all = g.state_instances["all0"]
-        self.assertEqual("{&one0}", all.init)
+        self.assertEqual([AddressOf("one0")], all.init)
