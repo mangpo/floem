@@ -141,17 +141,30 @@ class Desugar:
 
         elif isinstance(x, ElementInstance):
             m = re.match('([a-zA-Z0-9_]+)\[([0-9]+)]', x.name)
+            m_thread = None
+            if x.thread:
+                m_thread = re.match('([a-zA-Z0-9_]+)\[([0-9]+)]', x.thread)
             if m:
                 name = m.group(1)
                 n = int(m.group(2))
                 self.env[name] = n
                 ret = []
-                for i in range(n):
-                    args = [self.instantiate_arg(name,m.group(2),i,arg) for arg in x.args]  # TODO: test
-                    ret.append(ElementInstance(x.element, name + str(i), args))
+                if m_thread:
+                    assert int(m_thread.group(2)) == n, \
+                        ("Paramterized element instance '%s' is initialized with a mismatched parameterized thread '%s'."
+                         % (x.name, x.thread))
+                    for i in range(n):
+                        args = [self.instantiate_arg(name, m.group(2), i, arg) for arg in x.args]
+                        ret.append(ElementInstance(x.element, name + str(i), args,
+                                                   m_thread.group(1) + str(i), x.thread_flag))
+                else:
+                    for i in range(n):
+                        args = [self.instantiate_arg(name,m.group(2), i, arg) for arg in x.args]
+                        ret.append(ElementInstance(x.element, name + str(i), args, x.thread, x.thread_flag))
                 return ret
             else:
-                return x
+                return ElementInstance(x.element, desugar_name(x.name), [desugar_name(arg) for arg in x.args],
+                                       x.thread, x.thread_flag)
 
         elif isinstance(x, CompositeInstance):
             m = re.match('([a-zA-Z0-9_]+)\[([0-9]+)]', x.name)
@@ -217,7 +230,6 @@ class Desugar:
                 return [InternalTrigger(m.group(1) + str(i), x.port) for i in range(n)]
             else:
                 return InternalTrigger(desugar_name(x.element_instance), x.port)
-                #return x
 
         elif isinstance(x, ExternalTrigger):
             m = re.match('([a-zA-Z0-9_]+)\[([a-zA-Z]+)]', x.element_instance)
@@ -226,7 +238,41 @@ class Desugar:
                 return [ExternalTrigger(m.group(1) + str(i), x.port) for i in range(n)]
             else:
                 return ExternalTrigger(desugar_name(x.element_instance), x.port)
-                #return x
+
+        elif isinstance(x, InternalTrigger2):
+            m = re.match('([a-zA-Z0-9_]+)\[([0-9]+)]', x.name)
+            if m:
+                n = int(m.group(2))
+                return [InternalTrigger2(m.group(1) + str(i)) for i in range(n)]
+            else:
+                return InternalTrigger2(desugar_name(x.element_instance))
+
+        elif isinstance(x, ResourceMap):
+            m_rs = re.match('([a-zA-Z0-9_]+)\[([a-zA-Z]+)]', x.resource)
+            m_inst = re.match('([a-zA-Z0-9_]+)\[([a-zA-Z]+)]', x.instance)
+            if m_rs and m_inst:
+                assert m_rs.group(2) == m_inst.group(2), \
+                    ("Parameterized instance '%s' is mapped to parameterized resource '%s'. Parameters are unmatched."
+                     % (x.instance, x.resource))
+
+                n = self.lookup(m_inst.group(1))
+                return [ResourceMap(m_rs.group(1) + str(i), m_inst.group(1) + str(i), x.flag) for i in range(n)]
+            elif m_inst:
+                n = self.lookup(m_inst.group(1))
+                return [ResourceMap(desugar_name(x.resource), m_inst.group(1) + str(i), x.flag) for i in range(n)]
+            elif m_rs:
+                raise Exception("Non-parameterized instance '%s' cannot be mapped to parameterized resource '%s'"
+                                % (x.instance, x.resource))
+            else:
+                return ResourceMap(desugar_name(x.resource), desugar_name(x.instance), x.flag)
+
+        elif isinstance(x, APIFunction2):
+            m = re.match('([a-zA-Z0-9_]+)\[([0-9]+)]', x.name)
+            if m:
+                n = int(m.group(2))
+                return [APIFunction2(m.group(1) + str(i), x.call_types, x.return_type, x.default_val) for i in range(n)]
+            else:
+                return APIFunction2(desugar_name(x.name), x.call_types, x.return_type, x.default_val)
 
         elif isinstance(x, APIFunction):
             m = re.match('([a-zA-Z0-9_]+)\[([a-zA-Z]+)]', x.name)

@@ -34,3 +34,55 @@ def create_drop(name, type):
                           [Port("in", [type])],
                           [],
                           r'''in();''')
+
+def create_circular_queue(name, type, size):
+    prefix = "_%s_" % name
+    state_name = prefix + "queue"
+
+    Enqueue = create_element(prefix+ "enqueue",
+                             [Port("in", [type])], [],
+                             r'''
+           (%s x) = in();
+           int next = this.tail + 1;
+           if(next >= this.size) next = 0;
+           if(next == this.head) {
+             printf("Circular queue '%s' is full. A packet is dropped.\n");
+           } else {
+             this.data[this.tail] = x;
+             this.tail = next;
+           }
+           ''' % (type, name), None, [(state_name, "this")])
+
+    Dequeue = create_element(prefix + "dequeue",
+                             [], [Port("out", [type])],
+                             r'''
+           %s x;
+           bool avail = false;
+           if(this.head == this.tail) {
+             printf("Dequeue an empty circular queue '%s'. Default value is returned (for API call).\n");
+             //exit(-1);
+           } else {
+               avail = true;
+               x = this.data[this.head];
+               int next = this.head + 1;
+               if(next >= this.size) next = 0;
+               this.head = next;
+           }
+           output switch { case avail: out(x); }
+           ''' % (type, name), None, [(state_name, "this")])
+
+    Queue = create_state(state_name, "int head; int tail; int size; %s data[%d];" % (type, size),
+                         [0,0,size, [0]])
+
+    def func(x, t1, t2):
+        queue = Queue()
+        enq = Enqueue(prefix + "enqueue", [queue])
+        deq = Dequeue(prefix + "dequeue", [queue])
+        enq(x)
+        y = deq()
+
+        t1.run(False, enq)
+        t2.run(True, deq)
+        return y
+
+    return create_composite(name, func)

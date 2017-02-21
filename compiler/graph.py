@@ -188,14 +188,17 @@ class Element:
 
 
 class ElementNode:
-    def __init__(self, name, element, state_args):
+    def __init__(self, name, element, state_args, thread="main", thread_flag=None):
         self.name = name
         self.element = element
         self.output2ele = {}   # map output port name to (element name, port)
         self.input2ele = {}    # map input port name to (element name, port)
         self.output2connect = {}
         self.state_args = state_args
-        self.thread = None
+
+        # Thread
+        self.thread = thread
+        self.thread_flag = thread_flag
 
         # Join information
         self.join_ports_same_thread = None
@@ -210,7 +213,6 @@ class ElementNode:
         self.API_return_from = None   # which output node the the return value comes form
         self.API_return_final = None  # mark that this node has to create the return state
         self.API_default_val = None   # default return value
-
 
     def __str__(self):
         return self.element.name + "::" + self.name + "---OUT[" + str(self.output2ele) + "]" + "---IN[" + str(self.input2ele) + "]"
@@ -300,6 +302,9 @@ class Graph:
         self.threads_internal = None
         self.threads_roots = None
 
+        self.threads_internal2 = []
+        self.threads_API = []
+
         # Inject and probe
         self.inject_populates = {}
         self.probe_compares = {}
@@ -320,6 +325,8 @@ class Graph:
 
     def clear_APIs(self):
         self.APIs = []
+        self.threads_API = []
+        self.threads_internal2 = []
 
     def has_element_instance(self, instance_name):
         return instance_name in self.instances
@@ -367,11 +374,11 @@ class Graph:
         self.state_instances[name] = ret
         self.state_instance_order.append(name)
 
-    def newElementInstance(self, element, name, state_args=[]):
+    def newElementInstance(self, element, name, state_args=[], thread=None, thread_flag=None):
         if not element in self.elements:
             raise Exception("Element '%s' is undefined." % element)
         e = self.elements[element]
-        ret = ElementNode(name, e, state_args)
+        ret = ElementNode(name, e, state_args, thread, thread_flag)
         self.instances[name] = ret
 
         # Check state types

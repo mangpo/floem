@@ -263,10 +263,12 @@ class TestThreadStateComposite(unittest.TestCase):
                     [Port("in", ["int"])],
                     [],
                     r'''printf("%d\n", in());'''),
-            ElementInstance("Inc", "inc1"),
-            ElementInstance("Print", "print"),
+            APIFunction2("add_and_print", ["int"], None),
+            ElementInstance("Inc", "inc1", [], "add_and_print", True),
+            ElementInstance("Print", "print", [], "add_and_print"),
             Connect("inc1", "print"),
-            APIFunction("add_and_print", "inc1", "in", "print", None)
+            #ResourceMap("add_and_print", "inc1", True),
+            #ResourceMap("add_and_print", "print"),
         )
         g = generate_graph(p)
         self.assertEqual(2, len(g.instances))
@@ -277,38 +279,14 @@ class TestThreadStateComposite(unittest.TestCase):
         self.check_api_return(g, [])
         self.check_api_return_final(g, [])
 
-    def test_API_basic_output(self):
-        p = Program(
-            Element("Inc",
-                    [Port("in", ["int"])],
-                    [Port("out", ["int"])],
-                    r'''int x = in() + 1; output { out(x); }'''),
-            Element("Dup",
-                    [Port("in", ["int"])],
-                    [Port("out", ["int", "int"])],
-                    r'''int x = in(); output { out(x, x); }'''),
-            ElementInstance("Inc", "inc"),
-            ElementInstance("Dup", "dup"),
-            Connect("inc", "dup"),
-            APIFunction("func", "inc", "in", "dup", "out", "Add2Return")
-        )
-        g = generate_graph(p)
-        self.assertEqual(2, len(g.instances))
-        self.assertEqual(1, len(g.states))
-        roots = self.find_roots(g)
-        self.assertEqual(set(['inc']), roots)
-        self.assertEqual(set(['inc', 'dup']), self.find_subgraph(g, 'inc', set()))
-        self.check_api_return(g, [("inc", "Add2Return"), ("dup", "Add2Return")])
-        self.check_api_return_from(g, [("inc", "dup")])
-        self.check_api_return_final(g, ["dup"])
-
     def test_API_blocking_read(self):
         p = Program(
             Forward,
             ElementInstance("Forward", "f1"),
             ElementInstance("Forward", "f2"),
             Connect("f1", "f2"),
-            APIFunction("read", "f2", None, "f2", "out", "int")
+            APIFunction2("read", [], "int"),
+            ResourceMap("read", "f2", True),
         )
         g = generate_graph(p)
         self.assertEqual(4, len(g.instances))
@@ -328,12 +306,15 @@ class TestThreadStateComposite(unittest.TestCase):
             ElementInstance("Forward", "f1"),
             ElementInstance("Forward", "f2"),
             Connect("f1", "f2"),
-            APIFunction("func", "f1", "in", "f1", None)
+            APIFunction2("func", ["int"], None),
+            ResourceMap("func", "f1", True),
+            ResourceMap("func", "f2"),
         )
         try:
             g = generate_graph(p)
         except Exception as e:
-            self.assertNotEqual(e.message.find("return element instance 'f1' has a continuing element instance"), -1)
+            print e.message
+            self.assertNotEqual(e.message.find("API 'func' should have no return value"), -1)
         else:
             self.fail('Exception is not raised.')
 
@@ -343,8 +324,8 @@ class TestThreadStateComposite(unittest.TestCase):
             ElementInstance("Forward", "f1"),
             ElementInstance("Forward", "f2"),
             Connect("f1", "f2"),
-            InternalTrigger("f2"),
-            APIFunction("func", "f1", "in", "f1", None)
+            APIFunction2("func", ["int"], None),
+            ResourceMap("func", "f1", True),
         )
         g = generate_graph(p)
         self.assertEqual(4, len(g.instances))
@@ -365,7 +346,11 @@ class TestThreadStateComposite(unittest.TestCase):
             ElementInstance("Forward", "fwd"),
             Connect("dup", "fwd", "out1"),
             InternalTrigger("fwd"),
-            APIFunction("func", "dup", "in", "dup", "out2", "int")
+            APIFunction("func", "dup", "in", "dup", "out2", "int"),
+            APIFunction2("func", ["int"], "int"),
+            ResourceMap("func", "dup", True),
+            #InternalTrigger2("t"),
+            #ResourceMap("t", "fwd", True),
         )
         g = generate_graph(p)
         self.assertEqual(4, len(g.instances))
@@ -379,6 +364,7 @@ class TestThreadStateComposite(unittest.TestCase):
         self.check_api_return_from(g, [])
         self.check_api_return_final(g, ["dup"])
 
+    # TODO
     def test_API_not_always_return(self):
         p = Program(
             Inc, CircularQueue("Queue", "int", 4),
@@ -390,7 +376,7 @@ class TestThreadStateComposite(unittest.TestCase):
             Connect("inject", "inc1"),
             Connect("inc1", "queue"),
             Connect("queue", "inc2"),
-            APIFunction("dequeue", "queue", "dequeue", "inc2", "out", "int")
+            APIFunction("dequeue", "queue", "dequeue", "inc2", "out", "int"),
         )
         try:
             g = generate_graph(desugar(p))
@@ -399,6 +385,7 @@ class TestThreadStateComposite(unittest.TestCase):
         else:
             self.fail('Exception is not raised.')
 
+    # TODO
     def test_API_not_always_return_but_okay(self):
         p = Program(
             Inc, CircularQueue("Queue", "int", 4),

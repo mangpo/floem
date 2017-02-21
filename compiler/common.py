@@ -41,3 +41,9 @@ def types_args_port_list(ports, formatter):
             args.append(arg)
         types += port.argtypes
     return types, args
+
+def types_port_list(ports):
+    types = []
+    for port in ports:
+        types += port.argtypes
+    return types

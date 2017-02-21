@@ -51,18 +51,18 @@ def mark_return(g, name, path, api):
     instance = g.instances[name]
     next = path[name]
     if instance.API_return:
-        if not instance.API_return == api.state_name:
+        if not instance.API_return == api.return_type:
             raise Exception(
                 r'''Element instance '%s' can only compose APIs that return the same state.
                 However, it is parts of APIs that return '%s' and '%s'.'''
-                % (name, instance.API_return, api.state_name))
+                % (name, instance.API_return, api.return_type))
 
         if next is True:
             if not instance.API_return_final.return_port == api.return_port:
                 raise Exception(
                     r'''Element instance '%s' can only compose APIs that return the same state from the same port.
                     However, it is parts of APIs that return from ports '%s' and '%s'.'''
-                    % (name, instance.API_return_final.return_port, api.return_portinstance.API_return))
+                    % (name, instance.API_return_final.return_port, api.return_port, instance.API_return))
         else:
             if not instance.API_return_from == next:
                 raise Exception(
@@ -72,7 +72,7 @@ def mark_return(g, name, path, api):
                 always_return = mark_return(g, next, path, api)
 
     else:
-        instance.API_return = api.state_name
+        instance.API_return = api.return_type
         instance.API_default_val = api.default_val
         if next is True:
             instance.API_return_final = api
@@ -90,25 +90,13 @@ def annotate_api_info(g):
     :param g: computation graph
     :return: void
     """
-    for api in g.APIs:
-        if api.state_name:
+    for api in g.threads_API:
+        if api.return_type:
             # Find a path from call node to return node. This path is used for passing the return value.
             path = {}
             dfs_find_path(g, api.call_instance, api.return_instance, path)
             always_return = mark_return(g, api.call_instance, path, api)
 
-            if api.state_name and (not always_return) and (not api.default_val):
+            if (not always_return) and (not api.default_val):
                 raise Exception("API '%s' doesn't always return, and the default return value is not provided." %
                                 api.name)
-
-            # Create return state.
-            content = " "
-            for port in g.instances[api.return_instance].element.outports:
-                if port.name == api.return_port:
-                    for i in range(len(port.argtypes)):
-                        type_arg = "%s %s_arg%d; " % (port.argtypes[i], port.name, i)
-                        content += type_arg
-
-            if not g.get_outport_argtypes(api.return_instance, api.return_port) == [api.state_name]:
-                api.new_state_type = True
-                g.addState(State(api.state_name, content, init=None))

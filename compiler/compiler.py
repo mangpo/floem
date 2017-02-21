@@ -351,25 +351,25 @@ def generate_join_save_function(name, join_ports_same_thread):
     return src
 
 
-def generate_API_return_state(api, g):
-    types_args = []
-    args = []
-    for port in g.instances[api.return_instance].element.outports:
-        if port.name == api.return_port:
-            l_types_args, l_args = common.types_args_one_port(port, common.standard_arg_format)
-            types_args += l_types_args
-            args += l_args
-
-    src = ""
-    src += "%s _get_%s(%s) {\n" % (api.state_name, api.state_name.replace('*','$'), ", ".join(types_args))
-    src += "  %s ret = {%s};\n" % (api.state_name, ", ".join(args))
-    src += "  return ret; }\n"
-    print src
-    return src
+# def generate_API_return_state(api, g):
+#     types_args = []
+#     args = []
+#     for port in g.instances[api.return_instance].element.outports:
+#         if port.name == api.return_port:
+#             l_types_args, l_args = common.types_args_one_port(port, common.standard_arg_format)
+#             types_args += l_types_args
+#             args += l_args
+#
+#     src = ""
+#     src += "%s _get_%s(%s) {\n" % (api.state_name, api.state_name.replace('*','$'), ", ".join(types_args))
+#     src += "  %s ret = {%s};\n" % (api.state_name, ", ".join(args))
+#     src += "  return ret; }\n"
+#     print src
+#     return src
 
 
 def generate_API_identity_macro(api):
-    src = "#define _get_%s(X) X" % api.state_name.replace('*','$')
+    src = "#define _get_%s(X) X" % api.return_type.replace('*', '$')
     print src
     return src
 
@@ -377,14 +377,15 @@ def generate_API_identity_macro(api):
 def generate_API_function(api, g):
     args = []
     types_args = []
-    if api.call_port:
-        instance = g.instances[api.call_instance]
-        port = [port for port in instance.element.inports if port.name == api.call_port][0]
-        types_args, args = common.types_args_one_port(port, "arg{1}")
+    if api.call_types:
+        for i in range(len(api.call_types)):
+            arg = "arg" + str(i)
+            args.append(arg)
+            types_args.append("%s %s" % (api.call_types[i], arg))
 
     src = ""
     if api.return_port:
-        src += "%s %s(%s) { " % (api.state_name, api.name, ", ".join(types_args))
+        src += "%s %s(%s) { " % (api.return_type, api.name, ", ".join(types_args))
         src += "return %s(%s); }\n" % (api.call_instance, ", ".join(args))
     else:
         src += "void %s(%s) { " % (api.name, ", ".join(types_args))
@@ -478,7 +479,7 @@ def thread_func_create_cancel(func, size=None):
 
 
 def generate_internal_triggers(graph, triggers):
-    threads_internal = graph.threads_internal
+    threads_internal = set([trigger.call_instance for trigger in graph.threads_internal2])
     injects = graph.inject_populates
 
     spec_injects = []
@@ -490,13 +491,6 @@ def generate_internal_triggers(graph, triggers):
         all_injects += inject.spec_ele_instances
         all_injects += inject.impl_ele_instances
 
-    all_injects = set(all_injects)
-    forever = threads_internal.difference(all_injects)
-
-    src = ""
-    src += "  // spec inject: %s\n" % spec_injects
-    src += "  // impl inject: %s\n" % impl_injects
-    src += "  // rest: %s\n" % forever
 
     global_src = ""
     run_src = "void run_threads() {\n"
@@ -510,6 +504,8 @@ def generate_internal_triggers(graph, triggers):
         final_src += cancel
 
     if triggers:
+        all_injects = set(all_injects)
+        forever = threads_internal.difference(all_injects)
         no_triggers = graph.threads_roots.difference(forever).difference(all_injects)
         if len(no_triggers) > 0:
             sys.stderr.write(
@@ -621,13 +617,14 @@ def generate_code(graph, testing=None, include=None, triggers=None):
 
     # Generate functions to produce API return state
     return_funcs = []
-    for api in graph.APIs:
-        if api.state_name and api.state_name not in return_funcs:
-            return_funcs.append(api.state_name)
-            if graph.get_outport_argtypes(api.return_instance, api.return_port) == [api.state_name]:
-                generate_API_identity_macro(api)
-            else:
-                generate_API_return_state(api, graph)
+    for api in graph.threads_API:
+        if api.return_type and api.return_type not in return_funcs:
+            return_funcs.append(api.return_type)
+            generate_API_identity_macro(api)
+            # if graph.get_outport_argtypes(api.return_instance, api.return_port) == [api.state_name]:
+            #     generate_API_identity_macro(api)
+            # else:
+            #     generate_API_return_state(api, graph)
 
     # Generate signatures.
     for name in graph.instances:
@@ -645,10 +642,8 @@ def generate_code(graph, testing=None, include=None, triggers=None):
         element_to_function(instance, state_rename, graph)
 
     # Generate API functions.
-    for api in graph.APIs:
+    for api in graph.threads_API:
         generate_API_function(api, graph)
-
-    #generate_testing_code(graph, testing, graph.inject_populates, graph.probe_compares, graph.threads_internal, triggers)
 
 
 def convert_type(result, expect):

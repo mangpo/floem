@@ -19,11 +19,15 @@ class ThreadAllocator:
         print "Joins:", self.joins
 
     def transform(self):
-        self.assign_threads()
-        self.check_APIs()
-        #self.print_threads_info()
+        # self.assign_threads()
+        # self.check_APIs()
+        # #self.print_threads_info()
+        # self.insert_threading_elements()
+        # return self.roots.difference(self.threads_api)
+
+        self.find_roots()
+        self.check_resources()
         self.insert_threading_elements()
-        return self.roots.difference(self.threads_api)
 
     def find_roots(self):
         """
@@ -66,6 +70,95 @@ class ThreadAllocator:
                 (next, port) = instance.output2ele[out]
                 next = self.instances[next]
                 self.assign_thread_dfs(next, entry_points, name)
+
+    def dfs_collect_return(self, inst_name, thread, visit):
+        instance = self.graph.instances[inst_name]
+        if inst_name in visit:
+            return ([], None, None)
+        elif not instance.thread == thread:
+            return ([], None, None)
+
+        visit.add(inst_name)
+        return_type = []
+        return_inst = None
+        return_port = None
+        for port in instance.element.outports:
+            if port.name in instance.output2ele:
+                (next_inst, next_port) = instance.output2ele[port.name]
+                ret = self.dfs_collect_return(next_inst, thread, visit)
+                return_type += ret[0]
+                if ret[1]:
+                    return_inst = ret[1]
+                if ret[2]:
+                    return_port = ret[2]
+            else:
+                return_type += port.argtypes
+                return_inst = inst_name
+                return_port = port.name
+        return return_type, return_inst, return_port
+
+    def check_resources(self):
+        thread2start = {}
+        thread2instances = {}
+        extra_edges = {}
+
+        for instance in self.instances.values():
+            t = instance.thread
+            if t not in thread2instances:
+                thread2instances[t] = []
+            thread2instances[t].append(instance.name)
+
+            if instance.thread_flag:
+                if t in thread2start:
+                    raise Exception("Resource '%s' has more than one starting element instance." % t)
+                thread2start[t] = instance
+
+        for api in self.graph.threads_API:
+            assert (api.name in thread2start), ("API '%s' does not mark a starting element instance." % api.name)
+            start = thread2start[api.name]
+            api.call_instance = start.name
+
+            if start.name in self.roots:
+                # Receive input arguments.
+                types = common.types_port_list(start.element.inports)
+                assert types == api.call_types, \
+                    ("API '%s' is defined to take arguments of types %s, but the starting element '%s' take arguments of types %s."
+                     % (api.name, api.call_types, start.element.name, types))
+
+            else:
+                assert api.call_types == [], \
+                    ("API '%s' should take no argument because the starting element instance '%s' receives arguments from other threads." \
+                     % (api.name, start.name))
+
+            visit = set()
+            return_type, return_inst, return_port = self.dfs_collect_return(start.name, api.name, visit)
+            if api.return_type:
+                assert len(return_type) == 1 and return_type[0] == api.return_type, \
+                    ("API '%s' should return '%s', but the returning element instance inside the API returns '%s'"
+                     % (api.name, api.return_type, return_type))
+            else:
+                assert len(return_type) == 0, \
+                    ("API '%s' should have no return value, but the returning element instance inside the API returns %s"
+                     % (api.name, return_type))
+
+            api.return_instance = return_inst
+            api.return_port = return_port
+
+        for trigger in self.graph.threads_internal2:
+            assert (trigger.name in thread2start), \
+                ("Internal trigger '%s' does not mark a starting element instance." % trigger.name)
+            start = thread2start[trigger.name]
+            trigger.call_instance = start.name
+
+            if start.name in self.roots:
+                assert len(start.element.inports) == 0, \
+                    ("The starting element '%s' of internal trigger '%s' cannot take any argument."
+                     % (start.name, trigger.name))
+
+            visit = set()
+            return_type, return_inst, return_port = self.dfs_collect_return(start.name, trigger.name, visit)
+            assert return_type == [], ("Internal trigger '%s' should not return any value, but it returns %s"
+                                       % (trigger.name, return_type))
 
     def check_APIs(self):
         """
@@ -198,6 +291,9 @@ class ThreadAllocator:
                 self.threads_internal.add(new_name)
                 self.threads_entry_point.add(new_name)
             for api in self.graph.APIs:
+                if api.call_instance == instance.name:
+                    api.call_instance = new_name
+            for api in self.graph.threads_API:
                 if api.call_instance == instance.name:
                     api.call_instance = new_name
 

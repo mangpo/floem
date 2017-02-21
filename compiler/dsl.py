@@ -7,10 +7,60 @@ scope = [[]]
 stack = []
 fresh_id = 0
 
+
 class PortCollect:
     def __init__(self):
         self.element_instance = None
         self.port = None
+        self.thread_run_args = None
+
+    def run(self, *args):
+        """
+        This is for assign a thread to an element instance.
+        :return:
+        """
+        self.thread_run_args = args
+
+class Thread:
+    def __init__(self, name):
+        self.name = name
+
+    def run(self, start, *instances):
+        begin = 0
+        if start:
+            instances[0].assign_thread(self.name, True)
+            begin = 1
+        for i in range(begin, len(instances)):
+            instance = instances[i]
+            instance.assign_thread(self.name, False)
+
+
+class API_thread(Thread):
+    def __init__(self, name, call_types, return_types, default_val=None):
+        Thread.__init__(self, name)
+        api = APIFunction2(name, call_types, return_types, default_val)
+        scope[-1].insert(0, api)
+
+
+class internal_thread(Thread):
+    def __init__(self, name):
+        Thread.__init__(self, name)
+        trigger = InternalTrigger2(name)
+        scope[-1].append(trigger)
+
+
+class ElementInstance:
+    def __init__(self, name, instance, connect):
+        self.name = name
+        self.instance = instance
+        self.connect = connect
+
+    def __call__(self, *args, **kwargs):
+        return self.connect(*args)
+
+    def assign_thread(self, thread, flag):
+        self.instance.thread = thread
+        self.instance.thread_flag = flag
 
 
 def get_node_name(name):
@@ -33,7 +83,7 @@ def create_element(ele_name, inports, outports, code, local_state=None, state_pa
             assert isinstance(inst_name, str), \
                 "Name of element instance should be string. '%s' is given." % str(inst_name)
         inst_name = get_node_name(inst_name)
-        instance = ElementInstance(ele_name, inst_name, args)
+        instance = compiler.ElementInstance(ele_name, inst_name, args)
         scope[-1].append(instance)
 
         def connect(*ports):
@@ -41,9 +91,9 @@ def create_element(ele_name, inports, outports, code, local_state=None, state_pa
             :param ports: a list of (element_instance, out_port)
             :return:
             """
-            assert len(ports) == len(e.inports), ("Instance of element '%s' requires %d inputs, %d inputs are given."
-                                                  % (ele_name, len(e.inports), len(ports)))
-            for i in range(len(e.inports)):
+            # assert len(ports) == len(e.inports), ("Instance of element '%s' requires %d inputs, %d inputs are given."
+            #                                       % (ele_name, len(e.inports), len(ports)))
+            for i in range(len(ports)):
                 from_port = ports[i]  # (element_instance, out_port)
                 to_port = e.inports[i]  # Port
 
@@ -62,7 +112,7 @@ def create_element(ele_name, inports, outports, code, local_state=None, state_pa
             else:
                 return tuple([(inst_name, port.name) for port in e.outports])
         # end connect
-        return connect
+        return ElementInstance(inst_name, instance, connect)
     # end create_instance
     return create_instance
 
@@ -75,6 +125,7 @@ def create_composite(composite_name, program):
 
     def create_instance(inst_name=None):
         if inst_name is None:
+            global fresh_id
             inst_name = composite_name + str(fresh_id)
             fresh_id += 1
         else:
@@ -88,15 +139,18 @@ def create_composite(composite_name, program):
         stack = stack[:-1]
 
         def connect(*ports):
-            assert len(ports) == n_args, ("Instance of composite '%s' requires %d inputs, %d inputs are given."
-                                          % (composite_name, n_args, len(ports)))
-            for i in range(n_args):
+            # assert len(ports) == n_args, ("Instance of composite '%s' requires %d inputs, %d inputs are given."
+            #                               % (composite_name, n_args, len(ports)))
+            for i in range(len(ports)):
                 from_port = ports[i]
                 to_port = fake_ports[i]
 
-                if isinstance(from_port, PortCollect):
+                if isinstance(from_port, API_thread):
+                    from_port.run(*to_port.thread_run_args)
+                elif isinstance(from_port, PortCollect):
                     from_port.element_instance = to_port.element_instance
                     from_port.port = to_port.port
+                    from_port.thread_run_args = to_port.thread_run_args
                 elif from_port:
                     c = Connect(from_port[0], to_port.element_instance, from_port[1], to_port.port)
                     scope[-1].append(c)

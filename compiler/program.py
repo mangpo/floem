@@ -8,12 +8,14 @@ class StateInstance:
 
 
 class ElementInstance:
-    def __init__(self, element, name, args=[]):
+    def __init__(self, element, name, args=[], thread=None, thread_flag=None):
         if not isinstance(args, list):
             raise TypeError("State arguments of element instance '%s' is not a list of states." % name)
         self.element = element
         self.name = name
         self.args = args
+        self.thread = thread
+        self.thread_flag = thread_flag
 
 
 class Connect:
@@ -66,6 +68,12 @@ class ExternalTrigger:
     def __init__(self, name, port=None):
         self.element_instance = name
         self.port = port
+
+
+class InternalTrigger2:
+    def __init__(self, name):
+        self.name = name
+        self.call_instance = None
 
 
 class Inject:
@@ -155,6 +163,27 @@ class APIFunction:
         self.new_state_type = False
 
 
+class APIFunction2:
+    def __init__(self, name, call_types, return_type, default_val=None):
+        assert isinstance(call_types, list), \
+            ("call_types argument of APIFunction should be a list of types. '%s' is given." % call_types)
+        assert (return_type is None or isinstance(return_type, str)), \
+            ("return_type argument of APIFunction should be a data type in string format. '%s' is given." % return_type)
+        self.name = name
+        self.call_types = call_types
+        self.return_type = return_type
+        self.default_val = default_val
+        self.call_instance = None
+        self.return_instance = None
+        self.return_port = None
+
+
+class ResourceMap:
+    def __init__(self, resource, instance, flag=None):
+        self.resource = resource
+        self.instance = instance
+        self.flag = flag
+
 class GraphGenerator:
     def __init__(self):
         self.graph = Graph()
@@ -198,6 +227,12 @@ class GraphGenerator:
 
     def get_instance_type(self, name):
         return self.lookup(name)[1]
+
+    def put_resource(self, local_name, global_name):
+        self.env[local_name] = global_name
+
+    def get_resource(self, local_name):
+        return self.lookup(local_name)
 
     def push_scope(self, composite, state_params, state_args):
         params_types = [x[0] for x in state_params]
@@ -256,7 +291,8 @@ class GraphGenerator:
             except KeyError:
                 raise Exception("Element '%s' is undefined." % x.element)
             self.graph.newElementInstance(x.element, new_name,
-                                          [self.get_state_name(arg) for arg in x.args])
+                                          [self.get_state_name(arg) for arg in x.args],
+                                          x.thread, x.thread_flag)
         elif isinstance(x, StateInstance):
             new_name = get_node_name(stack, x.name)
             # Collect inject information
@@ -290,6 +326,25 @@ class GraphGenerator:
             self.threads_api.add(call_instance)
             self.graph.APIs.append(APIFunction(x.name, call_instance, call_port, return_instance, return_port,
                                                x.state_name, x.default_val))
+
+        elif isinstance(x, InternalTrigger2):
+            global_name = get_node_name(stack, x.name)
+            self.put_resource(x.name, global_name)
+            self.graph.threads_internal2.append(InternalTrigger2(global_name))
+
+        elif isinstance(x, APIFunction2):
+            global_name = get_node_name(stack, x.name)
+            self.put_resource(x.name, global_name)
+            self.graph.threads_API.append(APIFunction2(x.name, x.call_types, x.return_type, x.default_val))
+
+        elif isinstance(x, ResourceMap):
+            self.get_instance_stack(x.instance)
+            inst_name = get_node_name(self.get_instance_stack(x.instance), x.instance)
+            resource_name = self.get_resource(x.resource)
+            instance = self.graph.instances[inst_name]
+            instance.thread = resource_name
+            instance.thread_flag = x.flag
+
         elif isinstance(x, PopulateState):
             self.graph.inject_populates[x.state_instance] = x.clone()
         elif isinstance(x, CompareState):
@@ -453,5 +508,6 @@ class GraphGenerator:
             raise Exception("Element instance %s cannot be triggered by both internal and external triggers."
                             % intersect)
         t = ThreadAllocator(self.graph, self.threads_api, self.threads_internal)
-        self.graph.threads_roots = t.transform()
-        self.graph.threads_internal = self.threads_internal
+        t.transform()
+        #self.graph.threads_roots = t.transform()
+        #self.graph.threads_internal = self.threads_internal
