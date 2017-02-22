@@ -79,8 +79,7 @@ def mark_return(g, name, path, api):
         else:
             instance.API_return_from = next
             always_return = mark_return(g, next, path, api)
-    if next is not True:
-        always_return = always_return and (not instance.element.output_fire == "zero_or_one")
+    always_return = always_return and (not instance.element.output_fire == "zero_or_one")
     return always_return
 
 

@@ -196,7 +196,7 @@ depend = ['jenkins_hash', 'hashtable']
 def run_spec():
     dp = desugar(p, "spec")
     g = generate_graph(dp)
-    generate_code_as_header(g, testing, include)
+    generate_code_as_header(g, testing, include, "tmp_spec.h")
     compile_and_run("test", depend)
 
 def run_impl():

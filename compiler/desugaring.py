@@ -245,7 +245,7 @@ class Desugar:
                 n = int(m.group(2))
                 return [InternalTrigger2(m.group(1) + str(i)) for i in range(n)]
             else:
-                return InternalTrigger2(desugar_name(x.element_instance))
+                return InternalTrigger2(desugar_name(x.name))
 
         elif isinstance(x, ResourceMap):
             m_rs = re.match('([a-zA-Z0-9_]+)\[([a-zA-Z]+)]', x.resource)
@@ -330,7 +330,7 @@ class Desugar:
             state = InjectProbeState(st_name, x.type, x.size)
             state_instance = StateInstance(st_name, st_instance_name)
             element = InjectElement(ele_name, x.type, st_name, x.size)
-            element_instance = ElementInstance(ele_name, x.name, [st_instance_name])
+            element_instance = ElementInstance(ele_name, x.name, [st_instance_name], x.thread, x.thread_flag)
             self.populates.append(PopulateState(x.name, st_instance_name, st_name, x.type, x.size, x.func))
 
             if m:
@@ -355,7 +355,7 @@ class Desugar:
             state = InjectProbeState(st_name, x.type, x.size)
             state_instance = StateInstance(st_name, st_instance_name)  # TODO: get rid of parameter
             element = ProbeElement(ele_name, x.type, st_name, x.size)
-            element_instance = ElementInstance(ele_name, x.name, [st_instance_name])
+            element_instance = ElementInstance(ele_name, x.name, [st_instance_name], x.thread, x.thread_flag)
             self.compares.append(CompareState(x.name, st_instance_name, st_name, x.type, x.size, x.func))
 
             return self.process(Program(*[state, state_instance, element, element_instance])).statements

@@ -8,8 +8,6 @@
 #include <assert.h>
 #include "protocol_binary.h"
 
-#define static_assert(x,s) _Static_assert((x),s)
-
 /******************************************************************************/
 /* Settings */
 
@@ -84,16 +82,6 @@ item *hasht_get(const void *key, size_t klen, uint32_t hv);
 void hasht_put(item *it, item *cas);
 
 
-/******************************************************************************/
-/* Item Allocation */
-struct segment_header;
-item;
-/**
- * Item allocator struct. Should be considered to be opaque outside ialloc.c
- *
- * This struct is slightly ugly, as it is split up into 3 parts to reduce false
- * sharing as much as possible.
- */
 struct item_allocator {
     /***********************************************************/
     /* Part 1: mostly read-only for maintenance and worker */
@@ -128,10 +116,6 @@ struct item_allocator {
     size_t clean_offset;
 };
 
-static_assert(offsetof(struct item_allocator, cur) % 64 == 0,
-        "Alignment in struct item_allocator broken 1");
-static_assert(offsetof(struct item_allocator, oldest) % 64 == 0,
-        "Alignment in struct item_allocator broken 2");
 
 /** Initialize item allocation. Prepares memory regions etc. */
 void ialloc_init(void);

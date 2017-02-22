@@ -14,23 +14,22 @@ class PortCollect:
         self.port = None
         self.thread_run_args = None
 
-    def run(self, *args):
-        """
-        This is for assign a thread to an element instance.
-        :return:
-        """
+    def __call__(self, *args, **kwargs):
         self.thread_run_args = args
+
 
 class Thread:
     def __init__(self, name):
         self.name = name
 
-    def run(self, start, *instances):
-        begin = 0
-        if start:
-            instances[0].assign_thread(self.name, True)
-            begin = 1
-        for i in range(begin, len(instances)):
+    def run_start(self, *instances):
+        instances[0].assign_thread(self.name, True)
+        for i in range(1, len(instances)):
+            instance = instances[i]
+            instance.assign_thread(self.name, False)
+
+    def run(self, *instances):
+        for i in range(len(instances)):
             instance = instances[i]
             instance.assign_thread(self.name, False)
 
@@ -117,6 +116,12 @@ def create_element(ele_name, inports, outports, code, local_state=None, state_pa
     return create_instance
 
 
+def create_element_instance(inst_name, inports, outports, code, local_state=None, state_params=[]):
+    ele_name = "_element_" + inst_name
+    ele = create_element(ele_name, inports, outports, code, local_state, state_params)
+    return ele(inst_name)
+
+
 def create_composite(composite_name, program):
     assert callable(program), "The argument to create_composite must be lambda."
     args = inspect.getargspec(program).args
@@ -145,8 +150,8 @@ def create_composite(composite_name, program):
                 from_port = ports[i]
                 to_port = fake_ports[i]
 
-                if isinstance(from_port, API_thread):
-                    from_port.run(*to_port.thread_run_args)
+                if callable(from_port):
+                    from_port(*to_port.thread_run_args)
                 elif isinstance(from_port, PortCollect):
                     from_port.element_instance = to_port.element_instance
                     from_port.port = to_port.port
@@ -161,6 +166,23 @@ def create_composite(composite_name, program):
     # end create_instance
 
     return create_instance
+
+
+def create_composite_instance(inst_name, program):
+    composite_name = "_composite_" + inst_name
+    compo = create_composite(composite_name, program)
+    return compo()
+
+
+def create_inject_instance(inst_name, type, size, func):
+    instance = compiler.Inject(type, inst_name, size, func)
+    scope[-1].append(instance)
+
+    def connect():
+        return (inst_name, "out")
+
+    return ElementInstance(inst_name, instance, connect)
+
 
 def create_state(st_name, content, init=None):
     s = State(st_name, content, init)
@@ -183,6 +205,12 @@ def create_state(st_name, content, init=None):
     return create_instance
 
 
+def create_state_instance(inst_name, content, init=None):
+    st_name = "_state_" + inst_name
+    state = create_state(st_name, content, init)
+    return state(inst_name)
+
+
 class Compiler:
     def __init__(self):
         self.resource = True
@@ -195,8 +223,9 @@ class Compiler:
 
     def generate_graph(self):
         assert len(scope) == 1, "Compile error: there are multiple scopes remained."
-        p = desugaring.desugar(Program(*scope[0]))
-        g = compiler.generate_graph(p, self.resource)
+        p = Program(*scope[0])
+        dp = desugaring.desugar(p)
+        g = compiler.generate_graph(dp, self.resource)
         return g
 
     def generate_code(self):

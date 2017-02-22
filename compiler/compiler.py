@@ -480,6 +480,7 @@ def thread_func_create_cancel(func, size=None):
 
 def generate_internal_triggers(graph, triggers):
     threads_internal = set([trigger.call_instance for trigger in graph.threads_internal2])
+    threads_api = set([trigger.call_instance for trigger in graph.threads_API])
     injects = graph.inject_populates
 
     spec_injects = []
@@ -506,7 +507,7 @@ def generate_internal_triggers(graph, triggers):
     if triggers:
         all_injects = set(all_injects)
         forever = threads_internal.difference(all_injects)
-        no_triggers = graph.threads_roots.difference(forever).difference(all_injects)
+        no_triggers = graph.threads_roots.difference(forever).difference(all_injects).difference(threads_api)
         if len(no_triggers) > 0:
             sys.stderr.write(
                 "run() function doesn't invoke %s. To include them in run(), call InternalTrigger(instance).\n"

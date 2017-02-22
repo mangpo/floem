@@ -40,6 +40,7 @@ class ThreadAllocator:
                 not_roots.add(next)
 
         self.roots = set(self.instances.keys()).difference(not_roots)
+        self.graph.threads_roots = self.roots
         return self.roots
 
     def assign_threads(self):

@@ -77,19 +77,23 @@ class InternalTrigger2:
 
 
 class Inject:
-    def __init__(self, type, name, size, func):
+    def __init__(self, type, name, size, func, thread=None, thread_flag=None):
         self.type = type
         self.name = name
         self.size = size
         self.func = func
+        self.thread = thread
+        self.thread_flag = thread_flag
 
 
 class Probe:
-    def __init__(self, type, name, size, func):
+    def __init__(self, type, name, size, func, thread=None, thread_flag=None):
         self.type = type
         self.name = name
         self.size = size
         self.func = func
+        self.thread = thread
+        self.thread_flag = thread_flag
 
 
 class StorageState:

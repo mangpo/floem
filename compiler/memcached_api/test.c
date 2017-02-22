@@ -1,4 +1,4 @@
-#include "tmp.h"
+#include "tmp_spec.h"
 
 void run_app() {
   eq_entry* e = get_eq();

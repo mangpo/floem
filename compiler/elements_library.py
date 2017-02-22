@@ -8,6 +8,12 @@ def create_fork(name, n, type):
     return create_element(name, [Port("in", [type])], outports, src)
 
 
+def create_fork_instance(inst_name, n, type):
+    ele_name = "_element_" + inst_name
+    ele = create_fork(ele_name, n, type)
+    return ele(inst_name)
+
+
 def create_identity(name, type):
     src = "(%s x) = in(); output { out(x); }" % type
     return create_element(name, [Port("in", [type])], [Port("out", [type])], src)
@@ -81,8 +87,46 @@ def create_circular_queue(name, type, size):
         enq(x)
         y = deq()
 
-        t1.run(False, enq)
-        t2.run(True, deq)
+        t1(enq)
+        t2(deq)
         return y
 
     return create_composite(name, func)
+
+
+def create_circular_queue_instance(name, type, size):
+    ele_name = "_element_" + name
+    ele = create_circular_queue(ele_name, type, size)
+    return ele(name)
+
+
+def create_table_instances(put_name, get_name, index_type, val_type, size):
+    state_name = ("_table_%s_%d" % (val_type, size)).replace('*', '$')
+    state_instance_name = "_table_%s" % put_name
+    Table = create_state(state_name, "{0} data[{1}];".format(val_type, size), [[0]])
+    TablePut = create_element("_element_" + put_name,
+                              [Port("in_index", [index_type]), Port("in_value", [val_type])], [],
+                              r'''
+              (%s index) = in_index();
+              (%s val) = in_value();
+              uint32_t key = index %s %d;
+              if(this.data[key] == NULL) this.data[key] = val;
+              else { printf("Hash collision!\n"); exit(-1); }
+              ''' % (index_type, val_type, '%', size),
+                              None, [(state_name, "this")])
+
+    TableGet = create_element("_element_" + get_name,
+                              [Port("in", [index_type])], [Port("out", [val_type])],
+                              r'''
+              (%s index) = in();
+              uint32_t key = index %s %d;
+              %s val = this.data[key];
+              if(val == NULL) { printf("No such entry in this table.\n"); exit(-1); }
+              this.data[key] = NULL;
+              output { out(val); }
+              ''' % (index_type, '%', size, val_type), None, [(state_name, "this")])
+
+    table = Table(state_instance_name)
+    table_put = TablePut(put_name, [table])
+    table_get = TableGet(get_name, [table])
+    return table_put, table_get
