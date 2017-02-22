@@ -213,6 +213,7 @@ def create_state_instance(inst_name, content, init=None):
 
 class Compiler:
     def __init__(self):
+        self.desugar_mode = "impl"
         self.resource = True
         self.triggers = None
 
@@ -223,8 +224,8 @@ class Compiler:
 
     def generate_graph(self):
         assert len(scope) == 1, "Compile error: there are multiple scopes remained."
-        p = Program(*scope[0])
-        dp = desugaring.desugar(p)
+        p = Program(*scope[0], )
+        dp = desugaring.desugar(p, self.desugar_mode)
         g = compiler.generate_graph(dp, self.resource)
         return g
 
