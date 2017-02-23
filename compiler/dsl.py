@@ -3,19 +3,17 @@ import compiler
 import desugaring
 import inspect
 
+# Global variables for constructing a program.
 scope = [[]]
 stack = []
 fresh_id = 0
 
 
-class PortCollect:
-    def __init__(self):
-        self.element_instance = None
-        self.port = None
-        self.thread_run_args = None
-
-    def __call__(self, *args, **kwargs):
-        self.thread_run_args = args
+def reset():
+    global scope, stack, fresh_id
+    scope = [[]]
+    stack = []
+    fresh_id = 0
 
 
 class Thread:
@@ -62,6 +60,54 @@ class ElementInstance:
         self.instance.thread_flag = flag
 
 
+class PortCollect:
+    """
+    An object of this class is used for collecting the element instances and ports that connect to the inputs of
+    a composite or spec/impl composite.
+
+    If the composite doesn't contain spec/impl composites, then self.impl* are not used.
+
+    __call__ is for collecting thread bindings.
+    """
+
+    def __init__(self):
+        self.element_instance = None
+        self.port = None
+        self.thread_run_args = None
+
+        self.impl_element_instance = None
+        self.impl_port = None
+        self.impl_thread_run_args = None
+
+    def __call__(self, *args, **kwargs):
+        self.thread_run_args = args
+
+
+class SpecImplElementPort:
+    """
+    An object of this class is used for collecting the element instance and ports that connect to the outputs of
+    a spec/impl composite.
+    """
+
+    def __init__(self, spec_instance, spec_port, impl_instance, impl_port):
+        self.spec_instance = spec_instance
+        self.spec_port = spec_port
+
+        self.impl_instance = impl_instance
+        self.impl_port = impl_port
+
+
+class ElementPort:
+    """
+    An object of this class is used for collecting the element instance and ports that connect to the outputs of
+    a composite.
+    """
+
+    def __init__(self, instance, port):
+        self.instance = instance
+        self.port = port
+
+
 def get_node_name(name):
     if len(stack) > 0:
         return "_".join(stack) + "_" + name
@@ -99,17 +145,26 @@ def create_element(ele_name, inports, outports, code, local_state=None, state_pa
                 if isinstance(from_port, PortCollect):
                     from_port.element_instance = inst_name
                     from_port.port = to_port.name
-                elif from_port:
-                    c = Connect(from_port[0], inst_name, from_port[1], to_port.name)
+                elif isinstance(from_port, SpecImplElementPort):
+                    c = Connect(from_port.spec_instance, inst_name, from_port.spec_port, to_port.name)
+                    scope[-1].append(Spec([c]))
+                    c = Connect(from_port.impl_instance, inst_name, from_port.impl_port, to_port.name)
+                    scope[-1].append(Impl([c]))
+                elif isinstance(from_port, ElementPort):
+                    c = Connect(from_port.instance, inst_name, from_port.port, to_port.name)
                     scope[-1].append(c)
+                elif from_port is None:
+                    pass
+                else:
+                    raise Exception("Unknown element connection %s" % from_port)
 
             l = len(e.outports)
             if l == 0:
                 return None
             elif l == 1:
-                return (inst_name, e.outports[0].name)
+                return ElementPort(inst_name, e.outports[0].name)
             else:
-                return tuple([(inst_name, port.name) for port in e.outports])
+                return tuple([ElementPort(inst_name, port.name) for port in e.outports])
         # end connect
         return ElementInstance(inst_name, instance, connect)
     # end create_instance
@@ -123,10 +178,9 @@ def create_element_instance(inst_name, inports, outports, code, local_state=None
 
 
 def create_composite(composite_name, program):
-    assert callable(program), "The argument to create_composite must be lambda."
+    assert callable(program), "The second argument to create_composite must be lambda."
     args = inspect.getargspec(program).args
     n_args = len(args)
-    fake_ports = [PortCollect() for i in range(n_args)]
 
     def create_instance(inst_name=None):
         if inst_name is None:
@@ -137,7 +191,7 @@ def create_composite(composite_name, program):
             assert isinstance(inst_name, str), \
                 "Name of element instance should be string. '%s' is given." % str(inst_name)
 
-        inst_name = get_node_name(inst_name)
+        fake_ports = [PortCollect() for i in range(n_args)]
         global stack
         stack.append(inst_name)
         outs = program(*fake_ports)
@@ -150,15 +204,41 @@ def create_composite(composite_name, program):
                 from_port = ports[i]
                 to_port = fake_ports[i]
 
-                if callable(from_port):
-                    from_port(*to_port.thread_run_args)
-                elif isinstance(from_port, PortCollect):
+                if isinstance(from_port, PortCollect):
                     from_port.element_instance = to_port.element_instance
                     from_port.port = to_port.port
                     from_port.thread_run_args = to_port.thread_run_args
-                elif from_port:
-                    c = Connect(from_port[0], to_port.element_instance, from_port[1], to_port.port)
-                    scope[-1].append(c)
+
+                    from_port.impl_element_instance = to_port.impl_element_instance
+                    from_port.impl_port = to_port.impl_port
+                    from_port.impl_thread_run_args = to_port.impl_thread_run_args
+                elif callable(from_port):
+                    from_port(*to_port.thread_run_args)
+                    if to_port.impl_thread_run_args:
+                        from_port(*to_port.impl_thread_run_args)
+                elif isinstance(from_port, SpecImplElementPort):
+                    c = Connect(from_port.spec_instance, to_port.element_instance, from_port.spec_port, to_port.port)
+                    scope[-1].append(Spec([c]))
+                    if to_port.impl_element_instance:
+                        c = Connect(from_port.impl_instance, to_port.impl_element_instance,
+                                    from_port.impl_port, to_port.impl_port)
+                    else:
+                        c = Connect(from_port.impl_instance, to_port.element_instance,
+                                    from_port.impl_port, to_port.port)
+                    scope[-1].append(Impl([c]))
+                elif isinstance(from_port, ElementPort):
+                    c = Connect(from_port.instance, to_port.element_instance, from_port.port, to_port.port)
+                    if to_port.impl_element_instance:
+                        scope[-1].append(Spec([c]))
+                        c = Connect(from_port.instance, to_port.impl_element_instance,
+                                    from_port.port, to_port.impl_port)
+                        scope[-1].append(Impl([c]))
+                    else:
+                        scope[-1].append(c)
+                elif from_port is None:
+                    pass
+                else:
+                    raise Exception("Unknown composite connection %s" % from_port)
             return outs
         # end connect
 
@@ -172,6 +252,95 @@ def create_composite_instance(inst_name, program):
     composite_name = "_composite_" + inst_name
     compo = create_composite(composite_name, program)
     return compo()
+
+
+def create_spec_impl(name, spec_func, impl_func):
+    assert callable(spec_func), "The second argument to create_composite must be lambda."
+    assert callable(impl_func), "The third argument to create_composite must be lambda."
+    spec_args = inspect.getargspec(spec_func).args
+    impl_args = inspect.getargspec(impl_func).args
+    assert len(spec_args) == len(impl_args), "spec_func and impl_func take different numbers of arguments."
+    n_args = len(spec_args)
+
+    def create_instance(inst_name, program, fake_ports):
+        global stack
+        stack.append(inst_name)
+        outs = program(*fake_ports)
+        stack = stack[:-1]
+        return outs
+
+    global scope
+    spec_scope = []
+    spec_fake_inports = [PortCollect() for i in range(n_args)]
+    scope.append(spec_scope)
+    spec_outs = create_instance(name, spec_func, spec_fake_inports)
+    scope = scope[:-1]
+    scope[-1].append(Spec(spec_scope))
+
+    impl_scope = []
+    impl_fake_inports = [PortCollect() for i in range(n_args)]
+    scope.append(impl_scope)
+    impl_outs = create_instance(name, impl_func, impl_fake_inports)
+    scope = scope[:-1]
+    scope[-1].append(Impl(impl_scope))
+
+    outs = []
+    if isinstance(spec_outs, tuple):
+        assert (isinstance(impl_outs, tuple) and len(spec_outs) == len(impl_outs)), \
+            ("The numbers of outputs of spec/impl of %s are different." % name)
+
+        for i in range(len(spec_outs)):
+            spec_instance = spec_outs[i].instance
+            spec_port = spec_outs[i].port
+            impl_instance = impl_outs[i].instance
+            impl_port = impl_outs[i].port
+            o = SpecImplElementPort(spec_instance, spec_port, impl_instance, impl_port)
+            outs.append(o)
+    else:
+        assert (isinstance(spec_outs, ElementPort) and isinstance(impl_outs, ElementPort)), \
+            ("The outputs of spec/impl of %s must be of type ElementPort or tuple of ElementPort" % name)
+        spec_instance = spec_outs.instance
+        spec_port = spec_outs.port
+        impl_instance = impl_outs.instance
+        impl_port = impl_outs.port
+        outs = SpecImplElementPort(spec_instance, spec_port, impl_instance, impl_port)
+
+
+    def connect(*ports):
+        for i in range(len(ports)):
+            from_port = ports[i]
+            spec_to_port = spec_fake_inports[i]
+            impl_to_port = impl_fake_inports[i]
+
+            if isinstance(from_port, PortCollect):
+                from_port.element_instance = spec_to_port.element_instance
+                from_port.port = spec_to_port.port
+                from_port.thread_run_args = spec_to_port.thread_run_args
+
+                from_port.impl_element_instance = impl_to_port.element_instance
+                from_port.impl_port = impl_to_port.port
+                from_port.impl_thread_run_args = impl_to_port.thread_run_args
+            elif callable(from_port):
+                from_port(*spec_to_port.thread_run_args)
+                from_port(*impl_to_port.thread_run_args)
+            elif isinstance(from_port, SpecImplElementPort):
+                c = Connect(from_port.spec_instance, spec_to_port.element_instance, from_port.spec_port, spec_to_port.port)
+                spec_scope.append(c)
+                c = Connect(from_port.impl_instance, impl_to_port.element_instance, from_port.impl_port, impl_to_port.port)
+                impl_scope.append(c)
+            elif isinstance(from_port, ElementPort):
+                c = Connect(from_port.instance, spec_to_port.element_instance, from_port.port, spec_to_port.port)
+                spec_scope.append(c)
+                c = Connect(from_port.instance, impl_to_port.element_instance, from_port.port, impl_to_port.port)
+                impl_scope.append(c)
+            elif from_port is None:
+                pass
+            else:
+                raise Exception("Unknown spec/impl connection %s" % from_port)
+        return outs
+        # end connect
+
+    return connect
 
 
 def create_inject_instance(inst_name, type, size, func):
@@ -224,7 +393,7 @@ class Compiler:
 
     def generate_graph(self):
         assert len(scope) == 1, "Compile error: there are multiple scopes remained."
-        p = Program(*scope[0], )
+        p = Program(*scope[0])
         dp = desugaring.desugar(p, self.desugar_mode)
         g = compiler.generate_graph(dp, self.resource)
         return g

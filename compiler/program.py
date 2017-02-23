@@ -17,6 +17,9 @@ class ElementInstance:
         self.thread = thread
         self.thread_flag = thread_flag
 
+    def __str__(self):
+        return self.name + '<' + self.element + '>'
+
 
 class Connect:
     def __init__(self, ele1, ele2, out1=None, in2=None):
@@ -25,6 +28,9 @@ class Connect:
         self.out1 = out1
         self.in2 = in2
 
+    def __str__(self):
+        return self.ele1 + "-->" + self.ele2
+
 
 class Program:
     def __init__(self, *statements):
@@ -32,12 +38,12 @@ class Program:
 
 
 class Spec:
-    def __init__(self, *statements):
+    def __init__(self, statements):
         self.statements = statements
 
 
 class Impl:
-    def __init__(self, *statements):
+    def __init__(self, statements):
         self.statements = statements
 
 

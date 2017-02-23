@@ -7,16 +7,16 @@ g = Forward()
 
 
 # METHOD 2: more concise
-def connector_funcs(spec,x):
-    if spec:
-        c = Forward()
-        return c(x)
-    else:
-        c1 = Forward()
-        c2 = Forward()
-        return c2(c1(x))
+def connector_spec(x):
+    c = Forward()
+    return c(x)
 
-connector = create_spec_impl_instance("connector", connector_func)
+def connector_impl(x):
+    c1 = Forward()
+    c2 = Forward()
+    return c2(c1(x))
+
+connector = create_spec_impl_instance("connector", connector_spec, connector_impl)
 g(connector(f(None)))
 
 # METHOD 3: easy but problematic

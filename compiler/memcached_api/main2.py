@@ -96,8 +96,10 @@ print_msg = create_element_instance("print_msg",
    printf("OPAQUE: %d, len: %d, key:%d\n", m->mcr.request.magic, m->mcr.request.bodylen, key[0]);
    ''')
 
-rx_queue = create_circular_queue_instance("rx_queue", "eq_entry*", 4)
-tx_queue = create_circular_queue_instance("tx_queue", "cq_entry*", 4)
+#rx_queue = create_circular_queue_instance("rx_queue", "eq_entry*", 4)
+rx_enq, rx_deq = create_circular_queue_instances("rx_queue", "eq_entry*", 4)
+#tx_queue = create_circular_queue_instance("tx_queue", "cq_entry*", 4)
+tx_enq, tx_deq = create_circular_queue_instances("tx_queue", "cq_entry*", 4)
 msg_put, msg_get = create_table_instances("msg_put", "msg_get", "uint64_t", "iokvs_message*", 64)
 inject = create_inject_instance("inject", "iokvs_message*", 8, "random_request")
 
@@ -116,20 +118,25 @@ msg_put(opaque1, pkt2)
 key = get_key(pkt3)
 hash = jenkins_hash(key)
 eq_entry1 = pack(hash, opaque2)
-eq_entry2 = rx_queue(eq_entry1)
+rx_enq(eq_entry1)
+eq_entry2 = rx_deq()
 
-nic_rx.run_start(inject, fork_pkt, get_opaque, fork_opaque, msg_put, get_key, jenkins_hash, pack)  # TODO: better way to assign threads. This is very error-proned.
-rx_queue(None, nic_rx.run, get_eq.run_start)
+# TODO: better way to assign threads. This is very error-proned.
+# TODO: using block and @?
+# TODO: how to make it more obvious, what are inputs from API call and inputs from other elements? Same with outputs?
+nic_rx.run_start(inject, fork_pkt, get_opaque, fork_opaque, msg_put, get_key, jenkins_hash, pack, rx_enq)
+get_eq.run_start(rx_deq)
 
 # NIC TX
-cq_entry = tx_queue(None)
+tx_enq(None)
+cq_entry = tx_deq()
 opaque3, item = unpack(cq_entry)
 pkt4 = msg_get(opaque3)
 response = prepare_response(pkt4, item)
 print_msg(response)
 
-tx_queue(None, send_cq.run_start, nic_tx.run_start)
-nic_tx.run(unpack, msg_get, prepare_response, print_msg)
+send_cq.run_start(tx_enq)
+nic_tx.run_start(tx_deq, unpack, msg_get, prepare_response, print_msg)
 
 c = Compiler()
 c.include = r'''

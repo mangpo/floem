@@ -41,11 +41,11 @@ def create_drop(name, type):
                           [],
                           r'''in();''')
 
-def create_circular_queue(name, type, size):
+def declare_circular_queue(name, type, size):
     prefix = "_%s_" % name
     state_name = prefix + "queue"
 
-    Enqueue = create_element(prefix+ "enqueue",
+    Enqueue = create_element(prefix + "enqueue",
                              [Port("in", [type])], [],
                              r'''
            (%s x) = in();
@@ -78,7 +78,13 @@ def create_circular_queue(name, type, size):
            ''' % (type, name), None, [(state_name, "this")])
 
     Queue = create_state(state_name, "int head; int tail; int size; %s data[%d];" % (type, size),
-                         [0,0,size, [0]])
+                         [0, 0, size, [0]])
+
+    return Queue, Enqueue, Dequeue
+
+def create_circular_queue(name, type, size):
+    prefix = "_%s_" % name
+    Queue, Enqueue, Dequeue = declare_circular_queue(name, type, size)
 
     def func(x, t1, t2):
         queue = Queue()
@@ -98,6 +104,15 @@ def create_circular_queue_instance(name, type, size):
     ele_name = "_element_" + name
     ele = create_circular_queue(ele_name, type, size)
     return ele(name)
+
+
+def create_circular_queue_instances(name, type, size):
+    prefix = "_%s_" % name
+    Queue, Enqueue, Dequeue = declare_circular_queue(name, type, size)
+    queue = Queue()
+    enq = Enqueue(prefix + "enqueue", [queue])
+    deq = Dequeue(prefix + "dequeue", [queue])
+    return enq, deq
 
 
 def create_table_instances(put_name, get_name, index_type, val_type, size):
