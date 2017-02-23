@@ -60,7 +60,7 @@ class ElementInstance:
         self.instance.thread_flag = flag
 
 
-class PortCollect:
+class InputPortCollect:
     """
     An object of this class is used for collecting the element instances and ports that connect to the inputs of
     a composite or spec/impl composite.
@@ -71,11 +71,11 @@ class PortCollect:
     """
 
     def __init__(self):
-        self.element_instance = None
+        self.instance = None
         self.port = None
         self.thread_run_args = None
 
-        self.impl_element_instance = None
+        self.impl_instance = None
         self.impl_port = None
         self.impl_thread_run_args = None
 
@@ -83,29 +83,20 @@ class PortCollect:
         self.thread_run_args = args
 
 
-class SpecImplElementPort:
+class OutputPortCollect:
     """
     An object of this class is used for collecting the element instance and ports that connect to the outputs of
-    a spec/impl composite.
+    a spec/impl or spec/impl composite.
+
+    If the composite doesn't contain spec/impl composites, then self.impl* are not used.
     """
 
-    def __init__(self, spec_instance, spec_port, impl_instance, impl_port):
-        self.spec_instance = spec_instance
-        self.spec_port = spec_port
+    def __init__(self, instance, port, impl_instance=None, impl_port=None):
+        self.instance = instance
+        self.port = port
 
         self.impl_instance = impl_instance
         self.impl_port = impl_port
-
-
-class ElementPort:
-    """
-    An object of this class is used for collecting the element instance and ports that connect to the outputs of
-    a composite.
-    """
-
-    def __init__(self, instance, port):
-        self.instance = instance
-        self.port = port
 
 
 def get_node_name(name):
@@ -142,17 +133,20 @@ def create_element(ele_name, inports, outports, code, local_state=None, state_pa
                 from_port = ports[i]  # (element_instance, out_port)
                 to_port = e.inports[i]  # Port
 
-                if isinstance(from_port, PortCollect):
-                    from_port.element_instance = inst_name
+                if isinstance(from_port, InputPortCollect):
+                    # InputPortCollect only contains spec version because we evaluate the inner body of spec and impl
+                    # separately.
+                    from_port.instance = inst_name
                     from_port.port = to_port.name
-                elif isinstance(from_port, SpecImplElementPort):
-                    c = Connect(from_port.spec_instance, inst_name, from_port.spec_port, to_port.name)
-                    scope[-1].append(Spec([c]))
-                    c = Connect(from_port.impl_instance, inst_name, from_port.impl_port, to_port.name)
-                    scope[-1].append(Impl([c]))
-                elif isinstance(from_port, ElementPort):
+                elif isinstance(from_port, OutputPortCollect):
+                    # OutputPortCollect can have both spec and impl.
                     c = Connect(from_port.instance, inst_name, from_port.port, to_port.name)
-                    scope[-1].append(c)
+                    if from_port.impl_instance:
+                        scope[-1].append(Spec([c]))
+                        c = Connect(from_port.impl_instance, inst_name, from_port.impl_port, to_port.name)
+                        scope[-1].append(Impl([c]))
+                    else:
+                        scope[-1].append(c)
                 elif from_port is None:
                     pass
                 else:
@@ -162,9 +156,9 @@ def create_element(ele_name, inports, outports, code, local_state=None, state_pa
             if l == 0:
                 return None
             elif l == 1:
-                return ElementPort(inst_name, e.outports[0].name)
+                return OutputPortCollect(inst_name, e.outports[0].name)
             else:
-                return tuple([ElementPort(inst_name, port.name) for port in e.outports])
+                return tuple([OutputPortCollect(inst_name, port.name) for port in e.outports])
         # end connect
         return ElementInstance(inst_name, instance, connect)
     # end create_instance
@@ -191,7 +185,7 @@ def create_composite(composite_name, program):
             assert isinstance(inst_name, str), \
                 "Name of element instance should be string. '%s' is given." % str(inst_name)
 
-        fake_ports = [PortCollect() for i in range(n_args)]
+        fake_ports = [InputPortCollect() for i in range(n_args)]
         global stack
         stack.append(inst_name)
         outs = program(*fake_ports)
@@ -204,37 +198,40 @@ def create_composite(composite_name, program):
                 from_port = ports[i]
                 to_port = fake_ports[i]
 
-                if isinstance(from_port, PortCollect):
-                    from_port.element_instance = to_port.element_instance
+                if isinstance(from_port, InputPortCollect):
+                    from_port.instance = to_port.instance
                     from_port.port = to_port.port
                     from_port.thread_run_args = to_port.thread_run_args
 
-                    from_port.impl_element_instance = to_port.impl_element_instance
+                    from_port.impl_instance = to_port.impl_instance
                     from_port.impl_port = to_port.impl_port
                     from_port.impl_thread_run_args = to_port.impl_thread_run_args
                 elif callable(from_port):
                     from_port(*to_port.thread_run_args)
                     if to_port.impl_thread_run_args:
                         from_port(*to_port.impl_thread_run_args)
-                elif isinstance(from_port, SpecImplElementPort):
-                    c = Connect(from_port.spec_instance, to_port.element_instance, from_port.spec_port, to_port.port)
-                    scope[-1].append(Spec([c]))
-                    if to_port.impl_element_instance:
-                        c = Connect(from_port.impl_instance, to_port.impl_element_instance,
-                                    from_port.impl_port, to_port.impl_port)
-                    else:
-                        c = Connect(from_port.impl_instance, to_port.element_instance,
-                                    from_port.impl_port, to_port.port)
-                    scope[-1].append(Impl([c]))
-                elif isinstance(from_port, ElementPort):
-                    c = Connect(from_port.instance, to_port.element_instance, from_port.port, to_port.port)
-                    if to_port.impl_element_instance:
+                elif isinstance(from_port, OutputPortCollect):
+                    if from_port.impl_instance:
+                        # from_port contains both spec and impl
+                        c = Connect(from_port.instance, to_port.instance, from_port.port, to_port.port)
                         scope[-1].append(Spec([c]))
-                        c = Connect(from_port.instance, to_port.impl_element_instance,
-                                    from_port.port, to_port.impl_port)
+                        if to_port.impl_instance:
+                            c = Connect(from_port.impl_instance, to_port.impl_instance,
+                                        from_port.impl_port, to_port.impl_port)
+                        else:
+                            c = Connect(from_port.impl_instance, to_port.instance,
+                                        from_port.impl_port, to_port.port)
                         scope[-1].append(Impl([c]))
                     else:
-                        scope[-1].append(c)
+                        # from_port contains only one version.
+                        c = Connect(from_port.instance, to_port.instance, from_port.port, to_port.port)
+                        if to_port.impl_instance:
+                            scope[-1].append(Spec([c]))
+                            c = Connect(from_port.instance, to_port.impl_instance,
+                                        from_port.port, to_port.impl_port)
+                            scope[-1].append(Impl([c]))
+                        else:
+                            scope[-1].append(c)
                 elif from_port is None:
                     pass
                 else:
@@ -271,14 +268,14 @@ def create_spec_impl(name, spec_func, impl_func):
 
     global scope
     spec_scope = []
-    spec_fake_inports = [PortCollect() for i in range(n_args)]
+    spec_fake_inports = [InputPortCollect() for i in range(n_args)]
     scope.append(spec_scope)
     spec_outs = create_instance(name, spec_func, spec_fake_inports)
     scope = scope[:-1]
     scope[-1].append(Spec(spec_scope))
 
     impl_scope = []
-    impl_fake_inports = [PortCollect() for i in range(n_args)]
+    impl_fake_inports = [InputPortCollect() for i in range(n_args)]
     scope.append(impl_scope)
     impl_outs = create_instance(name, impl_func, impl_fake_inports)
     scope = scope[:-1]
@@ -294,16 +291,16 @@ def create_spec_impl(name, spec_func, impl_func):
             spec_port = spec_outs[i].port
             impl_instance = impl_outs[i].instance
             impl_port = impl_outs[i].port
-            o = SpecImplElementPort(spec_instance, spec_port, impl_instance, impl_port)
+            o = OutputPortCollect(spec_instance, spec_port, impl_instance, impl_port)
             outs.append(o)
     else:
-        assert (isinstance(spec_outs, ElementPort) and isinstance(impl_outs, ElementPort)), \
-            ("The outputs of spec/impl of %s must be of type ElementPort or tuple of ElementPort" % name)
+        assert (isinstance(spec_outs, OutputPortCollect) and isinstance(impl_outs, OutputPortCollect)), \
+            ("The outputs of spec/impl of %s must be of type OutputPortCollect or tuple of OutputPortCollect" % name)
         spec_instance = spec_outs.instance
         spec_port = spec_outs.port
         impl_instance = impl_outs.instance
         impl_port = impl_outs.port
-        outs = SpecImplElementPort(spec_instance, spec_port, impl_instance, impl_port)
+        outs = OutputPortCollect(spec_instance, spec_port, impl_instance, impl_port)
 
 
     def connect(*ports):
@@ -312,27 +309,28 @@ def create_spec_impl(name, spec_func, impl_func):
             spec_to_port = spec_fake_inports[i]
             impl_to_port = impl_fake_inports[i]
 
-            if isinstance(from_port, PortCollect):
-                from_port.element_instance = spec_to_port.element_instance
+            if isinstance(from_port, InputPortCollect):
+                from_port.instance = spec_to_port.instance
                 from_port.port = spec_to_port.port
                 from_port.thread_run_args = spec_to_port.thread_run_args
 
-                from_port.impl_element_instance = impl_to_port.element_instance
+                from_port.impl_instance = impl_to_port.instance
                 from_port.impl_port = impl_to_port.port
                 from_port.impl_thread_run_args = impl_to_port.thread_run_args
             elif callable(from_port):
                 from_port(*spec_to_port.thread_run_args)
                 from_port(*impl_to_port.thread_run_args)
-            elif isinstance(from_port, SpecImplElementPort):
-                c = Connect(from_port.spec_instance, spec_to_port.element_instance, from_port.spec_port, spec_to_port.port)
+            elif isinstance(from_port, OutputPortCollect):
+                c = Connect(from_port.instance, spec_to_port.instance, from_port.port, spec_to_port.port)
                 spec_scope.append(c)
-                c = Connect(from_port.impl_instance, impl_to_port.element_instance, from_port.impl_port, impl_to_port.port)
-                impl_scope.append(c)
-            elif isinstance(from_port, ElementPort):
-                c = Connect(from_port.instance, spec_to_port.element_instance, from_port.port, spec_to_port.port)
-                spec_scope.append(c)
-                c = Connect(from_port.instance, impl_to_port.element_instance, from_port.port, impl_to_port.port)
-                impl_scope.append(c)
+                if from_port.impl_instance:
+                    # from_port contains both spec and impl.
+                    c = Connect(from_port.impl_instance, impl_to_port.instance, from_port.impl_port, impl_to_port.port)
+                    impl_scope.append(c)
+                else:
+                    # from_port contains only one version.
+                    c = Connect(from_port.instance, impl_to_port.instance, from_port.port, impl_to_port.port)
+                    impl_scope.append(c)
             elif from_port is None:
                 pass
             else:
