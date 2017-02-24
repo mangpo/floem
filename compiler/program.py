@@ -62,40 +62,6 @@ class CompositeInstance:
         self.args = args
 
 
-class InternalTrigger:
-    def __init__(self, name, port=None):
-        self.element_instance = name
-        self.port = port
-
-
-class ExternalTrigger:
-    def __init__(self, name, port=None):
-        self.element_instance = name
-        self.port = port
-
-
-class InternalTrigger2:
-    def __init__(self, name):
-        self.name = name
-        self.call_instance = None
-
-
-class Inject:
-    def __init__(self, type, name, size, func):
-        self.type = type
-        self.name = name
-        self.size = size
-        self.func = func
-
-
-class Probe:
-    def __init__(self, type, name, size, func):
-        self.type = type
-        self.name = name
-        self.size = size
-        self.func = func
-
-
 class StorageState:
     def __init__(self, name, state_instance, state, type, size, func):
         self.name = name
@@ -156,18 +122,6 @@ def get_node_name(stack, name):
 
 
 class APIFunction:
-    def __init__(self, name, call_instance, call_port, return_instance, return_port, state_name=None, default_val=None):
-        self.name = name
-        self.call_instance = call_instance
-        self.call_port = call_port
-        self.return_instance = return_instance
-        self.return_port = return_port
-        self.state_name = state_name
-        self.default_val = default_val
-        self.new_state_type = False
-
-
-class APIFunction2:
     def __init__(self, name, call_types, return_type, default_val=None):
         assert isinstance(call_types, list), \
             ("call_types argument of APIFunction should be a list of types. '%s' is given." % call_types)
@@ -182,6 +136,12 @@ class APIFunction2:
         self.return_port = None
 
 
+class InternalTrigger:
+    def __init__(self, name):
+        self.name = name
+        self.call_instance = None
+
+
 class ResourceMap:
     def __init__(self, resource, instance, flag=None):
         self.resource = resource
@@ -194,9 +154,6 @@ class GraphGenerator:
         self.composites = {}
         self.elements = {}
         self.env = {}
-
-        self.threads_api = set()
-        self.threads_internal = set()
 
     def check_composite_port(self, composite_name, port_name, port_value):
         if not len(port_value) == 2:
@@ -315,30 +272,16 @@ class GraphGenerator:
             except KeyError:
                 raise Exception("Composite '%s' is undefined." % x.element)
             self.interpret_CompositeInstance(x, stack)
+
         elif isinstance(x, InternalTrigger):
-            ele_name = self.get_element_instance_name(x)
-            self.current_scope(x.element_instance, "InternalTrigger")
-            self.threads_internal.add(ele_name)
-        elif isinstance(x, ExternalTrigger):
-            ele_name = self.get_element_instance_name(x)
-            self.current_scope(x.element_instance, "ExternalTrigger")
-            self.threads_api.add(ele_name)
+            global_name = get_node_name(stack, x.name)
+            self.put_resource(x.name, global_name)
+            self.graph.threads_internal2.append(InternalTrigger(global_name))
+
         elif isinstance(x, APIFunction):
-            call_instance, call_port = self.convert_to_element_ports(x.call_instance, x.call_port, stack)
-            return_instance, return_port = self.convert_to_element_ports(x.return_instance, x.return_port, stack)
-            self.threads_api.add(call_instance)
-            self.graph.APIs.append(APIFunction(x.name, call_instance, call_port, return_instance, return_port,
-                                               x.state_name, x.default_val))
-
-        elif isinstance(x, InternalTrigger2):
             global_name = get_node_name(stack, x.name)
             self.put_resource(x.name, global_name)
-            self.graph.threads_internal2.append(InternalTrigger2(global_name))
-
-        elif isinstance(x, APIFunction2):
-            global_name = get_node_name(stack, x.name)
-            self.put_resource(x.name, global_name)
-            self.graph.threads_API.append(APIFunction2(x.name, x.call_types, x.return_type, x.default_val))
+            self.graph.threads_API.append(APIFunction(x.name, x.call_types, x.return_type, x.default_val))
 
         elif isinstance(x, ResourceMap):
             self.get_instance_stack(x.instance)
@@ -506,11 +449,5 @@ class GraphGenerator:
         """
         Insert necessary elements for resource mapping and join elements. This method mutates self.graph
         """
-        intersect = self.threads_api.intersection(self.threads_internal)
-        if len(intersect) > 0:
-            raise Exception("Element instance %s cannot be triggered by both internal and external triggers."
-                            % intersect)
-        t = ThreadAllocator(self.graph, self.threads_api, self.threads_internal)
+        t = ThreadAllocator(self.graph)
         t.transform()
-        #self.graph.threads_roots = t.transform()
-        #self.graph.threads_internal = self.threads_internal

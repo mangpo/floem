@@ -53,17 +53,16 @@ def need_desugar(x):
     elif isinstance(x, StateInstance):
         index = x.name.find("[")
         return index >= 0
-    elif isinstance(x, Inject):
-        return True
-    elif isinstance(x, Probe):
-        return True
+    # elif isinstance(x, Inject):
+    #     return True
+    # elif isinstance(x, Probe):
+    #     return True
 
 
 class Desugar:
     def __init__(self, spec):
         self.spec = spec
         self.env = {}
-        #self.inject = {}
 
         self.populates = []
         self.compares = []
@@ -74,12 +73,9 @@ class Desugar:
         self.env = env
 
         inject = dict()
-        # inject["__up__"] = self.inject
-        # self.inject = inject
 
     def pop_scope(self):
         self.env = self.env["__up__"]
-        # self.inject = self.inject["__up__"]
 
     def lookup(self, name):
         return self.lookup_recursive(name, self.env)
@@ -93,10 +89,6 @@ class Desugar:
             return False
 
     def create_connect(self, ele1, ele2, port1, port2):
-        # if self.lookup_recursive(ele2, self.inject):
-        #     return None
-        # else:
-        #     return Connect(desugar_name(ele1), desugar_name(ele2), port1, port2)
         return Connect(desugar_name(ele1), desugar_name(ele2), port1, port2)
 
     def instantiate_arg(self, instance, param, i, arg):
@@ -212,28 +204,12 @@ class Desugar:
                 return self.create_connect(x.ele1, x.ele2, x.out1, x.in2)
 
         elif isinstance(x, InternalTrigger):
-            m = re.match('([a-zA-Z0-9_]+)\[([a-zA-Z]+)]', x.element_instance)
-            if m:
-                n = self.lookup(m.group(1))
-                return [InternalTrigger(m.group(1) + str(i), x.port) for i in range(n)]
-            else:
-                return InternalTrigger(desugar_name(x.element_instance), x.port)
-
-        elif isinstance(x, ExternalTrigger):
-            m = re.match('([a-zA-Z0-9_]+)\[([a-zA-Z]+)]', x.element_instance)
-            if m:
-                n = self.lookup(m.group(1))
-                return [ExternalTrigger(m.group(1) + str(i), x.port) for i in range(n)]
-            else:
-                return ExternalTrigger(desugar_name(x.element_instance), x.port)
-
-        elif isinstance(x, InternalTrigger2):
             m = re.match('([a-zA-Z0-9_]+)\[([0-9]+)]', x.name)
             if m:
                 n = int(m.group(2))
-                return [InternalTrigger2(m.group(1) + str(i)) for i in range(n)]
+                return [InternalTrigger(m.group(1) + str(i)) for i in range(n)]
             else:
-                return InternalTrigger2(desugar_name(x.name))
+                return InternalTrigger(desugar_name(x.name))
 
         elif isinstance(x, ResourceMap):
             m_rs = re.match('([a-zA-Z0-9_]+)\[([a-zA-Z]+)]', x.resource)
@@ -254,99 +230,13 @@ class Desugar:
             else:
                 return ResourceMap(desugar_name(x.resource), desugar_name(x.instance), x.flag)
 
-        elif isinstance(x, APIFunction2):
+        elif isinstance(x, APIFunction):
             m = re.match('([a-zA-Z0-9_]+)\[([0-9]+)]', x.name)
             if m:
                 n = int(m.group(2))
-                return [APIFunction2(m.group(1) + str(i), x.call_types, x.return_type, x.default_val) for i in range(n)]
+                return [APIFunction(m.group(1) + str(i), x.call_types, x.return_type, x.default_val) for i in range(n)]
             else:
-                return APIFunction2(desugar_name(x.name), x.call_types, x.return_type, x.default_val)
-
-        elif isinstance(x, APIFunction):
-            m = re.match('([a-zA-Z0-9_]+)\[([a-zA-Z]+)]', x.name)
-            m_call = re.match('([a-zA-Z0-9_]+)\[([a-zA-Z]+)]', x.call_instance)
-            m_return = re.match('([a-zA-Z0-9_]+)\[([a-zA-Z]+)]', x.return_instance)
-            if m_call and not m:
-                raise Exception("Non-parameterized API '%s' has a parameterized call instance '%s'. Please parameterize the API."
-                                % (x.name, x.call_instance))
-            if m_return and not m:
-                raise Exception("Non-parameterized API '%s' has a parameterized return instance '%s'. Please parameterize the API."
-                                % (x.name, x.return_instance))
-            if m and (not m_call) and (not m_return):
-                raise Exception("Parameterized API '%s' has a non-parameterized call and return instances." % x.name)
-
-            if m_call and not m.group(2) == m_call.group(2):
-                raise Exception("Parameter mismatch: parameterized API '%s' has parameterized call instance '%s'."
-                                % (x.name, x.call_instance))
-            if m_return and not m.group(2) == m_return.group(2):
-                raise Exception("Parameter mismatch: parameterized API '%s' has parameterized return instance '%s'."
-                                % (x.name, x.return_instance))
-
-            if m_call and m_return:
-                n_call = self.lookup(m_call.group(1))
-                n_return = self.lookup(m_return.group(1))
-                if not n_call == n_return:
-                    raise Exception("Parameterized API '%s' has %d call instances but %d return instances."
-                                    % (n_call, n_return))
-                return [APIFunction(m.group(1) + str(i), m_call.group(1) + str(i), x.call_port,
-                                    m_return.group(1) + str(i), x.return_port, x.state_name, x.default_val)
-                        for i in range(n_call)]
-            elif m_call:
-                n_call = self.lookup(m_call.group(1))
-                return [APIFunction(m.group(1) + str(i), m_call.group(1) + str(i), x.call_port,
-                                    x.return_instance, x.return_port, x.state_name, x.default_val)
-                        for i in range(n_call)]
-            elif m_return:
-                n_return = self.lookup(m_return.group(1))
-                return [APIFunction(m.group(1) + str(i), x.call_instance, x.call_port,
-                                    m_return.group(1) + str(i), x.return_port, x.state_name, x.default_val)
-                        for i in range(n_return)]
-            else:
-                return APIFunction(x.name, desugar_name(x.call_instance), x.call_port,
-                                   desugar_name(x.return_instance), x.return_port, x.state_name, x.default_val)
-
-        # elif isinstance(x, Inject):
-        #     m = re.match('([a-zA-Z0-9_]+)\[([0-9]+)]', x.name)
-        #     if m:
-        #         pure_name = m.group(1)
-        #     else:
-        #         pure_name = x.name
-        #
-        #     st_name = "_Inject_%s%s" % (x.type.replace('*', '$'), x.size)
-        #     st_instance_name = "_State_%s" % pure_name
-        #     ele_name = "_Element_%s" % pure_name
-        #     state = InjectProbeState(st_name, x.type, x.size)
-        #     state_instance = StateInstance(st_name, st_instance_name)
-        #     element = InjectElement(ele_name, x.type, st_name, x.size)
-        #     element_instance = ElementInstance(ele_name, x.name, [st_instance_name])
-        #     self.populates.append(PopulateState(x.name, st_instance_name, st_name, x.type, x.size, x.func))
-        #
-        #     if m:
-        #         n = m.group(2)
-        #         for i in range(n):
-        #             self.inject[m.group(1) + str(i)] = True
-        #     else:
-        #         self.inject[x.name] = True
-        #
-        #     return self.process(Program(*[state, state_instance, element, element_instance])).statements
-        #
-        # elif isinstance(x, Probe):
-        #     m = re.match('([a-zA-Z0-9_]+)\[([0-9]+)]', x.name)
-        #     if m:
-        #         pure_name = m.group(1)
-        #     else:
-        #         pure_name = x.name
-        #
-        #     st_name = "_Inject_%s%s" % (x.type, x.size)
-        #     st_instance_name = "_State_%s" % pure_name
-        #     ele_name = "_Element_%s" % pure_name
-        #     state = InjectProbeState(st_name, x.type, x.size)
-        #     state_instance = StateInstance(st_name, st_instance_name)  # TODO: get rid of parameter
-        #     element = ProbeElement(ele_name, x.type, st_name, x.size)
-        #     element_instance = ElementInstance(ele_name, x.name, [st_instance_name])
-        #     self.compares.append(CompareState(x.name, st_instance_name, st_name, x.type, x.size, x.func))
-        #
-        #     return self.process(Program(*[state, state_instance, element, element_instance])).statements
+                return APIFunction(desugar_name(x.name), x.call_types, x.return_type, x.default_val)
 
         elif isinstance(x, PopulateState):
             self.populates.append(x.clone())

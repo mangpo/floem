@@ -195,6 +195,6 @@ def run_impl():
     c.generate_code_as_header("tmp_impl.h")
     c.compile_and_run("test_impl")
 
-#run_spec()
+run_spec()
 run_impl()
 

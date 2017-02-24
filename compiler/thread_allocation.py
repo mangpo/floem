@@ -3,28 +3,13 @@ import common
 
 
 class ThreadAllocator:
-    def __init__(self, graph, threads_api, threads_internal):
-        self.threads_api = threads_api
-        self.threads_internal = threads_internal
-        self.threads_entry_point = threads_api.union(threads_internal)
+    def __init__(self, graph):
         self.roots = set()
-        self.joins = set()
 
         self.graph = graph
         self.instances = graph.instances
 
-    def print_threads_info(self):
-        print "Roots:", self.roots
-        print "Entries:", self.threads_entry_point
-        print "Joins:", self.joins
-
     def transform(self):
-        # self.assign_threads()
-        # self.check_APIs()
-        # #self.print_threads_info()
-        # self.insert_threading_elements()
-        # return self.roots.difference(self.threads_api)
-
         self.find_roots()
         self.check_resources()
         self.insert_threading_elements()
@@ -42,18 +27,6 @@ class ThreadAllocator:
         self.roots = set(self.instances.keys()).difference(not_roots)
         self.graph.threads_roots = self.roots
         return self.roots
-
-    def assign_threads(self):
-        """
-        Assign thread to each element. Each root and each element marked API or trigger has its own thread.
-        For each remaining element, assign its thread to be the same as its first parent's thread.
-        :return: void
-        """
-        roots = self.find_roots()
-        last = {}
-        for root in roots:
-            self.assign_thread_dfs(self.instances[root], self.threads_entry_point, "main")
-
 
     def assign_thread_dfs(self, instance, entry_points, name):
         """Traverse the graph in DFS fashion to assign threads.
@@ -161,86 +134,6 @@ class ThreadAllocator:
             assert return_type == [], ("Internal trigger '%s' should not return any value, but it returns %s"
                                        % (trigger.name, return_type))
 
-    def check_APIs(self):
-        """
-        Check if the API functions are legal.
-        """
-        for api in self.graph.APIs:
-            # Call and return are at the same thread.
-            if not self.instances[api.call_instance].thread == self.instances[api.return_instance].thread:
-                raise Exception("API '%s' -- call element instance '%s' must be on the same thread as return element instance '%s'."
-                                % (api.name, api.call_instance, api.return_instance))
-
-            # Arguments
-            if api.call_instance in self.roots:
-                instance = self.instances[api.call_instance]
-                port_names = [x.name for x in instance.element.inports]
-                if len(port_names) > 1:
-                    raise TypeError(
-                        "API '%s' -- call element instance '%s' must have zero or one input port."
-                        % (api.name, api.call_instance))
-                elif len(port_names) == 1:
-                    if not api.call_port == port_names[0]:
-                        raise TypeError(
-                            "API '%s' -- call element instance '%s' takes port '%s' as arguments. The given argument port is '%s'."
-                            % (api.name, api.call_instance, port_names, api.call_port))
-                elif api.call_port:
-                    raise TypeError(
-                        "API '%s' -- call element instance '%s' takes no arguments, but argument port '%s' is given."
-                    % (api.name, api.call_instance, api.call_port))
-
-            elif api.call_instance in self.threads_api:
-                if not api.call_port == None:
-                    raise TypeError(
-                        "API '%s' -- call element instance '%s' should take no arguments, because inport port '%s' has already been connected."
-                    % (api.name, api.call_instance, api.call_port))
-            # else:
-            elif api.call_instance in self.threads_internal:
-                raise TypeError(
-                    "API '%s' -- call element instance '%s' is not marked as external trigger."
-                    % (api.name, api.call_instance))
-
-            # Return
-            instance = self.instances[api.return_instance]
-            port_names = [x.name for x in instance.element.outports]
-            for port in instance.output2ele:
-                (next_ele, next_port) = instance.output2ele[port]
-                if next_ele not in self.threads_entry_point:
-                    raise TypeError(
-                        "API '%s' -- return element instance '%s' has a continuing element instance '%s' on the same thread. This is illegal."
-                        % (api.name, api.return_instance, next_ele))
-                port_names.remove(port)
-
-            if len(port_names) > 1:
-                raise TypeError(
-                    "API '%s' -- return element instance '%s' must have zero or one unwired output port."
-                    % (api.name, api.return_instance))
-            elif len(port_names) == 1:
-                if not api.return_port == port_names[0]:
-                    raise TypeError(
-                        "API '%s' -- return element instance '%s' have port '%s' as return values. The given return port is '%s'."
-                        % (api.name, api.return_instance, port_names[0], api.return_port))
-            elif api.return_port:
-                raise TypeError(
-                    "API '%s' -- return element instance '%s' has no return value, but return port '%s' is given."
-                    % (api.name, api.return_instance, api.return_port))
-
-            # Return type
-            if api.state_name:
-                argtypes = self.graph.get_outport_argtypes(api.return_instance, api.return_port)
-                if len(argtypes) == 1 and (not argtypes[0] == api.state_name):
-                    raise TypeError("API '%s' returns '%s', but '%s' is given as a return type." %
-                                    (api.name, argtypes[0], api.state_name))
-
-            # if api.state_name in common.primitive_types or self.graph.is_state(api.state_name):
-            #     ports = [x for x in instance.element.outports if x.name in port_names]
-            #     return_types = []
-            #     for port in ports:
-            #         return_types += port.argtypes
-            #     if (not len(return_types) == 1) or (not return_types[0] == api.state_name):
-            #         raise TypeError("API '%s' returns '%s', but '%s' is given as a return type." %
-            #                         (api.name, ",".join(return_types), api.state_name))
-
     def insert_threading_elements(self):
         instances = self.instances.values();
         for instance in instances:
@@ -281,19 +174,19 @@ class ThreadAllocator:
             self.graph.connect(new_name, instance.name, "out", None)
 
             # Update thread entry points due to the new added node.
-            if instance.name in self.threads_api:
-                self.threads_api.remove(instance.name)
-                self.threads_entry_point.remove(instance.name)
-                self.threads_api.add(new_name)
-                self.threads_entry_point.add(new_name)
-            elif instance.name in self.threads_internal:
-                self.threads_internal.remove(instance.name)
-                self.threads_entry_point.remove(instance.name)
-                self.threads_internal.add(new_name)
-                self.threads_entry_point.add(new_name)
-            for api in self.graph.APIs:
-                if api.call_instance == instance.name:
-                    api.call_instance = new_name
+            # if instance.name in self.threads_api:
+            #     self.threads_api.remove(instance.name)
+            #     self.threads_entry_point.remove(instance.name)
+            #     self.threads_api.add(new_name)
+            #     self.threads_entry_point.add(new_name)
+            # elif instance.name in self.threads_internal:
+            #     self.threads_internal.remove(instance.name)
+            #     self.threads_entry_point.remove(instance.name)
+            #     self.threads_internal.add(new_name)
+            #     self.threads_entry_point.add(new_name)
+            # for api in self.graph.APIs:
+            #     if api.call_instance == instance.name:
+            #         api.call_instance = new_name
 
             for api in self.graph.threads_API:
                 if api.call_instance == instance.name:

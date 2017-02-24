@@ -45,7 +45,7 @@ class Thread:
 class API_thread(Thread):
     def __init__(self, name, call_types, return_types, default_val=None):
         Thread.__init__(self, name)
-        api = APIFunction2(name, call_types, return_types, default_val)
+        api = APIFunction(name, call_types, return_types, default_val)
         scope[-1].insert(0, api)
 
 
@@ -53,7 +53,7 @@ class internal_thread(Thread):
     def __init__(self, name):
         name = get_node_name(name)
         Thread.__init__(self, name)
-        trigger = InternalTrigger2(name)
+        trigger = InternalTrigger(name)
         scope[-1].insert(0, trigger)
 
 
@@ -253,6 +253,13 @@ def create_composite_instance(inst_name, program):
 
 
 def create_spec_impl(name, spec_func, impl_func):
+    """
+    Create composite instance for spec and impl.
+    :param name: name of this composite
+    :param spec_func:
+    :param impl_func:
+    :return: composite instance
+    """
     assert callable(spec_func), "The second argument to create_composite must be lambda."
     assert callable(impl_func), "The third argument to create_composite must be lambda."
     spec_args = inspect.getargspec(spec_func).args
@@ -308,7 +315,6 @@ def create_spec_impl(name, spec_func, impl_func):
             ("At spec/impl '%s', the output type of spec is %s, while output type of impl is %s."
              % (name, spec_outs, impl_outs))
         outs = None
-
 
     def connect(*ports):
         for i in range(len(ports)):
@@ -376,10 +382,32 @@ def create_state_instance(inst_name, content, init=None):
 
 
 def populte_state(name, st_inst_name, st_name, type, size, func):
+    """
+    Initialize inject state.
+    :param name: inject element name
+    :param st_inst_name: state instance name
+    :param st_name: state name
+    :param type: type of values to be generated
+    :param size: number of values
+    :param func: a name of a generator function.
+    The function should take an integer argument indicating the ID of iteration.
+    It should return a generated value.
+    """
     scope[-1].insert(0, PopulateState(name, st_inst_name, st_name, type, size, func))
 
 
 def compare_state(name, st_inst_name, st_name, type, size, func):
+    """
+    Compare the content stored in probe states of spec and impl.
+    :param name: probe element name
+    :param st_inst_name: state instance name
+    :param st_name: state name
+    :param type: type of values to be compared
+    :param size: number of values
+    :param func: a comparison function.
+    The function should take (int spec_n, <type> *spec_data, int impl_n, <type> *impl_data).
+    If incorrect, the function should exit with non-zero status.
+    """
     scope[-1].insert(0, CompareState(name, st_inst_name, st_name, type, size, func))
 
 

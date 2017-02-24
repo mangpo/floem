@@ -8,13 +8,13 @@ p = Program(
     ElementInstance("Forward", "g"),
     Connect("f", "g"),
     Spec(
-        APIFunction2("all", ["int"], "int"),
+        APIFunction("all", ["int"], "int"),
         ResourceMap("all", "f", True),
         ResourceMap("all", "g")
     ),
     Impl(
-        APIFunction2("write", ["int"], None),
-        APIFunction2("read", [], "int"),
+        APIFunction("write", ["int"], None),
+        APIFunction("read", [], "int"),
         ResourceMap("write", "f", True),
         ResourceMap("read", "g", True),
     ),

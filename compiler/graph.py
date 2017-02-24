@@ -298,9 +298,6 @@ class Graph:
             self.states[s.name] = s
 
         self.identity = {}
-        self.APIs = []
-        self.threads_internal = None
-        self.threads_roots = None
 
         self.threads_internal2 = []
         self.threads_API = []
@@ -324,7 +321,7 @@ class Graph:
         return state_name in self.states
 
     def clear_APIs(self):
-        self.APIs = []
+        # self.APIs = []
         self.threads_API = []
         self.threads_internal2 = []
 

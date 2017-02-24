@@ -263,7 +263,7 @@ class TestThreadStateComposite(unittest.TestCase):
                     [Port("in", ["int"])],
                     [],
                     r'''printf("%d\n", in());'''),
-            APIFunction2("add_and_print", ["int"], None),
+            APIFunction("add_and_print", ["int"], None),
             ElementInstance("Inc", "inc1", [], "add_and_print", True),
             ElementInstance("Print", "print", [], "add_and_print"),
             Connect("inc1", "print"),
@@ -285,7 +285,7 @@ class TestThreadStateComposite(unittest.TestCase):
             ElementInstance("Forward", "f1"),
             ElementInstance("Forward", "f2"),
             Connect("f1", "f2"),
-            APIFunction2("read", [], "int"),
+            APIFunction("read", [], "int"),
             ResourceMap("read", "f2", True),
         )
         g = generate_graph(p)
@@ -306,7 +306,7 @@ class TestThreadStateComposite(unittest.TestCase):
             ElementInstance("Forward", "f1"),
             ElementInstance("Forward", "f2"),
             Connect("f1", "f2"),
-            APIFunction2("func", ["int"], None),
+            APIFunction("func", ["int"], None),
             ResourceMap("func", "f1", True),
             ResourceMap("func", "f2"),
         )
@@ -324,7 +324,7 @@ class TestThreadStateComposite(unittest.TestCase):
             ElementInstance("Forward", "f1"),
             ElementInstance("Forward", "f2"),
             Connect("f1", "f2"),
-            APIFunction2("func", ["int"], None),
+            APIFunction("func", ["int"], None),
             ResourceMap("func", "f1", True),
         )
         g = generate_graph(p)
@@ -347,7 +347,7 @@ class TestThreadStateComposite(unittest.TestCase):
             Connect("dup", "fwd", "out1"),
             InternalTrigger("fwd"),
             APIFunction("func", "dup", "in", "dup", "out2", "int"),
-            APIFunction2("func", ["int"], "int"),
+            APIFunction("func", ["int"], "int"),
             ResourceMap("func", "dup", True),
             #InternalTrigger2("t"),
             #ResourceMap("t", "fwd", True),
