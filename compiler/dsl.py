@@ -16,20 +16,30 @@ def reset():
     fresh_id = 0
 
 
+def get_node_name(name):
+    if len(stack) > 0:
+        return "_".join(stack) + "_" + name
+    else:
+        return name
+
+
 class Thread:
     def __init__(self, name):
         self.name = name
 
     def run_start(self, *instances):
-        instances[0].assign_thread(self.name, True)
+        #instances[0].assign_thread(self.name, True)
+        scope[-1].append(ResourceMap(self.name, instances[0].name, True))
         for i in range(1, len(instances)):
             instance = instances[i]
-            instance.assign_thread(self.name, False)
+            #instance.assign_thread(self.name, False)
+            scope[-1].append(ResourceMap(self.name, instance.name, False))
 
     def run(self, *instances):
         for i in range(len(instances)):
             instance = instances[i]
-            instance.assign_thread(self.name, False)
+            #instance.assign_thread(self.name, False)
+            scope[-1].append(ResourceMap(self.name, instance.name, False))
 
 
 class API_thread(Thread):
@@ -41,9 +51,10 @@ class API_thread(Thread):
 
 class internal_thread(Thread):
     def __init__(self, name):
+        name = get_node_name(name)
         Thread.__init__(self, name)
         trigger = InternalTrigger2(name)
-        scope[-1].append(trigger)
+        scope[-1].insert(0, trigger)
 
 
 class ElementInstance:
@@ -54,10 +65,6 @@ class ElementInstance:
 
     def __call__(self, *args, **kwargs):
         return self.connect(*args)
-
-    def assign_thread(self, thread, flag):
-        self.instance.thread = thread
-        self.instance.thread_flag = flag
 
 
 class InputPortCollect:
@@ -97,13 +104,6 @@ class OutputPortCollect:
 
         self.impl_instance = impl_instance
         self.impl_port = impl_port
-
-
-def get_node_name(name):
-    if len(stack) > 0:
-        return "_".join(stack) + "_" + name
-    else:
-        return name
 
 
 def create_element(ele_name, inports, outports, code, local_state=None, state_params=[]):
@@ -150,7 +150,8 @@ def create_element(ele_name, inports, outports, code, local_state=None, state_pa
                 elif from_port is None:
                     pass
                 else:
-                    raise Exception("Unknown element connection %s" % from_port)
+                    raise Exception("Attempt to connect an unknown item %s to element instance '%s'."
+                                    % (from_port, inst_name))
 
             l = len(e.outports)
             if l == 0:
@@ -281,11 +282,11 @@ def create_spec_impl(name, spec_func, impl_func):
     scope = scope[:-1]
     scope[-1].append(Impl(impl_scope))
 
-    outs = []
     if isinstance(spec_outs, tuple):
         assert (isinstance(impl_outs, tuple) and len(spec_outs) == len(impl_outs)), \
             ("The numbers of outputs of spec/impl of %s are different." % name)
 
+        outs = []
         for i in range(len(spec_outs)):
             spec_instance = spec_outs[i].instance
             spec_port = spec_outs[i].port
@@ -293,14 +294,20 @@ def create_spec_impl(name, spec_func, impl_func):
             impl_port = impl_outs[i].port
             o = OutputPortCollect(spec_instance, spec_port, impl_instance, impl_port)
             outs.append(o)
-    else:
+    elif spec_outs:
         assert (isinstance(spec_outs, OutputPortCollect) and isinstance(impl_outs, OutputPortCollect)), \
-            ("The outputs of spec/impl of %s must be of type OutputPortCollect or tuple of OutputPortCollect" % name)
+            ("At spec/impl '%s', the output type of spec is %s, while output type of impl is %s."
+             % (name, spec_outs, impl_outs))
         spec_instance = spec_outs.instance
         spec_port = spec_outs.port
         impl_instance = impl_outs.instance
         impl_port = impl_outs.port
         outs = OutputPortCollect(spec_instance, spec_port, impl_instance, impl_port)
+    else:
+        assert (spec_outs is None and impl_outs is None), \
+            ("At spec/impl '%s', the output type of spec is %s, while output type of impl is %s."
+             % (name, spec_outs, impl_outs))
+        outs = None
 
 
     def connect(*ports):
@@ -341,16 +348,6 @@ def create_spec_impl(name, spec_func, impl_func):
     return connect
 
 
-def create_inject_instance(inst_name, type, size, func):
-    instance = compiler.Inject(type, inst_name, size, func)
-    scope[-1].append(instance)
-
-    def connect():
-        return (inst_name, "out")
-
-    return ElementInstance(inst_name, instance, connect)
-
-
 def create_state(st_name, content, init=None):
     s = State(st_name, content, init)
     scope[-1].append(s)
@@ -376,6 +373,14 @@ def create_state_instance(inst_name, content, init=None):
     st_name = "_state_" + inst_name
     state = create_state(st_name, content, init)
     return state(inst_name)
+
+
+def populte_state(name, st_inst_name, st_name, type, size, func):
+    scope[-1].insert(0, PopulateState(name, st_inst_name, st_name, type, size, func))
+
+
+def compare_state(name, st_inst_name, st_name, type, size, func):
+    scope[-1].insert(0, CompareState(name, st_inst_name, st_name, type, size, func))
 
 
 class Compiler:

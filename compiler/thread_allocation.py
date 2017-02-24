@@ -294,9 +294,13 @@ class ThreadAllocator:
             for api in self.graph.APIs:
                 if api.call_instance == instance.name:
                     api.call_instance = new_name
+
             for api in self.graph.threads_API:
                 if api.call_instance == instance.name:
                     api.call_instance = new_name
+            for trigger in self.graph.threads_internal2:
+                if trigger.call_instance == instance.name:
+                    trigger.call_instance = new_name
 
     def create_buffer_read_element(self, instance, need_buffer, no_buffer):
         clear = ""
@@ -308,7 +312,7 @@ class ThreadAllocator:
             this_avail = "this." + avail
             avails.append(avail)
             this_avails.append(this_avail)
-            clear += "  %s = 0;\n" % this_avail
+            clear += "  %s = false;\n" % this_avail
 
         # Generate buffer variables.
         buffers_types, buffers = common.types_args_port_list(need_buffer, common.standard_arg_format)
@@ -317,7 +321,7 @@ class ThreadAllocator:
         st_content = ""
         st_init = [0 for i in range(len(avails) + len(buffers))]
         for avail in avails:
-            st_content += "int %s; " % avail
+            st_content += "bool %s; " % avail
         for i in range(len(buffers)):
             st_content += "%s %s; " % (buffers_types[i], buffers[i])
 
@@ -338,7 +342,7 @@ class ThreadAllocator:
 
         # Generate code to invoke the main element and clear available indicators.
         all_avails = " && ".join(this_avails)
-        invoke += "  while(!(%s));\n" % all_avails
+        invoke += "  while(%s == false) { fflush(stdout); }\n" % all_avails
         for port in need_buffer:
             for i in range(len(port.argtypes)):
                 buffer = "%s_arg%d" % (port.name, i)
@@ -388,8 +392,7 @@ class ThreadAllocator:
             types_buffers.append("%s %s" % (port.argtypes[i], buffer))
 
         src = "  (%s) = in();" % ",".join(types_buffers)
-        src += "  if(%s == 1) { printf(\"Join failed (overwriting some values).\\n\"); exit(-1); }\n" \
-               % avail
+        src += "  while(%s == true) { fflush(stdout); }\n" % avail
         for i in range(len(port.argtypes)):
             buffer = buffers[i]
             src += "  this.%s = %s;\n" % (buffer, buffer)

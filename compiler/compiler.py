@@ -194,7 +194,7 @@ def element_to_function(instance, state_rename, graph):
         while not(match):
             m = re.search(port + '[ ]*\(([^\)]*)\)',src[index:])
             if m == None:
-                raise Exception("Element '%s' never get data from input port '%s'." % (funcname,port))
+                raise Exception("Element '%s' never gets data from input port '%s'." % (funcname,port))
             p = m.start(0)
             if p == 0 or re.search('[^a-zA-Z0-9_]',src[p-1]):
                 check_no_args(m.group(1))
@@ -660,6 +660,7 @@ def generate_code_with_test(graph, testing, include=None, triggers=False):
     generate_code(graph, testing, include, triggers)
     generate_inject_probe_code(graph)
     generate_internal_triggers(graph, triggers)
+    generate_testing_code(testing)
 
 
 def generate_code_as_header(graph, testing, include=None, triggers=True, header='tmp.h'):

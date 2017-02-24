@@ -63,7 +63,7 @@ class Desugar:
     def __init__(self, spec):
         self.spec = spec
         self.env = {}
-        self.inject = {}
+        #self.inject = {}
 
         self.populates = []
         self.compares = []
@@ -74,12 +74,12 @@ class Desugar:
         self.env = env
 
         inject = dict()
-        inject["__up__"] = self.inject
-        self.inject = inject
+        # inject["__up__"] = self.inject
+        # self.inject = inject
 
     def pop_scope(self):
         self.env = self.env["__up__"]
-        self.inject = self.inject["__up__"]
+        # self.inject = self.inject["__up__"]
 
     def lookup(self, name):
         return self.lookup_recursive(name, self.env)
@@ -93,10 +93,11 @@ class Desugar:
             return False
 
     def create_connect(self, ele1, ele2, port1, port2):
-        if self.lookup_recursive(ele2, self.inject):
-            return None
-        else:
-            return Connect(desugar_name(ele1), desugar_name(ele2), port1, port2)
+        # if self.lookup_recursive(ele2, self.inject):
+        #     return None
+        # else:
+        #     return Connect(desugar_name(ele1), desugar_name(ele2), port1, port2)
+        return Connect(desugar_name(ele1), desugar_name(ele2), port1, port2)
 
     def instantiate_arg(self, instance, param, i, arg):
         m = re.match('([a-zA-Z0-9_]+)\[([a-zA-Z0-9]+)]', arg)
@@ -141,30 +142,17 @@ class Desugar:
 
         elif isinstance(x, ElementInstance):
             m = re.match('([a-zA-Z0-9_]+)\[([0-9]+)]', x.name)
-            m_thread = None
-            if x.thread:
-                m_thread = re.match('([a-zA-Z0-9_]+)\[([0-9]+)]', x.thread)
             if m:
                 name = m.group(1)
                 n = int(m.group(2))
                 self.env[name] = n
                 ret = []
-                if m_thread:
-                    assert int(m_thread.group(2)) == n, \
-                        ("Paramterized element instance '%s' is initialized with a mismatched parameterized thread '%s'."
-                         % (x.name, x.thread))
-                    for i in range(n):
-                        args = [self.instantiate_arg(name, m.group(2), i, arg) for arg in x.args]
-                        ret.append(ElementInstance(x.element, name + str(i), args,
-                                                   m_thread.group(1) + str(i), x.thread_flag))
-                else:
-                    for i in range(n):
-                        args = [self.instantiate_arg(name,m.group(2), i, arg) for arg in x.args]
-                        ret.append(ElementInstance(x.element, name + str(i), args, x.thread, x.thread_flag))
+                for i in range(n):
+                    args = [self.instantiate_arg(name, m.group(2), i, arg) for arg in x.args]
+                    ret.append(ElementInstance(x.element, name + str(i), args))
                 return ret
             else:
-                return ElementInstance(x.element, desugar_name(x.name), [desugar_name(arg) for arg in x.args],
-                                       x.thread, x.thread_flag)
+                return ElementInstance(x.element, desugar_name(x.name), [desugar_name(arg) for arg in x.args])
 
         elif isinstance(x, CompositeInstance):
             m = re.match('([a-zA-Z0-9_]+)\[([0-9]+)]', x.name)
@@ -317,48 +305,54 @@ class Desugar:
                 return APIFunction(x.name, desugar_name(x.call_instance), x.call_port,
                                    desugar_name(x.return_instance), x.return_port, x.state_name, x.default_val)
 
-        elif isinstance(x, Inject):
-            m = re.match('([a-zA-Z0-9_]+)\[([0-9]+)]', x.name)
-            if m:
-                pure_name = m.group(1)
-            else:
-                pure_name = x.name
+        # elif isinstance(x, Inject):
+        #     m = re.match('([a-zA-Z0-9_]+)\[([0-9]+)]', x.name)
+        #     if m:
+        #         pure_name = m.group(1)
+        #     else:
+        #         pure_name = x.name
+        #
+        #     st_name = "_Inject_%s%s" % (x.type.replace('*', '$'), x.size)
+        #     st_instance_name = "_State_%s" % pure_name
+        #     ele_name = "_Element_%s" % pure_name
+        #     state = InjectProbeState(st_name, x.type, x.size)
+        #     state_instance = StateInstance(st_name, st_instance_name)
+        #     element = InjectElement(ele_name, x.type, st_name, x.size)
+        #     element_instance = ElementInstance(ele_name, x.name, [st_instance_name])
+        #     self.populates.append(PopulateState(x.name, st_instance_name, st_name, x.type, x.size, x.func))
+        #
+        #     if m:
+        #         n = m.group(2)
+        #         for i in range(n):
+        #             self.inject[m.group(1) + str(i)] = True
+        #     else:
+        #         self.inject[x.name] = True
+        #
+        #     return self.process(Program(*[state, state_instance, element, element_instance])).statements
+        #
+        # elif isinstance(x, Probe):
+        #     m = re.match('([a-zA-Z0-9_]+)\[([0-9]+)]', x.name)
+        #     if m:
+        #         pure_name = m.group(1)
+        #     else:
+        #         pure_name = x.name
+        #
+        #     st_name = "_Inject_%s%s" % (x.type, x.size)
+        #     st_instance_name = "_State_%s" % pure_name
+        #     ele_name = "_Element_%s" % pure_name
+        #     state = InjectProbeState(st_name, x.type, x.size)
+        #     state_instance = StateInstance(st_name, st_instance_name)  # TODO: get rid of parameter
+        #     element = ProbeElement(ele_name, x.type, st_name, x.size)
+        #     element_instance = ElementInstance(ele_name, x.name, [st_instance_name])
+        #     self.compares.append(CompareState(x.name, st_instance_name, st_name, x.type, x.size, x.func))
+        #
+        #     return self.process(Program(*[state, state_instance, element, element_instance])).statements
 
-            st_name = "_Inject_%s%s" % (x.type.replace('*', '$'), x.size)
-            st_instance_name = "_State_%s" % pure_name
-            ele_name = "_Element_%s" % pure_name
-            state = InjectProbeState(st_name, x.type, x.size)
-            state_instance = StateInstance(st_name, st_instance_name)
-            element = InjectElement(ele_name, x.type, st_name, x.size)
-            element_instance = ElementInstance(ele_name, x.name, [st_instance_name], x.thread, x.thread_flag)
-            self.populates.append(PopulateState(x.name, st_instance_name, st_name, x.type, x.size, x.func))
+        elif isinstance(x, PopulateState):
+            self.populates.append(x.clone())
 
-            if m:
-                n = m.group(2)
-                for i in range(n):
-                    self.inject[m.group(1) + str(i)] = True
-            else:
-                self.inject[x.name] = True
-
-            return self.process(Program(*[state, state_instance, element, element_instance])).statements
-
-        elif isinstance(x, Probe):
-            m = re.match('([a-zA-Z0-9_]+)\[([0-9]+)]', x.name)
-            if m:
-                pure_name = m.group(1)
-            else:
-                pure_name = x.name
-
-            st_name = "_Inject_%s%s" % (x.type, x.size)
-            st_instance_name = "_State_%s" % pure_name
-            ele_name = "_Element_%s" % pure_name
-            state = InjectProbeState(st_name, x.type, x.size)
-            state_instance = StateInstance(st_name, st_instance_name)  # TODO: get rid of parameter
-            element = ProbeElement(ele_name, x.type, st_name, x.size)
-            element_instance = ElementInstance(ele_name, x.name, [st_instance_name], x.thread, x.thread_flag)
-            self.compares.append(CompareState(x.name, st_instance_name, st_name, x.type, x.size, x.func))
-
-            return self.process(Program(*[state, state_instance, element, element_instance])).statements
+        elif isinstance(x, CompareState):
+            self.compares.append(x.clone())
 
         else:
             return x

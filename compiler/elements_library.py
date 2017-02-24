@@ -19,6 +19,10 @@ def create_identity(name, type):
     return create_element(name, [Port("in", [type])], [Port("out", [type])], src)
 
 
+def create_drop(name, type):
+    return create_element(name, [Port("in", [type])], [], "in();")
+
+
 def create_add(name, type):
     src = "%s x = in1() + in2(); output { out(x); }" % type
     return create_element(name,
@@ -145,3 +149,45 @@ def create_table_instances(put_name, get_name, index_type, val_type, size):
     table_put = TablePut(put_name, [table])
     table_get = TableGet(get_name, [table])
     return table_put, table_get
+
+
+def create_inject(name, type, size, func):
+    st_name = name + "_state"
+    st_inst_name = name + "_state_inst"
+    state = create_state(st_name, "%s data[%d]; int p;" % (type, size), "{{0},0}")
+    state_inst = state(st_inst_name)
+    src = r'''
+        if(this.p >= %d) { printf("Error: inject more than available entries.\n"); exit(-1); }
+        int temp = this.p;
+        this.p++;''' % size
+    src += "output { out(this.data[temp]); }"
+    element = create_element(name, [], [Port("out", [type])], src, None, [(st_name, "this")])
+    populte_state(name, st_inst_name, st_name, type, size, func)
+    # TODO: currently use inst_name to remove edges pointing to inst_name
+
+    def create(inst_name=name):
+        return element(inst_name, [state_inst])
+    return create
+
+
+def create_probe(name, type, size, func):
+    st_name = name + "_state"
+    st_inst_name = name + "_state_inst"
+    state = create_state(st_name, "%s data[%d]; int p;" % (type, size), "{{0},0}")
+    state_inst = state(st_inst_name)
+
+    append = r'''
+        if(this.p >= %d) { printf("Error: probe more than available entries.\n"); exit(-1); }
+        this.data[this.p] = x;
+        this.p++;''' % size
+    src = "(%s x) = in(); %s output { out(x); }" % (type, append)
+    element = create_element(name, [Port("in", [type])], [Port("out", [type])], src, None, [(st_name, "this")])
+    compare_state(name, st_inst_name, st_name, type, size, func)
+
+    def create(inst_name=None):
+        if inst_name is None:
+            global fresh_id
+            inst_name = name + str(fresh_id)
+            fresh_id += 1
+        return element(inst_name, [state_inst])
+    return create

@@ -18,6 +18,6 @@ buffer = Buffer()
 write = Write("w", [buffer])
 read = BlockingRead("r", [buffer])
 
-c =Compiler()
+c = Compiler()
 c.testing = "w(42); r(); w(123); r();";
 c.generate_code_and_run([42, 123])

@@ -7,39 +7,30 @@ import unittest
 
 class TestCompile(unittest.TestCase):
 
-    def test_pass(self):
+    def test_run(self):
         tests = ["hello.py",
                  "join.py",
                  "join_multiple.py",
-                 "join_nested.py",
-                 "join_both_both.py",
-                 "join_call_order.py",
-                 "join_call_order2.py",
                  "buffer.py",
                  "state_local.py",
                  "state_shared.py",
                  "state_nested_composite.py",
                  "composite.py",
                  "composite_thread_port.py",
-                 "state_local.py",
-                 "state_shared.py",
-                 "state_nested_composite.py",
                  "API_increment.py",
                  "API_read_blocking.py",
-                 "API_read_non_blocking.py",
-                 "API_read_non_blocking2.py",
-                 "probe_primitives.py",
+                 "spec_impl.py",
                  "probe_composite.py",
-                 "probe_sugar.py",
+                 "probe_multi.py",
+                 "probe_spec_impl.py",
                  "inject_queue.py",
-                 "desugar_simple.py",
                  "circular_queue.py",
                  "circular_queue_multicore.py",
                  "table.py"
                  ]
 
         for test in tests:
-            status = os.system("python programs/" + test)
+            status = os.system("python programs_in_dsl/" + test)
             self.assertEqual(status, 0, "Error at " + test)
 
     def test_undefined_element(self):

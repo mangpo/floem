@@ -8,14 +8,12 @@ class StateInstance:
 
 
 class ElementInstance:
-    def __init__(self, element, name, args=[], thread=None, thread_flag=None):
+    def __init__(self, element, name, args=[]):
         if not isinstance(args, list):
             raise TypeError("State arguments of element instance '%s' is not a list of states." % name)
         self.element = element
         self.name = name
         self.args = args
-        self.thread = thread
-        self.thread_flag = thread_flag
 
     def __str__(self):
         return self.name + '<' + self.element + '>'
@@ -83,23 +81,19 @@ class InternalTrigger2:
 
 
 class Inject:
-    def __init__(self, type, name, size, func, thread=None, thread_flag=None):
+    def __init__(self, type, name, size, func):
         self.type = type
         self.name = name
         self.size = size
         self.func = func
-        self.thread = thread
-        self.thread_flag = thread_flag
 
 
 class Probe:
-    def __init__(self, type, name, size, func, thread=None, thread_flag=None):
+    def __init__(self, type, name, size, func):
         self.type = type
         self.name = name
         self.size = size
         self.func = func
-        self.thread = thread
-        self.thread_flag = thread_flag
 
 
 class StorageState:
@@ -301,8 +295,7 @@ class GraphGenerator:
             except KeyError:
                 raise Exception("Element '%s' is undefined." % x.element)
             self.graph.newElementInstance(x.element, new_name,
-                                          [self.get_state_name(arg) for arg in x.args],
-                                          x.thread, x.thread_flag)
+                                          [self.get_state_name(arg) for arg in x.args])
         elif isinstance(x, StateInstance):
             new_name = get_node_name(stack, x.name)
             # Collect inject information
