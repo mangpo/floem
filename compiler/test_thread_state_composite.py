@@ -3,21 +3,11 @@ from standard_elements import *
 from compiler import *
 from desugaring import desugar
 
+
 class TestThreadStateComposite(unittest.TestCase):
 
     def find_roots(self, g):
-        """
-        :return: roots of the graph (elements that have no parent)
-        """
-        instances = g.instances
-        not_roots = set()
-        for name in instances:
-            instance = instances[name]
-            for (next, port) in instance.output2ele.values():
-                not_roots.add(next)
-
-        roots = set(instances.keys()).difference(not_roots)
-        return roots
+        return g.find_roots()
 
     def find_subgraph(self, g, root, subgraph):
         instance = g.instances[root]
@@ -57,8 +47,65 @@ class TestThreadStateComposite(unittest.TestCase):
             if name not in visit:
                 self.assertIsNone(g.instances[name].API_return_from)
 
+    def test_undefined_element(self):
+        p = Program(ElementInstance("Node", "x"))
+        try:
+            g = generate_graph(p)
+        except Exception as e:
+            self.assertNotEqual(e.message.find("Element 'Node' is undefined."), -1, 'Expect undefined exception.')
+        else:
+            self.fail('Exception is not raised.')
+
+    def test_undefined_element_port(self):
+        p = Program(
+            Forward,
+            ElementInstance("Forward", "x"),
+            ElementInstance("Forward", "y"),
+            Connect("x","y", "out..."))
+        try:
+            g = generate_graph(p)
+        except Exception as e:
+            self.assertNotEqual(e.message.find("Port 'out...' is undefined for element 'x'."), -1,
+                                'Expect port undefined exception.')
+        else:
+            self.fail('Exception is not raised.')
+
+    def test_undefined_composite_port(self):
+        p = Program(
+            Forward,
+            Composite("Unit", [Port("in", ("x", "in", "extra"))], [Port("out", ("x", "out"))], [], [],
+                      Program(
+                          ElementInstance("Forward", "x"))),
+            CompositeInstance("Unit", "u"))
+        try:
+            g = generate_graph(p)
+        except TypeError as e:
+            self.assertNotEqual(e.message.find("should be a pair of (internal instance, port)"), -1)
+        else:
+            self.fail('Exception is not raised.')
+
+    def test_undefined_composite_port2(self):
+        p = Program(
+            Forward,
+            Composite("Unit", [Port("in", ("x", "in"))], [Port("out", ("x", "out"))], [], [],
+                      Program(
+                          ElementInstance("Forward", "x"))),
+            CompositeInstance("Unit", "u1"),
+            CompositeInstance("Unit", "u2"),
+            Connect("u1", "u2", "out...")
+        )
+        try:
+            g = generate_graph(p)
+        except UndefinedPort as e:
+            self.assertNotEqual(e.message.find("Port 'out...' of instance 'u1' is undefined."), -1,
+                                'Expect port undefined exception.')
+        else:
+            self.fail('Exception is not raised.')
+
     def test_pipeline(self):
         p = Program(
+            APIFunction("producer", ["int"], None),
+            InternalTrigger("consumer"),
             Forward,
             Element("Comsumer",
                     [Port("in", ["int"])],
@@ -66,9 +113,9 @@ class TestThreadStateComposite(unittest.TestCase):
                     r'''printf("%d\n", in());'''),
             ElementInstance("Forward", "Forwarder"),
             ElementInstance("Comsumer", "Comsumer"),
-            Connect("Forwarder", "Comsumer")
-            , ExternalTrigger("Forwarder")
-            , InternalTrigger("Comsumer")
+            Connect("Forwarder", "Comsumer"),
+            ResourceMap("producer", "Forwarder", True),
+            ResourceMap("consumer", "Comsumer", True)
         )
 
         g1 = generate_graph(p, False)
@@ -185,26 +232,6 @@ class TestThreadStateComposite(unittest.TestCase):
         self.assertEqual(set(['c2']), set(g.state_instances.keys()))
         self.assertEqual(set(g.instances.keys()), self.find_subgraph(g, 'u2_in', set()))
 
-    def test_composite_with_threads(self):
-
-        p = Program(
-            Forward,
-            Composite("Unit", [Port("in", ("f1", "in"))], [Port("out", ("f2", "out"))], [], [],
-                      Program(
-                          ElementInstance("Forward", "f1"),
-                          ElementInstance("Forward", "f2"),
-                          Connect("f1", "f2"),
-                          InternalTrigger("f2")
-                      )),
-            CompositeInstance("Unit", "u1"),
-            CompositeInstance("Unit", "u2"),
-            Connect("u1", "u2")
-        )
-        g = generate_graph(p, True)
-        self.assertEqual(12, len(g.instances))
-        roots = self.find_roots(g)
-        self.assertEqual(set(['u1_in', '_buffer__u1_f2_read', '_buffer__u2_f2_read']), roots)
-
     def test_nonconflict_input(self):
         p = Program(
             Forward,
@@ -223,33 +250,36 @@ class TestThreadStateComposite(unittest.TestCase):
 
     def test_nonconflict_input_thread(self):
         p = Program(
-            Forward,
+            Forward, Drop,
             ElementInstance("Forward", "f1"),
             ElementInstance("Forward", "f2"),
-            ElementInstance("Forward", "f3"),
-            Connect("f1", "f3"),
-            Connect("f2", "f3"),
-            InternalTrigger("f3")
+            ElementInstance("Drop", "drop"),
+            Connect("f1", "drop"),
+            Connect("f2", "drop"),
+            InternalTrigger("t"),
+            ResourceMap("t", "drop", True)
         )
         g = generate_graph(p)
         self.assertEqual(5, len(g.instances))
         roots = self.find_roots(g)
-        self.assertEqual(set(['f1', 'f2', '_buffer_f3_read']), roots)
-        self.assertEqual(set(['f1', '_buffer_f3_in_write']), self.find_subgraph(g, 'f1', set()))
-        self.assertEqual(set(['f2', '_buffer_f3_in_write']), self.find_subgraph(g, 'f2', set()))
-        self.assertEqual(set(['_buffer_f3_read', 'f3']), self.find_subgraph(g, '_buffer_f3_read', set()))
+        self.assertEqual(set(['f1', 'f2', '_buffer_drop_read']), roots)
+        self.assertEqual(set(['f1', '_buffer_drop_in_write']), self.find_subgraph(g, 'f1', set()))
+        self.assertEqual(set(['f2', '_buffer_drop_in_write']), self.find_subgraph(g, 'f2', set()))
+        self.assertEqual(set(['_buffer_drop_read', 'drop']), self.find_subgraph(g, '_buffer_drop_read', set()))
 
     def test_error_both_internal_external(self):
         p = Program(
             Forward,
             ElementInstance("Forward", "f1"),
-            ExternalTrigger("f1"),
-            InternalTrigger("f1")
+            APIFunction("api", ["int"], "int"),
+            InternalTrigger("t"),
+            ResourceMap("api", "f1", True),
+            ResourceMap("t", "f1", True),
         )
         try:
             g = generate_graph(p)
         except Exception as e:
-            self.assertNotEqual(e.message.find("cannot be triggered by both internal and external triggers"), -1)
+            self.assertNotEqual(e.message.find("Element instance 'f1' cannot be mapped to both 'api' and 't'."), -1)
         else:
             self.fail('Exception is not raised.')
 
@@ -264,11 +294,11 @@ class TestThreadStateComposite(unittest.TestCase):
                     [],
                     r'''printf("%d\n", in());'''),
             APIFunction("add_and_print", ["int"], None),
-            ElementInstance("Inc", "inc1", [], "add_and_print", True),
-            ElementInstance("Print", "print", [], "add_and_print"),
+            ElementInstance("Inc", "inc1"),
+            ElementInstance("Print", "print"),
             Connect("inc1", "print"),
-            #ResourceMap("add_and_print", "inc1", True),
-            #ResourceMap("add_and_print", "print"),
+            ResourceMap("add_and_print", "inc1", True),
+            ResourceMap("add_and_print", "print"),
         )
         g = generate_graph(p)
         self.assertEqual(2, len(g.instances))
@@ -313,7 +343,6 @@ class TestThreadStateComposite(unittest.TestCase):
         try:
             g = generate_graph(p)
         except Exception as e:
-            print e.message
             self.assertNotEqual(e.message.find("API 'func' should have no return value"), -1)
         else:
             self.fail('Exception is not raised.')
@@ -341,63 +370,56 @@ class TestThreadStateComposite(unittest.TestCase):
 
     def test_API_return_okay(self):
         p = Program(
-            Fork2, Forward,
+            Fork2, Forward, Drop,
             ElementInstance("Fork2", "dup"),
             ElementInstance("Forward", "fwd"),
+            ElementInstance("Drop", "drop"),
             Connect("dup", "fwd", "out1"),
-            InternalTrigger("fwd"),
-            APIFunction("func", "dup", "in", "dup", "out2", "int"),
+            Connect("fwd", "drop"),
+            InternalTrigger("t"),
             APIFunction("func", ["int"], "int"),
             ResourceMap("func", "dup", True),
-            #InternalTrigger2("t"),
-            #ResourceMap("t", "fwd", True),
+            ResourceMap("t", "fwd", True),
+            ResourceMap("t", "drop", False),
         )
         g = generate_graph(p)
-        self.assertEqual(4, len(g.instances))
+        self.assertEqual(5, len(g.instances))
         self.assertEqual(1, len(g.states))
         roots = self.find_roots(g)
         self.assertEqual(set(['dup', '_buffer_fwd_read']), roots)
         self.assertEqual(2, len(self.find_subgraph(g, 'dup', set())))
-        self.assertEqual(2, len(self.find_subgraph(g, '_buffer_fwd_read', set())))
+        self.assertEqual(3, len(self.find_subgraph(g, '_buffer_fwd_read', set())))
 
         self.check_api_return(g, [("dup", "int")])
         self.check_api_return_from(g, [])
         self.check_api_return_final(g, ["dup"])
 
-    # TODO
     def test_API_not_always_return(self):
         p = Program(
-            Inc, CircularQueue("Queue", "int", 4),
-            ElementInstance("Inc", "inc1"),
-            ElementInstance("Inc", "inc2"),
-            CompositeInstance("Queue", "queue"),
-            Inject("int", "inject", 8, "gen_func"),
-
-            Connect("inject", "inc1"),
-            Connect("inc1", "queue"),
-            Connect("queue", "inc2"),
-            APIFunction("dequeue", "queue", "dequeue", "inc2", "out", "int"),
+            Element("Filter",
+                    [Port("in", ["int"])],
+                    [Port("out", ["int"])],
+                    r'''int x = in(); output switch { case (x>0): out(x); }'''),
+            ElementInstance("Filter", "filter"),
+            APIFunction("func", ["int"], "int"),
+            ResourceMap("func", "filter", True)
         )
         try:
             g = generate_graph(desugar(p))
         except Exception as e:
-            self.assertNotEqual(e.message.find("doesn't always return, and the default return value is not provided."), -1, 'Expect undefined exception.')
+            self.assertNotEqual(e.message.find("doesn't always return, and the default return value is not provided."), -1)
         else:
             self.fail('Exception is not raised.')
 
-    # TODO
     def test_API_not_always_return_but_okay(self):
         p = Program(
-            Inc, CircularQueue("Queue", "int", 4),
-            ElementInstance("Inc", "inc1"),
-            ElementInstance("Inc", "inc2"),
-            CompositeInstance("Queue", "queue"),
-            Inject("int", "inject", 8, "gen_func"),
-
-            Connect("inject", "inc1"),
-            Connect("inc1", "queue"),
-            Connect("queue", "inc2"),
-            APIFunction("dequeue", "queue", "dequeue", "inc2", "out", "int", -1)
+            Element("Filter",
+                    [Port("in", ["int"])],
+                    [Port("out", ["int"])],
+                    r'''int x = in(); output switch { case (x>0): out(x); }'''),
+            ElementInstance("Filter", "filter"),
+            APIFunction("func", ["int"], "int", "-1"),
+            ResourceMap("func", "filter", True)
         )
         g = generate_graph(desugar(p))
 

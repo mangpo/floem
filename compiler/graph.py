@@ -466,6 +466,19 @@ class Graph:
         for instance in self.instances.values():
             instance.check_input_ports()
 
+    def find_roots(self):
+        """
+        :return: roots of the graph (elements that have no parent)
+        """
+        not_roots = set()
+        for name in self.instances:
+            instance = self.instances[name]
+            for (next, port) in instance.output2ele.values():
+                not_roots.add(next)
+
+        roots = set(self.instances.keys()).difference(not_roots)
+        return roots
+
 '''
 State initialization related functions
 '''
@@ -494,6 +507,7 @@ def concretize_init(init):
             return init
     else:
         return init
+
 
 def concretize_init_as(init, i, n):
     if isinstance(init, str):

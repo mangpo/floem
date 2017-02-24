@@ -28,17 +28,14 @@ class Thread:
         self.name = name
 
     def run_start(self, *instances):
-        #instances[0].assign_thread(self.name, True)
         scope[-1].append(ResourceMap(self.name, instances[0].name, True))
         for i in range(1, len(instances)):
             instance = instances[i]
-            #instance.assign_thread(self.name, False)
             scope[-1].append(ResourceMap(self.name, instance.name, False))
 
     def run(self, *instances):
         for i in range(len(instances)):
             instance = instances[i]
-            #instance.assign_thread(self.name, False)
             scope[-1].append(ResourceMap(self.name, instance.name, False))
 
 

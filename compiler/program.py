@@ -169,9 +169,11 @@ class GraphGenerator:
         elif "__up__" in table:
             return self.lookup_recursive(table["__up__"], key)
         else:
-            raise Exception("'%s' is undefined." % str(key))
+            return None
 
     def put_state(self, used_name, type, real_name):
+        if used_name in self.env:
+            raise Exception("'%s' has already been defined in the current scope." % used_name)
         self.env[used_name] = (type, real_name)
 
     def get_state_name(self, name):
@@ -181,6 +183,8 @@ class GraphGenerator:
         return self.lookup(name)[0]
 
     def put_instance(self, local_name, stack, element):
+        if local_name in self.env:
+            raise Exception("'%s' has already been defined in the current scope." % local_name)
         self.env[local_name] = (stack, element)
 
     def get_instance_stack(self, name):
@@ -190,6 +194,8 @@ class GraphGenerator:
         return self.lookup(name)[1]
 
     def put_resource(self, local_name, global_name):
+        if local_name in self.env:
+            raise Exception("'%s' has already been defined in the current scope." % local_name)
         self.env[local_name] = global_name
 
     def get_resource(self, local_name):
@@ -288,6 +294,9 @@ class GraphGenerator:
             inst_name = get_node_name(self.get_instance_stack(x.instance), x.instance)
             resource_name = self.get_resource(x.resource)
             instance = self.graph.instances[inst_name]
+            if instance.thread:
+                raise Exception("Element instance '%s' cannot be mapped to both '%s' and '%s'."
+                                % (x.instance, instance.thread, resource_name))
             instance.thread = resource_name
             instance.thread_flag = x.flag
 
@@ -439,7 +448,7 @@ class GraphGenerator:
             elif isinstance(t, Composite):
                 port2element[key] = self.lookup(pointer)
             else:
-                raise Exception("Composite '%s' assigns undefined '%s' to thread port '%s'."
+                raise Exception("Composite '%s' assigns undefined '%s' to port '%s'."
                                 % (composite.name, pointer, port.name))
         self.pop_scope()
         for key in port2element:
