@@ -1,7 +1,7 @@
 from program import *
 from dsl import *
 
-def create_circular_queue_one2many_instance(name, type, size, n_cores):
+def create_circular_queue_one2many_instances(name, type, size, n_cores):
     prefix = "_%s_" % name
     one_name = prefix + "queue"
     all_name = prefix + "queues"
@@ -12,7 +12,7 @@ def create_circular_queue_one2many_instance(name, type, size, n_cores):
     ones = [One(one_instance_name + str(i)) for i in range(n_cores)]
 
     All = create_state(all_name, "%s* cores[%d];" % (one_name, n_cores))
-    all = All(all_instance_name, [AddressOf(one_instance_name + str(i)) for i in range(n_cores)])
+    all = All(all_instance_name, [AddressOf(ones[i]) for i in range(n_cores)])
 
     Enqueue = create_element(prefix + "enqueue_ele",
                              [Port("in_entry", [type]), Port("in_core", ["size_t"])], [],
@@ -50,7 +50,7 @@ def create_circular_queue_one2many_instance(name, type, size, n_cores):
     deqs = [Dequeue(prefix + "dequeue" + str(i), [ones[i]]) for i in range(n_cores)]
     return enq, deqs
 
-def create_circular_queue_many2one_instance(name, type, size, n_cores):
+def create_circular_queue_many2one_instances(name, type, size, n_cores):
     prefix = "_%s_" % name
     one_name = prefix + "queue"
     all_name = prefix + "queues"
@@ -61,7 +61,7 @@ def create_circular_queue_many2one_instance(name, type, size, n_cores):
     ones = [One(one_instance_name + str(i)) for i in range(n_cores)]
 
     All = create_state(all_name, "%s* cores[%d];" % (one_name, n_cores))
-    all = All(all_instance_name, [AddressOf(one_instance_name + str(i)) for i in range(n_cores)])
+    all = All(all_instance_name, [AddressOf(ones[i]) for i in range(n_cores)])
 
     Enqueue = create_element(prefix + "enqueue_ele",
                              [Port("in", [type])], [],

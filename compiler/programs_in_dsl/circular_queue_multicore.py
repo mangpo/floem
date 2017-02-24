@@ -3,8 +3,8 @@ from dsl import *
 
 n_cores = 4
 
-rx_enq, rx_deqs = queue.create_circular_queue_one2many_instance("rx_queue", "int", 4, n_cores)
-tx_enqs, tx_deq = queue.create_circular_queue_many2one_instance("tx_queue", "int", 4, n_cores)
+rx_enq, rx_deqs = queue.create_circular_queue_one2many_instances("rx_queue", "int", 4, n_cores)
+tx_enqs, tx_deq = queue.create_circular_queue_many2one_instances("tx_queue", "int", 4, n_cores)
 compute_core = create_element_instance("ComputeCore",
                          [Port("in", ["size_t", "int"])],
                          [Port("out_value", ["int"]), Port("out_core", ["size_t"])],
