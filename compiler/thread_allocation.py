@@ -118,7 +118,7 @@ class ThreadAllocator:
             api.return_instance = return_inst
             api.return_port = return_port
 
-        for trigger in self.graph.threads_internal2:
+        for trigger in self.graph.threads_internal:
             assert (trigger.name in thread2start), \
                 ("Internal trigger '%s' does not mark a starting element instance." % trigger.name)
             start = thread2start[trigger.name]
@@ -174,24 +174,10 @@ class ThreadAllocator:
             self.graph.connect(new_name, instance.name, "out", None)
 
             # Update thread entry points due to the new added node.
-            # if instance.name in self.threads_api:
-            #     self.threads_api.remove(instance.name)
-            #     self.threads_entry_point.remove(instance.name)
-            #     self.threads_api.add(new_name)
-            #     self.threads_entry_point.add(new_name)
-            # elif instance.name in self.threads_internal:
-            #     self.threads_internal.remove(instance.name)
-            #     self.threads_entry_point.remove(instance.name)
-            #     self.threads_internal.add(new_name)
-            #     self.threads_entry_point.add(new_name)
-            # for api in self.graph.APIs:
-            #     if api.call_instance == instance.name:
-            #         api.call_instance = new_name
-
             for api in self.graph.threads_API:
                 if api.call_instance == instance.name:
                     api.call_instance = new_name
-            for trigger in self.graph.threads_internal2:
+            for trigger in self.graph.threads_internal:
                 if trigger.call_instance == instance.name:
                     trigger.call_instance = new_name
 
@@ -235,7 +221,7 @@ class ThreadAllocator:
 
         # Generate code to invoke the main element and clear available indicators.
         all_avails = " && ".join(this_avails)
-        invoke += "  while(%s == false) { fflush(stdout); }\n" % all_avails
+        invoke += "  while(!(%s)) { fflush(stdout); }\n" % all_avails
         for port in need_buffer:
             for i in range(len(port.argtypes)):
                 buffer = "%s_arg%d" % (port.name, i)
@@ -285,11 +271,11 @@ class ThreadAllocator:
             types_buffers.append("%s %s" % (port.argtypes[i], buffer))
 
         src = "  (%s) = in();" % ",".join(types_buffers)
-        src += "  while(%s == true) { fflush(stdout); }\n" % avail
+        src += "  while(%s) { fflush(stdout); }\n" % avail
         for i in range(len(port.argtypes)):
             buffer = buffers[i]
             src += "  this.%s = %s;\n" % (buffer, buffer)
-        src += "  %s = 1;\n" % avail
+        src += "  %s = true;\n" % avail
 
         # Create element
         st_name = "_buffer_%s" % next_ele_name

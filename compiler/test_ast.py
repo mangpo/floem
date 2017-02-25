@@ -4,7 +4,7 @@ from compiler import *
 from desugaring import desugar
 
 
-class TestThreadStateComposite(unittest.TestCase):
+class TestAST(unittest.TestCase):
 
     def find_roots(self, g):
         return g.find_roots()
@@ -70,38 +70,6 @@ class TestThreadStateComposite(unittest.TestCase):
         else:
             self.fail('Exception is not raised.')
 
-    def test_undefined_composite_port(self):
-        p = Program(
-            Forward,
-            Composite("Unit", [Port("in", ("x", "in", "extra"))], [Port("out", ("x", "out"))], [], [],
-                      Program(
-                          ElementInstance("Forward", "x"))),
-            CompositeInstance("Unit", "u"))
-        try:
-            g = generate_graph(p)
-        except TypeError as e:
-            self.assertNotEqual(e.message.find("should be a pair of (internal instance, port)"), -1)
-        else:
-            self.fail('Exception is not raised.')
-
-    def test_undefined_composite_port2(self):
-        p = Program(
-            Forward,
-            Composite("Unit", [Port("in", ("x", "in"))], [Port("out", ("x", "out"))], [], [],
-                      Program(
-                          ElementInstance("Forward", "x"))),
-            CompositeInstance("Unit", "u1"),
-            CompositeInstance("Unit", "u2"),
-            Connect("u1", "u2", "out...")
-        )
-        try:
-            g = generate_graph(p)
-        except UndefinedPort as e:
-            self.assertNotEqual(e.message.find("Port 'out...' of instance 'u1' is undefined."), -1,
-                                'Expect port undefined exception.')
-        else:
-            self.fail('Exception is not raised.')
-
     def test_pipeline(self):
         p = Program(
             APIFunction("producer", ["int"], None),
@@ -152,85 +120,6 @@ class TestThreadStateComposite(unittest.TestCase):
         roots = self.find_roots(g)
         self.assertEqual(set(['sum1', 'sum2']), roots)
         self.assertEqual(set(['s']), set(g.state_instances.keys()))
-
-    def test_composite(self):
-        p = Program(
-            State("Count", "int count;", "0"),
-            Element("Identity",
-                    [Port("in", ["int"])],
-                    [Port("out", ["int"])],
-                    r'''local.count++; global.count++; int x = in(); output { out(x); }''',
-                    None,
-                    [("Count", "local"), ("Count", "global")]
-                    ),
-            Composite("Unit",
-                      [Port("in", ("x1", "in"))],
-                      [Port("out", ("x2", "out"))], [],
-                      [("Count", "global")],
-                      Program(
-                          StateInstance("Count", "local"),
-                          ElementInstance("Identity", "x1", ["local", "global"]),
-                          ElementInstance("Identity", "x2", ["local", "global"]),
-                          Connect("x1", "x2")  # error
-                          # , InternalThread("x2")
-                      )),
-            StateInstance("Count", "c"),
-            Element("Print",
-                    [Port("in", ["int"])],
-                    [],
-                    r'''printf("%d\n", in());'''),
-            CompositeInstance("Unit", "u1", ["c"]),
-            CompositeInstance("Unit", "u2", ["c"]),
-            ElementInstance("Print", "Print"),
-            Connect("u1", "u2"),
-            Connect("u2", "Print")
-        )
-        g = generate_graph(p, True)
-        self.assertEqual(9, len(g.instances))
-        roots = self.find_roots(g)
-        self.assertEqual(set(['u1_in']), roots)
-        self.assertEqual(set(['c', '_u1_local', '_u2_local']), set(g.state_instances.keys()))
-
-    def test_nested_composite(self):
-        p = Program(
-            State("Count", "int count;", "0"),
-            Element("Identity",
-                    [Port("in", ["int"])],
-                    [Port("out", ["int"])],
-                    r'''this.count++; int x = in(); output { out(x); }''',
-                    None,
-                    [("Count", "this")]
-                    ),
-            Element("Print",
-                    [Port("in", ["int"])],
-                    [],
-                    r'''printf("%d\n", in());'''),
-            Composite("Unit1",
-                      [Port("in", ("x1", "in"))],  # error
-                      [Port("out", ("x1", "out"))], [],
-                      [("Count", "c")],
-                      Program(
-                          ElementInstance("Identity", "x1", ["c"])
-                      )),
-            Composite("Unit2",
-                      [Port("in", ("u1", "in"))],  # error
-                      [Port("out", ("u1", "out"))], [],
-                      [("Count", "c1")],
-                      Program(
-                          CompositeInstance("Unit1", "u1", ["c1"])
-                      )),
-            StateInstance("Count", "c2"),
-            CompositeInstance("Unit2", "u2", ["c2"]),
-            ElementInstance("Print", "Print"),
-            Connect("u2", "Print")
-        )
-
-        g = generate_graph(p, True)
-        self.assertEqual(6, len(g.instances))
-        roots = self.find_roots(g)
-        self.assertEqual(set(['u2_in']), roots)
-        self.assertEqual(set(['c2']), set(g.state_instances.keys()))
-        self.assertEqual(set(g.instances.keys()), self.find_subgraph(g, 'u2_in', set()))
 
     def test_nonconflict_input(self):
         p = Program(
@@ -422,53 +311,6 @@ class TestThreadStateComposite(unittest.TestCase):
             ResourceMap("func", "filter", True)
         )
         g = generate_graph(desugar(p))
-
-    def test_composite_scope(self):
-        p = Program(
-            Forward,
-            Composite("Unit1",
-                      [Port("in", ("aa", "in"))],
-                      [Port("out", ("aa", "out"))],
-                      [],
-                      [],
-                      Program(
-                          ElementInstance("Forward", "aa")
-                      )),
-            Composite("Unit2",
-                      [Port("in", ("bb", "in"))],
-                      [Port("out", ("cc", "out"))],
-                      [],
-                      [],
-                      Program(
-                          ElementInstance("Forward", "bb"),
-                          ElementInstance("Forward", "cc"),
-                          Connect("bb", "cc")
-                      )),
-            Composite("Wrapper1",
-                      [Port("in", ("u", "in"))],
-                      [Port("out", ("u", "out"))],
-                      [],
-                      [],
-                      Program(
-                          CompositeInstance("Unit1", "u")
-                      )),
-            CompositeInstance("Wrapper1", "u"),
-            Composite("Wrapper2",
-                      [Port("in", ("u", "in"))],
-                      [Port("out", ("u", "out"))],
-                      [],
-                      [],
-                      Program(
-                          CompositeInstance("Unit2", "u")
-                      )),
-            CompositeInstance("Wrapper2", "w2"),
-            Connect("u", "w2")
-        )
-
-        g = generate_graph(p)
-        roots = self.find_roots(g)
-        self.assertEqual(set(['u_in']), roots)
-        self.assertEqual(11, len(self.find_subgraph(g, 'u_in', set())))
 
 
 if __name__ == '__main__':

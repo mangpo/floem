@@ -170,6 +170,11 @@ def create_inject(name, type, size, func):
     return create
 
 
+def create_inject_instance(name, type, size, func):
+    inject = create_inject(name, type, size, func)
+    return inject()
+
+
 def create_probe(name, type, size, func):
     st_name = name + "_state"
     st_inst_name = name + "_state_inst"

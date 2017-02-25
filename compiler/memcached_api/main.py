@@ -1,13 +1,14 @@
-from compiler import *
-from desugaring import desugar
-from standard_elements import *
-from queue import *
+from dsl import *
+from elements_library import *
+import queue
 
-ForkPacket = Fork("ForkPacket", 3, "iokvs_message*")
-ForkOpaque = Fork("ForkOpaque", 2, "uint64_t")
-ForkEQ = Fork("ForkEQ", 2, "eq_entry*")
+eq_entry = create_state("eq_entry", "uint64_t opaque; uint32_t hash; uint16_t keylen; void* key;")
+cq_entry = create_state("cq_entry", "uint64_t opaque; item* it;")
 
-GetKey = Element("GetKey",
+fork_pkt = create_fork_instance("fork_pkt", 3, "iokvs_message*")
+fork_opaque = create_fork_instance("fork_opaque", 2, "uint64_t")
+
+get_key = create_element_instance("GetKey",
               [Port("in", ["iokvs_message*"])],
               [Port("out", ["void*", "size_t"])],
                r'''
@@ -17,7 +18,7 @@ size_t len = m->mcr.request.keylen;
 output { out(key, len); }
 ''')
 
-Jenkins_Hash = Element("Jenkins_Hash",
+jenkins_hash = create_element_instance("Jenkins_Hash",
               [Port("in", ["void*", "size_t"])],
               [Port("out", ["void*", "size_t", "uint32_t"])],
                r'''
@@ -26,8 +27,7 @@ uint32_t hash = jenkins_hash(key, length);
 output { out(key, length, hash); }
 ''')
 
-
-PrepareResponse = Element("PrepareResponse",
+prepare_response = create_element_instance("PrepareResponse",
                           [Port("in_packet", ["iokvs_message*"]), Port("in_item", ["item*"])],
                           [Port("out", ["iokvs_message*"])],
                           r'''
@@ -49,15 +49,7 @@ if (it != NULL) {
 output { out(m); }
 ''')
 
-GetOpaque = Element("GetOpaque",
-                    [Port("in", ["iokvs_message*"])],
-                    [Port("out", ["uint64_t"])],
-                    r'''
-(iokvs_message* m) = in();
-output { out(m->mcr.request.magic); }
-                    ''')
-
-Pack = Element("Pack",
+pack = create_element_instance("Pack",
                [Port("in_hash", ["void*", "size_t", "uint32_t"]), Port("in_opaque", ["uint64_t"])],
                [Port("out", ["eq_entry*"])],
                r'''
@@ -71,7 +63,7 @@ entry->key = key;
 output { out(entry); }
                ''')
 
-Unpack = Element("Unpack",
+unpack = create_element_instance("Unpack",
                  [Port("in", ["cq_entry*"])],
                  [Port("out_opaque", ["uint64_t"]), Port("out_item", ["item*"])],
                  r'''
@@ -79,23 +71,23 @@ Unpack = Element("Unpack",
 output { out_opaque(entry->opaque); out_item(entry->it); }
                  ''')
 
-GetCore = Element("GetCore",
+get_opaque = create_element_instance("GetOpaque",
+                    [Port("in", ["iokvs_message*"])],
+                    [Port("out", ["uint64_t"])],
+                    r'''
+(iokvs_message* m) = in();
+output { out(m->mcr.request.magic); }
+                    ''')
+
+GetCore = create_element("GetCore",
                  [Port("in", ["eq_entry*"])],
                  [Port("out", ["size_t"])],
                  r'''
 (eq_entry* entry) = in();
 output { out(entry->hash % 4); }  // reta[entry->key_hash & 0xff];
-                 ''')  # TODO: reta
+                 ''')
 
-PrintEntry = Element("PrintEntry",
-                     [Port("in", ["eq_entry*"])],
-                     [],
-                     r'''
-     (eq_entry* m) = in();
-     printf("%ld %d %d\n", m->opaque, *((uint8_t *) m->key), m->hash);
-     ''')
-
-PrintMsg = Element("PrintMsg",
+print_msg = create_element_instance("print_msg",
                    [Port("in", ["iokvs_message*"])],
                    [],
                    r'''
@@ -104,107 +96,105 @@ PrintMsg = Element("PrintMsg",
    printf("OPAQUE: %d, len: %d, key:%d\n", m->mcr.request.magic, m->mcr.request.bodylen, key[0]);
    ''')
 
-(t_state, t_insert_element, t_get_element, t_state_instance, t_insert_instance, t_get_instance) = \
-    get_table_collection("uint64_t", "iokvs_message*", 64, "msg_put", "msg_get")
 
-rx_steer_instances, rx_steer_enq, rx_steer_deq = CircularQueueOneToMany("rx_queue", "eq_entry*", 4, 4)
-tx_steer_instances, tx_steer_enq, tx_steer_deq = CircularQueueManyToOne("tx_queue", "cq_entry*", 4, 4)
+msg_put, msg_get = create_table_instances("msg_put", "msg_get", "uint64_t", "iokvs_message*", 64)
+Inject = create_inject("inject", "iokvs_message*", 8, "random_request")
+inject = Inject()
 
+n_cores = 4
+nic_rx = internal_thread("nic_rx")
+nic_tx = internal_thread("nic_tx")
 
-p = Program(
-    t_state, t_state_instance,
-    State("eq_entry", "uint64_t opaque; uint32_t hash; uint16_t keylen; void* key;"),
-    State("cq_entry", "uint64_t opaque; item* it;"),
+######################## NIC Rx #######################
+pkt = inject()
+pkt1, pkt2, pkt3 = fork_pkt(pkt)       # TODO: automatically insert fork
+opaque = get_opaque(pkt1)              # TODO: easier way to extract field
+opaque1, opaque2 = fork_opaque(opaque)
+msg_put(opaque1, pkt2)
 
-    Jenkins_Hash, ForkPacket, ForkOpaque, GetKey,  Pack, GetOpaque, PrintEntry, PrintMsg,
-    ElementInstance("PrintMsg", "print_msg"),
-    ElementInstance("PrintEntry", "print_entry"),
+key = get_key(pkt3)
+hash = jenkins_hash(key)
+eq_entry = pack(hash, opaque2)
 
-    ElementInstance("ForkPacket", "fork_pkt"),
-    ElementInstance("ForkOpaque", "fork_opaque"),
-    ElementInstance("GetKey", "get_key"),
-    ElementInstance("Jenkins_Hash", "hash"),
-    ElementInstance("Pack", "rx_pack"),
-    ElementInstance("GetOpaque", "get_opaque"),
-    t_insert_element,t_get_element,  t_insert_instance, t_get_instance,
-    Inject("iokvs_message*", "inject", 8, "random_request"),
+# TODO: better way to assign threads. This is very error-proned.
+# TODO: using block and @?
+# TODO: how to make it more obvious, what are inputs from API call and inputs from other elements? Same with outputs?
+nic_rx.run_start(inject, fork_pkt, get_opaque, fork_opaque, msg_put, get_key, jenkins_hash, pack)
 
-    Connect("inject", "fork_pkt"),
-    Connect("fork_pkt", "get_key", "out1"),
-    Connect("get_key", "hash"),
-    Connect("hash", "rx_pack", "out", "in_hash"),
+def spec_nic2app(x):
+    rx_enq, rx_deq = create_circular_queue_instances("rx_queue", "eq_entry*", 4)
+    rx_enq(x)
 
-    Connect("fork_pkt", "msg_put", "out2", "in_value"),
-    Connect("fork_pkt", "get_opaque", "out3"),
-    Connect("get_opaque", "fork_opaque"),
-    Connect("fork_opaque", "msg_put", "out1", "in_index"),
-    Connect("fork_opaque", "rx_pack", "out2", "in_opaque"),
+    get_eq = API_thread("get_eq", [], "eq_entry*", "NULL")
+    get_eq.run_start(rx_deq)
+    nic_rx.run(rx_enq)
 
-    Spec(
-        CircularQueue("RXQueue", "eq_entry*", 4),
-        CompositeInstance("RXQueue", "rx_queue"),
-        Connect("rx_pack", "rx_queue"),
-        APIFunction("get_eq", "rx_queue", "dequeue", "rx_queue", "dequeue_out", "eq_entry*", "NULL"),
-    ),
-    Impl(
-        *(rx_steer_instances + [
-            ForkEQ, ElementInstance("ForkEQ", "fork_eq"),
-            GetCore, ElementInstance("GetCore", "core"),
-            Connect("rx_pack", "fork_eq"),
-            Connect("fork_eq", "core", "out1"),
-            Connect("core", rx_steer_enq.name, "out", "in_core"),
-            Connect("fork_eq", rx_steer_enq.name, "out2", "in_entry"),
-            APIFunction("get_eq[i]", rx_steer_deq.name.replace('[4]','[i]'), None,
-                        rx_steer_deq.name.replace('[4]','[i]'), "out", "eq_entry*", "NULL")
-        ])
-    ),
+def impl_nic2app(x):
+    fork_eq = create_fork_instance("fork_eq", 2, "eq_entry*")
+    get_core = GetCore()
+    rx_enq, rx_deqs = queue.create_circular_queue_one2many_instances("rx_queue", "eq_entry*", 4, n_cores)
 
-    Unpack, PrepareResponse,
-    ElementInstance("Unpack", "unpack"),
-    ElementInstance("PrepareResponse", "response"),
+    x1, x2 = fork_eq(x)
+    rx_enq(x1, get_core(x2))
 
-    Spec(
-        CircularQueue("TXQueue", "cq_entry*", 4),
-        CompositeInstance("TXQueue", "tx_queue"),
-        Connect("tx_queue", "unpack"),
-        APIFunction("send_cq", "tx_queue", "enqueue", "tx_queue", "enqueue_out"),
-        InternalTrigger("tx_queue", "dequeue"),
-    ),
-    Impl(
-        *(tx_steer_instances + [
-            Connect(tx_steer_deq.name, "unpack"),
-            APIFunction("send_cq[i]", tx_steer_enq.name.replace('[4]','[i]'), "in",
-                        tx_steer_enq.name.replace('[4]','[i]'), None),
-            InternalTrigger(tx_steer_deq.name),
-        ])
-    ),
-    Connect("unpack", "msg_get", "out_opaque"),
-    Connect("msg_get", "response", "out", "in_packet"),
-    Connect("unpack", "response", "out_item", "in_item"),
-    Connect("response", "print_msg"),
-)
+    nic_rx.run(fork_eq, get_core, rx_enq)
+    for i in range(n_cores):
+        api = API_thread("get_eq" + str(i), [], "eq_entry*", "NULL")
+        api.run_start(rx_deqs[i])
 
+nic2app = create_spec_impl("nic2app", spec_nic2app, impl_nic2app)
+nic2app(eq_entry)
 
-include = r'''
+######################## NIC Tx #######################
+
+def spec_app2nic():
+    tx_enq, tx_deq = create_circular_queue_instances("tx_queue", "cq_entry*", 4)
+    y = tx_deq()
+
+    send_cq = API_thread("send_cq", ["cq_entry*"], None)
+    send_cq.run_start(tx_enq)
+    nic_tx.run_start(tx_deq)
+    return y
+
+def impl_app2nic():
+    tx_enqs, tx_deq = queue.create_circular_queue_many2one_instances("tx_queue", "cq_entry*", 4, n_cores)
+    y = tx_deq()
+
+    for i in range(n_cores):
+        api = API_thread("send_cq" + str(i), ["cq_entry*"], None)
+        api.run_start(tx_enqs[i])
+    nic_tx.run_start(tx_deq)
+    return y
+
+app2nic = create_spec_impl("app2nic", spec_app2nic, impl_app2nic)
+
+cq_entry = app2nic()
+opaque3, item = unpack(cq_entry)
+pkt4 = msg_get(opaque3)
+response = prepare_response(pkt4, item)
+print_msg(response)
+
+nic_tx.run(unpack, msg_get, prepare_response, print_msg)
+
+######################## Run test #######################
+c = Compiler()
+c.include = r'''
 #include "iokvs.h"
 #include "protocol_binary.h"
 '''
-testing = ""
-depend = ['jenkins_hash', 'hashtable']
-
+c.depend = ['jenkins_hash', 'hashtable']
+c.triggers = True
 
 def run_spec():
-    dp = desugar(p, "spec")
-    g = generate_graph(dp)
-    generate_code_as_header(g, testing, include, "tmp_spec.h")
-    compile_and_run("test", depend)
+    c.desugar_mode = "spec"
+    c.generate_code_as_header("tmp_spec.h")
+    c.compile_and_run("test")
 
 def run_impl():
-    dp = desugar(p, "impl")
-    g = generate_graph(dp)
-    generate_code_as_header(g, testing, include, True, "tmp_impl.h")
-    compile_and_run("test_impl", depend)
+    c.desugar_mode = "impl"
+    c.generate_code_as_header("tmp_impl.h")
+    c.compile_and_run("test_impl")
 
-
-#run_spec()
+run_spec()
 run_impl()
+

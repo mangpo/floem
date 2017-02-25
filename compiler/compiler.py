@@ -479,7 +479,7 @@ def thread_func_create_cancel(func, size=None):
 
 
 def generate_internal_triggers(graph, triggers):
-    threads_internal = set([trigger.call_instance for trigger in graph.threads_internal2])
+    threads_internal = set([trigger.call_instance for trigger in graph.threads_internal])
     threads_api = set([trigger.call_instance for trigger in graph.threads_API])
     injects = graph.inject_populates
 

@@ -6,18 +6,7 @@ import unittest
 class TestDesugar(unittest.TestCase):
 
     def find_roots(self, g):
-        """
-        :return: roots of the graph (elements that have no parent)
-        """
-        instances = g.instances
-        not_roots = set()
-        for name in instances:
-            instance = instances[name]
-            for (next, port) in instance.output2ele.values():
-                not_roots.add(next)
-
-        roots = set(instances.keys()).difference(not_roots)
-        return roots
+        return g.find_roots()
 
     def find_subgraph(self, g, root, subgraph):
         instance = g.instances[root]
@@ -33,7 +22,9 @@ class TestDesugar(unittest.TestCase):
             ElementInstance("Forward", "f[4]"),
             ElementInstance("Forward", "g[4]"),
             Connect("f[i]", "g[i]"),
-            APIFunction("identity[i]", "f[i]", "in", "g[i]", "out", "int")
+            APIFunction("identity[4]", ["int"], "int"),
+            ResourceMap("identity[i]", "f[i]", True),
+            ResourceMap("identity[i]", "g[i]", False),
         )
         p = desugar(p)
         g = generate_graph(p, True)
@@ -45,56 +36,34 @@ class TestDesugar(unittest.TestCase):
         self.assertEqual(set(['f2', 'g2']), self.find_subgraph(g, 'f2', set([])))
         self.assertEqual(set(['f3', 'g3']), self.find_subgraph(g, 'f3', set([])))
 
-    def test_composite(self):
-        p = Program(
-            Element("Sum",
-                    [Port("in", ["int"])],
-                    [],
-                    r'''this.sum += in(); printf("%d\n", this.sum);''',
-                    None,
-                    [("Shared", "this")]),
-            State("Shared", "int sum;", "100"),
-            Composite("Unit",
-                      [Port("in", ("sum", "in"))],
-                      [], [],
-                      [],
-                      Program(
-                          StateInstance("Shared", "s"),
-                          ElementInstance("Sum", "sum", ["s"])
-                      )),
-            CompositeInstance("Unit", "u[4]")
-        )
-        p = desugar(p)
-        g = generate_graph(p, True)
-        self.assertEqual(8, len(g.instances))
-        self.assertEqual(4, len(g.state_instances))
-
     def test_trigger(self):
         p = Program(
-            Forward,
+            Forward, Drop,
             ElementInstance("Forward", "f[4]"),
-            ElementInstance("Forward", "g[4]"),
-            Connect("f[i]", "g[i]"),
-            InternalTrigger("g[i]")
+            ElementInstance("Drop", "d[4]"),
+            Connect("f[i]", "d[i]"),
+            InternalTrigger("t[4]"),
+            ResourceMap("t[i]", "d[i]", True)
         )
         p = desugar(p)
         g = generate_graph(p, True)
         self.assertEqual(16, len(g.instances))
         roots = self.find_roots(g)
-        self.assertEqual(set(['f0','f1','f2','f3', '_buffer_g0_read', '_buffer_g1_read', '_buffer_g2_read', '_buffer_g3_read']), roots)
+        self.assertEqual(set(['f0','f1','f2','f3', '_buffer_d0_read', '_buffer_d1_read', '_buffer_d2_read', '_buffer_d3_read']), roots)
 
     def test_spec_impl(self):
         p = Program(
             Forward,
             ElementInstance("Forward", "f"),
             ElementInstance("Forward", "g"),
-            Spec(
+            Spec([
+                Connect("f", "g")
+            ]),
+            Impl([
                 Connect("f", "g"),
-            ),
-            Impl(
-                Connect("f", "g"),
-                ExternalTrigger("g")
-            )
+                APIFunction("get", [], "int"),
+                ResourceMap("get", "g", True)
+            ])
         )
         dp = desugar(p, "spec")
         g = generate_graph(dp, True)
@@ -110,41 +79,6 @@ class TestDesugar(unittest.TestCase):
         g = generate_graph(dp, True)
         self.assertEqual(6, len(g.instances))
         self.assertEqual(set(['_spec_f', '_impl_f', '_buffer__impl_g_read']), self.find_roots(g))
-
-    def test_composite_spec_impl(self):
-        p = Program(
-            Forward,
-            Composite("Unit",
-                      [Port("in", ("f", "in"))],
-                      [Port("out", ("g", "out"))], [],
-                      [],
-                      Program(
-                          ElementInstance("Forward", "f"),
-                          ElementInstance("Forward", "g"),
-                          Spec(
-                              Connect("f", "g"),
-                          ),
-                          Impl(
-                              Connect("f", "g"),
-                              InternalTrigger("g")
-                          )
-                      )),
-            CompositeInstance("Unit", "u")
-        )
-        dp = desugar(p, "spec")
-        g = generate_graph(dp, True)
-        self.assertEqual(4, len(g.instances))
-        self.assertEqual(set(['u_in']), self.find_roots(g))
-
-        dp = desugar(p, "impl")
-        g = generate_graph(dp, True)
-        self.assertEqual(6, len(g.instances))
-        self.assertEqual(set(['u_in', '_buffer__u_g_read']), self.find_roots(g))
-
-        dp = desugar(p, "compare")
-        g = generate_graph(dp, True)
-        self.assertEqual(10, len(g.instances))
-        self.assertEqual(set(['_spec_u_in', '_impl_u_in', '_buffer__impl_u_g_read']), self.find_roots(g))
 
     def test_init(self):
         self.assertEqual(concretize_init("s[4]"), ['s0','s1', 's2', 's3'])

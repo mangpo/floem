@@ -9,12 +9,14 @@ class TestDSL(unittest.TestCase):
         tests = ["hello.py",
                  "join.py",
                  "join_multiple.py",
+                 "join_inject.py",
                  "buffer.py",
                  "state_local.py",
                  "state_shared.py",
                  "state_nested_composite.py",
                  "composite.py",
                  "composite_thread_port.py",
+                 "composite_scope.py",
                  "API_increment.py",
                  "API_read_blocking.py",
                  "spec_impl.py",
@@ -97,6 +99,35 @@ class TestDSL(unittest.TestCase):
         self.assertEqual(8, len(g.instances))
         roots = g.find_roots()
         self.assertEqual(set(['c1_f1', '_buffer_c1_f2_read', '_buffer_c2_f2_read']), roots)
+
+    def test_composite(self):
+        reset()
+        Count = create_state("Count", "int count;", [0])
+        Inc = create_element("Inc",
+                    [Port("in", ["int"])],
+                    [Port("out", ["int"])],
+                    r'''local.count++; global.count++; int x = in(); output { out(x); }''',
+                    None,
+                    [("Count", "local"), ("Count", "global")])
+
+        global_count = Count("count")
+        def compo(x):
+            count = Count("count")
+            inc1 = Inc("inc1", [count, global_count])
+            inc2 = Inc("inc2", [count, global_count])
+            return inc2(inc1(x))
+
+        Compo = create_composite("Compo", compo)
+        c1 = Compo("c1")
+        c2 = Compo("c2")
+        c2(c1(None))
+
+        c = Compiler()
+        g = c.generate_graph()
+        self.assertEqual(4, len(g.instances))
+        roots = g.find_roots()
+        self.assertEqual(set(['c1_inc1']), roots)
+        self.assertEqual(set(['count', 'c1_count', 'c2_count']), set(g.state_instances.keys()))
 
 
 if __name__ == '__main__':

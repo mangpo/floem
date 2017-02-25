@@ -230,7 +230,8 @@ class TestJoinHandling(unittest.TestCase):
             Connect("Fork", "Sub", "to_sub"),
             Connect("Add", "Print", "out", "in1"),
             Connect("Sub", "Print", "out", "in2"),
-            InternalTrigger("Print")
+            InternalTrigger("t"),
+            ResourceMap("t", "Print", True)
         )
 
         g = generate_graph(p, False)
@@ -275,7 +276,8 @@ class TestJoinHandling(unittest.TestCase):
             Connect("Fork", "Sub", "to_sub"),
             Connect("Add", "Print", "out", "in1"),
             Connect("Sub", "Print", "out", "in2"),
-            InternalTrigger("Sub")
+            InternalTrigger("t"),
+            ResourceMap("t", "Sub", True)
         )
 
         g = generate_graph(p, False)
@@ -307,11 +309,13 @@ class TestJoinHandling(unittest.TestCase):
             ElementInstance("Print", "Print"),
             Connect("f1", "Print", "out", "in1"),
             Connect("f2", "Print", "out", "in2"),
-            ExternalTrigger("f2")
+            APIFunction("run", ["int"], None),
+            ResourceMap("run", "f2", True)
         )
 
         try:
             g = generate_graph(p, False)
+            generate_code(g)
         except Exception as e:
             self.assertNotEqual(e.message.find("There is no dominant element instance"), -1)
         else:
@@ -689,7 +693,8 @@ class TestJoinHandling(unittest.TestCase):
             Connect("f3", "add3", "out", "in3"),
             Connect("add3", "add2", "out", "in1"),
             Connect("fork4", "add2", "out4", "in2"),
-            ExternalTrigger("f3")
+            InternalTrigger("t"),
+            ResourceMap("t", "f3", True)
         )
 
         g = generate_graph(p, True)

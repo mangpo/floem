@@ -1,6 +1,5 @@
 from program import *
 import re
-from standard_elements import InjectProbeState, ProbeElement, InjectElement
 
 
 def desugar(x, mode="impl"):
@@ -11,8 +10,8 @@ def desugar(x, mode="impl"):
 
     if mode == "compare":
         D = Desugar(True)
-        spec = Composite("Spec", [], [], [], [], D.process(x))
-        impl = Composite("Impl", [], [], [], [], Desugar(False).process(x))
+        spec = Composite("Spec", D.process(x))
+        impl = Composite("Impl", Desugar(False).process(x))
         spec_instance = CompositeInstance("Spec", "spec")
         impl_instance = CompositeInstance("Impl", "impl")
         statements = []
@@ -30,6 +29,7 @@ def desugar(x, mode="impl"):
         statements = D.process(x).statements
         statements = D.populates + [x for x in statements]
         return Program(*statements)
+
 
 def need_desugar(x):
     if isinstance(x, Program):

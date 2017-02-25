@@ -299,7 +299,7 @@ class Graph:
 
         self.identity = {}
 
-        self.threads_internal2 = []
+        self.threads_internal = []
         self.threads_API = []
 
         # Inject and probe
@@ -321,9 +321,11 @@ class Graph:
         return state_name in self.states
 
     def clear_APIs(self):
-        # self.APIs = []
         self.threads_API = []
-        self.threads_internal2 = []
+        self.threads_internal = []
+        for instance in self.instances.values():
+            instance.thread = None
+            instance.thread_flag = None
 
     def has_element_instance(self, instance_name):
         return instance_name in self.instances

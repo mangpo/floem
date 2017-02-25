@@ -46,12 +46,8 @@ class Impl:
 
 
 class Composite:
-    def __init__(self, name, inports, outports, thread_ports, state_params, program):
+    def __init__(self, name, program):
         self.name = name
-        self.inports = inports
-        self.outports = outports
-        self.thread_ports = thread_ports
-        self.state_params = state_params
         self.program = program
 
 
@@ -201,26 +197,10 @@ class GraphGenerator:
     def get_resource(self, local_name):
         return self.lookup(local_name)
 
-    def push_scope(self, composite, state_params, state_args):
-        params_types = [x[0] for x in state_params]
-        args_types = [self.get_state_type(x) for x in state_args]
-        used_names = [x[1] for x in state_params]
-        real_names = [self.get_state_name(x) for x in state_args]
-
+    def push_scope(self):
         env = dict()
         env["__up__"] = self.env
         self.env = env
-
-        if not(len(state_params) == len(state_args)):
-            raise Exception("Composite '%s' requires '%d' state parameters, but '%d' are given."
-                            % (composite.name, len(state_params), len(state_args)))
-
-        if not(params_types == args_types):
-            raise Exception("Composite '%s' requires '%d' state parameters, but '%d' are given."
-                            % (composite.name, params_types, args_types))
-
-        for i in range(len(state_args)):
-            self.put_state(used_names[i], args_types[i], real_names[i])
 
     def pop_scope(self):
         self.env = self.env["__up__"]
@@ -282,10 +262,11 @@ class GraphGenerator:
         elif isinstance(x, InternalTrigger):
             global_name = get_node_name(stack, x.name)
             self.put_resource(x.name, global_name)
-            self.graph.threads_internal2.append(InternalTrigger(global_name))
+            self.graph.threads_internal.append(InternalTrigger(global_name))
 
         elif isinstance(x, APIFunction):
-            global_name = get_node_name(stack, x.name)
+            #global_name = get_node_name(stack, x.name)
+            global_name = x.name
             self.put_resource(x.name, global_name)
             self.graph.threads_API.append(APIFunction(x.name, x.call_types, x.return_type, x.default_val))
 
@@ -364,95 +345,9 @@ class GraphGenerator:
     def interpret_CompositeInstance(self, x, stack):
         new_stack = stack + [x.name]
         composite = self.composites[x.element]
-        self.push_scope(composite, composite.state_params, x.args)
+        self.push_scope()
         self.interpret(composite.program, new_stack)
-
-        # Check if ports connect to element in the current scope.
-        for port in composite.inports + composite.outports + composite.thread_ports:
-            self.current_scope(port.argtypes[0], "composite port")
-
-        # Create element instances for input ports, and connect the interface elements to internal elements.
-        for port in composite.inports:
-            portname = port.name
-            self.check_composite_port(composite.name, portname, port.argtypes)
-            (internal_name, internal_port) = port.argtypes
-            is_composite = isinstance(self.get_instance_type(internal_name), Composite)
-            if is_composite:  # Composite
-                internal_name = internal_name + "_" + internal_port
-                internal_port = "in"
-            internal_name = get_node_name(new_stack, internal_name)
-
-            try:
-                argtypes = self.graph.get_inport_argtypes(internal_name, internal_port) # TODO: better error message
-                ele = self.graph.get_identity_element(argtypes)
-                instance_name = get_node_name(stack, x.name + "_" + portname)
-                self.graph.addElement(ele)
-                self.graph.newElementInstance(ele.name, instance_name)
-                self.graph.connect(instance_name, internal_name, None, internal_port)
-            except UndefinedInstance:
-                if is_composite:
-                    raise UndefinedPort("Port '%s' of composite instance '%s' is undefined, but composite '%s' attempts to use it."
-                                        % (port.argtypes[1], port.argtypes[0], composite.name))
-                else:
-                    raise UndefinedInstance("Element instance '%s' is undefined, but composite '%s' attempts to use it."
-                                            % (port.argtypes[0], x.name))
-            except UndefinedPort:
-                raise UndefinedPort("Port '%s' of element instance '%s' is undefined, but composite '%s' attempts to use it."
-                                    % (port.argtypes[1], port.argtypes[0], composite.name))
-
-        # Create element instances for output ports, and connect the interface elements to internal elements.
-        for port in composite.outports:
-            portname = port.name
-            self.check_composite_port(composite.name, portname, port.argtypes)
-            (internal_name, internal_port) = port.argtypes
-            is_composite = isinstance(self.get_instance_type(internal_name), Composite)
-            if is_composite:  # Composite
-                internal_name = internal_name + "_" + internal_port
-                internal_port = "out"
-            internal_name = get_node_name(new_stack, internal_name)
-
-            try:
-                argtypes = self.graph.get_outport_argtypes(internal_name, internal_port) # TODO: better error message
-                ele = self.graph.get_identity_element(argtypes)
-                instance_name = get_node_name(stack, x.name + "_" + portname)
-                self.graph.addElement(ele)
-                self.graph.newElementInstance(ele.name, instance_name)
-                self.graph.connect(internal_name, instance_name, internal_port, None)
-            except UndefinedInstance:
-                if is_composite:
-                    raise UndefinedPort("Port '%s' of composite instance '%s' is undefined, but composite '%s' attempts to use it."
-                                        % (port.argtypes[1], port.argtypes[0], composite.name))
-                else:
-                    raise UndefinedInstance("Element instance '%s' is undefined, but composite '%s' attempts to use it."
-                                            % (port.argtypes[0], x.name))
-            except UndefinedPort:
-                raise UndefinedPort("Port '%s' of element instance '%s' is undefined, but composite '%s' attempts to use it."
-                                    % (port.argtypes[1], port.argtypes[0], composite.name))
-
-        # Save port mapping into environment.
-        port2element = dict()
-        for port in composite.thread_ports + composite.inports + composite.outports:
-            key = (x.name, port.name)
-            pointer = port.argtypes
-            if not isinstance(pointer, tuple) or not len(pointer) == 2:
-                raise Exception("Port '%s' of composite '%s' should assign to a tuple of (name, port)."
-                                % (port.name, composite.name))
-            t = self.get_instance_type(pointer[0])
-            if isinstance(t, Element):
-                if port in composite.thread_ports:
-                    port2element[key] = (get_node_name(new_stack, pointer[0]), pointer[1])
-                elif port in composite.inports:
-                    port2element[key] = (get_node_name(stack, x.name + "_" + port.name), "in")
-                elif port in composite.outports:
-                    port2element[key] = (get_node_name(stack, x.name + "_" + port.name), "out")
-            elif isinstance(t, Composite):
-                port2element[key] = self.lookup(pointer)
-            else:
-                raise Exception("Composite '%s' assigns undefined '%s' to port '%s'."
-                                % (composite.name, pointer, port.name))
         self.pop_scope()
-        for key in port2element:
-            self.env[key] = port2element[key]
 
     def allocate_resources(self):
         """
