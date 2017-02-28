@@ -220,15 +220,34 @@ class Desugar:
                      % (x.instance, x.resource))
 
                 n = self.lookup(m_inst.group(1))
-                return [ResourceMap(m_rs.group(1) + str(i), m_inst.group(1) + str(i), x.flag) for i in range(n)]
+                return [ResourceMap(m_rs.group(1) + str(i), m_inst.group(1) + str(i)) for i in range(n)]
             elif m_inst:
                 n = self.lookup(m_inst.group(1))
-                return [ResourceMap(desugar_name(x.resource), m_inst.group(1) + str(i), x.flag) for i in range(n)]
+                return [ResourceMap(desugar_name(x.resource), m_inst.group(1) + str(i)) for i in range(n)]
             elif m_rs:
                 raise Exception("Non-parameterized instance '%s' cannot be mapped to parameterized resource '%s'"
                                 % (x.instance, x.resource))
             else:
-                return ResourceMap(desugar_name(x.resource), desugar_name(x.instance), x.flag)
+                return ResourceMap(desugar_name(x.resource), desugar_name(x.instance))
+
+        elif isinstance(x, ResourceStart):
+            m_rs = re.match('([a-zA-Z0-9_]+)\[([a-zA-Z]+)]', x.resource)
+            m_inst = re.match('([a-zA-Z0-9_]+)\[([a-zA-Z]+)]', x.instance)
+            if m_rs and m_inst:
+                assert m_rs.group(2) == m_inst.group(2), \
+                    ("Parameterized instance '%s' is mapped to parameterized resource '%s'. Parameters are unmatched."
+                     % (x.instance, x.resource))
+
+                n = self.lookup(m_inst.group(1))
+                return [ResourceStart(m_rs.group(1) + str(i), m_inst.group(1) + str(i)) for i in range(n)]
+            elif m_inst:
+                n = self.lookup(m_inst.group(1))
+                return [ResourceStart(desugar_name(x.resource), m_inst.group(1) + str(i)) for i in range(n)]
+            elif m_rs:
+                raise Exception("Non-parameterized instance '%s' cannot be mapped to parameterized resource '%s'"
+                                % (x.instance, x.resource))
+            else:
+                return ResourceStart(desugar_name(x.resource), desugar_name(x.instance))
 
         elif isinstance(x, APIFunction):
             m = re.match('([a-zA-Z0-9_]+)\[([0-9]+)]', x.name)

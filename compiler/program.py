@@ -139,10 +139,16 @@ class InternalTrigger:
 
 
 class ResourceMap:
-    def __init__(self, resource, instance, flag=None):
+    def __init__(self, resource, instance):
         self.resource = resource
         self.instance = instance
-        self.flag = flag
+
+
+class ResourceStart:
+    def __init__(self, resource, instance):
+        self.resource = resource
+        self.instance = instance
+
 
 class GraphGenerator:
     def __init__(self):
@@ -271,15 +277,19 @@ class GraphGenerator:
             self.graph.threads_API.append(APIFunction(x.name, x.call_types, x.return_type, x.default_val))
 
         elif isinstance(x, ResourceMap):
-            self.get_instance_stack(x.instance)
             inst_name = get_node_name(self.get_instance_stack(x.instance), x.instance)
             resource_name = self.get_resource(x.resource)
             instance = self.graph.instances[inst_name]
-            if instance.thread:
+            if instance.thread and resource_name is not instance.thread:
                 raise Exception("Element instance '%s' cannot be mapped to both '%s' and '%s'."
                                 % (x.instance, instance.thread, resource_name))
             instance.thread = resource_name
-            instance.thread_flag = x.flag
+
+        elif isinstance(x, ResourceStart):
+            inst_name = get_node_name(self.get_instance_stack(x.instance), x.instance)
+            instance = self.graph.instances[inst_name]
+            if not instance.thread_flag:
+                instance.thread_flag = True
 
         elif isinstance(x, PopulateState):
             self.graph.inject_populates[x.state_instance] = x.clone()
