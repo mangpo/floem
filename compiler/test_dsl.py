@@ -26,7 +26,10 @@ class TestDSL(unittest.TestCase):
                  "inject_queue.py",
                  "circular_queue.py",
                  "circular_queue_multicore.py",
-                 "table.py"
+                 "table.py",
+                 "composite_at1.py",
+                 "composite_at2.py",
+                 "composite_at3.py",
                  ]
 
         for test in tests:

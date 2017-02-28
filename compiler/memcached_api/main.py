@@ -116,8 +116,6 @@ key = get_key(pkt3)
 hash = jenkins_hash(key)
 eq_entry = pack(hash, opaque2)
 
-# TODO: better way to assign threads. This is very error-proned.
-# TODO: using block and @?
 # TODO: how to make it more obvious, what are inputs from API call and inputs from other elements? Same with outputs?
 nic_rx.run_start(inject, fork_pkt, get_opaque, fork_opaque, msg_put, get_key, jenkins_hash, pack)
 

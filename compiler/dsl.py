@@ -30,7 +30,7 @@ class Thread:
     def start(self, instance):
         assert isinstance(instance, ElementInstance), \
             "Resource '%s' must start at an element instance not a composite instance."
-        scope[-1].append(ResourceStart(self.name, instance))
+        scope[-1].append(ResourceStart(self.name, instance.name))
 
     def run_start(self, *instances):
         self.run(*instances)
@@ -95,11 +95,13 @@ class InputPortCollect:
         self.port = None
         self.thread_run = None
         self.thread_start = None
+        self.thread_args = None
 
         self.impl_instance = None
         self.impl_port = None
         self.impl_thread_run = None
         self.impl_thread_start = None
+        self.impl_thread_args = None
 
     def start(self, e):
         self.thread_start = e
@@ -116,18 +118,21 @@ class InputPortCollect:
         self.port = other.port
         self.thread_run = other.thread_run
         self.thread_start = other.thread_start
+        self.thread_args = other.thread_args
 
     def copy_to_impl(self, other):
         self.impl_instance = other.instance
         self.impl_port = other.port
         self.impl_thread_run = other.thread_run
         self.impl_thread_start = other.thread_start
+        self.impl_thread_args = other.thread_args
 
     def copy_to_impl_from_impl(self, other):
         self.impl_instance = other.impl_instance
         self.impl_port = other.impl_port
         self.impl_thread_run = other.impl_thread_run
         self.impl_thread_start = other.impl_thread_start
+        self.impl_thread_args = other.impl_thread_args
 
     def spec_thread(self, t):
         if self.thread_run:
@@ -141,6 +146,8 @@ class InputPortCollect:
         if self.impl_thread_start:
             t.start(self.impl_thread_start)
 
+    def __call__(self, *args):
+        self.thread_args = args
 
 class OutputPortCollect:
     """
@@ -268,18 +275,14 @@ def create_composite(composite_name, program):
                 if isinstance(from_port, InputPortCollect):
                     from_port.copy_to_spec(to_port)
                     from_port.copy_to_impl_from_impl(to_port)
-                    # from_port.instance = to_port.instance
-                    # from_port.port = to_port.port
-                    # from_port.thread_run = to_port.thread_run
-                    # from_port.thread_start = to_port.thread_start
-                    #
-                    # from_port.impl_instance = to_port.impl_instance
-                    # from_port.impl_port = to_port.impl_port
-                    # from_port.impl_thread_run = to_port.impl_thread_run
-                    # from_port.impl_thread_start = to_port.impl_thread_start
                 elif isinstance(from_port, Thread):
                     to_port.spec_thread(from_port)
                     to_port.impl_thread(from_port)
+                elif callable(from_port):
+                    if to_port.thread_args:
+                        from_port(*to_port.thread_args)
+                    if to_port.impl_thread_args:
+                        from_port(*to_port.impl_thread_args)
                 elif isinstance(from_port, OutputPortCollect):
                     if from_port.impl_instance:
                         # from_port contains both spec and impl
@@ -319,6 +322,20 @@ def create_composite_instance(inst_name, program):
     composite_name = "_composite_" + inst_name
     compo = create_composite(composite_name, program)
     return compo()
+
+
+def composite_instance_at(name, t):
+    def receptor(f):
+        compo = create_composite_instance(name, f)
+        t.run(compo)
+        return compo
+    return receptor
+
+
+def composite_instance(name):
+    def receptor(f):
+        return create_composite_instance(name, f)
+    return receptor
 
 
 def create_spec_impl(name, spec_func, impl_func):
@@ -394,20 +411,14 @@ def create_spec_impl(name, spec_func, impl_func):
             if isinstance(from_port, InputPortCollect):
                 from_port.copy_to_spec(spec_to_port)
                 from_port.copy_to_impl(impl_to_port)
-                # from_port.instance = spec_to_port.instance
-                # from_port.port = spec_to_port.port
-                # from_port.thread_run = spec_to_port.thread_run
-                # from_port.thread_start = spec_to_port.thread_start
-                #
-                # from_port.impl_instance = impl_to_port.instance
-                # from_port.impl_port = impl_to_port.port
-                # from_port.impl_thread_run = impl_to_port.thread_run
-                # from_port.impl_thread_start = impl_to_port.thread_start
             elif isinstance(from_port, Thread):
                 spec_to_port.spec_thread(from_port)
                 impl_to_port.spec_thread(from_port)
-                # from_port(*spec_to_port.thread_run_args)
-                # from_port(*impl_to_port.thread_run_args)
+            elif callable(from_port):
+                if spec_to_port.thread_args:
+                    from_port(*spec_to_port.thread_args)
+                if impl_to_port.thread_args:
+                    from_port(*impl_to_port.thread_args)
             elif isinstance(from_port, OutputPortCollect):
                 c = Connect(from_port.instance, spec_to_port.instance, from_port.port, spec_to_port.port)
                 spec_scope.append(c)

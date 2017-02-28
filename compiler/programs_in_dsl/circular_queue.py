@@ -12,7 +12,7 @@ t1 = API_thread("enqueue", ["int"], None)
 t2 = API_thread("dequeue", [], "int", "-1")
 
 t1.run_start(inc1)
-queue(None, t1.run, t2.run_start)
+queue(None, t1, t2)
 t2.run(inc2)
 
 c = Compiler()

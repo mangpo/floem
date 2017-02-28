@@ -97,8 +97,8 @@ def create_circular_queue(name, type, size):
         enq(x)
         y = deq()
 
-        t1(enq)
-        t2(deq)
+        t1.run(enq)
+        t2.run_start(deq)
         return y
 
     return create_composite(name, func)

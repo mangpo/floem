@@ -231,7 +231,8 @@ class TestJoinHandling(unittest.TestCase):
             Connect("Add", "Print", "out", "in1"),
             Connect("Sub", "Print", "out", "in2"),
             InternalTrigger("t"),
-            ResourceMap("t", "Print", True)
+            ResourceMap("t", "Print"),
+            ResourceStart("t", "Print"),
         )
 
         g = generate_graph(p, False)
@@ -277,7 +278,8 @@ class TestJoinHandling(unittest.TestCase):
             Connect("Add", "Print", "out", "in1"),
             Connect("Sub", "Print", "out", "in2"),
             InternalTrigger("t"),
-            ResourceMap("t", "Sub", True)
+            ResourceMap("t", "Sub"),
+            ResourceStart("t", "Sub"),
         )
 
         g = generate_graph(p, False)
@@ -310,7 +312,8 @@ class TestJoinHandling(unittest.TestCase):
             Connect("f1", "Print", "out", "in1"),
             Connect("f2", "Print", "out", "in2"),
             APIFunction("run", ["int"], None),
-            ResourceMap("run", "f2", True)
+            ResourceStart("run", "f2"),
+            ResourceMap("run", "f2"),
         )
 
         try:
@@ -694,7 +697,8 @@ class TestJoinHandling(unittest.TestCase):
             Connect("add3", "add2", "out", "in1"),
             Connect("fork4", "add2", "out4", "in2"),
             InternalTrigger("t"),
-            ResourceMap("t", "f3", True)
+            ResourceMap("t", "f3"),
+            ResourceStart("t", "f3"),
         )
 
         g = generate_graph(p, True)

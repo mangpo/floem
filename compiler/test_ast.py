@@ -82,8 +82,10 @@ class TestAST(unittest.TestCase):
             ElementInstance("Forward", "Forwarder"),
             ElementInstance("Comsumer", "Comsumer"),
             Connect("Forwarder", "Comsumer"),
-            ResourceMap("producer", "Forwarder", True),
-            ResourceMap("consumer", "Comsumer", True)
+            ResourceMap("producer", "Forwarder"),
+            ResourceMap("consumer", "Comsumer"),
+            ResourceStart("producer", "Forwarder"),
+            ResourceStart("consumer", "Comsumer"),
         )
 
         g1 = generate_graph(p, False)
@@ -146,7 +148,8 @@ class TestAST(unittest.TestCase):
             Connect("f1", "drop"),
             Connect("f2", "drop"),
             InternalTrigger("t"),
-            ResourceMap("t", "drop", True)
+            ResourceMap("t", "drop"),
+            ResourceStart("t", "drop"),
         )
         g = generate_graph(p)
         self.assertEqual(5, len(g.instances))
@@ -162,8 +165,10 @@ class TestAST(unittest.TestCase):
             ElementInstance("Forward", "f1"),
             APIFunction("api", ["int"], "int"),
             InternalTrigger("t"),
-            ResourceMap("api", "f1", True),
-            ResourceMap("t", "f1", True),
+            ResourceMap("api", "f1"),
+            ResourceMap("t", "f1"),
+            ResourceStart("api", "f1"),
+            ResourceStart("t", "f1"),
         )
         try:
             g = generate_graph(p)
@@ -186,7 +191,8 @@ class TestAST(unittest.TestCase):
             ElementInstance("Inc", "inc1"),
             ElementInstance("Print", "print"),
             Connect("inc1", "print"),
-            ResourceMap("add_and_print", "inc1", True),
+            ResourceStart("add_and_print", "inc1"),
+            ResourceMap("add_and_print", "inc1"),
             ResourceMap("add_and_print", "print"),
         )
         g = generate_graph(p)
@@ -205,7 +211,8 @@ class TestAST(unittest.TestCase):
             ElementInstance("Forward", "f2"),
             Connect("f1", "f2"),
             APIFunction("read", [], "int"),
-            ResourceMap("read", "f2", True),
+            ResourceMap("read", "f2"),
+            ResourceStart("read", "f2"),
         )
         g = generate_graph(p)
         self.assertEqual(4, len(g.instances))
@@ -226,7 +233,8 @@ class TestAST(unittest.TestCase):
             ElementInstance("Forward", "f2"),
             Connect("f1", "f2"),
             APIFunction("func", ["int"], None),
-            ResourceMap("func", "f1", True),
+            ResourceStart("func", "f1"),
+            ResourceMap("func", "f1"),
             ResourceMap("func", "f2"),
         )
         try:
@@ -243,7 +251,8 @@ class TestAST(unittest.TestCase):
             ElementInstance("Forward", "f2"),
             Connect("f1", "f2"),
             APIFunction("func", ["int"], None),
-            ResourceMap("func", "f1", True),
+            ResourceMap("func", "f1"),
+            ResourceStart("func", "f1"),
         )
         g = generate_graph(p)
         self.assertEqual(4, len(g.instances))
@@ -267,9 +276,11 @@ class TestAST(unittest.TestCase):
             Connect("fwd", "drop"),
             InternalTrigger("t"),
             APIFunction("func", ["int"], "int"),
-            ResourceMap("func", "dup", True),
-            ResourceMap("t", "fwd", True),
-            ResourceMap("t", "drop", False),
+            ResourceStart("func", "dup"),
+            ResourceStart("t", "fwd"),
+            ResourceMap("func", "dup"),
+            ResourceMap("t", "fwd"),
+            ResourceMap("t", "drop"),
         )
         g = generate_graph(p)
         self.assertEqual(5, len(g.instances))
@@ -291,7 +302,8 @@ class TestAST(unittest.TestCase):
                     r'''int x = in(); output switch { case (x>0): out(x); }'''),
             ElementInstance("Filter", "filter"),
             APIFunction("func", ["int"], "int"),
-            ResourceMap("func", "filter", True)
+            ResourceMap("func", "filter"),
+            ResourceStart("func", "filter"),
         )
         try:
             g = generate_graph(desugar(p))
@@ -308,7 +320,8 @@ class TestAST(unittest.TestCase):
                     r'''int x = in(); output switch { case (x>0): out(x); }'''),
             ElementInstance("Filter", "filter"),
             APIFunction("func", ["int"], "int", "-1"),
-            ResourceMap("func", "filter", True)
+            ResourceMap("func", "filter"),
+            ResourceStart("func", "filter"),
         )
         g = generate_graph(desugar(p))
 
