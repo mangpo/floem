@@ -112,11 +112,11 @@ opaque = get_opaque(pkt1)              # TODO: easier way to extract field
 opaque1, opaque2 = fork_opaque(opaque)
 msg_put(opaque1, pkt2)
 
-key = get_key(pkt3)
-hash = jenkins_hash(key)
+hash = jenkins_hash(get_key(pkt3))
 eq_entry = pack(hash, opaque2)
 
 # TODO: how to make it more obvious, what are inputs from API call and inputs from other elements? Same with outputs?
+# Use decorator @api and use inputs and output of the function as its signature.
 nic_rx.run_start(inject, fork_pkt, get_opaque, fork_opaque, msg_put, get_key, jenkins_hash, pack)
 
 def spec_nic2app(x):
