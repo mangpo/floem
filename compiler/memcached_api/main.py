@@ -122,10 +122,13 @@ nic_rx.run_start(inject, fork_pkt, get_opaque, fork_opaque, msg_put, get_key, je
 def spec_nic2app(x):
     rx_enq, rx_deq = create_circular_queue_instances("rx_queue", "eq_entry*", 4)
     rx_enq(x)
-
-    get_eq = API_thread("get_eq", [], "eq_entry*", "NULL")
-    get_eq.run_start(rx_deq)
     nic_rx.run(rx_enq)
+
+    #get_eq = API_thread("get_eq", [], "eq_entry*", "NULL")
+    #get_eq.run_start(rx_deq)
+    @API("get_eq", "NULL")
+    def get_eq():
+        return rx_deq()
 
 def impl_nic2app(x):
     fork_eq = create_fork_instance("fork_eq", 2, "eq_entry*")
@@ -137,8 +140,11 @@ def impl_nic2app(x):
 
     nic_rx.run(fork_eq, get_core, rx_enq)
     for i in range(n_cores):
-        api = API_thread("get_eq" + str(i), [], "eq_entry*", "NULL")
-        api.run_start(rx_deqs[i])
+        # api = API_thread("get_eq" + str(i), [], "eq_entry*", "NULL")
+        # api.run_start(rx_deqs[i])
+        @API("get_eq" + str(i), "NULL")
+        def get_eq():
+            return rx_deqs[i]()
 
 nic2app = create_spec_impl("nic2app", spec_nic2app, impl_nic2app)
 nic2app(eq_entry)

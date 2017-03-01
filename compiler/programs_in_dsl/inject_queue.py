@@ -10,10 +10,10 @@ inc1 = Inc()
 inc2 = Inc()
 
 enq(inc1(inject()))
-inc2(deq())
 
-t = API_thread("dequeue", [], "int", "-1")
-t.run_start(deq, inc2)
+@API("dequeue", -1)
+def dequeue():
+    return inc2(deq())
 
 c = Compiler()
 c.include = r'''int gen_func(int i) { return i; }'''
@@ -23,7 +23,8 @@ for(int i=0; i<8; i++) {
     usleep(1000);
     printf("%d\n", dequeue());
 }
+out(dequeue());
 kill_threads();
 '''
 c.triggers = True
-c.generate_code_and_run(range(2,10))
+c.generate_code_and_run(range(2,10) + [-1])

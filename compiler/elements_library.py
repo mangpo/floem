@@ -56,7 +56,7 @@ def declare_circular_queue(name, type, size):
            int next = this.tail + 1;
            if(next >= this.size) next = 0;
            if(next == this.head) {
-             printf("Circular queue '%s' is full. A packet is dropped.\n");
+             //printf("Circular queue '%s' is full. A packet is dropped.\n");
            } else {
              this.data[this.tail] = x;
              this.tail = next;
@@ -69,7 +69,7 @@ def declare_circular_queue(name, type, size):
            %s x;
            bool avail = false;
            if(this.head == this.tail) {
-             printf("Dequeue an empty circular queue '%s'. Default value is returned (for API call).\n");
+             //printf("Dequeue an empty circular queue '%s'. Default value is returned (for API call).\n");
              //exit(-1);
            } else {
                avail = true;

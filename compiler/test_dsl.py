@@ -17,8 +17,12 @@ class TestDSL(unittest.TestCase):
                  "composite.py",
                  "composite_thread_port.py",
                  "composite_scope.py",
-                 "API_increment.py",
-                 "API_read_blocking.py",
+                 "API_increment1.py",
+                 "API_increment2.py",
+                 "API_increment3.py",
+                 "API_read_blocking1.py",
+                 "API_read_blocking2.py",
+                 "API_and_trigger.py",
                  "spec_impl.py",
                  "probe_composite.py",
                  "probe_multi.py",
@@ -132,6 +136,59 @@ class TestDSL(unittest.TestCase):
         self.assertEqual(set(['c1_inc1']), roots)
         self.assertEqual(set(['count', 'c1_count', 'c2_count']), set(g.state_instances.keys()))
 
+    def test_api_exception(self):
+        reset()
+        try:
+            Forward = create_identity("Forward", "int")
+
+            @API("func")
+            def func(x):
+                def spec(x):
+                    f = Forward()
+                    return f(x)
+
+                def impl(x):
+                    f1 = Forward()
+                    f2 = Forward()
+                    return f2(f1(x))
+
+                compo = create_spec_impl("compo", spec, impl)
+                return compo(x)
+        except Exception as e:
+            self.assertNotEqual(e.message.find("cannot wrap around spec and impl"), -1, 'Expect undefined exception.')
+        else:
+            self.fail('Exception is not raised.')
+
+    def test_api_okay(self):
+        reset()
+        Forward = create_identity("Forward", "int")
+        Inc = create_add1("Inc", "int")
+        def spec(x):
+            @API("func")
+            def func(x):
+                f = Forward()
+                return f(x)
+            return func(x)
+
+        def impl(x):
+            @API("func")
+            def func(x):
+                f1 = Inc()
+                f2 = Inc()
+                return f2(f1(x))
+            return func(x)
+
+        compo = create_spec_impl("compo", spec, impl)
+
+        c = Compiler()
+        c.desugar_mode = "spec"
+        c.testing = "out(func(123));"
+        c.generate_code_and_run([123])
+
+
+        c.desugar_mode = "impl"
+        c.testing = "out(func(123));"
+        c.generate_code_and_run([125])
 
 if __name__ == '__main__':
     unittest.main()

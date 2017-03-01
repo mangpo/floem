@@ -28,9 +28,12 @@ class Thread:
         self.name = name
 
     def start(self, instance):
-        assert isinstance(instance, ElementInstance), \
-            "Resource '%s' must start at an element instance not a composite instance."
-        scope[-1].append(ResourceStart(self.name, instance.name))
+        if isinstance(instance, str):
+            scope[-1].append(ResourceStart(self.name, instance))
+        else:
+            assert isinstance(instance, ElementInstance), \
+                "Resource '%s' must start at an element instance not a composite instance."
+            scope[-1].append(ResourceStart(self.name, instance.name))
 
     def run_start(self, *instances):
         self.run(*instances)
@@ -72,9 +75,13 @@ class ElementInstance:
 
 
 class CompositeInstance:
-    def __init__(self, connect, instances_names):
+    def __init__(self, connect, instances_names, roots, inputs, outputs, scope):
         self.connect = connect
         self.instances_names = instances_names
+        self.roots = roots
+        self.inputs = inputs
+        self.outputs = outputs
+        self.scope = scope
 
     def __call__(self, *args, **kwargs):
         return self.connect(*args)
@@ -93,12 +100,14 @@ class InputPortCollect:
     def __init__(self):
         self.instance = None
         self.port = None
+        self.port_argtypes = None
         self.thread_run = None
         self.thread_start = None
         self.thread_args = None
 
         self.impl_instance = None
         self.impl_port = None
+        self.impl_port_argtypes = None
         self.impl_thread_run = None
         self.impl_thread_start = None
         self.impl_thread_args = None
@@ -116,6 +125,7 @@ class InputPortCollect:
     def copy_to_spec(self, other):
         self.instance = other.instance
         self.port = other.port
+        self.port_argtypes = other.impl_port_argtypes
         self.thread_run = other.thread_run
         self.thread_start = other.thread_start
         self.thread_args = other.thread_args
@@ -123,6 +133,7 @@ class InputPortCollect:
     def copy_to_impl(self, other):
         self.impl_instance = other.instance
         self.impl_port = other.port
+        self.impl_port_argtypes = other.port_argtypes
         self.impl_thread_run = other.thread_run
         self.impl_thread_start = other.thread_start
         self.impl_thread_args = other.thread_args
@@ -130,6 +141,7 @@ class InputPortCollect:
     def copy_to_impl_from_impl(self, other):
         self.impl_instance = other.impl_instance
         self.impl_port = other.impl_port
+        self.impl_port_argtypes = other.impl_port_argtypes
         self.impl_thread_run = other.impl_thread_run
         self.impl_thread_start = other.impl_thread_start
         self.impl_thread_args = other.impl_thread_args
@@ -157,12 +169,14 @@ class OutputPortCollect:
     If the composite doesn't contain spec/impl composites, then self.impl* are not used.
     """
 
-    def __init__(self, instance, port, impl_instance=None, impl_port=None):
+    def __init__(self, instance, port, port_argtypes, impl_instance=None, impl_port=None, impl_port_argtypes=None):
         self.instance = instance
         self.port = port
+        self.port_argtypes = port_argtypes
 
         self.impl_instance = impl_instance
         self.impl_port = impl_port
+        self.impl_port_argtypes = impl_port_argtypes
 
 
 def create_element(ele_name, inports, outports, code, local_state=None, state_params=[]):
@@ -197,6 +211,7 @@ def create_element(ele_name, inports, outports, code, local_state=None, state_pa
                     # separately.
                     from_port.instance = inst_name
                     from_port.port = to_port.name
+                    from_port.port_argtypes = to_port.argtypes
                 elif isinstance(from_port, OutputPortCollect):
                     # OutputPortCollect can have both spec and impl.
                     c = Connect(from_port.instance, inst_name, from_port.port, to_port.name)
@@ -216,9 +231,9 @@ def create_element(ele_name, inports, outports, code, local_state=None, state_pa
             if l == 0:
                 return None
             elif l == 1:
-                return OutputPortCollect(inst_name, e.outports[0].name)
+                return OutputPortCollect(inst_name, e.outports[0].name, e.outports[0].argtypes)
             else:
-                return tuple([OutputPortCollect(inst_name, port.name) for port in e.outports])
+                return tuple([OutputPortCollect(inst_name, port.name, port.argtypes) for port in e.outports])
         # end connect
         return ElementInstance(inst_name, instance, connect)
     # end create_instance
@@ -231,12 +246,53 @@ def create_element_instance(inst_name, inports, outports, code, local_state=None
     return ele(inst_name)
 
 
-def extract_instances_names(my_scope):
-    names = []
+def check_no_spec_impl(name, my_scope):
+    for e in my_scope:
+        if isinstance(e, Spec) or isinstance(e, Impl):
+            raise Exception("API or internal trigger '%s' cannot wrap around spec and impl." % name)
+
+
+def extract_instances_names(my_scope, inputs, outputs):
+    names = set()
     for e in my_scope:
         if isinstance(e, compiler.ElementInstance):
-            names.append(e.name)
+            names.add(e.name)
+        elif isinstance(e, compiler.Connect):
+            names.add(e.ele1)
+            names.add(e.ele2)
+
+    for input in inputs:
+        if input.instance:
+            names.add(input.instance)
+
+    if isinstance(outputs, list):
+        for output in outputs:
+            names.add(output.instance)
+    elif outputs:
+        names.add(outputs.instance)
     return names
+
+
+def extract_roots(my_scope, inputs, outputs):
+    froms = set()
+    tos = set()
+    for e in my_scope:
+        if isinstance(e, compiler.Connect):
+            froms.add(e.ele1)
+            tos.add(e.ele2)
+        elif isinstance(e, compiler.ElementInstance):
+            froms.add(e.name)
+
+    for input in inputs:
+        if input.instance:
+            froms.add(input.instance)
+
+    if isinstance(outputs, list):
+        for output in outputs:
+            froms.add(output.instance)
+    elif outputs:
+        froms.add(outputs.instance)
+    return froms.difference(tos)
 
 
 def create_composite(composite_name, program):
@@ -263,7 +319,9 @@ def create_composite(composite_name, program):
         scope = scope[:-1]
         scope[-1] = scope[-1] + my_scope
 
-        instances_names = extract_instances_names(my_scope)
+        #check_no_spec_impl(inst_name, my_scope)
+        instances_names = extract_instances_names(my_scope, fake_ports, outs)
+        roots = extract_roots(my_scope, fake_ports, outs)
 
         def connect(*ports):
             # assert len(ports) == n_args, ("Instance of composite '%s' requires %d inputs, %d inputs are given."
@@ -312,14 +370,14 @@ def create_composite(composite_name, program):
             return outs
         # end connect
 
-        return CompositeInstance(connect, instances_names)
+        return CompositeInstance(connect, instances_names, roots, fake_ports, outs, my_scope)
     # end create_instance
 
     return create_instance
 
 
 def create_composite_instance(inst_name, program):
-    composite_name = "_composite_" + inst_name
+    composite_name = "composite_" + inst_name
     compo = create_composite(composite_name, program)
     return compo()
 
@@ -335,6 +393,77 @@ def composite_instance_at(name, t):
 def composite_instance(name):
     def receptor(f):
         return create_composite_instance(name, f)
+    return receptor
+
+def thread_common(name, f, input, output):
+    compo = create_composite_instance("composite_" + name, f)
+    check_no_spec_impl(name, compo.scope)
+    input_types = []
+    if input and len(compo.inputs) > 0:
+        for input in compo.inputs:
+            input_types += input.port_argtypes
+
+    output_type = None
+    if output:
+        if compo.outputs is None:
+            output_type = None
+        elif isinstance(compo.outputs, OutputPortCollect):
+            assert len(compo.outputs.port_argtypes) == 1, \
+                ("API '%s' can return no more than one value. Currently the return port has %d return values." %
+                 (name, len(compo.outputs.port_argtypes)))
+            output_type = compo.outputs.port_argtypes[0]
+        else:
+            raise Exception("API '%s' can return no more than one value. Currently it has %d return values."
+                            % (name, len(compo.outputs)))
+
+    assert len(compo.roots) == 1, \
+        ("API '%s' must have exactly one starting element, but currently these are starting elements: %s"
+         % (name, compo.roots))
+
+    return compo, input_types, output_type
+
+
+def internal_trigger(name):
+    def receptor(f):
+        compo, input_types, output_type = thread_common(name, f, False, False)
+        t = internal_thread(name)
+        t.run(compo)
+        t.start([r for r in compo.roots][0])
+        return compo
+    return receptor
+
+
+def API_common(name, f, input=True, output=True, default_return=None):
+    compo, input_types, output_type = thread_common(name, f, input, output)
+    if default_return:
+        default_return = str(default_return)
+    t = API_thread(name, input_types, output_type, default_return)
+    t.run(compo)
+    t.start([r for r in compo.roots][0])
+    return compo
+
+
+def API(name, default_return=None):
+    def receptor(f):
+        return API_common(name, f, default_return=default_return)
+    return receptor
+
+
+def API_implicit_inputs(name, default_return=None):
+    def receptor(f):
+        return API_common(name, f, input=False, default_return=default_return)
+    return receptor
+
+
+def API_implicit_outputs(name):
+    def receptor(f):
+        return API_common(name, f, output=False)
+    return receptor
+
+
+def API_implicit_inputs_outputs(name):
+    def receptor(f):
+        return API_common(name, f, input=False, output=False)
     return receptor
 
 
@@ -375,6 +504,7 @@ def create_spec_impl(name, spec_func, impl_func):
     scope = scope[:-1]
     scope[-1].append(Impl(impl_scope))
 
+    outs = None
     if isinstance(spec_outs, tuple):
         assert (isinstance(impl_outs, tuple) and len(spec_outs) == len(impl_outs)), \
             ("The numbers of outputs of spec/impl of %s are different." % name)
@@ -383,19 +513,19 @@ def create_spec_impl(name, spec_func, impl_func):
         for i in range(len(spec_outs)):
             spec_instance = spec_outs[i].instance
             spec_port = spec_outs[i].port
+            spec_port_argtypes = spec_outs[i].port_argtypes
             impl_instance = impl_outs[i].instance
             impl_port = impl_outs[i].port
-            o = OutputPortCollect(spec_instance, spec_port, impl_instance, impl_port)
+            impl_port_argtypes = impl_outs[i].port_argtypes
+            o = OutputPortCollect(spec_instance, spec_port, spec_port_argtypes,
+                                  impl_instance, impl_port, impl_port_argtypes)
             outs.append(o)
     elif spec_outs:
         assert (isinstance(spec_outs, OutputPortCollect) and isinstance(impl_outs, OutputPortCollect)), \
             ("At spec/impl '%s', the output type of spec is %s, while output type of impl is %s."
              % (name, spec_outs, impl_outs))
-        spec_instance = spec_outs.instance
-        spec_port = spec_outs.port
-        impl_instance = impl_outs.instance
-        impl_port = impl_outs.port
-        outs = OutputPortCollect(spec_instance, spec_port, impl_instance, impl_port)
+        outs = OutputPortCollect(spec_outs.instance, spec_outs.port, spec_outs.port_argtypes,
+                                 impl_outs.instance, impl_outs.port, impl_outs.port_argtypes)
     else:
         assert (spec_outs is None and impl_outs is None), \
             ("At spec/impl '%s', the output type of spec is %s, while output type of impl is %s."
