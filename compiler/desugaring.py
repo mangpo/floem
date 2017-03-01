@@ -5,6 +5,7 @@ import re
 def desugar(x, mode="impl"):
     # mode: compare, spec, impl
     need = need_desugar(x)
+    need_fork(x)
     if not need:
         return x
 
@@ -53,10 +54,41 @@ def need_desugar(x):
     elif isinstance(x, StateInstance):
         index = x.name.find("[")
         return index >= 0
-    # elif isinstance(x, Inject):
-    #     return True
-    # elif isinstance(x, Probe):
-    #     return True
+
+
+def insert_fork(x, connect_map={}, env={}):
+    if isinstance(x, Program) or isinstance(x, Spec) or isinstance(x, Impl):
+        return insert_fork_block(x)
+    elif isinstance(x, Connect):
+        if (x.ele1, x.out1) not in connect_map:
+            connect_map[(x.ele1, x.out1)] = []
+            connect_map[(x.ele1, x.out1)].append(x)
+            return False
+        else:
+            connect_map[(x.ele1, x.out1)].append(x)
+            return True
+    elif isinstance(x, Element):
+        env[x.name] = x
+    elif isinstance(x, ElementInstance):
+        env[x.name] = x
+    return False
+
+
+def insert_fork_block(x):
+    connect_map = {}
+    env = {}
+    ret = False
+    for st in x.statements:
+        ret = ret or insert_fork(st, connect_map, env)
+    if ret:
+        for inst_name, port_name in connect_map:
+            connects = connect_map[(inst_name, port)]
+            if len(connects) > 1:
+                ele_name = env[inst_name].element
+                element = env[ele_name]
+                port = [port for port in element.outports if port.name == port_name][0]
+                port.argtypes  # TODO
+    return ret
 
 
 class Desugar:
