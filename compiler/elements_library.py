@@ -45,7 +45,7 @@ def create_drop(name, type):
                           [],
                           r'''in();''')
 
-def declare_circular_queue(name, type, size):
+def declare_circular_queue(name, type, size, blocking=False):
     prefix = "_%s_" % name
     state_name = prefix + "queue"
 
@@ -63,32 +63,45 @@ def declare_circular_queue(name, type, size):
            }
            ''' % (type, name), None, [(state_name, "this")])
 
-    Dequeue = create_element(prefix + "dequeue",
-                             [], [Port("out", [type])],
-                             r'''
-           %s x;
-           bool avail = false;
-           if(this.head == this.tail) {
-             //printf("Dequeue an empty circular queue '%s'. Default value is returned (for API call).\n");
-             //exit(-1);
-           } else {
-               avail = true;
-               x = this.data[this.head];
+    if blocking:
+        src = r'''
+            %s x;
+            while(this.head == this.tail);
+            x = this.data[this.head];
+            int next = this.head + 1;
+            if(next >= this.size) next = 0;
+            this.head = next;
+            output { out(x); }
+            ''' % type
+    else:
+        src = r'''
+            %s x;
+            bool avail = false;
+            if(this.head == this.tail) {
+                //printf("Dequeue an empty circular queue '%s'. Default value is returned (for API call).\n");
+                //exit(-1);
+            } else {
+                avail = true;
+                x = this.data[this.head];
                int next = this.head + 1;
-               if(next >= this.size) next = 0;
-               this.head = next;
-           }
-           output switch { case avail: out(x); }
-           ''' % (type, name), None, [(state_name, "this")])
+                if(next >= this.size) next = 0;
+                this.head = next;
+            }
+            output switch { case avail: out(x); }
+            ''' % (type, name)
+
+    Dequeue = create_element(prefix + "dequeue", [], [Port("out", [type])],
+                             src, None, [(state_name, "this")])
 
     Queue = create_state(state_name, "int head; int tail; int size; %s data[%d];" % (type, size),
                          [0, 0, size, [0]])
 
     return Queue, Enqueue, Dequeue
 
-def create_circular_queue(name, type, size):
+
+def create_circular_queue(name, type, size, blocking=False):
     prefix = "_%s_" % name
-    Queue, Enqueue, Dequeue = declare_circular_queue(name, type, size)
+    Queue, Enqueue, Dequeue = declare_circular_queue(name, type, size, blocking)
 
     def func(x, t1, t2):
         queue = Queue()
@@ -104,15 +117,15 @@ def create_circular_queue(name, type, size):
     return create_composite(name, func)
 
 
-def create_circular_queue_instance(name, type, size):
+def create_circular_queue_instance(name, type, size, blocking=False):
     ele_name = "_element_" + name
-    ele = create_circular_queue(ele_name, type, size)
+    ele = create_circular_queue(ele_name, type, size, blocking)
     return ele(name)
 
 
-def create_circular_queue_instances(name, type, size):
+def create_circular_queue_instances(name, type, size, blocking=False):
     prefix = "_%s_" % name
-    Queue, Enqueue, Dequeue = declare_circular_queue(name, type, size)
+    Queue, Enqueue, Dequeue = declare_circular_queue(name, type, size, blocking)
     queue = Queue()
     enq = Enqueue(prefix + "enqueue", [queue])
     deq = Dequeue(prefix + "dequeue", [queue])
