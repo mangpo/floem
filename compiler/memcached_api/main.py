@@ -5,9 +5,6 @@ import queue
 eq_entry = create_state("eq_entry", "uint64_t opaque; uint32_t hash; uint16_t keylen; void* key;")
 cq_entry = create_state("cq_entry", "uint64_t opaque; item* it;")
 
-fork_pkt = create_fork_instance("fork_pkt", 3, "iokvs_message*")
-fork_opaque = create_fork_instance("fork_opaque", 2, "uint64_t")
-
 get_key = create_element_instance("GetKey",
               [Port("in", ["iokvs_message*"])],
               [Port("out", ["void*", "size_t"])],
@@ -107,15 +104,12 @@ nic_tx = internal_thread("nic_tx")
 
 ######################## NIC Rx #######################
 pkt = inject()
-pkt1, pkt2, pkt3 = fork_pkt(pkt)       # TODO: automatically insert fork
-opaque = get_opaque(pkt1)              # TODO: easier way to extract field
-opaque1, opaque2 = fork_opaque(opaque)
-msg_put(opaque1, pkt2)
+opaque = get_opaque(pkt)              # TODO: easier way to extract field
+msg_put(opaque, pkt)
+hash = jenkins_hash(get_key(pkt))
+eq_entry = pack(hash, opaque)
 
-hash = jenkins_hash(get_key(pkt3))
-eq_entry = pack(hash, opaque2)
-
-nic_rx.run_start(inject, fork_pkt, get_opaque, fork_opaque, msg_put, get_key, jenkins_hash, pack)
+nic_rx.run_start(inject, get_opaque, msg_put, get_key, jenkins_hash, pack)
 
 def spec_nic2app(x):
     rx_enq, rx_deq = create_circular_queue_instances("rx_queue", "eq_entry*", 4)

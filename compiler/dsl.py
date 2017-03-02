@@ -47,6 +47,9 @@ class Thread:
             elif isinstance(instance, CompositeInstance):
                 for name in instance.instances_names:
                     scope[-1].append(ResourceMap(self.name, name))
+            elif isinstance(instance, SpecImplInstance):
+                scope[-1].append(Spec([ResourceMap(self.name, x) for x in instance.spec_instances_names]))
+                scope[-1].append(Impl([ResourceMap(self.name, x) for x in instance.impl_instances_names]))
 
 
 class API_thread(Thread):
@@ -83,9 +86,18 @@ class CompositeInstance:
         self.outputs = outputs
         self.scope = scope
 
-    def __call__(self, *args, **kwargs):
+    def __call__(self, *args):
         return self.connect(*args)
 
+
+class SpecImplInstance:
+    def __init__(self, connect, spec_instances_names, impl_instances_names):
+        self.connect = connect
+        self.spec_instances_names = spec_instances_names
+        self.impl_instances_names = impl_instances_names
+
+    def __call__(self, *args):
+        return self.connect(*args)
 
 class InputPortCollect:
     """
@@ -98,16 +110,16 @@ class InputPortCollect:
     """
 
     def __init__(self):
-        self.instance = None
-        self.port = None
-        self.port_argtypes = None
+        self.instance = []
+        self.port = []
+        self.port_argtypes = []
         self.thread_run = None
         self.thread_start = None
         self.thread_args = None
 
-        self.impl_instance = None
-        self.impl_port = None
-        self.impl_port_argtypes = None
+        self.impl_instance = []
+        self.impl_port = []
+        self.impl_port_argtypes = []
         self.impl_thread_run = None
         self.impl_thread_start = None
         self.impl_thread_args = None
@@ -123,25 +135,25 @@ class InputPortCollect:
         self.start(args[0])
 
     def copy_to_spec(self, other):
-        self.instance = other.instance
-        self.port = other.port
-        self.port_argtypes = other.impl_port_argtypes
+        self.instance += other.instance
+        self.port += other.port
+        self.port_argtypes += other.impl_port_argtypes
         self.thread_run = other.thread_run
         self.thread_start = other.thread_start
         self.thread_args = other.thread_args
 
     def copy_to_impl(self, other):
-        self.impl_instance = other.instance
-        self.impl_port = other.port
-        self.impl_port_argtypes = other.port_argtypes
+        self.impl_instance += other.instance
+        self.impl_port += other.port
+        self.impl_port_argtypes += other.port_argtypes
         self.impl_thread_run = other.thread_run
         self.impl_thread_start = other.thread_start
         self.impl_thread_args = other.thread_args
 
     def copy_to_impl_from_impl(self, other):
-        self.impl_instance = other.impl_instance
-        self.impl_port = other.impl_port
-        self.impl_port_argtypes = other.impl_port_argtypes
+        self.impl_instance += other.impl_instance
+        self.impl_port += other.impl_port
+        self.impl_port_argtypes += other.impl_port_argtypes
         self.impl_thread_run = other.impl_thread_run
         self.impl_thread_start = other.impl_thread_start
         self.impl_thread_args = other.impl_thread_args
@@ -170,6 +182,7 @@ class OutputPortCollect:
     """
 
     def __init__(self, instance, port, port_argtypes, impl_instance=None, impl_port=None, impl_port_argtypes=None):
+        assert isinstance(instance, str), "OutputPortCollect init"
         self.instance = instance
         self.port = port
         self.port_argtypes = port_argtypes
@@ -209,17 +222,18 @@ def create_element(ele_name, inports, outports, code, local_state=None, state_pa
                 if isinstance(from_port, InputPortCollect):
                     # InputPortCollect only contains spec version because we evaluate the inner body of spec and impl
                     # separately.
-                    from_port.instance = inst_name
-                    from_port.port = to_port.name
-                    from_port.port_argtypes = to_port.argtypes
+                    from_port.instance.append(inst_name)
+                    from_port.port.append(to_port.name)
+                    from_port.port_argtypes.append(to_port.argtypes)
                 elif isinstance(from_port, OutputPortCollect):
                     # OutputPortCollect can have both spec and impl.
-                    c = Connect(from_port.instance, inst_name, from_port.port, to_port.name)
                     if from_port.impl_instance:
+                        c = Connect(from_port.instance, inst_name, from_port.port, to_port.name)
                         scope[-1].append(Spec([c]))
                         c = Connect(from_port.impl_instance, inst_name, from_port.impl_port, to_port.name)
                         scope[-1].append(Impl([c]))
                     else:
+                        c = Connect(from_port.instance, inst_name, from_port.port, to_port.name)
                         scope[-1].append(c)
                 elif from_port is None:
                     pass
@@ -262,14 +276,21 @@ def extract_instances_names(my_scope, inputs, outputs):
             names.add(e.ele2)
 
     for input in inputs:
-        if input.instance:
-            names.add(input.instance)
+        for instance in input.instance:
+            names.add(instance)
 
-    if isinstance(outputs, list):
+    if isinstance(outputs, tuple):
         for output in outputs:
-            names.add(output.instance)
-    elif outputs:
+            if isinstance(output, OutputPortCollect):
+                names.add(output.instance)
+            elif isinstance(output, InputPortCollect):
+                for inst in output.instance:
+                    names.add(inst)
+    elif isinstance(outputs, OutputPortCollect):
         names.add(outputs.instance)
+    elif isinstance(outputs, InputPortCollect):
+        for inst in outputs.instance:
+            names.add(inst)
     return names
 
 
@@ -284,15 +305,47 @@ def extract_roots(my_scope, inputs, outputs):
             froms.add(e.name)
 
     for input in inputs:
-        if input.instance:
-            froms.add(input.instance)
+        for instance in input.instance:
+            froms.add(instance)
 
-    if isinstance(outputs, list):
+    if isinstance(outputs, tuple):
         for output in outputs:
-            froms.add(output.instance)
-    elif outputs:
+            if isinstance(output, OutputPortCollect):
+                froms.add(output.instance)
+            elif isinstance(output, InputPortCollect):
+                for inst in output.instance:
+                    froms.add(inst)
+    elif isinstance(outputs, OutputPortCollect):
         froms.add(outputs.instance)
+    elif isinstance(outputs, InputPortCollect):
+        for inst in outputs.instance:
+            froms.add(inst)
     return froms.difference(tos)
+
+
+def check_composite_inputs(name, inputs):
+    for input in inputs:
+        if len(input.port_argtypes) > 1:
+            ref = input.port_argtypes[0]
+            for i in range(1, len(input.port_argtypes)):
+                assert input.port_argtypes[i] == ref, \
+                    ("Input %d of composite '%s' is used in different places that expect different data types."
+                     % (i, name))
+
+
+def check_composite_outputs(name, outputs):
+    if isinstance(outputs, InputPortCollect):
+        raise Exception("Composite '%s' should not connect an input to an output directly." % name)
+    elif isinstance(outputs, OutputPortCollect):
+        pass
+    elif isinstance(outputs, tuple):
+        for o in outputs:
+            if isinstance(o, InputPortCollect):
+                raise Exception("Composite '%s' should not connect an input to an output directly." % name)
+            elif isinstance(o, OutputPortCollect):
+                pass
+            else:
+                raise Exception("Unknown output item at composite '%s'." % name)
 
 
 def create_composite(composite_name, program):
@@ -319,7 +372,8 @@ def create_composite(composite_name, program):
         scope = scope[:-1]
         scope[-1] = scope[-1] + my_scope
 
-        #check_no_spec_impl(inst_name, my_scope)
+        check_composite_outputs(inst_name, outs)
+        check_composite_inputs(inst_name, fake_ports)
         instances_names = extract_instances_names(my_scope, fake_ports, outs)
         roots = extract_roots(my_scope, fake_ports, outs)
 
@@ -344,25 +398,33 @@ def create_composite(composite_name, program):
                 elif isinstance(from_port, OutputPortCollect):
                     if from_port.impl_instance:
                         # from_port contains both spec and impl
-                        c = Connect(from_port.instance, to_port.instance, from_port.port, to_port.port)
-                        scope[-1].append(Spec([c]))
-                        if to_port.impl_instance:
-                            c = Connect(from_port.impl_instance, to_port.impl_instance,
-                                        from_port.impl_port, to_port.impl_port)
+                        for i in range(len(to_port.instance)):
+                            c = Connect(from_port.instance, to_port.instance[i], from_port.port, to_port.port[i])
+                            scope[-1].append(Spec([c]))
+                        if len(to_port.impl_instance) > 0:
+                            for i in range(len(to_port.impl_instance)):
+                                c = Connect(from_port.impl_instance, to_port.impl_instance[i],
+                                            from_port.impl_port, to_port.impl_port[i])
+                                scope[-1].append(Impl([c]))
                         else:
-                            c = Connect(from_port.impl_instance, to_port.instance,
-                                        from_port.impl_port, to_port.port)
-                        scope[-1].append(Impl([c]))
+                            for i in range(len(to_port.instance)):
+                                c = Connect(from_port.impl_instance, to_port.instance[i],
+                                            from_port.impl_port, to_port.port[i])
+                                scope[-1].append(Impl([c]))
                     else:
                         # from_port contains only one version.
-                        c = Connect(from_port.instance, to_port.instance, from_port.port, to_port.port)
-                        if to_port.impl_instance:
-                            scope[-1].append(Spec([c]))
-                            c = Connect(from_port.instance, to_port.impl_instance,
-                                        from_port.port, to_port.impl_port)
-                            scope[-1].append(Impl([c]))
+                        if len(to_port.impl_instance) > 0:
+                            for i in range(len(to_port.instance)):
+                                c = Connect(from_port.instance, to_port.instance[i], from_port.port, to_port.port[i])
+                                scope[-1].append(Spec([c]))
+                            for i in range(len(to_port.impl_instance)):
+                                c = Connect(from_port.instance, to_port.impl_instance[i],
+                                            from_port.port, to_port.impl_port[i])
+                                scope[-1].append(Impl([c]))
                         else:
-                            scope[-1].append(c)
+                            for i in range(len(to_port.instance)):
+                                c = Connect(from_port.instance, to_port.instance[i], from_port.port, to_port.port[i])
+                                scope[-1].append(c)
                 elif from_port is None:
                     pass
                 else:
@@ -379,7 +441,7 @@ def create_composite(composite_name, program):
 def create_composite_instance(inst_name, program):
     composite_name = "composite_" + inst_name
     compo = create_composite(composite_name, program)
-    return compo()
+    return compo(inst_name)
 
 
 def composite_instance_at(name, t):
@@ -401,7 +463,7 @@ def thread_common(name, f, input, output):
     input_types = []
     if input and len(compo.inputs) > 0:
         for input in compo.inputs:
-            input_types += input.port_argtypes
+            input_types += input.port_argtypes[0]
 
     output_type = None
     if output:
@@ -504,6 +566,13 @@ def create_spec_impl(name, spec_func, impl_func):
     scope = scope[:-1]
     scope[-1].append(Impl(impl_scope))
 
+    check_composite_inputs(name, spec_fake_inports)
+    check_composite_inputs(name, impl_fake_inports)
+    check_composite_outputs(name, spec_outs)
+    check_composite_outputs(name, impl_outs)
+    spec_instances_names = extract_instances_names(spec_scope, spec_fake_inports, spec_outs)
+    impl_instances_names = extract_instances_names(impl_scope, impl_fake_inports, impl_outs)
+
     outs = None
     if isinstance(spec_outs, tuple):
         assert (isinstance(impl_outs, tuple) and len(spec_outs) == len(impl_outs)), \
@@ -550,16 +619,19 @@ def create_spec_impl(name, spec_func, impl_func):
                 if impl_to_port.thread_args:
                     from_port(*impl_to_port.thread_args)
             elif isinstance(from_port, OutputPortCollect):
-                c = Connect(from_port.instance, spec_to_port.instance, from_port.port, spec_to_port.port)
-                spec_scope.append(c)
+                for i in range(len(spec_to_port.instance)):
+                    c = Connect(from_port.instance, spec_to_port.instance[i], from_port.port, spec_to_port.port[i])
+                    spec_scope.append(c)
                 if from_port.impl_instance:
                     # from_port contains both spec and impl.
-                    c = Connect(from_port.impl_instance, impl_to_port.instance, from_port.impl_port, impl_to_port.port)
-                    impl_scope.append(c)
+                    for i in range(len(impl_to_port.instance)):
+                        c = Connect(from_port.impl_instance, impl_to_port.instance[i], from_port.impl_port, impl_to_port.port[i])
+                        impl_scope.append(c)
                 else:
                     # from_port contains only one version.
-                    c = Connect(from_port.instance, impl_to_port.instance, from_port.port, impl_to_port.port)
-                    impl_scope.append(c)
+                    for i in range(len(impl_to_port.instance)):
+                        c = Connect(from_port.instance, impl_to_port.instance[i], from_port.port, impl_to_port.port[i])
+                        impl_scope.append(c)
             elif from_port is None:
                 pass
             else:
@@ -567,7 +639,7 @@ def create_spec_impl(name, spec_func, impl_func):
         return outs
         # end connect
 
-    return connect
+    return SpecImplInstance(connect, spec_instances_names, impl_instances_names)
 
 
 def create_state(st_name, content, init=None):
@@ -640,8 +712,9 @@ class Compiler:
 
     def generate_graph(self):
         assert len(scope) == 1, "Compile error: there are multiple scopes remained."
-        p = Program(*scope[0])
-        dp = desugaring.desugar(p, self.desugar_mode)
+        p1 = Program(*scope[0])
+        p2 = desugaring.desugar(p1, self.desugar_mode)
+        dp = desugaring.insert_fork(p2)
         g = compiler.generate_graph(dp, self.resource)
         return g
 

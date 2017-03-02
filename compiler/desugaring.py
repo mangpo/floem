@@ -1,11 +1,107 @@
 from program import *
 import re
+import standard_elements
+
+
+def insert_fork(x):
+    new_x = clone_block(x)
+    insert_fork_program(new_x)
+    return new_x
+
+
+def clone_block(x):
+    if isinstance(x, Program):
+        statements = [clone_block(s) for s in x.statements]
+        return Program(*statements)
+    elif isinstance(x, Spec):
+        statements = [clone_block(s) for s in x.statements]
+        return Spec(statements)
+    elif isinstance(x, Impl):
+        statements = [clone_block(s) for s in x.statements]
+        return Impl(statements)
+    elif isinstance(x, Composite):
+        return Composite(x.name, clone_block(x.program))
+    elif isinstance(x, Connect):
+        return Connect(x.ele1, x.ele2, x.out1, x.in2)
+    else:
+        return x
+
+
+def insert_fork_other(x, connect_map, element_map, instance_map, resource_map):
+    """
+    Insert fork if an output port of an instance is connected more than one time.
+    :param x: AST
+    :param connect_map: a map from (inst_name, port_name) to a list of the corresponding Connect AST nodes
+    :param env: a map from (inst_name, instance) and (ele_name, element)
+    :return: result AST
+    """
+    if isinstance(x, Program) or isinstance(x, Spec) or isinstance(x, Impl):
+        return insert_fork_program(x)
+    elif isinstance(x, Composite):
+        return insert_fork_program(x.program)
+    elif isinstance(x, Connect):
+        if (x.ele1, x.out1) not in connect_map:
+            connect_map[(x.ele1, x.out1)] = []
+            connect_map[(x.ele1, x.out1)].append(x)
+            return False
+        else:
+            connect_map[(x.ele1, x.out1)].append(x)
+            return True
+    elif isinstance(x, Element):
+        element_map[x.name] = x
+    elif isinstance(x, ElementInstance):
+        instance_map[x.name] = x
+    elif isinstance(x, ResourceMap):
+        resource_map[x.instance] = x.resource
+    return False
+
+
+def insert_fork_program(x):
+    connect_map = {}
+    resource_map = {}
+    element_map = {}
+    instance_map = {}
+    ret = False
+    for st in x.statements:
+        this_ret = insert_fork_other(st, connect_map, element_map, instance_map, resource_map)
+        ret = ret or this_ret
+    if ret:
+        for inst_name, port_name in connect_map:
+            connects = connect_map[(inst_name, port_name)]
+            if len(connects) > 1:
+                ele_name = instance_map[inst_name].element
+                element = element_map[ele_name]
+                port = [port for port in element.outports if port.name == port_name][0]
+
+                # Statements to insert into program
+                fork = standard_elements.Fork_multi_values(inst_name + "_fork", len(connects), port.argtypes)
+                fork_inst = ElementInstance(fork.name, fork.name + "_inst")
+                fork_connect = Connect(inst_name, fork_inst.name, port_name, "in")
+
+                x.statements.insert(0, fork_inst)
+                x.statements.insert(0, fork)
+                x.statements.append(fork_connect)
+
+                if inst_name in resource_map:
+                    resource = ResourceMap(resource_map[inst_name], fork_inst.name)
+                    x.statements.append(resource)
+
+                # Mutate Connect to connect to fork
+                for i in range(len(connects)):
+                    connects[i].ele1 = fork_inst.name
+                    connects[i].out1 = "out" + str(i+1)
+        return True
+    return False
+
 
 
 def desugar(x, mode="impl"):
-    # mode: compare, spec, impl
+    """
+    :param x: program AST
+    :param mode: "spec", "impl", "compare"
+    :return: desugared AST
+    """
     need = need_desugar(x)
-    need_fork(x)
     if not need:
         return x
 
@@ -30,6 +126,8 @@ def desugar(x, mode="impl"):
         statements = D.process(x).statements
         statements = D.populates + [x for x in statements]
         return Program(*statements)
+    else:
+        raise Exception("Unknown desugaring mode '%s'" % mode)
 
 
 def need_desugar(x):
@@ -54,41 +152,6 @@ def need_desugar(x):
     elif isinstance(x, StateInstance):
         index = x.name.find("[")
         return index >= 0
-
-
-def insert_fork(x, connect_map={}, env={}):
-    if isinstance(x, Program) or isinstance(x, Spec) or isinstance(x, Impl):
-        return insert_fork_block(x)
-    elif isinstance(x, Connect):
-        if (x.ele1, x.out1) not in connect_map:
-            connect_map[(x.ele1, x.out1)] = []
-            connect_map[(x.ele1, x.out1)].append(x)
-            return False
-        else:
-            connect_map[(x.ele1, x.out1)].append(x)
-            return True
-    elif isinstance(x, Element):
-        env[x.name] = x
-    elif isinstance(x, ElementInstance):
-        env[x.name] = x
-    return False
-
-
-def insert_fork_block(x):
-    connect_map = {}
-    env = {}
-    ret = False
-    for st in x.statements:
-        ret = ret or insert_fork(st, connect_map, env)
-    if ret:
-        for inst_name, port_name in connect_map:
-            connects = connect_map[(inst_name, port)]
-            if len(connects) > 1:
-                ele_name = env[inst_name].element
-                element = env[ele_name]
-                port = [port for port in element.outports if port.name == port_name][0]
-                port.argtypes  # TODO
-    return ret
 
 
 class Desugar:

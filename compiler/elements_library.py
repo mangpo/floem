@@ -8,19 +8,6 @@ def create_fork(name, n, type):
     return create_element(name, [Port("in", [type])], outports, src)
 
 
-def create_fork_types(name, n, types):
-    args = []
-    types_args = []
-    for i in range(len(types)):
-        arg = "_arg%d" % i
-        args.append(arg)
-        types_args("%s %s" % (types[i], arg))
-
-    outports = [Port("out%d" % (i + 1), types) for i in range(n)]
-    calls = ["out%d(%s);" % ((i + 1), ",".join(args)) for i in range(n)]
-    src = "(%s) = in(); output { %s }" % (type, ",".join(types_args), " ".join(calls))
-    return create_element(name, [Port("in", types)], outports, src)
-
 def create_fork_instance(inst_name, n, type):
     ele_name = "_element_" + inst_name
     ele = create_fork(ele_name, n, type)

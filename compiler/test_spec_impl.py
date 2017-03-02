@@ -125,15 +125,29 @@ class TestSpecImpl(unittest.TestCase):
         c.testing = '_spec_f(0); _impl_f(0);'
         c.generate_code_and_run([3,4])
 
-    def test_connect_compo_speciml(self):
+    def test_specimpl_compo(self):
         reset()
         Compo = get_composite()
-        e1 = get_element_instance("f")
-        c1 = Compo()
-        c2 = Compo()
-        s1 = get_spec_impl_instance()
-        s2 = get_spec_impl_instance()
-        c3 = Compo()
+        e1 = get_element_instance("f")  # 1
+        s2 = get_spec_impl_instance()  # 1/2
+        c3 = Compo()  # 2
+        c3(s2(e1(None)))
+
+        c = Compiler()
+        c.desugar_mode = "impl"
+        c.testing = 'f(0);'
+        c.generate_code_and_run([5])
+
+
+    def test_connect_compo_specimpl(self):
+        reset()
+        Compo = get_composite()
+        e1 = get_element_instance("f")  # 1
+        c1 = Compo()  # 2
+        c2 = Compo()  # 2
+        s1 = get_spec_impl_instance() # 1/2
+        s2 = get_spec_impl_instance() # 1/2
+        c3 = Compo()  # 2
 
         c3(s2(s1(c2(c1(e1(None))))))
         c = Compiler()

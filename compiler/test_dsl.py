@@ -5,6 +5,14 @@ from elements_library import *
 
 class TestDSL(unittest.TestCase):
 
+    def find_subgraph(self, g, root, subgraph):
+        instance = g.instances[root]
+        if instance.name not in subgraph:
+            subgraph.add(instance.name)
+            for ele,port in instance.output2ele.values():
+                self.find_subgraph(g, ele, subgraph)
+        return subgraph
+
     def test_run(self):
         tests = ["hello.py",
                  "join.py",
@@ -24,6 +32,7 @@ class TestDSL(unittest.TestCase):
                  "API_read_blocking2.py",
                  "API_and_trigger.py",
                  "spec_impl.py",
+                 "spec_impl_at.py",
                  "probe_composite.py",
                  "probe_multi.py",
                  "probe_spec_impl.py",
@@ -39,24 +48,6 @@ class TestDSL(unittest.TestCase):
         for test in tests:
             status = os.system("python programs_in_dsl/" + test)
             self.assertEqual(status, 0, "Error at " + test)
-
-    def test_conflict_output(self):
-        reset()
-        Forward = create_identity("Forward", "int")
-        f1 = Forward("f1")
-        f2 = Forward()
-        f3 = Forward()
-        x1 = f1(None)
-        f2(x1)
-        f3(x1)
-
-        c = Compiler()
-        try:
-            c.generate_code()
-        except Exception as e:
-            self.assertNotEqual(e.message.find("The output port 'out' of element instance 'f1' cannot be connected to both"), -1)
-        else:
-            self.fail('Exception is not raised.')
 
     def test_conflict_input(self):
         reset()
@@ -189,6 +180,73 @@ class TestDSL(unittest.TestCase):
         c.desugar_mode = "impl"
         c.testing = "out(func(123));"
         c.generate_code_and_run([125])
+
+    def test_insert_fork(self):
+        reset()
+        Inc = create_add1("Inc", "int")
+
+        inc1 = Inc()
+        inc2 = Inc()
+        inc3 = Inc()
+
+        x1 = inc1()
+        x2 = inc2(x1)
+        x3 = inc3(x1)
+
+        c = Compiler()
+        g = c.generate_graph()
+        self.assertEqual(4, len(g.instances))  # fork is added.
+
+    def test_insert_fork_spec_impl(self):
+        reset()
+        Inc = create_add1("Inc", "int")
+        Drop = create_drop("Drop", "int")
+
+        inc1 = Inc("inc1")
+
+        x1 = inc1()
+
+        def spec(x1):
+            inc2 = Inc("inc2")
+            return inc2(x1)
+
+        def impl(x1):
+            inc2 = Inc("inc2")
+            inc3 = Inc("inc3")
+            drop = Drop("drop")
+            x2 = inc2(x1)
+            x3 = inc3(x1)
+            drop(x3)
+            return x2
+
+        compo = create_spec_impl("compo", spec, impl)
+        compo(inc1(None))
+
+        c = Compiler()
+        c.desugar_mode = "compare"
+        g = c.generate_graph()
+        roots = g.find_roots()
+        self.assertEqual(roots, set(['_spec_inc1', '_impl_inc1']))
+        self.assertEqual(self.find_subgraph(g, '_impl_inc1', set()),
+                         set(['_impl_inc1', '_impl_inc1_fork_inst', '_impl_compo_inc2', '_impl_compo_inc3', '_impl_compo_drop']))
+
+    def test_compo_nop(self):
+        reset()
+        try:
+            Forward = create_identity("Forward", "int")
+            f1 = Forward()
+            f2 = Forward()
+            @composite_instance("compo")
+            def compo(x):
+                return x  # TODO: should throw exception
+
+            f2(compo(f1(None)))
+
+        except Exception as e:
+            self.assertNotEqual(e.message.find("Composite 'compo' should not connect an input to an output directly."), -1, 'Expect undefined exception.')
+        else:
+            self.fail('Exception is not raised.')
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -21,6 +21,7 @@ class ElementInstance:
 
 class Connect:
     def __init__(self, ele1, ele2, out1=None, in2=None):
+        assert isinstance(ele1, str)
         self.ele1 = ele1
         self.ele2 = ele2
         self.out1 = out1
@@ -32,7 +33,7 @@ class Connect:
 
 class Program:
     def __init__(self, *statements):
-        self.statements = statements
+        self.statements = list(statements)
 
 
 class Spec:
