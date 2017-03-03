@@ -50,6 +50,8 @@ class Thread:
             elif isinstance(instance, SpecImplInstance):
                 scope[-1].append(Spec([ResourceMap(self.name, x) for x in instance.spec_instances_names]))
                 scope[-1].append(Impl([ResourceMap(self.name, x) for x in instance.impl_instances_names]))
+            else:
+                raise Exception("Thread.run unimplemented for '%s'" % instance)
 
     def run_order(self, *instances):
         self.run(*instances)
@@ -121,6 +123,7 @@ class InputPortCollect:
         self.thread_run = None
         self.thread_start = None
         self.thread_args = None
+        self.thread_order = None
 
         self.impl_instance = []
         self.impl_port = []
@@ -128,6 +131,7 @@ class InputPortCollect:
         self.impl_thread_run = None
         self.impl_thread_start = None
         self.impl_thread_args = None
+        self.impl_thread_order = None
 
     def start(self, e):
         self.thread_start = e
@@ -139,7 +143,8 @@ class InputPortCollect:
         self.run(*args)
         self.start(args[0])
 
-    # TODO: run_order
+    def run_order(self, *args):
+        self.thread_order = args
 
     def copy_to_spec(self, other):
         self.instance += other.instance
@@ -148,6 +153,7 @@ class InputPortCollect:
         self.thread_run = other.thread_run
         self.thread_start = other.thread_start
         self.thread_args = other.thread_args
+        self.thread_order = other.thread_order
 
     def copy_to_impl(self, other):
         self.impl_instance += other.instance
@@ -156,6 +162,7 @@ class InputPortCollect:
         self.impl_thread_run = other.thread_run
         self.impl_thread_start = other.thread_start
         self.impl_thread_args = other.thread_args
+        self.impl_thread_order = other.thread_order
 
     def copy_to_impl_from_impl(self, other):
         self.impl_instance += other.impl_instance
@@ -164,18 +171,23 @@ class InputPortCollect:
         self.impl_thread_run = other.impl_thread_run
         self.impl_thread_start = other.impl_thread_start
         self.impl_thread_args = other.impl_thread_args
+        self.impl_thread_order = other.impl_thread_order
 
     def spec_thread(self, t):
         if self.thread_run:
             t.run(*self.thread_run)
         if self.thread_start:
             t.start(self.thread_start)
+        if self.thread_order:
+            t.run_order(*self.thread_order)
 
     def impl_thread(self, t):
         if self.impl_thread_run:
             t.run(*self.impl_thread_run)
         if self.impl_thread_start:
             t.start(self.impl_thread_start)
+        if self.impl_thread_order:
+            t.run_order(*self.impl_thread_order)
 
     def __call__(self, *args):
         self.thread_args = args

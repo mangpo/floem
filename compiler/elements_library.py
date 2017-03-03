@@ -66,7 +66,7 @@ def declare_circular_queue(name, type, size, blocking=False):
     if blocking:
         src = r'''
             %s x;
-            while(this.head == this.tail);
+            while(this.head == this.tail) { fflush(stdout); }
             x = this.data[this.head];
             int next = this.head + 1;
             if(next >= this.size) next = 0;

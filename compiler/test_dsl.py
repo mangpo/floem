@@ -45,6 +45,7 @@ class TestDSL(unittest.TestCase):
                  "composite_at3.py",
                  "order_empty_port.py",
                  "order_join.py",
+                 "syscall.py",
                  ]
 
         for test in tests:

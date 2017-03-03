@@ -1,5 +1,6 @@
 from thread_allocation import *
 
+
 class StateInstance:
     def __init__(self, state, name, init=False):
         self.state = state
@@ -143,6 +144,9 @@ class ResourceMap:
     def __init__(self, resource, instance):
         self.resource = resource
         self.instance = instance
+
+    def __str__(self):
+        return self.instance + "@" + self.resource
 
 
 class ResourceStart:
