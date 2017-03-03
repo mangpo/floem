@@ -15,7 +15,7 @@ class RedefineError(Exception):
 
 class Element:
 
-    def __init__(self, name, inports, outports, code, local_state=None, state_params=[]):
+    def __init__(self, name, inports, outports, code, local_state=None, state_params=[], analyze=True):
         self.name = name
         self.inports = inports
         self.outports = outports
@@ -26,8 +26,26 @@ class Element:
         self.output_fire = None
         self.output_code = None
 
-        self.analyze_output_type()
-        #self.reorder_outports()
+        if analyze:
+            self.analyze_output_type()
+            #self.reorder_outports()
+
+    def clone(self, new_name):
+        e = Element(new_name, self.inports[:], self.outports[:], self.code, self.local_state, self.state_params, False)
+        e.output_fire = self.output_fire
+        e.output_code = self.output_code
+        return e
+
+    def add_empty_outports(self, port_names):
+        assert self.output_fire == "all", ("Cannot add ports too an  '%s' whose output_fires != all." % self.name)
+        self.outports += [Port(name, []) for name in port_names]
+        for name in port_names:
+            self.output_code[name] = name + "()"
+
+    def add_empty_inports(self, port_names):
+        self.inports += [Port(name, []) for name in port_names]
+        for name in port_names:
+            self.code = ("%s();\n" % name) + self.code
 
     def __str__(self):
         return self.name
@@ -122,6 +140,8 @@ class Element:
                 if len(self.outports) > 0:
                     raise Exception("Element '%s' does not have output { ... } block." % self.name)
                 program_code = self.code
+                self.output_fire = "all"
+                self.output_code = {}
 
         # Check that it doesn't fire output port in program area.
         occurrence_program = self.count_ports_occurrence(program_code)
@@ -192,7 +212,7 @@ class ElementNode:
         self.name = name
         self.element = element
         self.output2ele = {}   # map output port name to (element name, port)
-        self.input2ele = {}    # map input port name to (element name, port)
+        self.input2ele = {}    # map input port name to list of (element name, port)
         self.output2connect = {}
         self.state_args = state_args
 
@@ -301,6 +321,7 @@ class Graph:
 
         self.threads_internal = []
         self.threads_API = []
+        self.threads_order = []
 
         # Inject and probe
         self.inject_populates = {}
@@ -480,6 +501,14 @@ class Graph:
 
         roots = set(self.instances.keys()).difference(not_roots)
         return roots
+
+    def find_subgraph(self, root, subgraph):
+        instance = self.instances[root]
+        if instance.name not in subgraph:
+            subgraph.add(instance.name)
+            for ele,port in instance.output2ele.values():
+                self.find_subgraph(ele, subgraph)
+        return subgraph
 
 '''
 State initialization related functions

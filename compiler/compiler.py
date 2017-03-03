@@ -238,7 +238,9 @@ def element_to_function(instance, state_rename, graph):
                     % (f, funcname))
             # Save output to join buffer instead of calling the next function
             join = instance.join_output2save[o]
-            call = get_join_buffer_name(join) + "_" + fport + "_save(_p_" + join + ", "
+            call = get_join_buffer_name(join) + "_" + fport + "_save(_p_" + join
+            if not out_src[m.end(1)] == ")":
+                call += ", "
 
             # Insert join_call right after saving the buffer for it.
             # This is to preserve the right order of function calls.
@@ -342,7 +344,12 @@ def generate_join_save_function(name, join_ports_same_thread):
     st_name = get_join_buffer_name(name)
     for port in join_ports_same_thread:
         types_args, args = common.types_args_one_port(port, common.standard_arg_format)
-        src += "void %s_%s_save(%s *p, %s) {\n" % (st_name, port.name, st_name, ", ".join(types_args))
+        src += "void %s_%s_save(%s *p" % (st_name, port.name, st_name)
+        if len(types_args) > 0:
+            src += ", %s) {\n" % (", ".join(types_args))
+        else:
+            src += ") {\n"
+
         for arg in args:
             src += "  p->%s = %s;\n" % (arg, arg)
         src += "}\n"
@@ -434,6 +441,8 @@ def generate_graph(program, resource=True):
     gen.graph.check_input_ports()
 
     if resource:
+        # Insert extra ports for scheduling order.
+        gen.insert_resource_order()
         # Insert necessary elements for resource mapping.
         gen.allocate_resources()
         # Annotate APIs information. APIs ony make sense with resource mapping.

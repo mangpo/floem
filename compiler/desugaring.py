@@ -23,11 +23,13 @@ def clone_block(x):
         return Composite(x.name, clone_block(x.program))
     elif isinstance(x, Connect):
         return Connect(x.ele1, x.ele2, x.out1, x.in2)
+    elif isinstance(x, ResourceOrder):
+        return ResourceOrder(x.a, x.b)
     else:
         return x
 
 
-def insert_fork_other(x, connect_map, element_map, instance_map, resource_map):
+def insert_fork_other(x, connect_map, element_map, instance_map, resource_map, resource_order):
     """
     Insert fork if an output port of an instance is connected more than one time.
     :param x: AST
@@ -53,17 +55,20 @@ def insert_fork_other(x, connect_map, element_map, instance_map, resource_map):
         instance_map[x.name] = x
     elif isinstance(x, ResourceMap):
         resource_map[x.instance] = x.resource
+    elif isinstance(x, ResourceOrder):
+        resource_order[x.a] = x
     return False
 
 
 def insert_fork_program(x):
     connect_map = {}
     resource_map = {}
+    resource_order = {}
     element_map = {}
     instance_map = {}
     ret = False
     for st in x.statements:
-        this_ret = insert_fork_other(st, connect_map, element_map, instance_map, resource_map)
+        this_ret = insert_fork_other(st, connect_map, element_map, instance_map, resource_map, resource_order)
         ret = ret or this_ret
     if ret:
         for inst_name, port_name in connect_map:
@@ -82,9 +87,14 @@ def insert_fork_program(x):
                 x.statements.insert(0, fork)
                 x.statements.append(fork_connect)
 
+                # Add ResourceMap for fork
                 if inst_name in resource_map:
                     resource = ResourceMap(resource_map[inst_name], fork_inst.name)
                     x.statements.append(resource)
+
+                # Adjust ResourceOrder
+                if inst_name in resource_order:
+                    resource_order[inst_name].a = fork_inst.name
 
                 # Mutate Connect to connect to fork
                 for i in range(len(connects)):
@@ -343,6 +353,30 @@ class Desugar:
                                 % (x.instance, x.resource))
             else:
                 return ResourceStart(desugar_name(x.resource), desugar_name(x.instance))
+
+        elif isinstance(x, ResourceOrder):
+            m_a = re.match('([a-zA-Z0-9_]+)\[([a-zA-Z]+)]', x.a)
+            m_b = re.match('([a-zA-Z0-9_]+)\[([a-zA-Z]+)]', x.b)
+            if m_a and m_b:
+                if m_a.group(2) == m_b.group(2):
+                    n = self.lookup(m_a.group(1))
+                    return [ResourceOrder(m_a.group(1) + str(i), m_b.group(1) + str(i)) for i in range(n)]
+                else:
+                    n_a = self.lookup(m_a.group(1))
+                    n_b = self.lookup(m_b.group(1))
+                    ret = []
+                    for i in range(n_a):
+                        for j in range(n_b):
+                            ret.append(ResourceOrder(m_a.group(1) + str(i), m_b.group(1) + str(j)))
+                    return ret
+            elif m_a:
+                n = self.lookup(m_a.group(1))
+                return [ResourceOrder(m_a.group(1) + str(i), desugar_name(x.b)) for i in range(n)]
+            elif m_b:
+                n = self.lookup(m_b.group(1))
+                return [ResourceOrder(desugar_name(x.a), m_b.group(1) + str(i)) for i in range(n)]
+            else:
+                return ResourceOrder(desugar_name(x.a), desugar_name(x.b))
 
         elif isinstance(x, APIFunction):
             m = re.match('([a-zA-Z0-9_]+)\[([0-9]+)]', x.name)

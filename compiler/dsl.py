@@ -51,6 +51,11 @@ class Thread:
                 scope[-1].append(Spec([ResourceMap(self.name, x) for x in instance.spec_instances_names]))
                 scope[-1].append(Impl([ResourceMap(self.name, x) for x in instance.impl_instances_names]))
 
+    def run_order(self, *instances):
+        self.run(*instances)
+        for i in range(len(instances)-1):
+            scope[-1].append(ResourceOrder(instances[i].name, instances[i+1].name))
+
 
 class API_thread(Thread):
     def __init__(self, name, call_types, return_types, default_val=None):
@@ -133,6 +138,8 @@ class InputPortCollect:
     def run_start(self, *args):
         self.run(*args)
         self.start(args[0])
+
+    # TODO: run_order
 
     def copy_to_spec(self, other):
         self.instance += other.instance
