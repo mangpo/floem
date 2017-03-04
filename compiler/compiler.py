@@ -441,8 +441,6 @@ def generate_graph(program, resource=True):
     gen.graph.check_input_ports()
 
     if resource:
-        # Insert extra ports for scheduling order.
-        gen.insert_resource_order()
         # Insert necessary elements for resource mapping.
         gen.allocate_resources()
         # Annotate APIs information. APIs ony make sense with resource mapping.

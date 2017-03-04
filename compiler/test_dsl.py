@@ -250,6 +250,25 @@ class TestDSL(unittest.TestCase):
         else:
             self.fail('Exception is not raised.')
 
+    def test_illegal_order(self):
+        reset()
+        Forward = create_identity("Forward", "int")
+        f1 = Forward()
+        f2 = Forward()
+        f3 = Forward()
+
+        f3(f2(f1(None)))
+        t = API_thread("run", ["int"], "int")
+        t.run_start(f1, f2, f3)
+        t.run_order(f3, f2)
+
+        try:
+            c = Compiler()
+            c.generate_graph()
+        except Exception as e:
+            self.assertNotEqual(e.message.find("Cannot order 'Forward2' before 'Forward1' because 'Forward1' points to 'Forward2'."), -1, 'Expect undefined exception.')
+        else:
+            self.fail('Exception is not raised.')
 
 if __name__ == '__main__':
     unittest.main()
