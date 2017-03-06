@@ -27,6 +27,7 @@ class Element:
         self.output_code = None
 
         if analyze:
+            self.check_ports(inports + outports)
             self.analyze_output_type()
             #self.reorder_outports()
 
@@ -35,6 +36,13 @@ class Element:
         e.output_fire = self.output_fire
         e.output_code = self.output_code
         return e
+
+    def check_ports(self, ports):
+        names = []
+        for port in ports:
+            if port.name in names:
+                raise Exception("Element '%s' has multiple '%s' ports." % (self.name, port.name))
+            names.append(port.name)
 
     def add_empty_outports(self, port_names):
         assert self.output_fire == "all", ("Cannot add ports too an  '%s' whose output_fires != all." % self.name)
@@ -230,7 +238,7 @@ class ElementNode:
 
         # API information
         self.API_return = None        # which state this node needs to return
-        self.API_return_from = None   # which output node the the return value comes form
+        self.API_return_from = []   # which output node the the return value comes form
         self.API_return_final = None  # mark that this node has to create the return state
         self.API_default_val = None   # default return value
 

@@ -24,7 +24,6 @@ def create_drop(name, type):
 
 
 def create_add(name, type):
-    src = "%s x = in1() + in2(); output { out(x); }" % type
     return create_element(name,
                           [Port("in1", [type]), Port("in2", [type])],
                           [Port("out", [type])],

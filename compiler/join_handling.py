@@ -69,6 +69,10 @@ class FlowCollection:
         s += "]"
         return s
 
+    def __eq__(self, other):
+        return (self.__class__ == other.__class__ and self.collection == other.collection and
+                self.target == other.target and self.total == other.total and self.goal == other.goal)
+
     def clone(self):
         collection = []
         for l in self.collection:
@@ -200,20 +204,6 @@ class FlowCollection:
         return (other_max_port >= 0) and self.goal and (my_max_port == -1)
 
 
-def find_roots(g):
-    """
-    :return: roots of the graph (elements that have no parent)
-    """
-    not_roots = set()
-    for name in g.instances:
-        instance = g.instances[name]
-        for (next, port) in instance.output2ele.values():
-            not_roots.add(next)
-
-    roots = set(g.instances.keys()).difference(not_roots)
-    return [x for x in roots]
-
-
 def wrap_port(cover, instance, target, num_ports, port_name):
     """
     If instance is a join node, then return a part of the cover.
@@ -274,7 +264,7 @@ def dfs_cover(g, node_name, port_name, target, num_ports, answer):
             cover = cover.union(l_cover)
         elif element.output_fire == "one":
             cover_empty = cover.empty()
-            if not cover_empty and not l_cover.empty() > 0 and not cover == l_cover:
+            if not cover_empty and not l_cover.empty() and not cover == l_cover:  # TODO: check
                 raise Exception("When element instance '%s' fire only one port. All its output ports must fire the same input ports of the join instance '%s'."
                                 % (node_name, target))
             if cover_empty:
@@ -391,7 +381,7 @@ def annotate_join_info(g):
     :param g: graph
     :return: void
     """
-    roots = find_roots(g)
+    roots = g.find_roots()
     for instance in g.instances.values():
         nodes_same_thread = []
         ports_same_thread = []  # TODO: Why not all ports are in this list?

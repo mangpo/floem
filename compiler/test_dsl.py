@@ -18,6 +18,7 @@ class TestDSL(unittest.TestCase):
                  "join.py",
                  "join_multiple.py",
                  "join_inject.py",
+                 "join_inject_forkjoin.py",
                  "buffer.py",
                  "state_local.py",
                  "state_shared.py",
@@ -269,6 +270,167 @@ class TestDSL(unittest.TestCase):
             self.assertNotEqual(e.message.find("Cannot order 'Forward2' before 'Forward1' because 'Forward1' points to 'Forward2'."), -1, 'Expect undefined exception.')
         else:
             self.fail('Exception is not raised.')
+
+    def test_api_multi_return(self):
+        reset()
+        Fork = create_fork("Fork", 2, "int")
+        Forward = create_identity("Forward", "int")
+
+        fork = Fork()
+        f1 = Forward()
+        f2 = Forward()
+        f3 = Forward()
+
+        x1, x2 = fork(None)
+        f3(f1(x1))
+        f3(f2(x2))
+
+        t = API_thread("run", ["int"], "int")
+        t.run_start(fork, f1, f2, f3)
+
+        try:
+            c = Compiler()
+            c.generate_graph()
+        except Exception as e:
+            self.assertNotEqual(e.message.find("the return instance 'Forward3' more than once"), -1, 'Expect undefined exception.')
+        else:
+            self.fail('Exception is not raised.')
+
+    def test_api_default_val(self):
+        reset()
+        Choice = create_element("Choice", [Port("in", ["int"])], [Port("out1", ["int"]), Port("out2", ["int"])],
+                                r'''
+                                int x = in();
+                                output switch { case (x > 0): out1(x); else: out2(x); }
+                                ''')
+        Forward = create_identity("Forward", "int")
+        Drop = create_drop("Drop", "int")
+
+        choice = Choice()
+        f1 = Forward()
+        f2 = Forward()
+        drop = Drop()
+
+        x1, x2 = choice()
+        drop(x2)
+        f2(f1(x1))
+
+        t = API_thread("run", ["int"], "int", default_val=-1)
+        t.run_start(choice, f1, f2, drop)
+
+        c = Compiler()
+        c.testing = "out(run(3)); out(run(-3)); out(run(0));"
+        c.generate_code_and_run([3, -1, -1])
+
+    def test_api_either(self):
+        reset()
+        Choice = create_element("Choice", [Port("in", ["int"])], [Port("out1", ["int"]), Port("out2", ["int"])],
+                                r'''
+                                int x = in();
+                                output switch { case (x % 2 == 0): out1(x); else: out2(x); }
+                                ''')
+        Forward = create_identity("Forward", "int")
+        Inc = create_add1("Inc", "int")
+
+        choice = Choice()
+        nop = Forward()
+        inc = Inc()
+        end = Forward()
+
+        even, odd = choice(None)
+        end(nop(even))
+        end(inc(odd))
+
+        t = API_thread("run", ["int"], "int")
+        t.run_start(choice, inc, nop, end)
+
+        c = Compiler()
+        c.testing = "out(run(3)); out(run(4)); out(run(5));"
+        c.generate_code_and_run([4, 4, 6])
+
+    def test_api_join(self):
+        reset()
+        Fork = create_fork("Fork", 2, "int")
+        Add = create_add("Add", "int")
+
+        @API("run")
+        def run(x):
+            fork1 = Fork("fork1")
+            fork2 = Fork("fork2")
+            add1 = Add("add1")
+            add2 = Add("add2")
+
+            x1, x2 = fork1(x)
+            x3, x4 = fork2(x2)
+            x5 = add1(x1, x3)
+            y = add2(x5, x4)
+            return y
+
+        c = Compiler()
+        c.testing = "out(run(1)); out(run(10));"
+        c.generate_code_and_run([3, 30])
+
+    def test_api_nested_join(self):
+        reset()
+        Fork2 = create_fork("Fork2", 2, "int")
+        Fork3 = create_fork("Fork3", 3, "int")
+        Add2 = create_add("Add2", "int")
+        Add3 = create_element("Add3",
+                          [Port("in1", ["int"]), Port("in2", ["int"]), Port("in3", ["int"])],
+                          [Port("out", ["int"])],
+                          r'''int x = in1() + in2() + in3(); output { out(x); }''')
+        Forward = create_identity("Forward", "int")
+
+
+        @API("run")
+        def run(x):
+            fork2 = Fork2("fork2")
+            fork3 = Fork3("fork3")
+            f1 = Forward("f1")
+            f2 = Forward("f2")
+            f3 = Forward("f3")
+            add2 = Add2("add2")
+            add3 = Add3("add3")
+
+            fork2_o1, fork2_o2 = fork2(x)
+            f1_o = f1(fork2_o1)
+            fork3_o1, fork3_o2, fork3_o3 = fork3(fork2_o2)
+            f2_o = f2(fork3_o2)
+            f3_o = f3(fork3_o3)
+            add2_o = add2(f2_o, f3_o)
+            y = add3(f1_o, add2_o, fork3_o1)
+            return y
+
+        c = Compiler()
+        c.testing = "out(run(1)); out(run(10));"
+        c.generate_code_and_run([4, 40])
+
+    def test_api_zero_or_one_join(self):
+        reset()
+        Fork = create_fork("Fork", 2, "int")
+        Filter = create_element("Filter",
+                          [Port("in", ["int"])],
+                          [Port("out", ["int"])],
+                          r'''int x = in(); output switch { case (x > 0): out(x); }''')
+        Forward = create_identity("Forward", "int")
+        Add = create_add("Add", "int")
+
+        @API("run", -1)
+        def run(x):
+            fork = Fork()
+            filter = Filter()
+            f1 = Forward()
+            f2 = Forward()
+            add = Add()
+
+            x1, x2 = fork(filter((x)))
+            y = add(f1(x1), f2(x2))
+            return y
+
+        c = Compiler()
+        c.testing = "out(run(1)); out(run(10)); out(run(-10));"
+        c.generate_code_and_run([2, 20, -1])
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -36,11 +36,11 @@ class TestAST(unittest.TestCase):
         visit = []
         for name, target in name_target:
             visit.append(name)
-            self.assertEqual(target, g.instances[name].API_return_from)
+            self.assertEqual([target], g.instances[name].API_return_from)
 
         for name in g.instances:
             if name not in visit:
-                self.assertIsNone(g.instances[name].API_return_from)
+                self.assertEqual(g.instances[name].API_return_from, [])
 
     def test_undefined_element(self):
         p = Program(ElementInstance("Node", "x"))

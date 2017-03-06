@@ -173,7 +173,7 @@ def element_to_function(instance, state_rename, graph):
         types, args = common.types_args_port_list(graph.instances[join].join_ports_same_thread,
                                                   "_p_%s->{0}_arg{1}" % join)
 
-        if instance.API_return_from == join:
+        if join in instance.API_return_from:
             join_call += "ret ="
         join_call += "  %s(" % join
         for other_join in graph.instances[join].join_func_params:
@@ -251,7 +251,7 @@ def element_to_function(instance, state_rename, graph):
                 out_src = out_src[:m.start(1)] + call + out_src[m.end(1):m.end(0)] + out_src[m.end(0):]
         else:
             call = ""
-            if instance.API_return_from == f:
+            if f in instance.API_return_from:
                 call += "ret = "
             call += f + "("
             for join in graph.instances[f].join_func_params:
@@ -444,12 +444,15 @@ def generate_graph(program, resource=True):
         # Insert necessary elements for resource mapping.
         gen.allocate_resources()
         # Annotate APIs information. APIs ony make sense with resource mapping.
-        annotate_api_info(gen.graph)
+        #annotate_api_info(gen.graph)  # TODO: do this after annotate_join_info
     else:
         gen.graph.clear_APIs()
 
     # Annotate join information
     annotate_join_info(gen.graph)
+
+    if resource:
+        annotate_api_info(gen.graph)
 
     return gen.graph
 
