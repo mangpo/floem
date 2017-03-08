@@ -6,13 +6,15 @@ import inspect
 # Global variables for constructing a program.
 scope = [[]]
 stack = []
+state_mapping = {}
 fresh_id = 0
 
 
 def reset():
-    global scope, stack, fresh_id
+    global scope, stack, state_mapping, fresh_id
     scope = [[]]
     stack = []
+    state_mapping = {}
     fresh_id = 0
 
 
@@ -212,7 +214,7 @@ class OutputPortCollect:
 
 
 def create_element(ele_name, inports, outports, code, local_state=None, state_params=[]):
-    e = Element(ele_name, inports, outports, code, local_state, state_params)
+    e = Element(ele_name, inports, outports, sanitize_variable_length(code), local_state, state_params)
     scope[-1].append(e)
 
     def create_instance(inst_name=None, args=[]):
@@ -662,9 +664,37 @@ def create_spec_impl(name, spec_func, impl_func):
     return SpecImplInstance(connect, spec_instances_names, impl_instances_names)
 
 
+def sanitize_variable_length(code):
+    working = True
+    while working:
+        working = False
+        m = re.search('extract([\*]?)\([ ]*([^)]+)[ ]*,[ ]*([^)]+)[ ]*,[ ]*([^)]+)[ ]*\)', code)
+        if m:
+            pointer = m.group(1)
+            var = m.group(2)
+            state = m.group(3)
+            field = m.group(4)
+
+            assert state in state_mapping, \
+                ("State '%s' is undefined. Cannot extract field for this state." % state)
+            assert field in state_mapping[state], \
+                ("Extract field error: state '%s' does not contain field '%s'." % (state, field))
+
+            extract = state_mapping[state][field]
+            if pointer == '*':
+                extract = extract.format(var + '->')
+            else:
+                extract = extract.format(var + '.')
+
+            code = code[:m.start(0)] + extract + code[m.end(0):]
+            working = True
+    return code
+
+
 def modify_for_variable_length(content):
     fields = content.split(';')[:-1]  # discard the last one
-    all_vars = []
+    fixed_len_order = []
+    variable_len_order = []
     fixed_len = {}
     variable_len = {}
     for field in fields:
@@ -675,29 +705,43 @@ def modify_for_variable_length(content):
             l = m.group(2)
             assert l in fixed_len, ("The size of field '%s' should refer to previously defined field." % var)
             variable_len[name] = (t, l)
-            all_vars.append(name)
+            variable_len_order.append(name)
         else:
             fixed_len[var] = t
-            all_vars.append(var)
+            fixed_len_order.append(var)
 
     if len(variable_len) == 0:
         return content, False, None
-    elif len(variable_len) == 1:
-        var_len_var = variable_len.keys()[0]
+    elif len(variable_len_order) == 1:
+        var_len_var = variable_len_order[0]
         content = ""
         for var in fixed_len:
             content += "%s %s;\n" % (fixed_len[var], var)
         content += "%s %s[];\n" % (variable_len[var_len_var][0], var_len_var)
-        if all_vars[-1] == var_len_var:
+        if variable_len_order[0] == var_len_var:
             return content, False, None
         else:
             return content, True, None
     else:
         content = ""
-        for var in fixed_len:
+        for var in fixed_len_order:
             content += "%s %s;\n" % (fixed_len[var], var)
-        content += "void _rest[];\n"
-        return content, True, variable_len  # TODO: map to field access
+        content += "uint8_t _rest[];\n"
+
+        # Create field mapping
+        field_mapping = {}
+        first_var = variable_len_order[0]
+        t, prev_size = variable_len[first_var]
+        pointer = "(%s*) {0}_rest" % t
+        field_mapping[first_var] = pointer
+
+        for var in variable_len_order[1:]:
+            t, size = variable_len[var]
+            pointer = "(%s*) (%s + {0}%s)" % (t, pointer, prev_size)
+            prev_size = size
+            field_mapping[var] = pointer
+
+        return content, True, field_mapping
 
 
 def create_state(st_name, content, init=None):
@@ -708,11 +752,21 @@ def create_state(st_name, content, init=None):
         content = src
 
     content, reorder, mapping = modify_for_variable_length(content)
+    if len(mapping) > 0:
+        assert st_name not in state_mapping, ("State '%s' is redefined." % st_name)
+        state_mapping[st_name] = mapping
+
+    if reorder and init:
+        raise Exception("Cannot initialize state '%s' when there are more than one variable-length field." % st_name)
 
     s = State(st_name, content, init)
     scope[-1].append(s)
 
     def create_instance(inst_name=None, init=False):
+        if reorder and init:
+            raise Exception(
+                "Cannot initialize state '%s' when there are more than one variable-length field." % st_name)
+
         global fresh_id
         if inst_name is None:
             inst_name = st_name + str(fresh_id)

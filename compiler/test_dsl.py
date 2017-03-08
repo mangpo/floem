@@ -47,6 +47,7 @@ class TestDSL(unittest.TestCase):
                  "order_empty_port.py",
                  "order_join.py",
                  "syscall.py",
+                 "variable_length_field.py",
                  ]
 
         for test in tests:
