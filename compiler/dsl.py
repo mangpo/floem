@@ -194,6 +194,10 @@ class InputPortCollect:
     def __call__(self, *args):
         self.thread_args = args
 
+    def get(self, field):
+        raise Exception("Cannot extract field '%s' from an input to a composite because the type is unknown." % field)
+
+
 class OutputPortCollect:
     """
     An object of this class is used for collecting the element instance and ports that connect to the outputs of
@@ -211,6 +215,36 @@ class OutputPortCollect:
         self.impl_instance = impl_instance
         self.impl_port = impl_port
         self.impl_port_argtypes = impl_port_argtypes
+
+        if impl_port_argtypes:
+            assert port_argtypes == impl_port_argtypes, \
+                ("Output port types of spec and impl must be the same. Spec output: %s. Impl output: %s."
+                 % (port_argtypes, impl_port_argtypes))
+
+    def get(self, field):
+        assert len(self.port_argtypes) == 1, \
+            ("Cannot extract field '%s' from port '%s' of instance '%s' because port '%s' contain multiple pieces of values."
+             % (field, self.port, self.instance, self.port))
+
+        field_list = field.replace('->', '.').split('.')
+
+        first_t = self.port_argtypes[0]
+        last_t = self.port_argtypes[0]
+        content = "x"
+        for f in field_list:
+            if last_t[-1] == "*":
+                mapping = state_mapping[last_t[:-1]]
+                content = "extract*(%s, %s, %s)" % (content, last_t[:-1], f)
+            else:
+                mapping = state_mapping[last_t]
+                content = "extract(%s, %s, %s)" % (content, last_t, f)
+            last_t = mapping[f][0]
+
+        inst_name = "extract_%s_%s_%s" % (self.instance, self.port, field.replace('.', '_').replace('->', '_'))
+        inst = create_element_instance(inst_name, [Port("in", [first_t])], [Port("out", [last_t])],
+                                       "%s x = in(); output { out(%s); }" % (first_t, content))
+        out = inst(self)
+        return out
 
 
 def create_element(ele_name, inports, outports, code, local_state=None, state_params=[]):
@@ -668,7 +702,7 @@ def sanitize_variable_length(code):
     working = True
     while working:
         working = False
-        m = re.search('extract([\*]?)\([ ]*([^)]+)[ ]*,[ ]*([^)]+)[ ]*,[ ]*([^)]+)[ ]*\)', code)
+        m = re.search('extract([\*]?)\([ ]*([a-zA-Z0-9_.>\-]+)[ ]*,[ ]*([a-zA-Z0-9_]+)[ ]*,[ ]*([a-zA-Z0-9_]+)[ ]*\)', code)
         if m:
             pointer = m.group(1)
             var = m.group(2)
@@ -680,7 +714,7 @@ def sanitize_variable_length(code):
             assert field in state_mapping[state], \
                 ("Extract field error: state '%s' does not contain field '%s'." % (state, field))
 
-            extract = state_mapping[state][field]
+            extract = state_mapping[state][field][1]
             if pointer == '*':
                 extract = extract.format(var + '->')
             else:
@@ -691,7 +725,7 @@ def sanitize_variable_length(code):
     return code
 
 
-def modify_for_variable_length(content):
+def get_state_mapping(content):
     fields = content.split(';')[:-1]  # discard the last one
     fixed_len_order = []
     variable_len_order = []
@@ -705,7 +739,8 @@ def modify_for_variable_length(content):
             l = m.group(2)
             try:
                 size = int(l)
-                return content, False, {}
+                fixed_len[name] = (t + '*')
+                fixed_len_order.append(name)
             except ValueError:
                 assert l in fixed_len, ("The size of field '%s' should refer to previously defined field." % var)
                 variable_len[name] = (t, l)
@@ -715,17 +750,28 @@ def modify_for_variable_length(content):
             fixed_len_order.append(var)
 
     if len(variable_len) == 0:
-        return content, False, {}
+        field_mapping = {}
+        for var in fixed_len_order:
+            t = fixed_len[var]
+            field_mapping[var] = (t, "{0}%s" % var)
+        return content, False, field_mapping
     elif len(variable_len_order) == 1:
         var_len_var = variable_len_order[0]
+        var_t = variable_len[var_len_var][0]
+        field_mapping = {}
+        for var in fixed_len_order:
+            t = fixed_len[var]
+            field_mapping[var] = (t, "{0}%s" % var)
+        field_mapping[var_len_var] = (var_t + '*', "{0}%s" % var_len_var)
+
         content = ""
         for var in fixed_len:
             content += "%s %s;\n" % (fixed_len[var], var)
-        content += "%s %s[];\n" % (variable_len[var_len_var][0], var_len_var)
+        content += "%s %s[];\n" % (var_t, var_len_var)
         if variable_len_order[0] == var_len_var:
-            return content, False, {}
+            return content, False, field_mapping
         else:
-            return content, True, {}
+            return content, True, field_mapping
     else:
         content = ""
         for var in fixed_len_order:
@@ -737,13 +783,17 @@ def modify_for_variable_length(content):
         first_var = variable_len_order[0]
         t, prev_size = variable_len[first_var]
         pointer = "(%s*) {0}_rest" % t
-        field_mapping[first_var] = pointer
+        field_mapping[first_var] = (t + '*', pointer)
+
+        for var in fixed_len_order:
+            t = fixed_len[var]
+            field_mapping[var] = (t, "{0}%s" % var)
 
         for var in variable_len_order[1:]:
             t, size = variable_len[var]
             pointer = "(%s*) (%s + {0}%s)" % (t, pointer, prev_size)
             prev_size = size
-            field_mapping[var] = pointer
+            field_mapping[var] = (t + '*', pointer)
 
         return content, True, field_mapping
 
@@ -755,10 +805,9 @@ def create_state(st_name, content, init=None):
             src = "%s %s;\n" % (t, var)
         content = src
 
-    content, reorder, mapping = modify_for_variable_length(content)
-    if len(mapping) > 0:
-        assert st_name not in state_mapping, ("State '%s' is redefined." % st_name)
-        state_mapping[st_name] = mapping
+    content, reorder, mapping = get_state_mapping(content)
+    assert st_name not in state_mapping, ("State '%s' is redefined." % st_name)
+    state_mapping[st_name] = mapping
 
     if reorder and init:
         raise Exception("Cannot initialize state '%s' when there are more than one variable-length field." % st_name)

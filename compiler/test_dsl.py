@@ -48,6 +48,8 @@ class TestDSL(unittest.TestCase):
                  "order_join.py",
                  "syscall.py",
                  "variable_length_field.py",
+                 "extract_field.py",
+                 "extract_field_spec_impl.py",
                  ]
 
         for test in tests:

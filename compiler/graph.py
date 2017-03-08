@@ -93,7 +93,7 @@ class Element:
 
             name2call = {}
             for port in self.outports:
-                m = re.search('[^a-zA-Z0-9_](' + port.name + '[ ]*\([^)]*\))', out_code)
+                m = re.search('[^a-zA-Z0-9_](' + port.name + '[ ]*\([^;]*)', out_code)
                 name2call[port.name] = m.group(1)
 
             self.output_code = name2call
