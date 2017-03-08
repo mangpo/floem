@@ -703,15 +703,19 @@ def modify_for_variable_length(content):
         if m:
             name = m.group(1)
             l = m.group(2)
-            assert l in fixed_len, ("The size of field '%s' should refer to previously defined field." % var)
-            variable_len[name] = (t, l)
-            variable_len_order.append(name)
+            try:
+                size = int(l)
+                return content, False, {}
+            except ValueError:
+                assert l in fixed_len, ("The size of field '%s' should refer to previously defined field." % var)
+                variable_len[name] = (t, l)
+                variable_len_order.append(name)
         else:
             fixed_len[var] = t
             fixed_len_order.append(var)
 
     if len(variable_len) == 0:
-        return content, False, None
+        return content, False, {}
     elif len(variable_len_order) == 1:
         var_len_var = variable_len_order[0]
         content = ""
@@ -719,9 +723,9 @@ def modify_for_variable_length(content):
             content += "%s %s;\n" % (fixed_len[var], var)
         content += "%s %s[];\n" % (variable_len[var_len_var][0], var_len_var)
         if variable_len_order[0] == var_len_var:
-            return content, False, None
+            return content, False, {}
         else:
-            return content, True, None
+            return content, True, {}
     else:
         content = ""
         for var in fixed_len_order:
