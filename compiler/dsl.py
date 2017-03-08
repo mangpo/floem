@@ -476,6 +476,7 @@ def composite_instance(name):
         return create_composite_instance(name, f)
     return receptor
 
+
 def thread_common(name, f, input, output):
     compo = create_composite_instance("composite_" + name, f)
     check_no_spec_impl(name, compo.scope)
@@ -661,7 +662,53 @@ def create_spec_impl(name, spec_func, impl_func):
     return SpecImplInstance(connect, spec_instances_names, impl_instances_names)
 
 
+def modify_for_variable_length(content):
+    fields = content.split(';')[:-1]  # discard the last one
+    all_vars = []
+    fixed_len = {}
+    variable_len = {}
+    for field in fields:
+        t, var = field.lstrip().rstrip().split()
+        m = re.match('([^\[]+)\[([^\]]+)\]', var)  # only support one dimension
+        if m:
+            name = m.group(1)
+            l = m.group(2)
+            assert l in fixed_len, ("The size of field '%s' should refer to previously defined field." % var)
+            variable_len[name] = (t, l)
+            all_vars.append(name)
+        else:
+            fixed_len[var] = t
+            all_vars.append(var)
+
+    if len(variable_len) == 0:
+        return content, False, None
+    elif len(variable_len) == 1:
+        var_len_var = variable_len.keys()[0]
+        content = ""
+        for var in fixed_len:
+            content += "%s %s;\n" % (fixed_len[var], var)
+        content += "%s %s[];\n" % (variable_len[var_len_var][0], var_len_var)
+        if all_vars[-1] == var_len_var:
+            return content, False, None
+        else:
+            return content, True, None
+    else:
+        content = ""
+        for var in fixed_len:
+            content += "%s %s;\n" % (fixed_len[var], var)
+        content += "void _rest[];\n"
+        return content, True, variable_len  # TODO: map to field access
+
+
 def create_state(st_name, content, init=None):
+    if isinstance(content, list):
+        src = ""
+        for t, var in content:
+            src = "%s %s;\n" % (t, var)
+        content = src
+
+    content, reorder, mapping = modify_for_variable_length(content)
+
     s = State(st_name, content, init)
     scope[-1].append(s)
 
