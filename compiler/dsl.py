@@ -292,6 +292,9 @@ def create_element(ele_name, inports, outports, code, local_state=None, state_pa
                         scope[-1].append(c)
                 elif from_port is None:
                     pass
+                elif isinstance(from_port, tuple) and isinstance(from_port[0], OutputPortCollect):
+                    raise Exception("Attempt to connect '%s'\nto iput port '%s' of element instance '%s'.\nCannot connect multiple output ports to one input port."
+                                    % (from_port, to_port, inst_name))
                 else:
                     raise Exception("Attempt to connect an unknown item %s to element instance '%s'."
                                     % (from_port, inst_name))
