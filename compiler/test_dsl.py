@@ -19,6 +19,7 @@ class TestDSL(unittest.TestCase):
                  "join_multiple.py",
                  "join_inject.py",
                  "join_inject_forkjoin.py",
+                 "double_connect.py",
                  "buffer.py",
                  "state_local.py",
                  "state_shared.py",
@@ -70,7 +71,6 @@ class TestDSL(unittest.TestCase):
         try:
             c.generate_code()
         except Exception as e:
-            print e.message
             self.assertNotEqual(
                 e.message.find("Input port 'in1' of join element instance 'add' is connected to more than one port."), -1)
         else:
