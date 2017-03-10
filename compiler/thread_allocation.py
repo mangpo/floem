@@ -206,7 +206,7 @@ class ThreadAllocator:
             st_content += "%s %s; " % (buffers_types[i], buffers[i])
 
         # Create state
-        st_name = "_buffer_%s" % instance.name
+        st_name = "%s_buffer" % instance.name
         state = State(st_name, st_content, st_init)
         self.graph.addState(state)
         self.graph.newStateInstance(st_name, '_'+st_name)
@@ -279,7 +279,7 @@ class ThreadAllocator:
         src += "  %s = true;\n" % avail
 
         # Create element
-        st_name = "_buffer_%s" % next_ele_name
+        st_name = "%s_buffer" % next_ele_name
         ele_name = st_name + '_' + next_port + "_write"
         ele = Element(ele_name, [Port("in", port.argtypes)], [], src, None, [(st_name, "this")])
         define = self.graph.addElement(ele)

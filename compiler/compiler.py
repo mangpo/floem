@@ -488,7 +488,54 @@ def thread_func_create_cancel(func, size=None):
     return (thread, func_src, create, cancel)
 
 
+def is_spec_impl(threads):
+    if len(threads) == 0:
+        return False
+
+    for t in threads:
+        m = (re.match('_spec', t) or re.match('_impl', t))
+        if not m:
+            return False
+    return True
+
+
+def inject_thread_code(injects):
+    global_src = ""
+    run_src = ""
+    kill_src = ""
+
+    for (func, size) in injects:
+        (thread, func_src, create, cancel) = thread_func_create_cancel(func, size)
+        global_src += thread
+        global_src += func_src
+        run_src += create
+        kill_src += cancel
+
+    return global_src, run_src, kill_src
+
+
+def internal_thread_code(forever, graph):
+    global_src = ""
+    run_src = ""
+    kill_src = ""
+
+    for func in forever:
+        if len(graph.instances[func].element.inports) > 0:
+            raise Exception("The input port of element instance '%s' is not connected to anything." % func)
+
+        (thread, func_src, create, cancel) = thread_func_create_cancel(func)
+        global_src += thread
+        global_src += func_src
+        run_src += create
+        kill_src += cancel
+
+    return global_src, run_src, kill_src
+
+
 def generate_internal_triggers(graph, triggers):
+    if not triggers:
+        return ""
+
     threads_internal = set([trigger.call_instance for trigger in graph.threads_internal])
     threads_api = set([trigger.call_instance for trigger in graph.threads_API])
     injects = graph.inject_populates
@@ -502,42 +549,38 @@ def generate_internal_triggers(graph, triggers):
         all_injects += inject.spec_ele_instances
         all_injects += inject.impl_ele_instances
 
+    spec_impl = is_spec_impl(threads_internal.union(all_injects))
 
-    global_src = ""
-    run_src = "void run_threads() {\n"
-    final_src = "void kill_threads() {\n"
+    forever = threads_internal.difference(all_injects)
+    no_triggers = graph.threads_roots.difference(forever).difference(all_injects).difference(threads_api)
+    if len(no_triggers) > 0:
+        sys.stderr.write(
+            "run() function doesn't invoke %s. To include them in run(), call InternalTrigger(instance).\n"
+            % no_triggers)
 
-    for (func, size) in spec_injects + impl_injects:
-        (thread, func_src, create, cancel) = thread_func_create_cancel(func, size)
-        global_src += thread
-        global_src += func_src
-        run_src += create
-        final_src += cancel
+    if not spec_impl:
+        g1, r1, k1 = inject_thread_code(spec_injects + impl_injects)
+        g2, r2, k2 = internal_thread_code(forever, graph)
+        global_src = g1 + g2
+        run_src = "void run_threads() {\n" + r1 + r2 + "}\n"
+        kill_src = "void kill_threads() {\n" + k1 + k2 + "}\n"
 
-    if triggers:
-        all_injects = set(all_injects)
-        forever = threads_internal.difference(all_injects)
-        no_triggers = graph.threads_roots.difference(forever).difference(all_injects).difference(threads_api)
-        if len(no_triggers) > 0:
-            sys.stderr.write(
-                "run() function doesn't invoke %s. To include them in run(), call InternalTrigger(instance).\n"
-                % no_triggers)
+    else:
+        g1, r1, k1 = inject_thread_code(spec_injects)
+        g2, r2, k2 = internal_thread_code([x for x in forever if re.match('_spec', x)], graph)
+        global_src = g1 + g2
+        run_src = "void spec_run_threads() {\n" + r1 + r2 + "}\n"
+        kill_src = "void spec_kill_threads() {\n" + k1 + k2 + "}\n"
 
-        for func in forever:
-            if len(graph.instances[func].element.inports) > 0:
-                raise Exception("The input port of element instance '%s' is not connected to anything." % func)
+        g1, r1, k1 = inject_thread_code(impl_injects)
+        g2, r2, k2 = internal_thread_code([x for x in forever if re.match('_impl', x)], graph)
+        global_src += g1 + g2
+        run_src += "void impl_run_threads() {\n" + r1 + r2 + "}\n"
+        kill_src += "void impl_kill_threads() {\n" + k1 + k2 + "}\n"
 
-            (thread, func_src, create, cancel) = thread_func_create_cancel(func)
-            global_src += thread
-            global_src += func_src
-            run_src += create
-            final_src += cancel
+    print global_src + run_src + kill_src
+    return global_src + run_src + kill_src
 
-    run_src += "}\n"
-    final_src += "}\n"
-
-    print global_src + run_src + final_src
-    return global_src + run_src + final_src
 
 def generate_inject_probe_code(graph):
     injects = graph.inject_populates

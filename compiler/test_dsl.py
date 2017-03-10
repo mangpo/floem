@@ -103,7 +103,7 @@ class TestDSL(unittest.TestCase):
         g = c.generate_graph()
         self.assertEqual(8, len(g.instances))
         roots = g.find_roots()
-        self.assertEqual(set(['c1_f1', '_buffer_c1_f2_read', '_buffer_c2_f2_read']), roots)
+        self.assertEqual(set(['c1_f1', 'c1_f2_buffer_read', 'c2_f2_buffer_read']), roots)
 
     def test_composite(self):
         reset()

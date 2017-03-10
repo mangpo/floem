@@ -50,9 +50,12 @@ void cmp_func(int spec_n, int *spec_data, int impl_n, int *impl_data) {
 }
 '''
 c.testing = r'''
-run_threads();
+spec_run_threads();
 usleep(100000);
-kill_threads();
+spec_kill_threads();
+impl_run_threads();
+usleep(100000);
+impl_kill_threads();
 '''
 c.desugar_mode = "compare"
 c.triggers = True

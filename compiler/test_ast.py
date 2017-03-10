@@ -93,11 +93,11 @@ class TestAST(unittest.TestCase):
         root2 = self.find_roots(g2)
 
         self.assertEqual(set(["Forwarder"]), root1)
-        self.assertEqual(set(["Forwarder", "_buffer_Comsumer_read"]), root2)
-        self.assertEqual(set(["Forwarder", "_buffer_Comsumer_in_write"]),
+        self.assertEqual(set(["Forwarder", "Comsumer_buffer_read"]), root2)
+        self.assertEqual(set(["Forwarder", "Comsumer_buffer_in_write"]),
                          self.find_subgraph(g2, "Forwarder"))
-        self.assertEqual(set(["_buffer_Comsumer_read", "Comsumer"]),
-                         self.find_subgraph(g2, "_buffer_Comsumer_read"))
+        self.assertEqual(set(["Comsumer_buffer_read", "Comsumer"]),
+                         self.find_subgraph(g2, "Comsumer_buffer_read"))
 
     def test_shared_state(self):
         p = Program(
@@ -149,10 +149,10 @@ class TestAST(unittest.TestCase):
         g = generate_graph(p)
         self.assertEqual(5, len(g.instances))
         roots = self.find_roots(g)
-        self.assertEqual(set(['f1', 'f2', '_buffer_drop_read']), roots)
-        self.assertEqual(set(['f1', '_buffer_drop_in_write']), self.find_subgraph(g, 'f1'))
-        self.assertEqual(set(['f2', '_buffer_drop_in_write']), self.find_subgraph(g, 'f2'))
-        self.assertEqual(set(['_buffer_drop_read', 'drop']), self.find_subgraph(g, '_buffer_drop_read'))
+        self.assertEqual(set(['f1', 'f2', 'drop_buffer_read']), roots)
+        self.assertEqual(set(['f1', 'drop_buffer_in_write']), self.find_subgraph(g, 'f1'))
+        self.assertEqual(set(['f2', 'drop_buffer_in_write']), self.find_subgraph(g, 'f2'))
+        self.assertEqual(set(['drop_buffer_read', 'drop']), self.find_subgraph(g, 'drop_buffer_read'))
 
     def test_error_both_internal_external(self):
         p = Program(
@@ -213,12 +213,12 @@ class TestAST(unittest.TestCase):
         self.assertEqual(4, len(g.instances))
         self.assertEqual(1, len(g.states))
         roots = self.find_roots(g)
-        self.assertEqual(set(['f1', '_buffer_f2_read']), roots)
+        self.assertEqual(set(['f1', 'f2_buffer_read']), roots)
         self.assertEqual(2, len(self.find_subgraph(g, 'f1')))
-        self.assertEqual(2, len(self.find_subgraph(g, '_buffer_f2_read')))
+        self.assertEqual(2, len(self.find_subgraph(g, 'f2_buffer_read')))
 
-        self.check_api_return(g, [("_buffer_f2_read", "int"), ("f2", "int")])
-        self.check_api_return_from(g, [("_buffer_f2_read", "f2")])
+        self.check_api_return(g, [("f2_buffer_read", "int"), ("f2", "int")])
+        self.check_api_return_from(g, [("f2_buffer_read", "f2")])
         self.check_api_return_final(g, ["f2"])
 
     def test_API_return_error(self):
@@ -253,9 +253,9 @@ class TestAST(unittest.TestCase):
         self.assertEqual(4, len(g.instances))
         self.assertEqual(1, len(g.states))
         roots = self.find_roots(g)
-        self.assertEqual(set(['f1', '_buffer_f2_read']), roots)
+        self.assertEqual(set(['f1', 'f2_buffer_read']), roots)
         self.assertEqual(2, len(self.find_subgraph(g, 'f1')))
-        self.assertEqual(2, len(self.find_subgraph(g, '_buffer_f2_read')))
+        self.assertEqual(2, len(self.find_subgraph(g, 'f2_buffer_read')))
 
         self.check_api_return(g, [])
         self.check_api_return(g, [])
@@ -281,9 +281,9 @@ class TestAST(unittest.TestCase):
         self.assertEqual(5, len(g.instances))
         self.assertEqual(1, len(g.states))
         roots = self.find_roots(g)
-        self.assertEqual(set(['dup', '_buffer_fwd_read']), roots)
+        self.assertEqual(set(['dup', 'fwd_buffer_read']), roots)
         self.assertEqual(2, len(self.find_subgraph(g, 'dup')))
-        self.assertEqual(3, len(self.find_subgraph(g, '_buffer_fwd_read')))
+        self.assertEqual(3, len(self.find_subgraph(g, 'fwd_buffer_read')))
 
         self.check_api_return(g, [("dup", "int")])
         self.check_api_return_from(g, [])

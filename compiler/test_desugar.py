@@ -51,7 +51,7 @@ class TestDesugar(unittest.TestCase):
         g = generate_graph(p, True)
         self.assertEqual(16, len(g.instances))
         roots = self.find_roots(g)
-        self.assertEqual(set(['f0','f1','f2','f3', '_buffer_d0_read', '_buffer_d1_read', '_buffer_d2_read', '_buffer_d3_read']), roots)
+        self.assertEqual(set(['f0','f1','f2','f3', 'd0_buffer_read', 'd1_buffer_read', 'd2_buffer_read', 'd3_buffer_read']), roots)
 
     def test_spec_impl(self):
         p = Program(
@@ -76,12 +76,12 @@ class TestDesugar(unittest.TestCase):
         dp = desugar(p, "impl")
         g = generate_graph(dp, True)
         self.assertEqual(4, len(g.instances))
-        self.assertEqual(set(['f', '_buffer_g_read']), self.find_roots(g))
+        self.assertEqual(set(['f', 'g_buffer_read']), self.find_roots(g))
 
         dp = desugar(p, "compare")
         g = generate_graph(dp, True)
         self.assertEqual(6, len(g.instances))
-        self.assertEqual(set(['_spec_f', '_impl_f', '_buffer__impl_g_read']), self.find_roots(g))
+        self.assertEqual(set(['_spec_f', '_impl_f', '_impl_g_buffer_read']), self.find_roots(g))
 
     def test_init(self):
         self.assertEqual(concretize_init("s[4]"), ['s0','s1', 's2', 's3'])

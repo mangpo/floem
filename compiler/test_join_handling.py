@@ -241,11 +241,11 @@ class TestJoinHandling(unittest.TestCase):
         g = generate_graph(p, True)
         self.assertEqual(7, len(g.instances))
         roots = self.find_roots(g)
-        self.assertEqual(set(['Fork', '_buffer_Print_read']), roots)
-        self.assertEqual(set(['Fork', 'Add', '_buffer_Print_in1_write', 'Sub', '_buffer_Print_in2_write']),
+        self.assertEqual(set(['Fork', 'Print_buffer_read']), roots)
+        self.assertEqual(set(['Fork', 'Add', 'Print_buffer_in1_write', 'Sub', 'Print_buffer_in2_write']),
                          self.find_subgraph(g, 'Fork', set()))
-        self.assertEqual(set(['_buffer_Print_read', 'Print']),
-                         self.find_subgraph(g, '_buffer_Print_read', set()))
+        self.assertEqual(set(['Print_buffer_read', 'Print']),
+                         self.find_subgraph(g, 'Print_buffer_read', set()))
 
         self.check_join_ports_same_thread(g, [])
         self.check_join_state_create(g, [])
@@ -288,9 +288,9 @@ class TestJoinHandling(unittest.TestCase):
         g = generate_graph(p, True)
         self.assertEqual(8, len(g.instances))
         roots = self.find_roots(g)
-        self.assertEqual(set(['Fork', '_buffer_Sub_read']), roots)
+        self.assertEqual(set(['Fork', 'Sub_buffer_read']), roots)
         self.assertEqual(5, len(self.find_subgraph(g, 'Fork', set())))
-        self.assertEqual(3, len(self.find_subgraph(g, '_buffer_Sub_read', set())))
+        self.assertEqual(3, len(self.find_subgraph(g, 'Sub_buffer_read', set())))
 
         self.check_join_ports_same_thread(g, [])
         self.check_join_state_create(g, [])
@@ -328,8 +328,8 @@ class TestJoinHandling(unittest.TestCase):
         self.assertEqual(5, len(g.instances))
         roots = self.find_roots(g)
         self.assertEqual(set(["f1", "f2"]), roots)
-        self.assertEqual(set(["f1", '_buffer_Print_read', "Print"]), self.find_subgraph(g, 'f1', set()))
-        self.assertEqual(set(["f2", '_buffer_Print_in2_write']), self.find_subgraph(g, 'f2', set()))
+        self.assertEqual(set(["f1", 'Print_buffer_read', "Print"]), self.find_subgraph(g, 'f1', set()))
+        self.assertEqual(set(["f2", 'Print_buffer_in2_write']), self.find_subgraph(g, 'f2', set()))
         self.check_join_ports_same_thread(g, [])
 
     def test_join_only(self):
@@ -704,9 +704,9 @@ class TestJoinHandling(unittest.TestCase):
         g = generate_graph(p, True)
         self.assertEqual(10, len(g.instances))
         roots = self.find_roots(g)
-        self.assertEqual(set(['fork4', '_buffer_f3_read']), roots)
+        self.assertEqual(set(['fork4', 'f3_buffer_read']), roots)
 
-        self.check_join_ports_same_thread(g, [('_buffer_add3_read', ["in1", "in2"]), ("add2", ["in1", "in2"])])
-        self.check_join_state_create(g, [("fork4", ['_buffer_add3_read', "add2"])])
+        self.check_join_ports_same_thread(g, [('add3_buffer_read', ["in1", "in2"]), ("add2", ["in1", "in2"])])
+        self.check_join_state_create(g, [("fork4", ['add3_buffer_read', "add2"])])
 
         self.assertEqual(g.instances["fork4"].join_partial_order, ["out1", "out2", "out3", "out4"])
