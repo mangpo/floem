@@ -112,7 +112,7 @@ eq_entry = pack(hash, opaque)
 nic_rx.run_start(inject, get_opaque, msg_put, get_key, jenkins_hash, pack)
 
 def spec_nic2app(x):
-    rx_enq, rx_deq = create_circular_queue_instances("rx_queue", "eq_entry*", 4)
+    rx_enq, rx_deq = create_circular_queue_instances("rx_queue_spec", "eq_entry*", 4)
     rx_enq(x)
     nic_rx.run(rx_enq)
 
@@ -125,7 +125,7 @@ def spec_nic2app(x):
 def impl_nic2app(x):
     fork_eq = create_fork_instance("fork_eq", 2, "eq_entry*")
     get_core = GetCore()
-    rx_enq, rx_deqs = queue.create_circular_queue_one2many_instances("rx_queue", "eq_entry*", 4, n_cores)
+    rx_enq, rx_deqs = queue.create_circular_queue_one2many_instances("rx_queue_impl", "eq_entry*", 4, n_cores)
 
     x1, x2 = fork_eq(x)
     rx_enq(x1, get_core(x2))
@@ -144,7 +144,7 @@ nic2app(eq_entry)
 ######################## NIC Tx #######################
 
 def spec_app2nic():
-    tx_enq, tx_deq = create_circular_queue_instances("tx_queue", "cq_entry*", 4)
+    tx_enq, tx_deq = create_circular_queue_instances("tx_queue_spec", "cq_entry*", 4)
     y = tx_deq()
 
     send_cq = API_thread("send_cq", ["cq_entry*"], None)
@@ -153,7 +153,7 @@ def spec_app2nic():
     return y
 
 def impl_app2nic():
-    tx_enqs, tx_deq = queue.create_circular_queue_many2one_instances("tx_queue", "cq_entry*", 4, n_cores)
+    tx_enqs, tx_deq = queue.create_circular_queue_many2one_instances("tx_queue_impl", "cq_entry*", 4, n_cores)
     y = tx_deq()
 
     for i in range(n_cores):
