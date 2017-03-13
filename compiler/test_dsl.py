@@ -434,6 +434,31 @@ class TestDSL(unittest.TestCase):
         c.testing = "out(run(1)); out(run(10)); out(run(-10));"
         c.generate_code_and_run([2, 20, -1])
 
+    def test_wrong_starting_element(self):
+        reset()
+        Gen = create_element("Gen", [], [Port("out", ["int"])],
+                             "output { out(1); }")
+        Forward = create_identity("Forward", "int")
+        Drop = create_drop("Drop", "int")
+
+        gen = Gen()
+        f = Forward()
+        drop = Drop()
+        drop(f(gen()))
+
+        t = internal_thread("t")
+        t.run_start(f, gen, drop)
+
+        try:
+            c = Compiler()
+            c.triggers = True
+            c.testing = "run_threads(); usleep(1000); kill_threads();"
+            c.generate_code_and_run()
+        except Exception as e:
+            self.assertNotEqual(e.message.find("cannot be a starting element because it receives an input from another element."), -1, 'Expect undefined exception.')
+        else:
+            self.fail('Exception is not raised.')
+
 
 if __name__ == '__main__':
     unittest.main()

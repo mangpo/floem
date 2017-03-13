@@ -411,7 +411,7 @@ def create_composite(composite_name, program):
     args = inspect.getargspec(program).args
     n_args = len(args)
 
-    def create_instance(inst_name=None, threads=[]):
+    def create_instance(inst_name=None):
         if inst_name is None:
             global fresh_id
             inst_name = composite_name + str(fresh_id)

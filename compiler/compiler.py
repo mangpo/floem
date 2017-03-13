@@ -521,7 +521,7 @@ def internal_thread_code(forever, graph):
 
     for func in forever:
         if len(graph.instances[func].element.inports) > 0:
-            raise Exception("The input port of element instance '%s' is not connected to anything." % func)
+            raise Exception("The element '%s' cannot be a starting element because it receives an input from another element." % func)
 
         (thread, func_src, create, cancel) = thread_func_create_cancel(func)
         global_src += thread
@@ -554,6 +554,13 @@ def generate_internal_triggers(graph, triggers):
     forever = threads_internal.difference(all_injects)
     no_triggers = graph.threads_roots.difference(forever).difference(all_injects).difference(threads_api)
     if len(no_triggers) > 0:
+        print "here???"
+        for inst in no_triggers:
+            raise Exception(
+                "Element instance '%s' is assigned to thread '%s', but it is not reachable from the starting element of thread '%s'."
+                + "To make it reachable, use %s.run_order to specify order from an element reachable ")
+        raise Exception("run() function doesn't invoke %s. To include them in run(), call InternalTrigger(instance).\n"
+            % no_triggers)
         sys.stderr.write(
             "run() function doesn't invoke %s. To include them in run(), call InternalTrigger(instance).\n"
             % no_triggers)
