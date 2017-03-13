@@ -455,7 +455,37 @@ class TestDSL(unittest.TestCase):
             c.testing = "run_threads(); usleep(1000); kill_threads();"
             c.generate_code_and_run()
         except Exception as e:
-            self.assertNotEqual(e.message.find("cannot be a starting element because it receives an input from another element."), -1, 'Expect undefined exception.')
+            self.assertNotEqual(e.message.find("not reachable from the starting element of thread"), -1, 'Expect undefined exception.')
+        else:
+            self.fail('Exception is not raised.')
+
+    def test_disconnection(self):
+        reset()
+        Gen = create_element("Gen", [], [Port("out", ["int"])],
+                             "output { out(1); }")
+        Forward = create_identity("Forward", "int")
+        Drop = create_drop("Drop", "int")
+
+        gen = Gen()
+        f = Forward()
+        drop = Drop()
+        drop(f(gen()))
+
+        gen2 = Gen()
+        f2 = Forward()
+        drop2 = Drop()
+        drop2(f2(gen2()))
+
+        t = internal_thread("t")
+        t.run_start(gen, f, drop, gen2, f2, drop2)
+
+        try:
+            c = Compiler()
+            c.triggers = True
+            c.testing = "run_threads(); usleep(1000); kill_threads();"
+            c.generate_code_and_run()
+        except Exception as e:
+            self.assertNotEqual(e.message.find("not reachable from the starting element of thread"), -1, 'Expect undefined exception.')
         else:
             self.fail('Exception is not raised.')
 

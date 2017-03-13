@@ -554,13 +554,14 @@ def generate_internal_triggers(graph, triggers):
     forever = threads_internal.difference(all_injects)
     no_triggers = graph.threads_roots.difference(forever).difference(all_injects).difference(threads_api)
     if len(no_triggers) > 0:
-        print "here???"
         for inst in no_triggers:
+            t = graph.instances[inst].thread
             raise Exception(
-                "Element instance '%s' is assigned to thread '%s', but it is not reachable from the starting element of thread '%s'."
-                + "To make it reachable, use %s.run_order to specify order from an element reachable ")
-        raise Exception("run() function doesn't invoke %s. To include them in run(), call InternalTrigger(instance).\n"
-            % no_triggers)
+                "Element instance '%s' is assigned to thread '%s', but it is not reachable from the starting element of thread '%s'.\n"
+                % (inst, t, t)
+                + "To make it reachable, use %s.run_order to specify an order from an element reachable by the starting element of thread '%s' to '%s'."
+                % (t, t, inst)
+            )
         sys.stderr.write(
             "run() function doesn't invoke %s. To include them in run(), call InternalTrigger(instance).\n"
             % no_triggers)
