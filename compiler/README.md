@@ -177,6 +177,8 @@ b(q_out)
 For more examples, see
 - `programs_in_dsl/composite.py`
 
+### Maybe this should come after resource mapping?
+
 ## 5. Resource Mapping
 To execute a program, you need to assign each element a thread to run. Currently, there are two types of threads: internal thread and API thread handler.
 
