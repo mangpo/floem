@@ -194,21 +194,49 @@ In each round, a thread starts invoke the starting element. Then, the rest of th
 For an internal thread, it will repeatedly invoke the starting element when each round is complete. For an API thread, it invokes the starting element whenever the user application calls the API.
 
 #### Example 1
-- parallel prints with internal threads
+```python
+hello1 = create_element_instance("Hello1", [], [], r'''printf("hello 1\n");''')
+hello2 = create_element_instance("hello2", [], [], r'''printf("hello 2\n");''')
 
-### 5.2 Block Buffer
+t1 = internal_thread("t1")
+t2 = internal_thread("t2")
+t1.run_start(hello1)
+t2.run_start(hello2)
+```
+This program launches two threads that repeatedly print "hello 1"/"hello 2".
 
+### 5.2 API
+API thread is slightly more complicated than an internal thread. It requires a user to provide the signature of the API function, and the compiler checks if it matches the inputs taken by the starting element and the outputs of the returning elements. The starting element is defined by the user; it is the first element given to `thread.run_start`. The inputs to the API function are the input ports to the starting element that have not been connected. A returning element is (i) an element that does not send any value to another element on the same thread, (ii) has only one output port, and (iii) its output port is not connected to anything. An API thread handler must have zero or one returning element. If it has zero returning element, then the return type of the API is `None` (void), otherwise it matches the type of the output port of the returning element. Currently, our compiler only supports a returning element whose output port contains only one value.
 #### Example 2
-- blocking read/write
+```python
+Inc = create_element("Inc", [Port("in", ["int"])], [Port("out", ["int"])], 
+  "int x = in() + 1; output { out(x); }")
+inc1 = Inc()
+inc2 = Inc()
+
+inc2(inc1(None))
+
+t = API_thread("add2", ["int"], "int")
+t.run_start(inc1, inc2)
+```
+
+- @API sugar
+### 5.3 Blocking Buffer
 
 #### Example 3
+- blocking read/write
+
+#### Example 4
 - spawn thread
 
-### 5.3 Thread and Composite
-#### Example 4
-- thread and composite
+### 5.4 Thread and Composite
+#### Example 5
+- composite with multiple-threads
+- composite with one thread
 
 ## 6. Testing Facilities
 - spec/impl
 
+## 7. Provided Elements
+- circular queue (one thread/multi-thread)
 
