@@ -61,12 +61,16 @@ uint8_t *key = m->payload + 4;
 printf("%d %d %d\n", m->mcr.request.magic, m->mcr.request.bodylen, key[0]);
 ''')
 
-pkt1, pkt2 = Fork("fork_pkt")(None)
-key = get_key(pkt1)
-hash = jenkins_hash(key)
-item = lookup(hash)
-response = prepare_response(pkt2, item)
-print_msg(response)
+fork = Fork()
+
+@API("run")
+def run(pkt):
+    pkt1, pkt2 = fork(pkt)
+    key = get_key(pkt1)
+    hash = jenkins_hash(key)
+    item = lookup(hash)
+    response = prepare_response(pkt2, item)
+    print_msg(response)
 
 c = Compiler()
 c.include = r'''
@@ -75,10 +79,10 @@ c.include = r'''
 '''
 c.testing = r'''
 populate_hasht(10);
-fork_pkt(random_request(1));
-fork_pkt(random_request(2));
-fork_pkt(random_request(3));
-fork_pkt(random_request(100));
+run(random_request(1));
+run(random_request(2));
+run(random_request(3));
+run(random_request(100));
 '''
 c.depend = ['jenkins_hash', 'hashtable']
 c.generate_code_and_run([1,5,3, 2,5,6, 3,5,9, 100,4,100])
