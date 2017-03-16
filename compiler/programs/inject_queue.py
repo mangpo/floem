@@ -1,5 +1,6 @@
 from dsl import *
 from elements_library import *
+from queue import *
 
 Inc = create_add1("Inc", "int")
 Inject = create_inject("Inject", "int", 8, "gen_func")
@@ -18,13 +19,10 @@ def dequeue():
 c = Compiler()
 c.include = r'''int gen_func(int i) { return i; }'''
 c.testing = r'''
-run_threads();
 for(int i=0; i<8; i++) {
-    usleep(1000);
+    usleep(10);
     printf("%d\n", dequeue());
 }
 out(dequeue());
-kill_threads();
 '''
-c.triggers = True
 c.generate_code_and_run(range(2,10) + [-1])

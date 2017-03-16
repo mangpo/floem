@@ -15,16 +15,10 @@ class TestDSL(unittest.TestCase):
 
     def test_run(self):
         tests = ["hello.py",
-                 "join.py",
-                 "join_multiple.py",
                  "join_inject.py",
                  "join_inject_forkjoin.py",
-                 "double_connect.py",
-                 "buffer.py",
                  "state_local.py",
                  "state_shared.py",
-                 "state_nested_composite.py",
-                 "composite.py",
                  "composite_thread_port.py",
                  "composite_scope.py",
                  "API_increment1.py",
@@ -35,26 +29,39 @@ class TestDSL(unittest.TestCase):
                  "API_and_trigger.py",
                  "spec_impl.py",
                  "spec_impl_at.py",
-                 "probe_composite.py",
-                 "probe_multi.py",
                  "probe_spec_impl.py",
+                 "probe_multi.py",
                  "inject_queue.py",
                  "circular_queue.py",
+                 "circular_queue2.py",
                  "circular_queue_multicore.py",
-                 "table.py",
                  "composite_at1.py",
                  "composite_at2.py",
                  "composite_at3.py",
                  "order_empty_port.py",
                  "order_join.py",
                  "syscall.py",
-                 "variable_length_field.py",
-                 "extract_field.py",
-                 "extract_field_spec_impl.py",
+                  "extract_field.py",
                  ]
 
+        tests2 = ["join.py",
+                  "join_multiple.py",
+                  "double_connect.py",
+                  "buffer.py",
+                  "state_nested_composite.py",
+                  "probe_composite.py",
+                  "probe_spec_impl.py",
+                  "table.py",
+                  "composite.py",
+                  "variable_length_field.py",
+                  "extract_field_spec_impl.py",
+                  ]
+
         for test in tests:
-            status = os.system("python programs_in_dsl/" + test)
+            status = os.system("python programs/" + test)
+            self.assertEqual(status, 0, "Error at " + test)
+        for test in tests2:
+            status = os.system("python programs_testing/" + test)
             self.assertEqual(status, 0, "Error at " + test)
 
     def test_conflict_input(self):

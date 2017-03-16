@@ -19,13 +19,13 @@ int main() {
   init();
   run_threads();
 
-  usleep(1000);
+  usleep(10);
   for(int i=0;i<10;i++) {
     run_app();
-    usleep(1000);
+    usleep(10);
   }
 
-  usleep(10000);
+  usleep(500);
 
   kill_threads();
   return 0;

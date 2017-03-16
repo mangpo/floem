@@ -1,5 +1,6 @@
 from dsl import *
 from elements_library import *
+from queue import *
 
 @composite_instance("syscall")
 def syscall(arg_app, ret_kernel, t_app, t_ker):
@@ -37,8 +38,7 @@ inc(arg_ker2)
 p(ret_app2)
 
 c = Compiler()
-c.triggers = True
-c.testing = "run_threads(); f(0); f(1); f(2); kill_threads();"
+c.testing = "f(0); f(1); f(2);"
 c.generate_code_and_run([1,2,3])
 
 

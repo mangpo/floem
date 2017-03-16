@@ -8,8 +8,13 @@ Sum = create_element("Sum",
             None,
             [("Storage", "this")])
 s = Storage(init=[50])
-sum1 = Sum("sum1", [s])
-sum2 = Sum("sum2", [s])
+sum1 = Sum("_sum1", [s])
+sum2 = Sum("_sum2", [s])
+
+t1 = API_thread("sum1", ["int"], None)
+t2 = API_thread("sum2", ["int"], None)
+t1.run_start(sum1)
+t2.run_start(sum2)
 
 c = Compiler()
 c.testing = "sum1(1); sum1(2); sum2(0);"

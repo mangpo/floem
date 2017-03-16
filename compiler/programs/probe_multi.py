@@ -30,6 +30,10 @@ def impl():
 
 compo = create_spec_impl("compo", spec, impl)
 
+t = internal_thread("t")
+t.run(compo)
+t.start(inject)
+
 c = Compiler()
 c.include = r'''
 int gen_func(int i) { return i; }
@@ -51,12 +55,11 @@ void cmp_func(int spec_n, int *spec_data, int impl_n, int *impl_data) {
 '''
 c.testing = r'''
 spec_run_threads();
-usleep(100000);
+usleep(1000);
 spec_kill_threads();
 impl_run_threads();
-usleep(100000);
+usleep(1000);
 impl_kill_threads();
 '''
 c.desugar_mode = "compare"
-c.triggers = True
 c.generate_code_and_run()

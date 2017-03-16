@@ -18,8 +18,8 @@ unit = Unit()
 pre = Forward()
 post = Forward()
 
-t1 = API_thread("write", ["int"], None)
-t2 = API_thread("read", [], "int")
+t1 = API_thread("put", ["int"], None)
+t2 = API_thread("get", [], "int")
 
 x1 = pre(None)
 x2 = unit(x1)
@@ -30,5 +30,5 @@ t1.run_start(pre)
 t2.run(post)
 
 c = Compiler()
-c.testing = "write(123); out(read()); write(42); out(read());"
+c.testing = "put(123); out(get()); put(42); out(get());"
 c.generate_code_and_run([123,42])

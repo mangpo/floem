@@ -457,13 +457,11 @@ def generate_graph(program, resource=True):
     return gen.graph
 
 
-def generate_header(testing, triggers):
+def generate_header(testing):
     src = ""
-    for file in common.header_files:
+    for file in common.header_files + common.header_files_triggers:
         src += "#include <%s>\n" % file
-    if triggers:
-        for file in common.header_files_triggers:
-            src += "#include <%s>\n" % file
+
     if testing:
         src += "void out(int x) { printf(\"%d\\n\", x); }"
     print src
@@ -479,10 +477,10 @@ n_threads = 0
 def thread_func_create_cancel(func, size=None):
     thread = "pthread_t _thread_%s;\n" % func
     if size:
-        func_src = "void *_run_%s(void *threadid) { for(int i=0; i<%d; i++) { %s(); usleep(1000); } pthread_exit(NULL); }\n" \
+        func_src = "void *_run_%s(void *threadid) { for(int i=0; i<%d; i++) { %s(); usleep(10); } pthread_exit(NULL); }\n" \
                    % (func, size, func)
     else:
-        func_src = "void *_run_%s(void *threadid) { while(true) { %s(); usleep(1000); } }\n" % (func, func)
+        func_src = "void *_run_%s(void *threadid) { while(true) { %s(); /* usleep(1000); */ } }\n" % (func, func)
     create = "  pthread_create(&_thread_%s, NULL, _run_%s, NULL);\n" % (func, func)
     cancel = "  pthread_cancel(_thread_%s);\n" % func
     return (thread, func_src, create, cancel)
@@ -532,10 +530,7 @@ def internal_thread_code(forever, graph):
     return global_src, run_src, kill_src
 
 
-def generate_internal_triggers(graph, triggers):
-    if not triggers:
-        return ""
-
+def generate_internal_triggers(graph):
     threads_internal = set([trigger.call_instance for trigger in graph.threads_internal])
     threads_api = set([trigger.call_instance for trigger in graph.threads_API])
     injects = graph.inject_populates
@@ -556,15 +551,13 @@ def generate_internal_triggers(graph, triggers):
     if len(no_triggers) > 0:
         for inst in no_triggers:
             t = graph.instances[inst].thread
-            raise Exception(
-                "Element instance '%s' is assigned to thread '%s', but it is not reachable from the starting element of thread '%s'.\n"
-                % (inst, t, t)
-                + "To make it reachable, use %s.run_order to specify an order from an element reachable by the starting element of thread '%s' to '%s'."
-                % (t, t, inst)
-            )
-        sys.stderr.write(
-            "run() function doesn't invoke %s. To include them in run(), call InternalTrigger(instance).\n"
-            % no_triggers)
+            if t:
+                raise Exception(
+                    "Element instance '%s' is assigned to thread '%s', but it is not reachable from the starting element of thread '%s'.\n"
+                    % (inst, t, t)
+                    + "To make it reachable, use %s.run_order to specify an order from an element reachable by the starting element of thread '%s' to '%s'."
+                    % (t, t, inst)
+                )
 
     if not spec_impl:
         g1, r1, k1 = inject_thread_code(spec_injects + impl_injects)
@@ -574,11 +567,14 @@ def generate_internal_triggers(graph, triggers):
         kill_src = "void kill_threads() {\n" + k1 + k2 + "}\n"
 
     else:
+        run_src = "void run_threads() { }\n"
+        kill_src = "void kill_threads() { }\n"
+
         g1, r1, k1 = inject_thread_code(spec_injects)
         g2, r2, k2 = internal_thread_code([x for x in forever if re.match('_spec', x)], graph)
         global_src = g1 + g2
-        run_src = "void spec_run_threads() {\n" + r1 + r2 + "}\n"
-        kill_src = "void spec_kill_threads() {\n" + k1 + k2 + "}\n"
+        run_src += "void spec_run_threads() {\n" + r1 + r2 + "}\n"
+        kill_src += "void spec_kill_threads() {\n" + k1 + k2 + "}\n"
 
         g1, r1, k1 = inject_thread_code(impl_injects)
         g2, r2, k2 = internal_thread_code([x for x in forever if re.match('_impl', x)], graph)
@@ -624,9 +620,10 @@ def generate_inject_probe_code(graph):
 def generate_testing_code(code):
     src = "int main() {\n"
     src += "  init();\n"
+    src += "  run_threads();\n"
     if code:
         src += "  " + code
-    #src += "  finalize();\n"
+    src += "  kill_threads();\n"
     src += "  finalize_and_check();\n"
     src += "\n  return 0;\n"
     src += "}\n"
@@ -656,12 +653,12 @@ def generate_compare_state(probe, key):
     src = "  {0}({1}.p, {1}.data, {2}.p, {2}.data);\n".format(probe.func, spec, impl)
     return src
 
-def generate_code(graph, testing=None, include=None, triggers=None):
+def generate_code(graph, testing=None, include=None):
     """
     Display C code to stdout
     :param graph: data-flow graph
     """
-    generate_header(testing, triggers)
+    generate_header(testing)
     generate_include(include)
 
     # Generate states.
@@ -717,25 +714,25 @@ def convert_type(result, expect):
         return result
 
 
-def generate_code_with_test(graph, testing, include=None, triggers=False):
-    generate_code(graph, testing, include, triggers)
+def generate_code_with_test(graph, testing, include=None):
+    generate_code(graph, testing, include)
     generate_inject_probe_code(graph)
-    generate_internal_triggers(graph, triggers)
+    generate_internal_triggers(graph)
     generate_testing_code(testing)
 
 
-def generate_code_as_header(graph, testing, include=None, triggers=True, header='tmp.h'):
+def generate_code_as_header(graph, testing, include=None, header='tmp.h'):
     with open(header, 'w') as f, redirect_stdout(f):
-        generate_code(graph, testing, include, triggers)
+        generate_code(graph, testing, include)
         generate_inject_probe_code(graph)
-        generate_internal_triggers(graph, triggers)
+        generate_internal_triggers(graph)
 
 
-def generate_code_and_run(graph, testing, expect=None, include=None, depend=None, triggers=False):
+def generate_code_and_run(graph, testing, expect=None, include=None, depend=None):
     with open('tmp.c', 'w') as f, redirect_stdout(f):
-        generate_code(graph, testing, include, triggers)
+        generate_code(graph, testing, include)
         generate_inject_probe_code(graph)
-        generate_internal_triggers(graph, triggers)
+        generate_internal_triggers(graph)
         generate_testing_code(testing)
 
     extra = ""

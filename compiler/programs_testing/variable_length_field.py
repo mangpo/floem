@@ -8,8 +8,8 @@ get_key_val = create_element_instance("get_key_val",
               [Port("out", ["uint16_t", "uint8_t*", "uint16_t", "uint8_t*"])],
                r'''
 KeyValue* m = in();
-void* key = extract*(m, KeyValue, key);
-void* val = extract*(m, KeyValue, val);
+void* key = extract*(m, KeyValue, key); // m->key
+void* val = extract*(m, KeyValue, val); // m->val
 output { out(m->keylen, key, m->vallen, val); }
 ''')
 

@@ -20,6 +20,5 @@ c = Compiler()
 c.include = r'''
 int gen_func(int i) { return i; }
 '''
-c.testing = "run_threads(); usleep(100000); kill_threads();"
-c.triggers = True
+c.testing = "usleep(1000);"
 c.generate_code_and_run(range(10))

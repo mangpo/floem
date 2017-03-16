@@ -17,7 +17,5 @@ c1 = Compo()
 c2 = Compo()
 
 c = Compiler()
-c.triggers = True
-c.testing = "run_threads(); usleep(1000); kill_threads();"
 c.generate_code_and_run()
 

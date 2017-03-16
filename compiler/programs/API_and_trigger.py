@@ -23,6 +23,5 @@ def i2(x):
 i2(i1(xxx(None)))
 
 c = Compiler()
-c.triggers = True
-c.testing = "run_threads(); run(123); run(42); usleep(2000); kill_threads();"
+c.testing = "run(123); run(42); usleep(10);"
 c.generate_code_and_run([123,42])

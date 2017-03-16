@@ -21,7 +21,7 @@ Print = create_element("Print",
             [],
             r'''printf("%d\n",in());''')
 
-fork = Fork("myfork")
+fork = Fork()
 add = Add()
 sub = Sub()
 p = Print()
@@ -31,6 +31,9 @@ out1 = add(in1)
 out2 = sub(in2)
 p(out1)
 p(out2)
+
+t = API_thread("myfork", ["int", "int"], None)
+t.run_start(fork, add, sub, p)
 
 c = Compiler()
 c.testing = "myfork(10, 7);"

@@ -1,6 +1,94 @@
 from program import *
 from dsl import *
 
+
+def declare_circular_queue(name, type, size, blocking=False):
+    prefix = "_%s_" % name
+    state_name = prefix + "queue"
+
+    Enqueue = create_element(prefix + "enqueue",
+                             [Port("in", [type])], [],
+                             r'''
+           (%s x) = in();
+           int next = this.tail + 1;
+           if(next >= this.size) next = 0;
+           if(next == this.head) {
+             //printf("Circular queue '%s' is full. A packet is dropped.\n");
+           } else {
+             this.data[this.tail] = x;
+             this.tail = next;
+           }
+           ''' % (type, name), None, [(state_name, "this")])
+
+    if blocking:
+        src = r'''
+            %s x;
+            while(this.head == this.tail) { fflush(stdout); }
+            x = this.data[this.head];
+            int next = this.head + 1;
+            if(next >= this.size) next = 0;
+            this.head = next;
+            output { out(x); }
+            ''' % type
+    else:
+        src = r'''
+            %s x;
+            bool avail = false;
+            if(this.head == this.tail) {
+                //printf("Dequeue an empty circular queue '%s'. Default value is returned (for API call).\n");
+                //exit(-1);
+            } else {
+                avail = true;
+                x = this.data[this.head];
+               int next = this.head + 1;
+                if(next >= this.size) next = 0;
+                this.head = next;
+            }
+            output switch { case avail: out(x); }
+            ''' % (type, name)
+
+    Dequeue = create_element(prefix + "dequeue", [], [Port("out", [type])],
+                             src, None, [(state_name, "this")])
+
+    Queue = create_state(state_name, "int head; int tail; int size; %s data[%d];" % (type, size),
+                         [0, 0, size, [0]])
+
+    return Queue, Enqueue, Dequeue
+
+
+def create_circular_queue(name, type, size, blocking=False):
+    prefix = "_%s_" % name
+    Queue, Enqueue, Dequeue = declare_circular_queue(name, type, size, blocking)
+
+    def func(x, t1, t2):
+        queue = Queue()
+        enq = Enqueue(prefix + "enqueue", [queue])
+        deq = Dequeue(prefix + "dequeue", [queue])
+        enq(x)
+        y = deq()
+
+        t1.run(enq)
+        t2.run_start(deq)
+        return y
+
+    return create_composite(name, func)
+
+
+def create_circular_queue_instance(name, type, size, blocking=False):
+    ele_name = "_element_" + name
+    ele = create_circular_queue(ele_name, type, size, blocking)
+    return ele(name)
+
+
+def create_circular_queue_instances(name, type, size, blocking=False):
+    prefix = "_%s_" % name
+    Queue, Enqueue, Dequeue = declare_circular_queue(name, type, size, blocking)
+    queue = Queue()
+    enq = Enqueue(prefix + "enqueue", [queue])
+    deq = Dequeue(prefix + "dequeue", [queue])
+    return enq, deq
+
+
 def create_circular_queue_one2many_instances(name, type, size, n_cores):
     prefix = "_%s_" % name
     one_name = prefix + "queue"
@@ -36,7 +124,7 @@ def create_circular_queue_one2many_instances(name, type, size, n_cores):
            %s x;
            bool avail = false;
            if(this.head == this.tail) {
-             printf("Dequeue an empty circular queue '%s'. Default value is returned (for API call).\n");
+             //printf("Dequeue an empty circular queue '%s'. Default value is returned (for API call).\n");
              //exit(-1);
            } else {
                avail = true;
@@ -96,7 +184,7 @@ def create_circular_queue_many2one_instances(name, type, size, n_cores):
              }
            }
            if(!avail) {
-             printf("Dequeue all empty circular queues '%s' for all cores. Default value is returned (for API call).\n");
+             //printf("Dequeue all empty circular queues '%s' for all cores. Default value is returned (for API call).\n");
              //exit(-1);
            }
            output switch { case avail: out(x); }

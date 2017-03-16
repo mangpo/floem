@@ -1,5 +1,6 @@
 from dsl import *
 from elements_library import *
+from queue import *
 
 Inc = create_add1("Inc", "int")
 inc1 = Inc()

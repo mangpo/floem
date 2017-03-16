@@ -13,9 +13,9 @@ def spec():
     t1.run_start(f, g)
 
 def impl():
-    t1 = API_thread("write", ["int"], None)
+    t1 = API_thread("put", ["int"], None)
     t1.run_start(f)
-    t2 = API_thread("read", [], "int")
+    t2 = API_thread("get", [], "int")
     t2.run_start(g)
 
 mapping = create_spec_impl("mapping", spec, impl)
@@ -29,7 +29,7 @@ def run_spec():
 def run_impl():
     c = Compiler()
     c.desugar_mode = "impl"
-    c.testing = "write(42); out(read()); write(123); out(read()); write(999); out(read());"
+    c.testing = "put(42); out(get()); put(123); out(get()); put(999); out(get());"
     c.generate_code_and_run([42,123,999])
 
 run_spec()

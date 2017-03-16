@@ -22,5 +22,4 @@ t.run_start(a1, b1, a2, b2)
 t.run_order(b1, a2)
 
 c = Compiler()
-c.testing = "a();"
-c.generate_code_and_run([1,2,1,2])
+c.generate_code_and_run()

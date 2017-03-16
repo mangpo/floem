@@ -44,92 +44,6 @@ def create_drop(name, type):
                           [],
                           r'''in();''')
 
-def declare_circular_queue(name, type, size, blocking=False):
-    prefix = "_%s_" % name
-    state_name = prefix + "queue"
-
-    Enqueue = create_element(prefix + "enqueue",
-                             [Port("in", [type])], [],
-                             r'''
-           (%s x) = in();
-           int next = this.tail + 1;
-           if(next >= this.size) next = 0;
-           if(next == this.head) {
-             //printf("Circular queue '%s' is full. A packet is dropped.\n");
-           } else {
-             this.data[this.tail] = x;
-             this.tail = next;
-           }
-           ''' % (type, name), None, [(state_name, "this")])
-
-    if blocking:
-        src = r'''
-            %s x;
-            while(this.head == this.tail) { fflush(stdout); }
-            x = this.data[this.head];
-            int next = this.head + 1;
-            if(next >= this.size) next = 0;
-            this.head = next;
-            output { out(x); }
-            ''' % type
-    else:
-        src = r'''
-            %s x;
-            bool avail = false;
-            if(this.head == this.tail) {
-                //printf("Dequeue an empty circular queue '%s'. Default value is returned (for API call).\n");
-                //exit(-1);
-            } else {
-                avail = true;
-                x = this.data[this.head];
-               int next = this.head + 1;
-                if(next >= this.size) next = 0;
-                this.head = next;
-            }
-            output switch { case avail: out(x); }
-            ''' % (type, name)
-
-    Dequeue = create_element(prefix + "dequeue", [], [Port("out", [type])],
-                             src, None, [(state_name, "this")])
-
-    Queue = create_state(state_name, "int head; int tail; int size; %s data[%d];" % (type, size),
-                         [0, 0, size, [0]])
-
-    return Queue, Enqueue, Dequeue
-
-
-def create_circular_queue(name, type, size, blocking=False):
-    prefix = "_%s_" % name
-    Queue, Enqueue, Dequeue = declare_circular_queue(name, type, size, blocking)
-
-    def func(x, t1, t2):
-        queue = Queue()
-        enq = Enqueue(prefix + "enqueue", [queue])
-        deq = Dequeue(prefix + "dequeue", [queue])
-        enq(x)
-        y = deq()
-
-        t1.run(enq)
-        t2.run_start(deq)
-        return y
-
-    return create_composite(name, func)
-
-
-def create_circular_queue_instance(name, type, size, blocking=False):
-    ele_name = "_element_" + name
-    ele = create_circular_queue(ele_name, type, size, blocking)
-    return ele(name)
-
-
-def create_circular_queue_instances(name, type, size, blocking=False):
-    prefix = "_%s_" % name
-    Queue, Enqueue, Dequeue = declare_circular_queue(name, type, size, blocking)
-    queue = Queue()
-    enq = Enqueue(prefix + "enqueue", [queue])
-    deq = Dequeue(prefix + "dequeue", [queue])
-    return enq, deq
-
 
 def create_table_instances(put_name, get_name, index_type, val_type, size):
     state_name = ("_table_%s_%d" % (val_type, size)).replace('*', '$')
@@ -175,9 +89,12 @@ def create_inject(name, type, size, func):
     src += "output { out(this.data[temp]); }"
     element = create_element(name, [], [Port("out", [type])], src, None, [(st_name, "this")])
     populte_state(name, st_inst_name, st_name, type, size, func)
-    # TODO: currently use inst_name to remove edges pointing to inst_name
+    fresh_id = [0]
 
-    def create(inst_name=name):
+    def create(inst_name=None):
+        if not inst_name:
+            inst_name = name + "_inst" + str(fresh_id[0])
+            fresh_id[0] += 1
         return element(inst_name, [state_inst])
     return create
 

@@ -879,7 +879,6 @@ class Compiler:
     def __init__(self):
         self.desugar_mode = "impl"
         self.resource = True
-        self.triggers = None
 
         # Extra code
         self.include = None
@@ -895,17 +894,16 @@ class Compiler:
         return g
 
     def generate_code(self):
-        compiler.generate_code(self.generate_graph(), self.testing, self.include, self.triggers)
+        compiler.generate_code(self.generate_graph(), self.testing, self.include)
 
     def generate_code_with_test(self):
-        compiler.generate_code_with_test(self.generate_graph(), self.testing, self.include, self.triggers)
+        compiler.generate_code_with_test(self.generate_graph(), self.testing, self.include)
 
     def generate_code_and_run(self, expect=None):
-        compiler.generate_code_and_run(self.generate_graph(), self.testing, expect,
-                                       self.include, self.depend, self.triggers)
+        compiler.generate_code_and_run(self.generate_graph(), self.testing, expect, self.include, self.depend)
 
     def generate_code_as_header(self, header='tmp.h'):
-        compiler.generate_code_as_header(self.generate_graph(), self.testing, self.include, self.triggers, header)
+        compiler.generate_code_as_header(self.generate_graph(), self.testing, self.include, header)
 
     def compile_and_run(self, name):
         compiler.compile_and_run(name, self.depend)
