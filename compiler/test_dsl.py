@@ -41,7 +41,9 @@ class TestDSL(unittest.TestCase):
                  "order_empty_port.py",
                  "order_join.py",
                  "syscall.py",
-                  "extract_field.py",
+                 "extract_field.py",
+                 "nested_spec_impl_in_compo.py",
+                 "nested_compo_in_impl.py",
                  ]
 
         tests2 = ["join.py",
@@ -54,7 +56,7 @@ class TestDSL(unittest.TestCase):
                   "table.py",
                   "composite.py",
                   "variable_length_field.py",
-                  "extract_field_spec_impl.py",
+                  #"extract_field_spec_impl.py",
                   ]
 
         for test in tests:

@@ -148,8 +148,9 @@ To execute a program, you need to assign each element a thread to run. Currently
 `internal_thread(name)` returns an internal thread. An internal thread will be created automatically by our runtime system.
 `API_thread(name, call_types, return_types, default_return=None)` returns an API thread handler. An API thread is created by a user application. The user application can invoke elements inside our system by calling `name`. Our system then use the application thread to execute all elements that map to such thread.
 `thread.run(e0, e1, ...)` assigns elements `e0, e1, ...` to run on `thread`.
-`thread.run_start(e0, e1, ...)` assigns elements `e0, e1, ...` to run on `thread`, and mark `e0` as the starting element to run in each round.
+`thread.run_start(e0, e1, ...)` assigns elements `e0, e1, ...` to run on `thread`, and marks `e0` as the starting element to run in each round.
 `thread.run_order(e0, e1, ...)` assigns elements `e0, e1, ...` to run on `thread`, and impose that in each round `e0` runs before `e1`, `e1` runs before `e2`, and so on.
+`thread.start(e)` marks `e` as the starting element to run in each round.
 
 ### 4.1 Order of Execution
 What is the order of execution within a thread?
@@ -556,9 +557,9 @@ returns (`enqueues`, and `dequeue`) elements that share the same queue storage s
 For an example program that uses `create_circular_queue_one2many_instances` and `create_circular_queue_many2one_instances`, see `programs/circular_queue_multicore.py`
 
 ## 9. Field Extraction
+**This feature is currently not working with resource mapping. Do not try to use this at the moment.**
+
 Given a struct, we can extract a field of a struct by creating an element to extract a field. However, for productivity, we allow users to extract field inside without creating an element.
 
 - extract field with thread: programs/extract_field_spec_impl.py
 - examples
-- t.start()
-

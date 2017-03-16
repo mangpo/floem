@@ -47,8 +47,12 @@ class Thread:
             if isinstance(instance, ElementInstance):
                 scope[-1].append(ResourceMap(self.name, instance.name))
             elif isinstance(instance, CompositeInstance):
-                for name in instance.instances_names:
-                    scope[-1].append(ResourceMap(self.name, name))
+                if instance.impl_instances_names:
+                    scope[-1].append(Spec([ResourceMap(self.name, x) for x in instance.spec_instances_names]))
+                    scope[-1].append(Impl([ResourceMap(self.name, x) for x in instance.impl_instances_names]))
+                else:
+                    for name in instance.spec_instances_names:
+                        scope[-1].append(ResourceMap(self.name, name))
             elif isinstance(instance, SpecImplInstance):
                 scope[-1].append(Spec([ResourceMap(self.name, x) for x in instance.spec_instances_names]))
                 scope[-1].append(Impl([ResourceMap(self.name, x) for x in instance.impl_instances_names]))
@@ -87,9 +91,10 @@ class ElementInstance:
 
 
 class CompositeInstance:
-    def __init__(self, connect, instances_names, roots, inputs, outputs, scope):
+    def __init__(self, connect, spec_instances_names, impl_instances_names, roots, inputs, outputs, scope):
         self.connect = connect
-        self.instances_names = instances_names
+        self.spec_instances_names = spec_instances_names
+        self.impl_instances_names = impl_instances_names
         self.roots = roots
         self.inputs = inputs
         self.outputs = outputs
@@ -174,6 +179,9 @@ class InputPortCollect:
         self.impl_thread_start = other.impl_thread_start
         self.impl_thread_args = other.impl_thread_args
         self.impl_thread_order = other.impl_thread_order
+
+    def has_impl(self):
+        return self.impl_thread_run or self.impl_thread_start or self.impl_thread_order
 
     def spec_thread(self, t):
         if self.thread_run:
@@ -324,7 +332,16 @@ def check_no_spec_impl(name, my_scope):
             raise Exception("API or internal trigger '%s' cannot wrap around spec and impl." % name)
 
 
-def extract_instances_names(my_scope, inputs, outputs):
+def has_spec_impl(my_scope):
+    for e in my_scope:
+        if isinstance(e, Spec):
+            return True
+        elif isinstance(e, Impl):
+            return True
+    return False
+
+
+def extract_instances_names(my_scope, inputs, outputs, spec=True):
     names = set()
     for e in my_scope:
         if isinstance(e, compiler.ElementInstance):
@@ -332,23 +349,47 @@ def extract_instances_names(my_scope, inputs, outputs):
         elif isinstance(e, compiler.Connect):
             names.add(e.ele1)
             names.add(e.ele2)
+        elif isinstance(e, Spec) and spec:
+            additional = extract_instances_names(e.statements, [], None, spec)
+            names = names.union(additional)
+        elif isinstance(e, Impl) and not spec:
+            additional = extract_instances_names(e.statements, [], None, spec)
+            names = names.union(additional)
 
     for input in inputs:
-        for instance in input.instance:
-            names.add(instance)
+        if spec:
+            for instance in input.instance:
+                names.add(instance)
+        else:
+            for instance in input.impl_instance:
+                names.add(instance)
 
     if isinstance(outputs, tuple):
         for output in outputs:
             if isinstance(output, OutputPortCollect):
-                names.add(output.instance)
+                if spec:
+                    names.add(output.instance)
+                else:
+                    names.add(output.impl_instance)
             elif isinstance(output, InputPortCollect):
-                for inst in output.instance:
-                    names.add(inst)
+                if spec:
+                    for inst in output.instance:
+                        names.add(inst)
+                else:
+                    for inst in output.impl_instance:
+                        names.add(inst)
     elif isinstance(outputs, OutputPortCollect):
-        names.add(outputs.instance)
+        if spec:
+            names.add(outputs.instance)
+        else:
+            names.add(outputs.impl_instance)
     elif isinstance(outputs, InputPortCollect):
-        for inst in outputs.instance:
-            names.add(inst)
+        if spec:
+            for inst in outputs.instance:
+                names.add(inst)
+        else:
+            for inst in outputs.impl_instance:
+                names.add(inst)
     return names
 
 
@@ -432,7 +473,13 @@ def create_composite(composite_name, program):
 
         check_composite_outputs(inst_name, outs)
         check_composite_inputs(inst_name, fake_ports)
-        instances_names = extract_instances_names(my_scope, fake_ports, outs)
+        spec_impl = has_spec_impl(my_scope)
+        if spec_impl:
+            spec_instances_names = extract_instances_names(my_scope, fake_ports, outs, spec=True)
+            impl_instances_names = extract_instances_names(my_scope, fake_ports, outs, spec=False)
+        else:
+            spec_instances_names = extract_instances_names(my_scope, fake_ports, outs)
+            impl_instances_names = None
         roots = extract_roots(my_scope, fake_ports, outs)
 
         def connect(*ports):
@@ -446,8 +493,22 @@ def create_composite(composite_name, program):
                     from_port.copy_to_spec(to_port)
                     from_port.copy_to_impl_from_impl(to_port)
                 elif isinstance(from_port, Thread):
-                    to_port.spec_thread(from_port)
-                    to_port.impl_thread(from_port)
+                    if to_port.has_impl():
+                        global scope
+                        scope.append([])
+                        to_port.spec_thread(from_port)
+                        this_scope = scope[-1]
+                        scope = scope[:-1]
+                        scope[-1].append(Spec(this_scope))
+
+                        scope.append([])
+                        to_port.impl_thread(from_port)
+                        this_scope = scope[-1]
+                        scope = scope[:-1]
+                        scope[-1].append(Spec(this_scope))
+                    else:
+                        to_port.spec_thread(from_port)
+
                 elif callable(from_port):
                     if to_port.thread_args:
                         from_port(*to_port.thread_args)
@@ -490,7 +551,7 @@ def create_composite(composite_name, program):
             return outs
         # end connect
 
-        return CompositeInstance(connect, instances_names, roots, fake_ports, outs, my_scope)
+        return CompositeInstance(connect, spec_instances_names, impl_instances_names, roots, fake_ports, outs, my_scope)
     # end create_instance
 
     return create_instance
@@ -670,27 +731,45 @@ def create_spec_impl(name, spec_func, impl_func):
                 from_port.copy_to_spec(spec_to_port)
                 from_port.copy_to_impl(impl_to_port)
             elif isinstance(from_port, Thread):
+                global scope
+                scope.append([])
                 spec_to_port.spec_thread(from_port)
+                my_scope = scope[-1]
+                scope = scope[:-1]
+                scope[-1].append(Spec(my_scope))
+
+                scope.append([])
                 impl_to_port.spec_thread(from_port)
+                my_scope = scope[-1]
+                scope = scope[:-1]
+                scope[-1].append(Impl(my_scope))
+
             elif callable(from_port):
                 if spec_to_port.thread_args:
                     from_port(*spec_to_port.thread_args)
                 if impl_to_port.thread_args:
                     from_port(*impl_to_port.thread_args)
             elif isinstance(from_port, OutputPortCollect):
+                my_scope = []
                 for i in range(len(spec_to_port.instance)):
                     c = Connect(from_port.instance, spec_to_port.instance[i], from_port.port, spec_to_port.port[i])
-                    spec_scope.append(c)
+                    my_scope.append(c)
+                scope[-1].append(Spec(my_scope))
+
+                my_scope = []
                 if from_port.impl_instance:
                     # from_port contains both spec and impl.
                     for i in range(len(impl_to_port.instance)):
-                        c = Connect(from_port.impl_instance, impl_to_port.instance[i], from_port.impl_port, impl_to_port.port[i])
-                        impl_scope.append(c)
+                        c = Connect(from_port.impl_instance, impl_to_port.instance[i],
+                                    from_port.impl_port, impl_to_port.port[i])
+                        my_scope.append(c)
                 else:
                     # from_port contains only one version.
                     for i in range(len(impl_to_port.instance)):
                         c = Connect(from_port.instance, impl_to_port.instance[i], from_port.port, impl_to_port.port[i])
-                        impl_scope.append(c)
+                        my_scope.append(c)
+                scope[-1].append(Impl(my_scope))
+
             elif from_port is None:
                 pass
             else:
