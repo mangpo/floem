@@ -1,9 +1,22 @@
+Our prototyping DSL is a Python Library. The library provides mechanisms to connect elements, mapping elements to hardware resources, and create API functions for user applications. However, an element itself is implemented in C. The compiler then generates C program that can be executed.
+
 # Prerequisites
 
 ### Dependencies
 
 - GCC
 - Python 2
+
+### Repository
+
+URL: https://gitlab.cs.washington.edu/mangpo/flexnic-language-mockup
+
+```
+git clone git@gitlab.cs.washington.edu:mangpo/flexnic-language-mockup.git
+cd compiler
+```
+
+This documentation is the same as README.md
 
 ### Import
 
@@ -13,11 +26,11 @@ To use our compiler, simply import
 from dsl import *
 ```
 
-The library functions described in this documentation are defined in dsl.py.
+Most library functions described in this documentation are defined in dsl.py.
 
 # Essentials
 
-#### 1. State
+## 1. State
 
 State is like C-language struct. To create an instance of a state, first you need to create a state constructor and use the state constructor to instantiate an instance of the state.
 
@@ -31,7 +44,8 @@ If you only want to create one instance of a state, you can just call:
 #### Example
 
 ```python
-tracker_constructor = create_state("tracker", "int total; int last;", [0,0])
+tracker_constructor = create_state(
+  "tracker", "int total; int last;", [0,0])
 tracker1 = tracker_constructor()         
 # ^ use the constructor's init: total = 0, last = 0
 tracker2 = tracker_constructor([10,42])  
@@ -55,8 +69,13 @@ If you only want to create one instance of an element, you can just call:
 obs_constructor = create_element("observer", 
   [Port("in", ["int"])], 
   [Port("out", ["int"])],
-  "int id = in(); this.total++; this.last = id; output { out(id); }",
-  None,
+  # C implementation
+  r'''
+  int id = in(); 
+  this.total++; 
+  this.last = id; 
+  output { out(id); }''', 
+  None,  # local state
   [("tracker", "this")])  # state params = a list of (state, local_name)
 o1 = obs_constructor(tracker1)  # observer element 1
 o2 = obs_constructor(tracker1)  # observer element 2
@@ -681,3 +700,13 @@ Given a struct, we can extract a field of a struct by creating an element to ext
 
 - extract field with thread: programs/extract_field_spec_impl.py
 - examples
+
+## 10. Example Application: Memcached
+
+Directory `compiler/memcached` and `compiler/memcached_api` currently implements memcached that only handles get requests.
+
+`compiler/memcached/main.y` runs everything from receiving a packet to sending a response on one thread. The table lookup happens in the element `lookup` defined in `main.py`.
+
+`compiler/memcached_api/main.py` uses two CPU threads to simulate Rx and Tx pipelines on a NIC, and exposes API functions (i.e. `get_eq[i]` and `send_cq[i]`) to the user application `test_impl.c`. `main.py` generates a header file `tmp_impl.h`.  The user application `test_impl.c` imports the header file and run 4 threads. Thread `i` uses `get_eq[i]` API function to get a key and hash of a packet that is steered to core `i`, performs table lookup, and send an item from the table lookup to the NIC Tx pipeline using `send_cq[i]` API function.
+
+Note that currently an entry of the notification queue is a pointer to `eq_entry` instead of `eq_entry` itself. For a more realistic simulation, the queue should contain `eq_entry` not the pointer.
