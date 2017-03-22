@@ -5,6 +5,16 @@ import queue
 eq_entry = create_state("eq_entry", "uint64_t opaque; uint32_t hash; uint16_t keylen; void* key;")
 cq_entry = create_state("cq_entry", "uint64_t opaque; item* it;")
 
+get_cmd = create_element_instance("GetCMD",
+              [Port("in", ["iokvs_message*"])],
+              [Port("out", ["void*", "size_t"])],
+               r'''
+(iokvs_message* m) = in();
+void *key = m->payload + m->mcr.request.extlen;
+size_t len = m->mcr.request.keylen;
+output { out(key, len); }
+''')
+
 get_key = create_element_instance("GetKey",
               [Port("in", ["iokvs_message*"])],
               [Port("out", ["void*", "size_t"])],
