@@ -13,13 +13,25 @@ class RedefineError(Exception):
     pass
 
 
+def remove_comment(code):
+    m = re.search("//[^\n]*\n", code)
+    if m:
+        return remove_comment(code[:m.start(0)] + code[m.end(0):])
+    else:
+        m = re.search("/\*[^\*]*\*/", code)
+        if m:
+            return remove_comment(code[:m.start(0)] + code[m.end(0):])
+        else:
+            return code
+
+
 class Element:
 
     def __init__(self, name, inports, outports, code, local_state=None, state_params=[], analyze=True):
         self.name = name
         self.inports = inports
         self.outports = outports
-        self.code = '  ' + code
+        self.code = '  ' + remove_comment(code)
         self.local_state = local_state
         self.state_params = state_params
 
@@ -105,8 +117,7 @@ class Element:
                 program_code = self.code[:m.start(0)]
                 out_code = self.code[m.start(1):m.end(1)]
                 cases = out_code.split(';')
-                re.search('^[ ]*$', cases[-1])
-                if re.search('^[ ]*$', cases[-1]) is None:
+                if re.search('^[ \n]*$', cases[-1]) is None:
                     raise Exception("Illegal form of output { ... } block in element '%s'." % self.name)
                 count = {}
                 cases = cases[:-1]
@@ -125,7 +136,7 @@ class Element:
 
                 cases_exprs = []
                 for case in cases:
-                    m = re.search('^[ ]*case([^:]+):[ ]*([a-zA-Z0-9_]+)(\([^)]*\))[ ]*$', case)
+                    m = re.search('^[ \n]*case([^:]+):[ ]*([a-zA-Z0-9_]+)(\([^)]*\))[ ]*$', case)
                     if m:
                         cases_exprs.append((m.group(1), m.group(2) + m.group(3)))
                         if m.group(1) in count:

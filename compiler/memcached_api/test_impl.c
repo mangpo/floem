@@ -13,7 +13,9 @@ void run_app(void *threadid) {
       eq_entry* e = get_eqs[tid]();
       if(e == NULL) {
         printf("eq_entry at core %ld is null.\n", tid);
-      } else {
+      }
+      else if (e->flags == EQE_TYPE_RXGET) {
+
         printf("eq_entry at core %ld: OPAQUE: %ld, len: %d\n", tid, e->opaque, e->keylen);
         item *it = hasht_get(e->key, e->keylen, e->hash);
         cq_entry* c = (cq_entry *) malloc(sizeof(cq_entry));

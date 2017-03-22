@@ -81,6 +81,16 @@ item *hasht_get(const void *key, size_t klen, uint32_t hv);
  */
 void hasht_put(item *it, item *cas);
 
+typedef struct _segment_header {
+    void *data;
+    struct _segment_header *next;
+    struct _segment_header *prev;
+    uint32_t offset;
+    uint32_t freed;
+    uint32_t size;
+    uint32_t flags;
+} segment_header;
+
 
 struct item_allocator {
     /***********************************************************/
@@ -266,6 +276,7 @@ static iokvs_message* random_request(size_t v) {
   size_t extlen = 4;
 
   iokvs_message *m = (iokvs_message *) malloc(sizeof(iokvs_message) + extlen + keylen);
+  m->mcr.request.opcode = PROTOCOL_BINARY_CMD_GET;
   m->mcr.request.magic = v; // PROTOCOL_BINARY_REQ
   m->mcr.request.keylen = keylen;
   m->mcr.request.datatype = PROTOCOL_BINARY_RAW_BYTES;

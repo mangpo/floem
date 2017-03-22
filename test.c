@@ -1,18 +1,12 @@
 #include<stdio.h>
 #include<stdlib.h>
 
-struct datapacket {
-  int size;
-  int data[];
-};
+typedef struct {
+    int flags;
+    //uint16_t len;
+} __attribute__((packed)) cq_entry;
 
 int main() {
-
-  struct datapacket *pkt =
-    malloc( sizeof(struct datapacket) +
-            sizeof(int)*10 );
-  pkt->size = 10;
-  pkt->data[5] = 55;
-  printf("%d %d\n", pkt->size, pkt->data[5]);
+  printf("hello\n");
   return 0;
 }

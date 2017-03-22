@@ -31,11 +31,11 @@ struct core_region {
 #define CQE_TYPE_SRESP 0x02
 #define CQE_TYPE_ERR   0x03
 #define CQE_TYPE_LOG   0x04
-struct cq_entry {
+typedef struct {
     uint16_t flags;
     //uint16_t len;
-} __attribute__((packed));
-struct cqe_send_getresponse {
+} __attribute__((packed)) cq_entry;
+tyepdef struct {
     uint16_t flags;
     //uint16_t len;
     //uint32_t client;
@@ -44,29 +44,29 @@ struct cqe_send_getresponse {
     uint64_t opaque;
     //uint64_t item;
     void* item;
-} __attribute__((packed));
-struct cqe_send_setresponse {
+} __attribute__((packed)) cqe_send_getresponse;
+typedef struct {
     uint16_t flags;
     //uint16_t len;
     //uint32_t client;
     uint64_t opaque;
-} __attribute__((packed));
-struct cqe_send_error {
+} __attribute__((packed)) cqe_send_setresponse;
+typedef struct {
     uint16_t flags;
     uint16_t len;
     uint16_t datalen;
     uint16_t error;
     uint64_t opaque;
     uint8_t data[];
-} __attribute__((packed));
-struct cqe_add_logseg {
+} __attribute__((packed)) cqe_send_error;
+typedef struct {
     uint16_t flags;
     //uint16_t len;
     //uint32_t pad0;
     //uint64_t segbase;
     //uint64_t seglen;
     void* segment;
-} __attribute__((packed));
+} __attribute__((packed)) cqe_add_logseg;
 #define EQE_ALIGN 8U
 #define EQE_FLAG_SWOWN 0x0001
 #define EQE_TYPE_SHIFT 8
@@ -75,11 +75,11 @@ struct cqe_add_logseg {
 #define EQE_TYPE_RXGET 0x01
 #define EQE_TYPE_RXSET 0x02
 #define EQE_TYPE_SEGFULL 0x03
-struct eq_entry {
+typedef struct {
     uint16_t flags;
     //uint16_t len;
-} __attribute__((packed));
-struct eqe_rx_get {
+} __attribute__((packed)) eq_entry;
+typedef struct {
     uint16_t flags;
     //uint16_t len;
     //uint32_t client;
@@ -87,18 +87,18 @@ struct eqe_rx_get {
     uint32_t hash;
     uint16_t keylen;
     uint8_t key[];
-} __attribute__((packed));
-struct eqe_rx_set {
+} __attribute__((packed)) eqe_rx_get;
+typedef struct {
     uint16_t flags;
     //uint16_t len;
     //uint32_t client;
     uint64_t opaque;
     void* item;
-} __attribute__((packed));
-struct eqe_seg_full {
+} __attribute__((packed)) eqe_rx_set;
+typedef struct {
     uint16_t flags;
     //uint16_t len;
     //uint32_t pad0;
     uint64_t last;
-} __attribute__((packed));
+} __attribute__((packed)) eqe_seg_full;
 #endif // ndef NICIF_H_
