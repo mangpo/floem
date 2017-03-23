@@ -275,7 +275,7 @@ class ElementNode:
                 port_list = self.input2ele[port]
                 if len(port_list) > 1:
                     raise ConflictConnection(
-                        "The input port '%s' of element instance '%s' cannot be connected to multiple element instances %s because '%s' is a join element."
+                        "The input port '%s' of element instance '%s' cannot be connected to multiple element instances %s\nbecause '%s' is a join element."
                         % (port, self.name, [x[0] for x in port_list], self.name))
 
     def print_details(self):

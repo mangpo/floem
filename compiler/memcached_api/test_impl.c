@@ -16,12 +16,13 @@ void run_app(void *threadid) {
       }
       else if (e->flags == EQE_TYPE_RXGET) {
 
-        printf("eq_entry at core %ld: OPAQUE: %ld, len: %d\n", tid, e->opaque, e->keylen);
-        item *it = hasht_get(e->key, e->keylen, e->hash);
-        cq_entry* c = (cq_entry *) malloc(sizeof(cq_entry));
-        c->it = it;
-        c->opaque = e->opaque;
-        send_cqs[tid](c);
+        eqe_rx_get* e_get = (eqe_rx_get*) e;
+        printf("eq_entry at core %ld: OPAQUE: %ld, len: %d\n", tid, e_get->opaque, e_get->keylen);
+        item *it = hasht_get(e_get->key, e_get->keylen, e_get->hash);
+        cqe_send_getresponse* c = (cqe_send_getresponse *) malloc(sizeof(cqe_send_getresponse));
+        c->item = it;
+        c->opaque = e_get->opaque;
+        send_cqs[tid]((cq_entry*) c);
       }
     usleep(10);
   }

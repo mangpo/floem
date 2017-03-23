@@ -2,9 +2,6 @@ from dsl import *
 from elements_library import *
 import queue
 
-#eq_entry = create_state("eq_entry", "uint64_t opaque; uint32_t hash; uint16_t keylen; void* key;")
-#cq_entry = create_state("cq_entry", "uint64_t opaque; item* it;")
-
 classifier = create_element_instance("classifier",
               [Port("in_pkt", ["iokvs_message*"]), Port("in_hash", ["void*", "size_t", "uint32_t"])],
               [Port("out_get", ["iokvs_message*", "void*", "size_t", "uint32_t"]),
@@ -73,27 +70,27 @@ entry->opaque = m->mcr.request.magic;
 entry->hash = hash;
 entry->keylen = len;
 entry->key = key;
-output { out(entry); }
+output { out((eq_entry*) entry); }
                ''')
+
 make_eqe_set = create_element_instance("make_eqe_set",
-               [Port("in_item", ["item*"]), Port("in_opaque", ["uint64_t"])],
+               [Port("in", ["item*", "uint64_t"])],
                [Port("out", ["eq_entry*"])],
                r'''
-(item* it) = in_item();
-(uint64_t opaque) = in_opaque();
+(item* it, uint64_t opaque) = in();
 eqe_rx_set* entry = (eqe_rx_set *) malloc(sizeof(eqe_rx_set));
 entry->flags = EQE_TYPE_RXSET;
 entry->opaque = opaque;
 entry->item = it;
-output { out(entry); }
+output { out((eq_entry*) entry); }
                ''')
 
 unpack = create_element_instance("Unpack",
                  [Port("in", ["cq_entry*"])],
                  [Port("out_opaque", ["uint64_t"]), Port("out_item", ["item*"])],
                  r'''
-(cq_entry* entry) = in();
-output { out_opaque(entry->opaque); out_item(entry->it); }
+cqe_send_getresponse* entry = (cqe_send_getresponse*) in(); // TODO
+output { out_opaque(entry->opaque); out_item(entry->item); }
                  ''')
 
 get_opaque = create_element_instance("GetOpaque",
@@ -104,13 +101,13 @@ get_opaque = create_element_instance("GetOpaque",
 output { out(m->mcr.request.magic); }
                     ''')
 
-GetCore = create_element("GetCore",
-                 [Port("in", ["eq_entry*"])],
-                 [Port("out", ["size_t"])],
-                 r'''
-(eq_entry* entry) = in();
-output { out(entry->hash % 4); }  // reta[entry->key_hash & 0xff];
-                 ''')
+# GetCore = create_element("GetCore",
+#                  [Port("in", ["eq_entry*"])],
+#                  [Port("out", ["size_t"])],
+#                  r'''
+# (eq_entry* entry) = in();
+# output { out(entry->hash % 4); }  // reta[entry->key_hash & 0xff];
+#                  ''')
 
 print_msg = create_element_instance("print_msg",
                    [Port("in", ["iokvs_message*"])],
@@ -130,11 +127,11 @@ Segments = create_state("segments_holder",
 segments = Segments()
 
 get_item_creator = create_element("get_item_creator",
-                   [Port("in_hash", ["iokvs_message*", "void*", "size_t", "uint32_t"])],
+                   [Port("in", ["iokvs_message*", "void*", "size_t", "uint32_t"])],
                    [Port("out_item", ["item*", "uint64_t"]), Port("out_full", ["bool"])],
                    r'''
-    (iokvs_message* m, void* key, size_t len, uint32_t hash) = in();
-    size_t totlen = out(m->mcr.request.bodylen - m->mcr.request.extlen);
+    (iokvs_message* m, void* key, size_t keylen, uint32_t hash) = in();
+    size_t totlen = m->mcr.request.bodylen - m->mcr.request.extlen;
 
     bool full = false;
     item *it = segment_item_alloc(this.segments[this.head], totlen);
@@ -150,9 +147,19 @@ get_item_creator = create_element("get_item_creator",
     it->keylen = keylen;
     rte_memcpy(item_key(it), key, totlen);
 
-    output { out_item(it, m->mcr.request.magic); out_bool(full); }
+    output { out_item(it, m->mcr.request.magic); out_full(full); }
    '''% ("%", n_segments), None, [("segments_holder", "this")])
 get_item = get_item_creator("get_item", [segments])
+
+get_core = create_element("get_core",
+                                       [Port("in", ["iokvs_message*", "void*", "size_t", "uint32_t"])],
+                                       [Port("out", ["size_t"])],
+                                       r'''
+    (iokvs_message* m, void* key, size_t keylen, uint32_t hash) = in();
+    output { out(hash % 4); }
+                                       ''')
+get_core_get = get_core("get_core_get")
+get_core_set = get_core("get_core_set")
 
 msg_put, msg_get = create_table_instances("msg_put", "msg_get", "uint64_t", "iokvs_message*", 64)
 Inject = create_inject("inject", "iokvs_message*", 8, "random_request")
@@ -169,16 +176,18 @@ msg_put(opaque, pkt)
 hash = jenkins_hash(get_key(pkt))
 pkt_hash_get, pkt_hash_set = classifier(pkt, hash)
 
-nic_rx.run_start(inject, classifier, get_opaque, msg_put, get_key, jenkins_hash)
+nic_rx.run_start(inject, get_opaque, msg_put, get_key, jenkins_hash, classifier)
 
 # Get request
 eqe_get = make_eqe_get(pkt_hash_get)
-nic_rx.run(make_eqe_get)
+eqe_get_core = get_core_get(pkt_hash_get)  # TODO
+nic_rx.run(make_eqe_get, get_core_get)
 
 # Set request
 item_opaque, is_segment_full = get_item(pkt_hash_set)
 eqe_set = make_eqe_set(item_opaque)
-nic_rx.run(get_item, make_eqe_set)
+eqe_set_core = get_core_set(pkt_hash_set)  # TODO
+nic_rx.run(get_item, make_eqe_set, get_core_set)
 
 # Full segment
 nop = create_element_instance("nop", [Port("in", ["bool"])], [], "in();")  # TODO
@@ -188,10 +197,14 @@ nic_rx.run(nop)
 # TODO: 1. initialize segments
 # TODO: 2. use ialloc_from_offset and ialloc_to_offset (eq_entry contains item instead of item*)
 
-def spec_nic2app(x):
+def spec_nic2app(x, core):
+    Drop = create_drop("Drop", "uint64_t")
+    drop = Drop()
+    drop(core)
+
     rx_enq, rx_deq = queue.create_circular_queue_instances("rx_queue_spec", "eq_entry*", 4)
     rx_enq(x)
-    nic_rx.run(rx_enq)
+    nic_rx.run(rx_enq, drop)
 
     #get_eq = API_thread("get_eq", [], "eq_entry*", "NULL")
     #get_eq.run_start(rx_deq)
@@ -199,13 +212,11 @@ def spec_nic2app(x):
     def get_eq():
         return rx_deq()
 
-def impl_nic2app(x):
-    get_core = GetCore()
+def impl_nic2app(x, core):
     rx_enq, rx_deqs = queue.create_circular_queue_one2many_instances("rx_queue_impl", "eq_entry*", 4, n_cores)
+    rx_enq(x, core)
 
-    rx_enq(x, get_core(x))
-
-    nic_rx.run(get_core, rx_enq)
+    nic_rx.run(rx_enq)
     for i in range(n_cores):
         # api = API_thread("get_eq" + str(i), [], "eq_entry*", "NULL")
         # api.run_start(rx_deqs[i])
@@ -214,8 +225,8 @@ def impl_nic2app(x):
             return rx_deqs[i]()
 
 nic2app = create_spec_impl("nic2app", spec_nic2app, impl_nic2app)
-nic2app(eqe_get)
-nic2app(eqe_set)
+nic2app(eqe_get, eqe_get_core)
+nic2app(eqe_set, eqe_set_core)
 
 ######################## NIC Tx #######################
 
@@ -251,12 +262,15 @@ nic_tx.run(unpack, msg_get, prepare_response, print_msg)
 ######################## Run test #######################
 c = Compiler()
 c.include = r'''
-#include "incif.h"
+#include <rte_memcpy.h>
+#include "nicif.h"
 #include "iokvs.h"
 #include "protocol_binary.h"
+#include "ialloc.h"
 '''
 c.depend = ['jenkins_hash', 'hashtable']
 c.triggers = True
+c.I = '/home/mangpo/lib/dpdk-16.11/build/include'
 
 def run_spec():
     c.desugar_mode = "spec"
@@ -268,7 +282,7 @@ def run_impl():
     c.generate_code_as_header("tmp_impl.h")
     c.compile_and_run("test_impl")
 
-run_spec()
+#run_spec()
 run_impl()
 
 

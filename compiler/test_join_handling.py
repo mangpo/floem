@@ -466,8 +466,8 @@ class TestJoinHandling(unittest.TestCase):
         try:
             g = generate_graph(p, True)
         except Exception as e:
-            self.assertNotEqual(e.message.find("cannot be connected to multiple element instances"), -1)
-            self.assertNotEqual(e.message.find("because 'add1' is a join element"), -1)
+            self.assertNotEqual(e.message.find("Element instance 'fork2' fires port"), -1)
+            self.assertNotEqual(e.message.find("of the join instance 'add1' more than once"), -1)
         else:
             self.fail('Exception is not raised.')
 

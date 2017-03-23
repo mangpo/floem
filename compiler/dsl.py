@@ -964,6 +964,9 @@ class Compiler:
         self.testing = None
         self.depend = None
 
+        # Compiler option
+        self.I = None
+
     def generate_graph(self):
         assert len(scope) == 1, "Compile error: there are multiple scopes remained."
         p1 = Program(*scope[0])
@@ -979,10 +982,10 @@ class Compiler:
         compiler.generate_code_with_test(self.generate_graph(), self.testing, self.include)
 
     def generate_code_and_run(self, expect=None):
-        compiler.generate_code_and_run(self.generate_graph(), self.testing, expect, self.include, self.depend)
+        compiler.generate_code_and_run(self.generate_graph(), self.testing, expect, self.include, self.depend, self.I)
 
     def generate_code_as_header(self, header='tmp.h'):
         compiler.generate_code_as_header(self.generate_graph(), self.testing, self.include, header)
 
     def compile_and_run(self, name):
-        compiler.compile_and_run(name, self.depend)
+        compiler.compile_and_run(name, self.depend, self.I)

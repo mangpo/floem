@@ -438,13 +438,11 @@ def generate_graph(program, resource=True):
     # Generate data-flow graph.
     gen = GraphGenerator()
     gen.interpret(program)
-    gen.graph.check_input_ports()
+    #gen.graph.check_input_ports()
 
     if resource:
         # Insert necessary elements for resource mapping.
         gen.allocate_resources()
-        # Annotate APIs information. APIs ony make sense with resource mapping.
-        #annotate_api_info(gen.graph)  # TODO: do this after annotate_join_info
     else:
         gen.graph.clear_APIs()
 
@@ -452,6 +450,7 @@ def generate_graph(program, resource=True):
     annotate_join_info(gen.graph)
 
     if resource:
+        # Annotate APIs information. APIs ony make sense with resource mapping.
         annotate_api_info(gen.graph)
 
     return gen.graph
@@ -728,7 +727,7 @@ def generate_code_as_header(graph, testing, include=None, header='tmp.h'):
         generate_internal_triggers(graph)
 
 
-def generate_code_and_run(graph, testing, expect=None, include=None, depend=None):
+def generate_code_and_run(graph, testing, expect=None, include=None, depend=None, include_option=None):
     with open('tmp.c', 'w') as f, redirect_stdout(f):
         generate_code(graph, testing, include)
         generate_inject_probe_code(graph)
@@ -744,7 +743,7 @@ def generate_code_and_run(graph, testing, expect=None, include=None, depend=None
             if not status == 0:
                 raise Exception("Compile error: " + cmd)
 
-    cmd = 'gcc -O3 -pthread tmp.c %s -o tmp' % extra
+    cmd = 'gcc -O3 -I %s -pthread tmp.c %s -o tmp' % (common.dpdk_include, extra)
     status = os.system(cmd)
     if not status == 0:
         raise Exception("Compile error: " + cmd)
@@ -767,7 +766,7 @@ def generate_code_and_run(graph, testing, expect=None, include=None, depend=None
     print "PASSED!"
 
 
-def compile_and_run(name, depend):
+def compile_and_run(name, depend, include_option):
     extra = ""
     if depend:
         for f in depend:
@@ -777,7 +776,7 @@ def compile_and_run(name, depend):
             if not status == 0:
                 raise Exception("Compile error: " + cmd)
 
-    cmd = 'gcc -O3 -pthread %s.c %s -o %s' % (name, extra, name)
+    cmd = 'gcc -O3 -I %s -pthread %s.c %s -o %s' % (common.dpdk_include, name, extra, name)
     status = os.system(cmd)
     if not status == 0:
         raise Exception("Compile error: " + cmd)

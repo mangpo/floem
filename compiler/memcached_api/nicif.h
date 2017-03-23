@@ -35,7 +35,7 @@ typedef struct {
     uint16_t flags;
     //uint16_t len;
 } __attribute__((packed)) cq_entry;
-tyepdef struct {
+typedef struct {
     uint16_t flags;
     //uint16_t len;
     //uint32_t client;
@@ -86,7 +86,8 @@ typedef struct {
     uint64_t opaque;
     uint32_t hash;
     uint16_t keylen;
-    uint8_t key[];
+    //uint8_t key[];
+    void* key;
 } __attribute__((packed)) eqe_rx_get;
 typedef struct {
     uint16_t flags;
