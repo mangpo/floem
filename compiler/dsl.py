@@ -814,7 +814,10 @@ def get_state_mapping(content):
     fixed_len = {}
     variable_len = {}
     for field in fields:
-        t, var = field.lstrip().rstrip().split()
+        field = field.lstrip().rstrip()
+        index = field.rfind(' ')
+        t = field[:index].rstrip()
+        var = field[index+1:]
         m = re.match('([^\[]+)\[([^\]]+)\]', var)  # only support one dimension
         if m:
             name = m.group(1)

@@ -49,6 +49,7 @@ class TestDSL(unittest.TestCase):
 
         tests2 = ["join.py",
                   "join_multiple.py",
+                  "classify_join1.py",
                   "double_connect.py",
                   "buffer.py",
                   "state_nested_composite.py",
@@ -81,8 +82,9 @@ class TestDSL(unittest.TestCase):
         try:
             c.generate_code()
         except Exception as e:
+            print e.message
             self.assertNotEqual(
-                e.message.find("Input port 'in1' of join element instance 'add' is connected to more than one port."), -1)
+                e.message.find("Input port 'in2' of join element instance 'add' is not connected to any instance."), -1)
         else:
             self.fail('Exception is not raised.')
 
@@ -245,7 +247,7 @@ class TestDSL(unittest.TestCase):
         roots = g.find_roots()
         self.assertEqual(roots, set(['_spec_inc1', '_impl_inc1']))
         self.assertEqual(self.find_subgraph(g, '_impl_inc1', set()),
-                         set(['_impl_inc1', '_impl_inc1_fork_inst', '_impl_compo_inc2', '_impl_compo_inc3', '_impl_compo_drop']))
+                         set(['_impl_inc1', '_impl_inc1_out_fork_inst', '_impl_compo_inc2', '_impl_compo_inc3', '_impl_compo_drop']))
 
     def test_compo_nop(self):
         reset()
@@ -496,6 +498,39 @@ class TestDSL(unittest.TestCase):
             c.generate_code_and_run()
         except Exception as e:
             self.assertNotEqual(e.message.find("not reachable from the starting element of thread"), -1, 'Expect undefined exception.')
+        else:
+            self.fail('Exception is not raised.')
+
+    def classify_join2(self):
+        reset()
+        fork = create_fork_instance("fork2", 2, "int")
+
+        Chioce = create_element("Choice",
+                                [Port("in", ["int"])],
+                                [Port("out1", ["int"]), Port("out2", ["int"])],
+                                r'''(int x) = in(); output switch { case (x % 2 == 0): out1(x); else: out2(x); }''')
+        choice1 = Chioce("choice1")
+        choice2 = Chioce("choice2")
+
+        Inc = create_add1("Inc", "int")
+        inc1 = Inc("inc1")
+        inc2 = Inc("inc2")
+
+        Add = create_add("Add", "int")
+        add1 = Add("add1")
+        add2 = Add("add2")
+
+        x1, x2 = fork(None)
+        y1, y2 = choice1(x1)
+        z1, z2 = choice2(x2)
+        add1(y1, z2)
+        add2(inc1(y2), inc2(z1))
+
+        try:
+            c = Compiler()
+            c.generate_code_and_run()
+        except Exception as e:
+            self.assertNotEqual(e.message.find("All its output ports must fire the same input ports of the join instance 'add2'."), -1, 'Expect undefined exception.')
         else:
             self.fail('Exception is not raised.')
 

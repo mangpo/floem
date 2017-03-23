@@ -53,7 +53,7 @@ m->mcr.request.bodylen = 4;
 *((uint32_t *)m->payload) = 0;
 if (it != NULL) {
   m->mcr.request.bodylen = 4 + it->vallen;
-  memcpy(m->payload + 4, item_value(it), it->vallen);
+  rte_memcpy(m->payload + 4, item_value(it), it->vallen);
 }
 
 output { out(m); }
@@ -121,9 +121,8 @@ print_msg = create_element_instance("print_msg",
 
 n_segments = 4
 Segments = create_state("segments_holder",
-                       "segment_header* segments[%d]; int head; int tail; int size;" % n_segments,
-                       [[0],0,n_segments-1,n_segments])
-
+                        "struct segment_header* segment; struct _segments_holder* next;",
+                        [0,0])
 segments = Segments()
 
 get_item_creator = create_element("get_item_creator",
@@ -134,12 +133,13 @@ get_item_creator = create_element("get_item_creator",
     size_t totlen = m->mcr.request.bodylen - m->mcr.request.extlen;
 
     bool full = false;
-    item *it = segment_item_alloc(this.segments[this.head], totlen);
+    item *it = segment_item_alloc(this.segment, totlen);
     if(it == NULL) {
         full = true;
-        this.head = (this.head + 1) %s %d;
+        this.segment = this.next->segment;
+        this.next = this.next->next;
         // Assume that the next one is not full.
-        it = segment_item_alloc(this.segments[this.head], totlen);
+        it = segment_item_alloc(this.segment, totlen);
     }
 
     it->hv = hash;
@@ -148,7 +148,7 @@ get_item_creator = create_element("get_item_creator",
     rte_memcpy(item_key(it), key, totlen);
 
     output { out_item(it, m->mcr.request.magic); out_full(full); }
-   '''% ("%", n_segments), None, [("segments_holder", "this")])
+   ''', None, [("segments_holder", "this")])
 get_item = get_item_creator("get_item", [segments])
 
 get_core = create_element("get_core",
@@ -196,6 +196,7 @@ nic_rx.run(nop)
 
 # TODO: 1. initialize segments
 # TODO: 2. use ialloc_from_offset and ialloc_to_offset (eq_entry contains item instead of item*)
+# TODO: 3. circular queue stores entries instead of pointers to entries
 
 def spec_nic2app(x, core):
     Drop = create_drop("Drop", "uint64_t")

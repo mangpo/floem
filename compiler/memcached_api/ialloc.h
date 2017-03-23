@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include "iokvs.h"
 
-static item *segment_item_alloc(segment_header *h, size_t total)
+static item *segment_item_alloc(struct segment_header *h, size_t total)
 {
     item *it = (item *) ((uintptr_t) h->data + h->offset);
     size_t avail;

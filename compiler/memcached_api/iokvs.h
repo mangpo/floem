@@ -81,15 +81,15 @@ item *hasht_get(const void *key, size_t klen, uint32_t hv);
  */
 void hasht_put(item *it, item *cas);
 
-typedef struct _segment_header {
+struct segment_header {
     void *data;
-    struct _segment_header *next;
-    struct _segment_header *prev;
+    struct segment_header *next;
+    struct segment_header *prev;
     uint32_t offset;
     uint32_t freed;
     uint32_t size;
     uint32_t flags;
-} segment_header;
+};
 
 
 struct item_allocator {
@@ -184,13 +184,13 @@ void ialloc_maintenance(struct item_allocator *ia);
 /** Get pointer to the item's key */
 static inline void *item_key(item *it)
 {
-    return it + 1; // TODO: what is this point ot?
+    return it + 1; // TODO: what is this point to?
 }
 
 /** Get pointer to the item's value */
 static inline void *item_value(item *it)
 {
-    return (void *) ((uintptr_t) (it + 1) + it->keylen); // TODO: what is this point ot?
+    return (void *) ((uintptr_t) (it + 1) + it->keylen); // TODO: what is this point to?
 }
 
 /** Total number of bytes for this item (includes item struct) */

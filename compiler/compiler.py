@@ -319,7 +319,7 @@ def element_to_function(instance, state_rename, graph):
 
 def generate_state(state):
     src = ""
-    src += "typedef struct { %s } %s;" % (state.content, state.name)
+    src += "typedef struct _%s { %s } %s;" % (state.name, state.content, state.name)
     print src
     return src
 

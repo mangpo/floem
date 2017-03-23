@@ -141,6 +141,7 @@ def dfs_cover_return(g, node_name, port_name, target, num_ports, answer):
                                 % (node_name, intersect, target))
             cover = cover.union(l_cover)
         elif element.output_fire == "one":
+            # Not as strict as join handling
             cover_empty = cover.empty()
             if not cover_empty and not l_cover.empty() and not cover == l_cover:
                 raise Exception(
