@@ -738,12 +738,12 @@ def generate_code_and_run(graph, testing, expect=None, include=None, depend=None
     if depend:
         for f in depend:
             extra += '%s.o ' % f
-            cmd = 'gcc -O3 -I %s -c %s.c' % (common.dpdk_include, f)
+            cmd = 'gcc -O3 -msse4.1 -I %s -c %s.c' % (common.dpdk_include, f)
             status = os.system(cmd)
             if not status == 0:
                 raise Exception("Compile error: " + cmd)
 
-    cmd = 'gcc -O3 -I %s -pthread tmp.c %s -o tmp' % (common.dpdk_include, extra)
+    cmd = 'gcc -O3 -msse4.1 -I %s -pthread tmp.c %s -o tmp' % (common.dpdk_include, extra)
     status = os.system(cmd)
     if not status == 0:
         raise Exception("Compile error: " + cmd)
@@ -771,12 +771,12 @@ def compile_and_run(name, depend, include_option):
     if depend:
         for f in depend:
             extra += '%s.o ' % f
-            cmd = 'gcc -O3 -I %s -c %s.c' % (common.dpdk_include, f)
+            cmd = 'gcc -O3 -msse4.1 -I %s -c %s.c' % (common.dpdk_include, f)
             status = os.system(cmd)
             if not status == 0:
                 raise Exception("Compile error: " + cmd)
 
-    cmd = 'gcc -O3 -I %s -pthread %s.c %s -o %s' % (common.dpdk_include, name, extra, name)
+    cmd = 'gcc -O3 -msse4.1 -I %s -pthread %s.c %s -o %s' % (common.dpdk_include, name, extra, name)
     status = os.system(cmd)
     if not status == 0:
         raise Exception("Compile error: " + cmd)
