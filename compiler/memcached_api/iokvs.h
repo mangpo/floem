@@ -26,11 +26,10 @@ struct settings {
 };
 
 /** Global settings */
-extern struct settings settings;
+struct settings settings;
 
 /** Initialize global settings from command-line. */
-void settings_init(int argc, char *argv[]);
-
+void settings_init();
 
 /**
  * Item.
@@ -175,6 +174,8 @@ void ialloc_cleanup_nextrequest(struct item_allocator *ia);
  * from maintenance thread.
  */
 void ialloc_maintenance(struct item_allocator *ia);
+
+item *segment_item_alloc(struct segment_header *h, size_t total);
 
 
 /******************************************************************************/

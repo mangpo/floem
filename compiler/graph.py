@@ -136,7 +136,7 @@ class Element:
 
                 cases_exprs = []
                 for case in cases:
-                    m = re.search('^[ \n]*case([^:]+):[ ]*([a-zA-Z0-9_]+)(\([^)]*\))[ ]*$', case)
+                    m = re.search('^[ \n]*case([^:]+):[ ]*([a-zA-Z0-9_]+)(\(.+)$', case)
                     if m:
                         cases_exprs.append((m.group(1), m.group(2) + m.group(3)))
                         if m.group(1) in count:

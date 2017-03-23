@@ -86,7 +86,7 @@ output { out((eq_entry*) entry); }
                ''')
 
 unpack = create_element_instance("Unpack",
-                 [Port("in", ["cq_entry*"])],
+                 [Port("in", ["cqe_send_getresponse*"])],
                  [Port("out_opaque", ["uint64_t"]), Port("out_item", ["item*"])],
                  r'''
 cqe_send_getresponse* entry = (cqe_send_getresponse*) in(); // TODO
@@ -101,14 +101,6 @@ get_opaque = create_element_instance("GetOpaque",
 output { out(m->mcr.request.magic); }
                     ''')
 
-# GetCore = create_element("GetCore",
-#                  [Port("in", ["eq_entry*"])],
-#                  [Port("out", ["size_t"])],
-#                  r'''
-# (eq_entry* entry) = in();
-# output { out(entry->hash % 4); }  // reta[entry->key_hash & 0xff];
-#                  ''')
-
 print_msg = create_element_instance("print_msg",
                    [Port("in", ["iokvs_message*"])],
                    [],
@@ -119,11 +111,26 @@ print_msg = create_element_instance("print_msg",
    ''')
 
 
-n_segments = 4
+get_core = create_element("get_core",
+                                       [Port("in", ["iokvs_message*", "void*", "size_t", "uint32_t"])],
+                                       [Port("out", ["size_t"])],
+                                       r'''
+    (iokvs_message* m, void* key, size_t keylen, uint32_t hash) = in();
+    output { out(hash % 4); }
+                                       ''')
+get_core_get = get_core("get_core_get")
+get_core_set = get_core("get_core_set")
+
+######################## Log segment ##########################
 Segments = create_state("segments_holder",
                         "struct segment_header* segment; struct _segments_holder* next;",
                         [0,0])
 segments = Segments()
+
+Last_segment = create_state("last_segment",
+                        "struct _segments_holder* holder;",
+                        [0])
+last_segment = Last_segment()
 
 get_item_creator = create_element("get_item_creator",
                    [Port("in", ["iokvs_message*", "void*", "size_t", "uint32_t"])],
@@ -151,15 +158,38 @@ get_item_creator = create_element("get_item_creator",
    ''', None, [("segments_holder", "this")])
 get_item = get_item_creator("get_item", [segments])
 
-get_core = create_element("get_core",
-                                       [Port("in", ["iokvs_message*", "void*", "size_t", "uint32_t"])],
-                                       [Port("out", ["size_t"])],
-                                       r'''
-    (iokvs_message* m, void* key, size_t keylen, uint32_t hash) = in();
-    output { out(hash % 4); }
-                                       ''')
-get_core_get = get_core("get_core_get")
-get_core_set = get_core("get_core_set")
+add_logseg_creator = create_element("add_logseg_creator",
+                   [Port("in", ["cqe_add_logseg*"])], [],
+                   r''''
+    (cqe_add_logseg* e) = in();
+    if(this.segment != NULL) {
+        struct _segments_holder* holder = (struct _segments_holder*) malloc(sizeof(struct _segments_holder*));
+        holder->segment = e->segment;
+        last.holder->next = holder;
+        last.holder = holder;
+    }
+    else {
+        this.segment = e->segment;
+        last.holder = &this;
+    }
+    ''', None, [("segments_holder", "this"), ("last_segment", "last")])
+add_logseg = add_logseg_creator("add_logseg", [segments, last_segment])
+
+
+######################## Rx ##########################
+classifier_rx = create_element_instance("classifier_rx",
+              [Port("in", ["cq_entry*"])],
+              [Port("out_get", ["cqe_send_getresponse*"]), Port("out_logseg", ["cqe_add_logseg*"])],
+               r'''
+(cq_entry* e) = in();
+uint16_t flags = e->flags;
+
+output switch{
+  case (flags == CQE_TYPE_GRESP): out_get((cqe_send_getresponse*) e);
+  case (flags == CQE_TYPE_LOG): out_logseg((cqe_add_logseg*) e);
+  // else drop
+}
+''')
 
 msg_put, msg_get = create_table_instances("msg_put", "msg_get", "uint64_t", "iokvs_message*", 64)
 Inject = create_inject("inject", "iokvs_message*", 8, "random_request")
@@ -253,12 +283,21 @@ def impl_app2nic():
 app2nic = create_spec_impl("app2nic", spec_app2nic, impl_app2nic)
 
 cq_entry = app2nic()
-opaque3, item = unpack(cq_entry)
-pkt4 = msg_get(opaque3)
-response = prepare_response(pkt4, item)
-print_msg(response)
+cqe_set, cqe_logseg = classifier_rx(cq_entry)
 
-nic_tx.run(unpack, msg_get, prepare_response, print_msg)
+# get response
+opaque, item = unpack(cqe_set)
+pkt4 = msg_get(opaque)
+response = prepare_response(pkt4, item)
+nic_tx.run(unpack, msg_get, prepare_response)
+
+# logseg
+add_logseg(cqe_logseg)
+nic_tx.run(add_logseg)
+
+# print
+print_msg(response)
+nic_tx.run(print_msg)
 
 ######################## Run test #######################
 c = Compiler()
@@ -267,9 +306,8 @@ c.include = r'''
 #include "nicif.h"
 #include "iokvs.h"
 #include "protocol_binary.h"
-#include "ialloc.h"
 '''
-c.depend = ['jenkins_hash', 'hashtable']
+c.depend = ['jenkins_hash', 'hashtable', 'ialloc']
 c.triggers = True
 c.I = '/home/mangpo/lib/dpdk-16.11/build/include'
 

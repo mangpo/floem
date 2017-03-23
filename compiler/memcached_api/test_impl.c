@@ -1,4 +1,5 @@
 #include "tmp_impl.h"
+#include "iokvs.h"
 
 #define NUM_THREADS     4
 typedef eq_entry* (*feq)();
@@ -7,8 +8,29 @@ typedef void (*fcq)(cq_entry*);
 feq get_eqs[4] = {get_eq0, get_eq1, get_eq2, get_eq3};  // array of pointers to API function get_eq
 fcq send_cqs[4] = {send_cq0, send_cq1, send_cq2, send_cq3};  // array of pointers to API function send_eq
 
+static struct item_allocator **iallocs;
+
+void settings_init()
+{
+    settings.udpport = 11211;
+    settings.verbose = 1;
+    settings.segsize = 2 * 1024 * 1024;
+    settings.segmaxnum = 512;
+    settings.segcqsize = 32 * 1024;
+}
+
+
 void run_app(void *threadid) {
   long tid = (long)threadid;
+
+  // init worker
+  struct item_allocator ia;
+  ialloc_init_allocator(&ia);
+  iallocs[tid] = &ia;
+  // pass ia->cur to NIC
+
+  printf("Worker starting\n");
+
   while(true) {
       eq_entry* e = get_eqs[tid]();
       if(e == NULL) {
@@ -30,7 +52,11 @@ void run_app(void *threadid) {
 
 
 int main() {
+  settings_init();
   populate_hasht(64);
+  ialloc_init();
+  iallocs = calloc(NUM_THREADS, sizeof(*iallocs));
+
   init();
   run_threads();
 
@@ -45,6 +71,7 @@ int main() {
        }
   }
 
+  // TODO: run maintenance();
   usleep(500);
 
   for(int t=0;t<NUM_THREADS;t++) {
