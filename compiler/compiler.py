@@ -476,7 +476,7 @@ n_threads = 0
 def thread_func_create_cancel(func, size=None):
     thread = "pthread_t _thread_%s;\n" % func
     if size:
-        func_src = "void *_run_%s(void *threadid) { for(int i=0; i<%d; i++) { %s(); usleep(10); } pthread_exit(NULL); }\n" \
+        func_src = "void *_run_%s(void *threadid) { usleep(10000); for(int i=0; i<%d; i++) { %s(); usleep(10); } pthread_exit(NULL); }\n" \
                    % (func, size, func)
     else:
         func_src = "void *_run_%s(void *threadid) { while(true) { %s(); /* usleep(1000); */ } }\n" % (func, func)
@@ -777,6 +777,7 @@ def compile_and_run(name, depend, include_option):
                 raise Exception("Compile error: " + cmd)
 
     cmd = 'gcc -O3 -msse4.1 -I %s -pthread %s.c %s -o %s' % (common.dpdk_include, name, extra, name)
+    print cmd
     status = os.system(cmd)
     if not status == 0:
         raise Exception("Compile error: " + cmd)

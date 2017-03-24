@@ -32,6 +32,7 @@ def declare_circular_queue(name, type, size, blocking=False):
             ''' % type
     else:
         src = r'''
+            fflush(stdout);
             %s x;
             bool avail = false;
             if(this.head == this.tail) {
@@ -116,6 +117,7 @@ def create_circular_queue_one2many_instances(name, type, size, n_cores):
              p->data[p->tail] = x;
              p->tail = next;
            }
+            fflush(stdout);
            ''' % (type, one_name, name), None, [(all_name, "this")])
 
     Dequeue = create_element(prefix + "dequeue_ele",
@@ -168,6 +170,7 @@ def create_circular_queue_many2one_instances(name, type, size, n_cores):
     Dequeue = create_element(prefix + "dequeue_ele",
                              [], [Port("out", [type])],
                              r'''
+            fflush(stdout);
            static int c = 0;  // round robin schedule
            %s x;
            bool avail = false;
@@ -186,6 +189,8 @@ def create_circular_queue_many2one_instances(name, type, size, n_cores):
            if(!avail) {
              //printf("Dequeue all empty circular queues '%s' for all cores. Default value is returned (for API call).\n");
              //exit(-1);
+           } else {
+             //printf("Dequeue: YES\n");
            }
            output switch { case avail: out(x); }
            ''' % (type, n_cores, '%', one_name, '%', '%', name), None, [(all_name, "this")])

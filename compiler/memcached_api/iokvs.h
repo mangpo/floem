@@ -44,7 +44,7 @@ typedef struct _item {
     /** Length of value in bytes */
     uint32_t vallen;
     /** Reference count */
-    volatile uint16_t refcount;
+    /*volatile*/ uint16_t refcount;
     /** Length of key in bytes */
     uint16_t keylen;
     /** Flags (currently unused, but provides padding) */
@@ -290,6 +290,33 @@ static iokvs_message* random_request(size_t v) {
   uint8_t* key = m->payload + extlen;
   for(size_t i=0; i<keylen; i++)
     key[i] = v;
+
+  return m;
+}
+
+static iokvs_message* random_set_request(size_t v) {
+  size_t keylen = (v % 4) + 1;
+  size_t vallen = (v % 4) + 1;
+  size_t extlen = 4;
+
+  iokvs_message *m = (iokvs_message *) malloc(sizeof(iokvs_message) + extlen + keylen + vallen);
+  m->mcr.request.opcode = PROTOCOL_BINARY_CMD_SET;
+  m->mcr.request.magic = v; // PROTOCOL_BINARY_REQ
+  m->mcr.request.keylen = keylen;
+  m->mcr.request.datatype = PROTOCOL_BINARY_RAW_BYTES;
+  m->mcr.request.status = 0;
+
+  m->mcr.request.extlen = extlen;
+  m->mcr.request.bodylen = extlen + keylen + vallen;
+  *((uint32_t *)m->payload) = 0;
+
+  uint8_t* key = m->payload + extlen;
+  for(size_t i=0; i<keylen; i++)
+    key[i] = v;
+
+  uint8_t* val = m->payload + extlen + keylen;
+  for(size_t i=0; i<vallen; i++)
+    val[i] = v * 3;
 
   return m;
 }

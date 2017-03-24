@@ -44,12 +44,11 @@ def create_drop(name, type):
                           [],
                           r'''in();''')
 
-
-def create_table_instances(put_name, get_name, index_type, val_type, size):
+def create_table(put_name, get_name, index_type, val_type, size):
     state_name = ("_table_%s_%d" % (val_type, size)).replace('*', '$')
     state_instance_name = "_table_%s" % put_name
     Table = create_state(state_name, "{0} data[{1}];".format(val_type, size), [[0]])
-    TablePut = create_element("_element_" + put_name,
+    TablePut = create_element(put_name,
                               [Port("in_index", [index_type]), Port("in_value", [val_type])], [],
                               r'''
               (%s index) = in_index();
@@ -60,7 +59,7 @@ def create_table_instances(put_name, get_name, index_type, val_type, size):
               ''' % (index_type, val_type, '%', size),
                               None, [(state_name, "this")])
 
-    TableGet = create_element("_element_" + get_name,
+    TableGet = create_element(get_name,
                               [Port("in", [index_type])], [Port("out", [val_type])],
                               r'''
               (%s index) = in();
@@ -72,9 +71,27 @@ def create_table_instances(put_name, get_name, index_type, val_type, size):
               ''' % (index_type, '%', size, val_type), None, [(state_name, "this")])
 
     table = Table(state_instance_name)
-    table_put = TablePut(put_name, [table])
-    table_get = TableGet(get_name, [table])
-    return table_put, table_get
+
+    def put(name=None):
+        if name is None:
+            global fresh_id
+            name = put_name + str(fresh_id)
+            fresh_id += 1
+        return TablePut(name, [table])
+
+    def get(name=None):
+        if name is None:
+            global fresh_id
+            name = get_name + str(fresh_id)
+            fresh_id += 1
+        return TableGet(name, [table])
+
+    return put, get
+
+
+def create_table_instances(put_name, get_name, index_type, val_type, size):
+    put, get = create_table("_element_" + put_name, "_element_" + get_name, index_type, val_type, size)
+    return put(put_name), get(get_name)
 
 
 def create_inject(name, type, size, func):
