@@ -272,13 +272,13 @@ static item* random_item(size_t v) {
   return it;
 }
 
-static iokvs_message* random_request(size_t v) {
+static iokvs_message* random_get_request(size_t v, size_t id) {
   size_t keylen = (v % 4) + 1;
   size_t extlen = 4;
 
   iokvs_message *m = (iokvs_message *) malloc(sizeof(iokvs_message) + extlen + keylen);
   m->mcr.request.opcode = PROTOCOL_BINARY_CMD_GET;
-  m->mcr.request.magic = v; // PROTOCOL_BINARY_REQ
+  m->mcr.request.magic = id; // PROTOCOL_BINARY_REQ
   m->mcr.request.keylen = keylen;
   m->mcr.request.datatype = PROTOCOL_BINARY_RAW_BYTES;
   m->mcr.request.status = 0;
@@ -294,14 +294,14 @@ static iokvs_message* random_request(size_t v) {
   return m;
 }
 
-static iokvs_message* random_set_request(size_t v) {
+static iokvs_message* random_set_request(size_t v, size_t id) {
   size_t keylen = (v % 4) + 1;
   size_t vallen = (v % 4) + 1;
   size_t extlen = 4;
 
   iokvs_message *m = (iokvs_message *) malloc(sizeof(iokvs_message) + extlen + keylen + vallen);
   m->mcr.request.opcode = PROTOCOL_BINARY_CMD_SET;
-  m->mcr.request.magic = v; // PROTOCOL_BINARY_REQ
+  m->mcr.request.magic = id; // PROTOCOL_BINARY_REQ
   m->mcr.request.keylen = keylen;
   m->mcr.request.datatype = PROTOCOL_BINARY_RAW_BYTES;
   m->mcr.request.status = 0;
@@ -319,6 +319,13 @@ static iokvs_message* random_set_request(size_t v) {
     val[i] = v * 3;
 
   return m;
+}
+
+static iokvs_message* random_request(size_t v) {
+    if(v % 2 == 0)
+        return random_set_request(v/2, v);
+    else
+        return random_get_request(v/2, v);
 }
 
 #endif // ndef IOKVS_H_

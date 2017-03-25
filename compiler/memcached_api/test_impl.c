@@ -1,14 +1,14 @@
 #include "tmp_impl.h"
 #include "iokvs.h"
 
-#define NUM_THREADS     1
+#define NUM_THREADS     4
 typedef eq_entry* (*feq)();
 typedef void (*fcq)(cq_entry*);
 
-//feq get_eqs[4] = {get_eq0, get_eq1, get_eq2, get_eq3};  // array of pointers to API function get_eq
-//fcq send_cqs[4] = {send_cq0, send_cq1, send_cq2, send_cq3};  // array of pointers to API function send_eq
-feq get_eqs[1] = {get_eq0};  // array of pointers to API function get_eq
-fcq send_cqs[1] = {send_cq0};  // array of pointers to API function send_eq
+feq get_eqs[4] = {get_eq0, get_eq1, get_eq2, get_eq3};  // array of pointers to API function get_eq
+fcq send_cqs[4] = {send_cq0, send_cq1, send_cq2, send_cq3};  // array of pointers to API function send_eq
+//feq get_eqs[1] = {get_eq0};  // array of pointers to API function get_eq
+//fcq send_cqs[1] = {send_cq0};  // array of pointers to API function send_eq
 
 static struct item_allocator **iallocs;
 
@@ -33,7 +33,6 @@ void run_app(void *threadid) {
   cqe_add_logseg* log = (cqe_add_logseg *) malloc(sizeof(cqe_add_logseg));
   log->flags = CQE_TYPE_LOG;
   log->segment = ia.cur;
-  printf("send_cq\n");
   send_cqs[tid]((cq_entry*) log);
 
   printf("Worker %ld starting\n", tid);
@@ -60,7 +59,6 @@ void run_app(void *threadid) {
         item* it = e_set->item;
         printf("set at core %ld: OPAQUE: %ld ref: %d\n", tid, e_set->opaque, it->refcount);
         hasht_put(it, NULL);
-        printf("[done] set at core %ld: OPAQUE: %ld ref: %d\n", tid, e_set->opaque, it->refcount);
         cqe_send_setresponse* c = (cqe_send_setresponse *) malloc(sizeof(cqe_send_setresponse));
         c->flags = CQE_TYPE_SRESP;
         c->opaque = e_set->opaque;

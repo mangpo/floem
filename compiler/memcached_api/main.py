@@ -2,7 +2,7 @@ from dsl import *
 from elements_library import *
 import queue
 
-n_cores = 1
+n_cores = 4
 
 classifier = create_element_instance("classifier",
               [Port("in_pkt", ["iokvs_message*"]), Port("in_hash", ["void*", "size_t", "uint32_t"])],
@@ -133,10 +133,13 @@ print_msg = create_element_instance("print_msg",
                    [],
                    r'''
    (iokvs_message* m) = in();
-   uint8_t *key = m->payload + 4;
-   printf("OPAQUE: %d, len: %d, key:%d\n", m->mcr.request.magic, m->mcr.request.bodylen, key[0]);
+   uint8_t *val = m->payload + 4;
+   uint8_t opcode = m->mcr.request.opcode;
+   if(opcode == PROTOCOL_BINARY_CMD_GET)
+        printf("GET -- id: %d, len: %d, val:%d\n", m->mcr.request.magic, m->mcr.request.bodylen, val[0]);
+   else if (opcode == PROTOCOL_BINARY_CMD_SET)
+        printf("SET -- id: %d, len: %d\n", m->mcr.request.magic, m->mcr.request.bodylen);
    ''')
-
 
 get_core = create_element("get_core",
                                        [Port("in", ["iokvs_message*", "void*", "size_t", "uint32_t"])],
@@ -235,7 +238,7 @@ msg_put = msg_put_creator("msg_put")
 msg_get_get = msg_get_creator("msg_get_get")
 msg_get_set = msg_get_creator("msg_get_set")
 #msg_put, msg_get = create_table_instances("msg_put", "msg_get", "uint64_t", "iokvs_message*", 64)
-Inject = create_inject("inject", "iokvs_message*", 8, "random_set_request")
+Inject = create_inject("inject", "iokvs_message*", 100, "random_request")
 inject = Inject()
 
 nic_rx = internal_thread("nic_rx")
@@ -265,10 +268,6 @@ nic_rx.run(get_item, make_eqe_set, get_core_set)
 nop = create_element_instance("nop", [Port("in", ["bool"])], [], "in();")  # TODO
 nop(is_segment_full)
 nic_rx.run(nop)
-
-# TODO: 1. initialize segments
-# TODO: 2. use ialloc_from_offset and ialloc_to_offset (eq_entry contains item instead of item*)
-# TODO: 3. circular queue stores entries instead of pointers to entries
 
 def spec_nic2app(x, core):
     Drop = create_drop("Drop", "uint64_t")
@@ -375,3 +374,7 @@ def run_impl():
 run_impl()
 
 
+# TODO: bug GET RESPONSE val = 0 sometimes
+# TODO: 1. initialize segments
+# TODO: 2. use ialloc_from_offset and ialloc_to_offset (eq_entry contains item instead of item*)
+# TODO: 3. circular queue stores entries instead of pointers to entries
