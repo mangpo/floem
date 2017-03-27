@@ -96,7 +96,7 @@ make_eqe_set = create_element_instance("make_eqe_set",
                [Port("out", ["eq_entry*"])],
                r'''
 (item* it, uint64_t opaque) = in();
-printf("make_eqe_set: opaque = %d, refcount = %d\n", opaque, it->refcount);
+//printf("make_eqe_set: opaque = %ld, refcount = %d\n", opaque, it->refcount);
 eqe_rx_set* entry = (eqe_rx_set *) malloc(sizeof(eqe_rx_set));
 entry->flags = EQE_TYPE_RXSET;
 entry->opaque = opaque;
@@ -169,8 +169,7 @@ get_item_creator = create_element("get_item_creator",
     size_t totlen = m->mcr.request.bodylen - m->mcr.request.extlen;
 
     bool full = false;
-    item *it = segment_item_alloc(this.segment, sizeof(item*) + totlen); // TODO
-    //printf("item %ld\n", it);
+    item *it = segment_item_alloc(this.segment, sizeof(item) + totlen); // TODO
     if(it == NULL) {
         full = true;
         this.segment = this.next->segment;
@@ -179,6 +178,7 @@ get_item_creator = create_element("get_item_creator",
         it = segment_item_alloc(this.segment, totlen);
     }
 
+    printf("get_item id: %d, keylen: %ld, hash: %d, totlen: %ld\n", m->mcr.request.magic, keylen, hash, totlen);
     it->hv = hash;
     it->vallen = totlen - keylen;
     it->keylen = keylen;

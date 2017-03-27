@@ -46,8 +46,14 @@ void run_app(void *threadid) {
       else if (e->flags == EQE_TYPE_RXGET) {
 
         eqe_rx_get* e_get = (eqe_rx_get*) e;
-        printf("get at core %ld: OPAQUE: %ld, len: %d\n", tid, e_get->opaque, e_get->keylen);
         item *it = hasht_get(e_get->key, e_get->keylen, e_get->hash);
+//        printf("get at core %ld: id: %ld, keylen: %d, hash: %d\n", tid, e_get->opaque, e_get->keylen, e_get->hash);
+//        printf("get at core %ld: id: %ld, item = %ld.....\n", tid, e_get->opaque, it);
+//        uint8_t* key = e_get->key;
+//        for(int i=0; i<e_get->keylen; i++)
+//            printf("get id: %ld, key[%d] = %d\n", e_get->opaque, i, key[i]);
+        uint8_t* val = item_value(it);
+        printf("get at core %ld: id: %ld, keylen: %d, vallen %d, val: %d\n", tid, e_get->opaque, it->keylen, it->vallen, val[0]);
         cqe_send_getresponse* c = (cqe_send_getresponse *) malloc(sizeof(cqe_send_getresponse));
         c->flags = CQE_TYPE_GRESP;
         c->item = it;
@@ -57,7 +63,12 @@ void run_app(void *threadid) {
       else if (e->flags == EQE_TYPE_RXSET) {
         eqe_rx_set* e_set = (eqe_rx_set*) e;
         item* it = e_set->item;
-        printf("set at core %ld: OPAQUE: %ld ref: %d\n", tid, e_set->opaque, it->refcount);
+        uint8_t * val = item_value(it);
+        //printf("set at core %ld: id: %ld, keylen: %d, hash: %d\n", tid, e_set->opaque, it->keylen, it->hv);
+        printf("set at core %ld: id: %ld, item: %ld, keylen: %d, vallen: %d, val: %d\n", tid, e_set->opaque, it, it->keylen, it->vallen, val[0]);
+//        uint8_t* key = item_key(it);
+//        for(int i=0; i<it->keylen; i++)
+//            printf("set id: %ld, key[%d] = %d\n", e_set->opaque, i, key[i]);
         hasht_put(it, NULL);
         cqe_send_setresponse* c = (cqe_send_setresponse *) malloc(sizeof(cqe_send_setresponse));
         c->flags = CQE_TYPE_SRESP;
