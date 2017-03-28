@@ -141,6 +141,7 @@ static inline struct segment_header *segment_from_part(void *data)
 
 static void segment_free(struct segment_header *h)
 {
+    printf("Free segment!\n");
     rte_spinlock_lock(&segalloc_lock);
     h->offset = 0;
     h->next = free_segments;
@@ -228,11 +229,15 @@ struct segment_header *new_segment(struct item_allocator *ia, bool cleanup) {
             return NULL;
         }
     }
+    old = ia->cur;
     old->next = h;
     h->next = NULL;
     /* Mark old segment as GC-able */
     old->flags |= SF_INACTIVE;
     ia->cur = h;
+
+//    printf("New segment %ld %ld %ld\n", old->next, old, ia->oldest);
+//    printf("New segment %ld %d\n", ia->oldest->next, (ia->oldest->flags & SF_INACTIVE) == SF_INACTIVE);
 
     return h;
 }
@@ -409,6 +414,7 @@ void ialloc_maintenance(struct item_allocator *ia)
         next = h->next;
         ratio = (double) h->freed / h->size;
         /* Done with this segment? */
+        //printf("maintain %ld %ld\n", h->freed, h->size);
         if (h->freed == h->size) {
             if (prev == NULL) {
                 ia->oldest = h->next;

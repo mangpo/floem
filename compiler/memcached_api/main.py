@@ -397,9 +397,7 @@ def run_impl():
 #run_spec()
 run_impl()
 
-# TODO: new logseg
 # TODO: 2. use ialloc_from_offset and ialloc_to_offset
 # TODO: 3. circular queue stores entries instead of pointers to entries
-# TODO: run maintenance
 # TODO: deallocate eq_entry/ cq_entry
 # TODO: proper initialization

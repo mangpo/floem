@@ -90,6 +90,17 @@ void run_app(void *threadid) {
   }
 }
 
+void maintenance()
+{
+    size_t i;
+    usleep(1000);
+    while (1) {
+        for (i = 0; i < NUM_THREADS; i++) {
+            ialloc_maintenance(iallocs[i]);
+        }
+        usleep(10);
+    }
+}
 
 int main() {
   settings_init();
@@ -111,8 +122,7 @@ int main() {
   }
 
   run_threads();
-
-  // TODO: run maintenance();
+  maintenance();
   usleep(500000);
 
   for(int t=0;t<NUM_THREADS;t++) {
