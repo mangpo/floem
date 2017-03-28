@@ -162,6 +162,7 @@ item *segment_item_alloc(struct segment_header *h, size_t total)
 
     /* Not enough room in this segment */
     avail = h->size - h->offset;
+    printf("avail = %ld\n", avail);
     if (avail == 0) {
         return NULL;
     } else if (avail < total) {
@@ -211,6 +212,29 @@ void ialloc_init_allocator(struct item_allocator *ia)
     ia->cleanup_queue = calloc(settings.segcqsize, sizeof(*ia->cleanup_queue));
     ia->cq_head = ia->cq_tail = 0;
     ia->cleaning = NULL;
+}
+
+struct segment_header *new_segment(struct item_allocator *ia, bool cleanup) {
+    struct segment_header *h, *old;
+
+    if ((h = segment_alloc()) == NULL) {
+        /* We're currently doing cleanup, and still have the reserved segment
+         * then that can be used now */
+        if (cleanup && ia->reserved != NULL) {
+            h = ia->reserved;
+            ia->reserved = NULL;
+        } else {
+            printf("Fail 2!\n");
+            return NULL;
+        }
+    }
+    old->next = h;
+    h->next = NULL;
+    /* Mark old segment as GC-able */
+    old->flags |= SF_INACTIVE;
+    ia->cur = h;
+
+    return h;
 }
 
 item *ialloc_alloc(struct item_allocator *ia, size_t total, bool cleanup)

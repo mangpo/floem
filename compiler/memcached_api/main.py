@@ -10,6 +10,7 @@ classifier = create_element_instance("classifier",
                Port("out_set", ["iokvs_message*", "void*", "size_t", "uint32_t"])],
                r'''
 (iokvs_message* m) = in_pkt();
+printf("receive id: %d\n", m->mcr.request.magic);
 (void* key, size_t len, uint32_t hash) = in_hash();
 uint8_t cmd = m->mcr.request.opcode;
 
@@ -104,6 +105,19 @@ entry->item = it;
 output { out((eq_entry*) entry); }
                ''')
 
+make_eqe_full = create_element_instance("make_eqe_full",
+               [Port("in", ["bool"])],
+               [Port("out", ["eq_entry*"])],
+               r'''
+(bool full) = in();
+eqe_seg_full* entry;
+if(full) {
+    entry = (eqe_seg_full *) malloc(sizeof(eqe_seg_full));
+    entry->flags = EQE_TYPE_SEGFULL;
+}
+output switch { case full: out((eq_entry*) entry); }
+               ''')
+
 unpack_get = create_element_instance("unpack_get",
                  [Port("in", ["cqe_send_getresponse*"])],
                  [Port("out_opaque", ["uint64_t"]), Port("out_item", ["item*"])],
@@ -150,6 +164,14 @@ get_core = create_element("get_core",
 get_core_get = get_core("get_core_get")
 get_core_set = get_core("get_core_set")
 
+get_core_full = create_element_instance("get_core_full",
+                   [Port("in", ["eq_entry*"])],
+                   [Port("out", ["size_t"])],
+                   r'''
+   (eq_entry* e) = in();
+   output { out(0); }
+   ''')
+
 ######################## Log segment ##########################
 Segments = create_state("segments_holder",
                         "struct segment_header* segment; struct _segments_holder* next;",
@@ -171,11 +193,12 @@ get_item_creator = create_element("get_item_creator",
     bool full = false;
     item *it = segment_item_alloc(this.segment, sizeof(item) + totlen); // TODO
     if(it == NULL) {
+        printf("Segment is full.\n");
         full = true;
         this.segment = this.next->segment;
         this.next = this.next->next;
         // Assume that the next one is not full.
-        it = segment_item_alloc(this.segment, totlen);
+        it = segment_item_alloc(this.segment, sizeof(item) + totlen);
     }
 
     printf("get_item id: %d, keylen: %ld, hash: %d, totlen: %ld\n", m->mcr.request.magic, keylen, hash, totlen);
@@ -238,7 +261,7 @@ msg_put = msg_put_creator("msg_put")
 msg_get_get = msg_get_creator("msg_get_get")
 msg_get_set = msg_get_creator("msg_get_set")
 #msg_put, msg_get = create_table_instances("msg_put", "msg_get", "uint64_t", "iokvs_message*", 64)
-Inject = create_inject("inject", "iokvs_message*", 100, "random_request")
+Inject = create_inject("inject", "iokvs_message*", 1000, "random_request")
 inject = Inject()
 
 nic_rx = internal_thread("nic_rx")
@@ -265,16 +288,16 @@ eqe_set_core = get_core_set(pkt_hash_set)
 nic_rx.run(get_item, make_eqe_set, get_core_set)
 
 # Full segment
-nop = create_element_instance("nop", [Port("in", ["bool"])], [], "in();")  # TODO
-nop(is_segment_full)
-nic_rx.run(nop)
+eqe_full = make_eqe_full(is_segment_full)
+eqe_full_core = get_core_full(eqe_full)
+nic_rx.run(make_eqe_full, get_core_full)
 
 def spec_nic2app(x, core):
     Drop = create_drop("Drop", "uint64_t")
     drop = Drop()
     drop(core)
 
-    rx_enq, rx_deq = queue.create_circular_queue_instances("rx_queue_spec", "eq_entry*", 4)
+    rx_enq, rx_deq = queue.create_circular_queue_instances("rx_queue_spec", "eq_entry*", 16)
     rx_enq(x)
     nic_rx.run(rx_enq, drop)
 
@@ -285,7 +308,7 @@ def spec_nic2app(x, core):
         return rx_deq()
 
 def impl_nic2app(x, core):
-    rx_enq, rx_deqs = queue.create_circular_queue_one2many_instances("rx_queue_impl", "eq_entry*", 4, n_cores)
+    rx_enq, rx_deqs = queue.create_circular_queue_one2many_instances("rx_queue_impl", "eq_entry*", 16, n_cores)
     rx_enq(x, core)
 
     nic_rx.run(rx_enq)
@@ -299,6 +322,7 @@ def impl_nic2app(x, core):
 nic2app = create_spec_impl("nic2app", spec_nic2app, impl_nic2app)
 nic2app(eqe_get, eqe_get_core)
 nic2app(eqe_set, eqe_set_core)
+nic2app(eqe_full, eqe_full_core)
 
 ######################## NIC Tx #######################
 
@@ -373,8 +397,9 @@ def run_impl():
 #run_spec()
 run_impl()
 
-
-# TODO: bug GET RESPONSE val = 0 sometimes
-# TODO: 1. initialize segments
-# TODO: 2. use ialloc_from_offset and ialloc_to_offset (eq_entry contains item instead of item*)
+# TODO: new logseg
+# TODO: 2. use ialloc_from_offset and ialloc_to_offset
 # TODO: 3. circular queue stores entries instead of pointers to entries
+# TODO: run maintenance
+# TODO: deallocate eq_entry/ cq_entry
+# TODO: proper initialization

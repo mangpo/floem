@@ -176,6 +176,7 @@ void ialloc_cleanup_nextrequest(struct item_allocator *ia);
 void ialloc_maintenance(struct item_allocator *ia);
 
 item *segment_item_alloc(struct segment_header *h, size_t total);
+struct segment_header *new_segment(struct item_allocator *ia, bool cleanup);
 
 
 /******************************************************************************/

@@ -100,6 +100,6 @@ typedef struct {
     uint16_t flags;
     //uint16_t len;
     //uint32_t pad0;
-    uint64_t last;
+    //uint64_t last;
 } __attribute__((packed)) eqe_seg_full;
 #endif // ndef NICIF_H_

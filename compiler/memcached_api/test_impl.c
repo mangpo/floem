@@ -16,9 +16,9 @@ void settings_init()
 {
     settings.udpport = 11211;
     settings.verbose = 1;
-    settings.segsize = 2 * 1024 * 1024;
+    settings.segsize = 4 * 1024; // 2 * 1024 * 1024
     settings.segmaxnum = 512;
-    settings.segcqsize = 32 * 1024;
+    settings.segcqsize = 1024; // 32 * 1024
 }
 
 
@@ -64,7 +64,7 @@ void run_app(void *threadid) {
         eqe_rx_set* e_set = (eqe_rx_set*) e;
         item* it = e_set->item;
         uint8_t * val = item_value(it);
-        //printf("set at core %ld: id: %ld, keylen: %d, hash: %d\n", tid, e_set->opaque, it->keylen, it->hv);
+//        printf("set at core %ld: id: %ld, keylen: %d, hash: %d\n", tid, e_set->opaque, it->keylen, it->hv);
         printf("set at core %ld: id: %ld, item: %ld, keylen: %d, vallen: %d, val: %d\n", tid, e_set->opaque, it, it->keylen, it->vallen, val[0]);
 //        uint8_t* key = item_key(it);
 //        for(int i=0; i<it->keylen; i++)
@@ -75,6 +75,17 @@ void run_app(void *threadid) {
         c->opaque = e_set->opaque;
         send_cqs[tid]((cq_entry*) c);
       }
+      else if (e->flags == EQE_TYPE_SEGFULL) {
+        struct segment_header* segment = new_segment(&ia, false);
+        if(segment == NULL) {
+            printf("Fail to allocate new segment.\n");
+            exit(-1);
+        }
+        cqe_add_logseg* log = (cqe_add_logseg *) malloc(sizeof(cqe_add_logseg));
+        log->flags = CQE_TYPE_LOG;
+        log->segment = segment;
+        send_cqs[tid]((cq_entry*) log);
+      }
       usleep(10);
   }
 }
@@ -83,7 +94,6 @@ void run_app(void *threadid) {
 int main() {
   settings_init();
   hasht_init();
-  //populate_hasht(64);
   ialloc_init();
   iallocs = calloc(NUM_THREADS, sizeof(*iallocs));
 
@@ -103,7 +113,7 @@ int main() {
   run_threads();
 
   // TODO: run maintenance();
-  usleep(100000);
+  usleep(500000);
 
   for(int t=0;t<NUM_THREADS;t++) {
        int rc = pthread_cancel(threads[t]);
