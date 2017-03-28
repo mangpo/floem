@@ -175,7 +175,7 @@ void hasht_put(item *nit, item *cas)
         if (it != NULL) {
             nit->next = it->next;
             prev->next = nit;
-            //item_unref(it); // undefined reference to `ialloc_free'
+            item_unref(it); // undefined reference to `ialloc_free'
             goto done;
         }
     }

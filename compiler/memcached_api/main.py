@@ -106,14 +106,15 @@ output { out((eq_entry*) entry); }
                ''')
 
 make_eqe_full = create_element_instance("make_eqe_full",
-               [Port("in", ["bool"])],
+               [Port("in", ["struct segment_header*"])],
                [Port("out", ["eq_entry*"])],
                r'''
-(bool full) = in();
+(struct segment_header* full) = in();
 eqe_seg_full* entry;
-if(full) {
+if(full != NULL) {
     entry = (eqe_seg_full *) malloc(sizeof(eqe_seg_full));
     entry->flags = EQE_TYPE_SEGFULL;
+    entry->segment = full;
 }
 output switch { case full: out((eq_entry*) entry); }
                ''')
@@ -185,16 +186,16 @@ last_segment = Last_segment()
 
 get_item_creator = create_element("get_item_creator",
                    [Port("in", ["iokvs_message*", "void*", "size_t", "uint32_t"])],
-                   [Port("out_item", ["item*", "uint64_t"]), Port("out_full", ["bool"])],
+                   [Port("out_item", ["item*", "uint64_t"]), Port("out_full", ["struct segment_header*"])],
                    r'''
     (iokvs_message* m, void* key, size_t keylen, uint32_t hash) = in();
     size_t totlen = m->mcr.request.bodylen - m->mcr.request.extlen;
 
-    bool full = false;
+    struct segment_header* full = NULL;
     item *it = segment_item_alloc(this.segment, sizeof(item) + totlen); // TODO
     if(it == NULL) {
         printf("Segment is full.\n");
-        full = true;
+        full = this.segment;
         this.segment = this.next->segment;
         this.next = this.next->next;
         // Assume that the next one is not full.
@@ -205,7 +206,7 @@ get_item_creator = create_element("get_item_creator",
     it->hv = hash;
     it->vallen = totlen - keylen;
     it->keylen = keylen;
-    it->refcount = 1;
+    //it->refcount = 1;
     rte_memcpy(item_key(it), key, totlen);
 
     output { out_item(it, m->mcr.request.magic); out_full(full); }
@@ -256,7 +257,7 @@ output switch{
 }
 ''')
 
-msg_put_creator, msg_get_creator = create_table("msg_put_creator", "msg_get_creator", "uint64_t", "iokvs_message*", 64)
+msg_put_creator, msg_get_creator = create_table("msg_put_creator", "msg_get_creator", "uint64_t", "iokvs_message*", 256)
 msg_put = msg_put_creator("msg_put")
 msg_get_get = msg_get_creator("msg_get_get")
 msg_get_set = msg_get_creator("msg_get_set")
@@ -282,13 +283,13 @@ eqe_get_core = get_core_get(pkt_hash_get)
 nic_rx.run(make_eqe_get, get_core_get)
 
 # Set request
-item_opaque, is_segment_full = get_item(pkt_hash_set)
+item_opaque, full_segment = get_item(pkt_hash_set)
 eqe_set = make_eqe_set(item_opaque)
 eqe_set_core = get_core_set(pkt_hash_set)
 nic_rx.run(get_item, make_eqe_set, get_core_set)
 
 # Full segment
-eqe_full = make_eqe_full(is_segment_full)
+eqe_full = make_eqe_full(full_segment)
 eqe_full_core = get_core_full(eqe_full)
 nic_rx.run(make_eqe_full, get_core_full)
 
@@ -297,7 +298,7 @@ def spec_nic2app(x, core):
     drop = Drop()
     drop(core)
 
-    rx_enq, rx_deq = queue.create_circular_queue_instances("rx_queue_spec", "eq_entry*", 16)
+    rx_enq, rx_deq = queue.create_circular_queue_instances("rx_queue_spec", "eq_entry*", 64)
     rx_enq(x)
     nic_rx.run(rx_enq, drop)
 
@@ -397,7 +398,6 @@ def run_impl():
 #run_spec()
 run_impl()
 
-# TODO: 2. use ialloc_from_offset and ialloc_to_offset
-# TODO: 3. circular queue stores entries instead of pointers to entries
+# TODO: 3. circular queue stores entries instead of pointers to entries ***
 # TODO: deallocate eq_entry/ cq_entry
 # TODO: proper initialization

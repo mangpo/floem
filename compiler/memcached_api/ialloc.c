@@ -149,7 +149,7 @@ static void segment_free(struct segment_header *h)
     rte_spinlock_unlock(&segalloc_lock);
 }
 
-static void segment_item_free(struct segment_header *h, size_t total)
+void segment_item_free(struct segment_header *h, size_t total)
 {
     if (h->size != __sync_add_and_fetch(&h->freed, total)) {
         return;
@@ -173,8 +173,9 @@ item *segment_item_alloc(struct segment_header *h, size_t total)
             it->keylen = avail - sizeof(item);
             it->vallen = 0;
         }
-        segment_item_free(h, avail);
-        h->offset += avail;
+        // The following should be done on APP.
+        //segment_item_free(h, avail);
+        //h->offset += avail;
         return NULL;
     }
 

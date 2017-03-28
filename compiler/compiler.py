@@ -58,6 +58,12 @@ def first_non_space(s,i):
         return (None,-1)
 
 
+def get_type(s):
+    s = s.lstrip('\n').lstrip().rstrip('\n').rstrip()
+    index = s.rfind(' ')
+    return s[:index]
+
+
 def remove_asgn_stmt(funcname, src,port2args,port,p_eq, p_end, inport_types):
     """
     Remove the reading from port statement from src, and put its LHS of the statement in port2args.
@@ -76,7 +82,7 @@ def remove_asgn_stmt(funcname, src,port2args,port,p_eq, p_end, inport_types):
     decl = src[p_start:p_eq].lstrip().rstrip().lstrip("(").rstrip(")").lstrip().rstrip()
     args = decl.split(",")
     port2args[port] = args
-    argtypes = [x.split()[0] for x in args]
+    argtypes = [get_type(x) for x in args]
 
     if not(argtypes == inport_types):
         raise Exception("At element instance '%s', types mismatch at an input port '%s'. Expect %s, but got %s."

@@ -85,6 +85,12 @@ void run_app(void *threadid) {
         log->flags = CQE_TYPE_LOG;
         log->segment = segment;
         send_cqs[tid]((cq_entry*) log);
+
+        eqe_seg_full* e_full = (eqe_seg_full*) e;
+        struct segment_header* old = e_full->segment;
+        size_t avail = old->size - old->offset;
+        segment_item_free(old, avail);
+        old->offset += avail;
       }
       usleep(10);
   }
