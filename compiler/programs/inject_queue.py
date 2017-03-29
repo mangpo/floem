@@ -19,10 +19,11 @@ def dequeue():
 c = Compiler()
 c.include = r'''int gen_func(int i) { return i; }'''
 c.testing = r'''
+usleep(10000);
 for(int i=0; i<8; i++) {
-    usleep(10);
     printf("%d\n", dequeue());
+    usleep(50);
 }
 out(dequeue());
 '''
-c.generate_code_and_run(range(2,10) + [-1])
+c.generate_code_and_run() #range(2,10) + [-1])

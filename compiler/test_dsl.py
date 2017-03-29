@@ -36,6 +36,7 @@ class TestDSL(unittest.TestCase):
                  "circular_queue2.py",
                  "circular_queue_multicore.py",
                  "circular_queue_multicore2.py",
+                 "circular_queue_multicore3.py",
                  "composite_at1.py",
                  "composite_at2.py",
                  "composite_at3.py",
@@ -62,7 +63,7 @@ class TestDSL(unittest.TestCase):
                   ]
 
         for test in tests:
-            status = os.system("python programs/" + test)
+            status = os.system("cd programs; python " + test + "; cd ..")
             self.assertEqual(status, 0, "Error at " + test)
         for test in tests2:
             status = os.system("python programs_testing/" + test)
@@ -82,7 +83,6 @@ class TestDSL(unittest.TestCase):
         try:
             c.generate_code()
         except Exception as e:
-            print e.message
             self.assertNotEqual(
                 e.message.find("Input port 'in2' of join element instance 'add' is not connected to any instance."), -1)
         else:

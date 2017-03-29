@@ -21,7 +21,7 @@ typedef struct {
 } __attribute__((packed)) q_entry;
 
 q_entry *enqueue_alloc(circular_queue* q, size_t len) {
-    printf("enq: queue = %ld\n", q->queue);
+    //printf("enq: queue = %ld\n", q->queue);
     volatile uint16_t *flags;
     q_entry *eqe, *dummy;
     size_t off, qlen, total, elen, eqe_off;
@@ -41,13 +41,13 @@ q_entry *enqueue_alloc(circular_queue* q, size_t len) {
             return NULL;
         }
         elen = flags[1];
-        printf("1: total= %ld, len=%ld, elen=%ld\n", total, len, elen);
+        //printf("1: total= %ld, len=%ld, elen=%ld\n", total, len, elen);
         /* Never been initialized -> rest of queue is usable */
         if (elen == 0) {
             elen = qlen - off;
         }
         total += elen;
-        printf("2: total= %ld, len=%ld, elen=%ld\n", total, len, elen);
+        //printf("2: total= %ld, len=%ld, elen=%ld\n", total, len, elen);
         if (total < len) {
             /* Need more */
             if (off + elen >= qlen) {
@@ -79,14 +79,14 @@ q_entry *enqueue_alloc(circular_queue* q, size_t len) {
 void enqueue_submit(q_entry *e)
 {
     e->flags |= FLAG_OWN;
-    printf("enq_submit %ld %d\n", e, e->flags);
+    //printf("enq_submit %ld %d\n", e, e->flags);
     fflush(stdout);
 }
 
 q_entry *dequeue_get(circular_queue* q) {
-    printf("deq: queue = %ld\n", q->queue);
+    //printf("deq: queue = %ld\n", q->queue);
     q_entry* eqe = q->queue + q->offset;
-    printf("deq_get %ld %d\n", eqe, eqe->flags);
+    //printf("deq_get %ld %d\n", eqe, eqe->flags);
     if(eqe->flags & FLAG_OWN) {
         q->offset = (q->offset + eqe->len) % q->len;
         return eqe;

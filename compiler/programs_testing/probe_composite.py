@@ -20,5 +20,5 @@ c = Compiler()
 c.include = r'''
 int gen_func(int i) { return i; }
 '''
-c.testing = "usleep(1000);"
+c.testing = "usleep(100000);"
 c.generate_code_and_run(range(10))

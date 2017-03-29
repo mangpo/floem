@@ -241,7 +241,7 @@ def create_circular_queue_variablesize_one2many_instances(name, size, n_cores):
                              [], [Port("out", ["q_entry*"])],
                              r'''
         q_entry* x = dequeue_get(&this);
-        printf("deq_get = %ld\n", x);
+        //printf("deq_get = %ld\n", x);
         output switch { case (x != NULL): out(x); }
            ''', None, [("circular_queue", "this")])
 

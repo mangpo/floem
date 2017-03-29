@@ -489,8 +489,15 @@ n_threads = 0
 def thread_func_create_cancel(func, size=None):
     thread = "pthread_t _thread_%s;\n" % func
     if size:
-        func_src = r'''void *_run_%s(void *threadid) { usleep(10000); for(int i=0; i<%d; i++) { printf("inject = %s\n", i); %s(); usleep(50); } pthread_exit(NULL); }''' \
-                   % (func, size, '%d', func)
+        func_src = r'''
+            void *_run_%s(void *threadid) {
+                usleep(10000);
+                for(int i=0; i<%d; i++) {
+                    //printf("inject = %s\n", i);
+                    %s();
+                    usleep(50); }
+                pthread_exit(NULL);
+            }''' % (func, size, '%d', func)
     else:
         func_src = "void *_run_%s(void *threadid) { while(true) { %s(); /* usleep(1000); */ } }\n" % (func, func)
     create = "  pthread_create(&_thread_%s, NULL, _run_%s, NULL);\n" % (func, func)

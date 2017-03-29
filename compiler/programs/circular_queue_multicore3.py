@@ -45,17 +45,17 @@ rx_write(2,2);
 rx_write(5,1);
 
 e = (my_entry*) rx_read1();
-printf("out_entry = %ld\n", e);
+//printf("out_entry = %ld\n", e);
 out(e->val);
 rx_release1((q_entry*) e);
 
 e = (my_entry*) rx_read1();
-printf("out_entry = %ld\n", e);
+//printf("out_entry = %ld\n", e);
 out(e->val);
 rx_release1((q_entry*) e);
 
 e = (my_entry*) rx_read2();
-printf("out_entry = %ld\n", e);
+//printf("out_entry = %ld\n", e);
 out(e->val);
 rx_release2((q_entry*) e);
 
@@ -66,6 +66,7 @@ out(e);
 rx_write(11,1);
 rx_write(12,1);
 rx_write(13,1);
+rx_write(14,1);
 e = (my_entry*) rx_read1();
 out(e->val);
 rx_release1((q_entry*) e);
@@ -73,4 +74,4 @@ rx_write(14,1);
 
 '''
 
-c.generate_code_and_run()
+c.generate_code_and_run([1,"enq",2,"enq", 5, "enq", 1, 5, 2, 0, 11, "enq", 12, "enq", 13, "enq", 11, 14, "enq"])
