@@ -408,7 +408,10 @@ class Graph:
             return True
 
     def newStateInstance(self, state, name, init=False):
-        s = self.states[state]
+        if state in self.states:
+            s = self.states[state]
+        else:
+            s = State(state, None, None)
         ret = StateNode(name, s, init)
         self.state_instances[name] = ret
         self.state_instance_order.append(name)

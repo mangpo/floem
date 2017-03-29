@@ -710,3 +710,24 @@ class TestJoinHandling(unittest.TestCase):
         self.check_join_state_create(g, [("fork4", ['add3_buffer_read', "add2"])])
 
         self.assertEqual(g.instances["fork4"].join_partial_order, ["out1", "out2", "out3", "out4"])
+
+    def test_join_bug(self):
+        p = Program(
+            Fork3, Add,
+            ElementInstance("Fork3", "fork"),
+            ElementInstance("Add", "add1"),
+            ElementInstance("Add", "add2"),
+            Connect("fork", "add1", "out3", "in1"),
+            Connect("fork", "add1", "out2", "in2"),
+            Connect("fork", "add2", "out1", "in2"),
+            Connect("add1", "add2", "out", "in1"),
+        )
+
+        g = generate_graph(p, False)
+        roots = self.find_roots(g)
+        self.assertEqual(set(["fork"]), roots)
+
+        self.check_join_ports_same_thread(g, [("add1", ["in1", "in2"]), ("add2", ["in1", "in2"])])
+        self.check_join_state_create(g, [("fork", ["add1", "add2"])])
+
+        self.assertEqual(g.instances["fork"].join_partial_order, ['out3', 'out2', 'out1'])

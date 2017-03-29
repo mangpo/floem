@@ -927,6 +927,13 @@ def create_state_instance(inst_name, content, init=None):
     return state(inst_name)
 
 
+def create_state_instance_from(st_name, inst_name, init=None):
+    inst_name = get_node_name(inst_name)
+    instance = StateInstance(st_name, inst_name, init)
+    scope[-1].append(instance)
+    return inst_name
+
+
 def populte_state(name, st_inst_name, st_name, type, size, func):
     """
     Initialize inject state.

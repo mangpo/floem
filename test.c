@@ -1,12 +1,10 @@
 #include<stdio.h>
 #include<stdlib.h>
 
-typedef struct {
-    int flags;
-    //uint16_t len;
-} __attribute__((packed)) cq_entry;
+int* p;
 
 int main() {
-  printf("hello\n");
+  p = malloc(sizeof(int)* 10);
+  printf("%d %d\n", p[0], sizeof(int));
   return 0;
 }

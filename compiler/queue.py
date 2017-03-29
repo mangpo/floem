@@ -198,3 +198,62 @@ def create_circular_queue_many2one_instances(name, type, size, n_cores):
     enqs = [Enqueue(prefix + "enqueue" + str(i), [ones[i]]) for i in range(n_cores)]
     deq = Dequeue(prefix + "dequeue", [all])
     return enqs, deq
+
+##########################################################
+
+def create_circular_queue_variablesize_one2many_instances(name, size, n_cores):
+    prefix = "_%s_" % name
+    one_name = prefix + "queue"
+    all_name = prefix + "queues"
+    one_instance_name = one_name + "_inst"
+    one_deq_instance_name = one_name + "_deq_inst"
+    all_instance_name = all_name + "_inst"
+
+    Dummy = create_state(one_name + "_dummy", "uint8_t queue[%d];" % size)
+    dummies = [Dummy(one_name + "_dummy" + str(i)) for i in range(n_cores)]
+    ones = [create_state_instance_from("circular_queue", one_instance_name + str(i), [size, 0, AddressOf(dummies[i])])
+            for i in range(n_cores)]
+    deq_ones = [create_state_instance_from("circular_queue", one_deq_instance_name + str(i), [size, 0, AddressOf(dummies[i])])
+            for i in range(n_cores)]
+
+    All = create_state(all_name, "circular_queue* cores[%d];" % n_cores)
+    all = All(all_instance_name, [AddressOf(ones[i]) for i in range(n_cores)])
+
+    Enqueue_alloc = create_element(prefix + "enqueue_alloc_ele",
+                                   [Port("in_len", ["size_t"]), Port("in_core", ["size_t"])],
+                                   [Port("out", ["q_entry*"])],
+                             r'''
+           (size_t len) = in_len();
+           (size_t c) = in_core();
+           circular_queue *q = this.cores[c];
+           q_entry* entry = (q_entry*) enqueue_alloc(q, len);
+           output { out(entry); }
+           ''', None, [(all_name, "this")])
+
+    Enqueue_submit = create_element(prefix + "enqueue_submit_ele",
+                                    [Port("in", ["q_entry*"])], [],
+                             r'''
+           (q_entry* eqe) = in();
+           enqueue_submit(eqe);
+           ''')
+
+    Dequeue_get = create_element(prefix + "dequeue_get_ele",
+                             [], [Port("out", ["q_entry*"])],
+                             r'''
+        q_entry* x = dequeue_get(&this);
+        printf("deq_get = %ld\n", x);
+        output switch { case (x != NULL): out(x); }
+           ''', None, [("circular_queue", "this")])
+
+    Dequeue_release = create_element(prefix + "dequeue_release_ele",
+                             [Port("in", ["q_entry*"])], [],
+                             r'''
+        (q_entry* eqe) = in();
+        dequeue_release(eqe);
+           ''')
+
+    enq_alloc = Enqueue_alloc(prefix + "enqueue_alloc", [all])
+    enq_submit = Enqueue_submit(prefix + "enqueue_submit")
+    deqs_get = [Dequeue_get(prefix + "dequeue_get" + str(i), [deq_ones[i]]) for i in range(n_cores)]
+    deqs_release = [Dequeue_release(prefix + "dequeue_release" + str(i),) for i in range(n_cores)]
+    return enq_alloc, enq_submit, deqs_get, deqs_release

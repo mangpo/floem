@@ -224,12 +224,19 @@ def element_to_function(instance, state_rename, graph):
             raise Exception("Cannot get data from input port '%s' more than one time in element '%s'."
                             % (port, funcname))
 
-    last_port = {}
+    # Respect instance.join_partial_order
+    local_order = []
     for port in element.outports:
-        if port.name in output2func:
-            (f, fport) = output2func[port.name]
+        if port.name not in instance.join_partial_order:
+            local_order.append(port.name)
+    local_order += instance.join_partial_order
+
+    last_port = {}
+    for name in local_order:
+        if name in output2func:
+            (f, fport) = output2func[name]
             if f in join_call_map:
-                last_port[f] = port.name
+                last_port[f] = name
 
     # Replace output ports with function calls
     for o in output2func:
