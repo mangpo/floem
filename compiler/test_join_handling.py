@@ -341,12 +341,11 @@ class TestJoinHandling(unittest.TestCase):
             ElementInstance("Print", "Print")
         )
 
-        try:
-            g = generate_graph(p, True)
-        except Exception as e:
-            self.assertNotEqual(e.message.find("is not connected to any instance"), -1)
-        else:
-            self.fail('Exception is not raised.')
+        g = generate_graph(p, True)
+        self.assertEqual(1, len(g.instances))
+        roots = self.find_roots(g)
+        self.assertEqual(set(["Print"]), roots)
+        self.check_join_ports_same_thread(g, [])
 
     def test_multi_joins(self):
         p = Program(

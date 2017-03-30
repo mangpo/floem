@@ -5,9 +5,9 @@ n_cores = 4
 
 s = create_state("my_entry", "uint16_t flags; uint16_t len; int val;")
 
-enq_alloc, enq_submit, deqs_get, deq_release = \
+enq_alloc, enq_submit, deq_get, deq_release = \
     queue.create_circular_queue_variablesize_one2many_instances("rx_queue", 30, n_cores)
-tx_enqs_alloc, tx_enq_submit, tx_deq_get, tx_deq_release = \
+tx_enq_alloc, tx_enq_submit, tx_deq_get, tx_deq_release = \
     queue.create_circular_queue_variablesize_many2one_instances("tx_queue", 30, n_cores)
 compute_core = create_element_instance("ComputeCore",
                          [Port("in", ["int", "size_t"])],
@@ -39,12 +39,11 @@ entry = fill_entry(entry, val)
 enq_submit(entry)
 
 rx_nic = API_thread("rx_write", ["int", "size_t"], None)
-rx_apps = [API_thread("rx_read" + str(i), [], "q_entry*", "NULL") for i in range(n_cores)]
+rx_app = API_thread("rx_read", ["size_t"], "q_entry*")
 rx_app_release = API_thread("rx_release", ["q_entry*"], None)
 
 rx_nic.run_start(compute_core, enq_alloc, fill_entry, enq_submit)
-for i in range(n_cores):
-    rx_apps[i].run_start(deqs_get[i])
+rx_app.run_start(deq_get)
 rx_app_release.run_start(deq_release)
 
 entry = tx_deq_get()
@@ -52,15 +51,12 @@ entry = print_msg(entry)
 tx_deq_release(entry)
 
 tx_nic = API_thread("tx_read", [], None)
-tx_apps = [API_thread("tx_alloc" + str(i), ["size_t"], "q_entry*") for i in range(n_cores)]
+tx_app = API_thread("tx_alloc", ["size_t","size_t"], "q_entry*")
 tx_app_submit = API_thread("tx_submit", ["q_entry*"], None)
 
 tx_nic.run_start(tx_deq_get, print_msg, tx_deq_release)
-for i in range(n_cores):
-    tx_apps[i].run_start(tx_enqs_alloc[i])
+tx_app.run_start(tx_enq_alloc)
 tx_app_submit.run_start(tx_enq_submit)
-
-# TODO: test tx pipeline
 
 
 c = Compiler()
@@ -71,23 +67,23 @@ rx_write(1,1);
 rx_write(22,2);
 rx_write(11,1);
 
-e = (my_entry*) rx_read1();
+e = (my_entry*) rx_read(1);
 out(e->val);
-d = (my_entry*) tx_alloc1(sizeof(int));
+d = (my_entry*) tx_alloc(1,sizeof(int));
 d->val = e->val;
 rx_release((q_entry*) e);
 tx_submit((q_entry*) d);
 
-e = (my_entry*) rx_read1();
+e = (my_entry*) rx_read(1);
 out(e->val);
-d = (my_entry*) tx_alloc1(sizeof(int));
+d = (my_entry*) tx_alloc(1,sizeof(int));
 d->val = e->val;
 rx_release((q_entry*) e);
 tx_submit((q_entry*) d);
 
-e = (my_entry*) rx_read2();
+e = (my_entry*) rx_read(2);
 out(e->val);
-d = (my_entry*) tx_alloc2(sizeof(int));
+d = (my_entry*) tx_alloc(2,sizeof(int));
 d->val = e->val;
 rx_release((q_entry*) e);
 tx_submit((q_entry*) d);
@@ -96,7 +92,7 @@ tx_read();
 tx_read();
 tx_read();
 
-e = (my_entry*) rx_read2();
+e = (my_entry*) rx_read(2);
 out(e);
 
 
@@ -104,7 +100,7 @@ rx_write(11,1);
 rx_write(12,1);
 rx_write(13,1);
 rx_write(14,1);
-e = (my_entry*) rx_read1();
+e = (my_entry*) rx_read(1);
 out(e->val);
 rx_release((q_entry*) e);
 rx_write(14,1);

@@ -110,7 +110,7 @@ def dfs_cover_return(g, node_name, port_name, target, num_ports, answer):
     element = instance.element
 
     if node_name == target:
-        if num_ports > 1:
+        if port_name and num_ports > 1:
             if isinstance(port_name, str):
                 port_names = [port.name for port in element.inports]
                 index = port_names.index(port_name)

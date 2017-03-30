@@ -399,6 +399,6 @@ def run_impl():
 run_impl()
 
 # TODO: 3. circular queue stores entries instead of pointers to entries ***
-# TODO: deallocate eq_entry/ cq_entry
 # TODO: proper initialization
 # TODO: queue -- owner bit & tail pointer update
+# TODO: opague #

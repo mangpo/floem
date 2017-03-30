@@ -407,21 +407,30 @@ def annotate_join_info(g):
 
         # This is a join node.
         if len(ports_same_thread) > 1:
+            connect = 0
             for port in instance.element.inports:
-                if port.name not in instance.input2ele:
-                    raise Exception("Input port '%s' of join element instance '%s' is not connected to any instance."
-                                    % (port.name, instance.name))
+                if port.name in instance.input2ele:
+                    connect += 1
+
+                # if port.name not in instance.input2ele:
+                #     raise Exception("Input port '%s' of join element instance '%s' is not connected to any instance."
+                #                     % (port.name, instance.name))
+
                 # elif len(instance.input2ele[port.name]) > 1:
                 #     raise Exception("Input port '%s' of join element instance '%s' is connected to more than one port."
                 #                     % (port.name, instance.name))
 
-            instance.join_ports_same_thread = ports_same_thread
+            if connect > 0:
+                assert connect == len(instance.element.inports), \
+                    "Some input port of join element instance '%s' is not connected to any instance." % instance.name
 
-            # Mark which output ports need to be saved into the join buffer.
-            for node in save:
-                ports = save[node]
-                for port in ports:
-                    g.instances[node].join_output2save[port] = instance.name
+                instance.join_ports_same_thread = ports_same_thread
+
+                # Mark which output ports need to be saved into the join buffer.
+                for node in save:
+                    ports = save[node]
+                    for port in ports:
+                        g.instances[node].join_output2save[port] = instance.name
 
     for instance in g.instances.values():
         if instance.join_ports_same_thread:

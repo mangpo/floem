@@ -201,23 +201,26 @@ def create_circular_queue_many2one_instances(name, type, size, n_cores):
 
 ##########################################################
 
-def create_circular_queue_variablesize_one2many_instances(name, size, n_cores):
+
+def create_circular_queue_variablesize_one2many(name, size, n_cores):
     prefix = "_%s_" % name
     one_name = prefix + "queue"
     all_name = prefix + "queues"
     one_instance_name = one_name + "_inst"
     one_deq_instance_name = one_name + "_deq_inst"
     all_instance_name = all_name + "_inst"
+    all_eq_instance_name = all_name + "_deq_inst"
 
     Dummy = create_state(one_name + "_dummy", "uint8_t queue[%d];" % size)
     dummies = [Dummy(one_name + "_dummy" + str(i)) for i in range(n_cores)]
-    ones = [create_state_instance_from("circular_queue", one_instance_name + str(i), [size, 0, AddressOf(dummies[i])])
+    enq_ones = [create_state_instance_from("circular_queue", one_instance_name + str(i), [size, 0, AddressOf(dummies[i])])
             for i in range(n_cores)]
     deq_ones = [create_state_instance_from("circular_queue", one_deq_instance_name + str(i), [size, 0, AddressOf(dummies[i])])
             for i in range(n_cores)]
 
     All = create_state(all_name, "circular_queue* cores[%d];" % n_cores)
-    all = All(all_instance_name, [AddressOf(ones[i]) for i in range(n_cores)])
+    enq_all = All(all_instance_name, [AddressOf(enq_ones[i]) for i in range(n_cores)])
+    deq_all = All(all_eq_instance_name, [AddressOf(deq_ones[i]) for i in range(n_cores)])
 
     Enqueue_alloc = create_element(prefix + "enqueue_alloc_ele",
                                    [Port("in_len", ["size_t"]), Port("in_core", ["size_t"])],
@@ -238,12 +241,14 @@ def create_circular_queue_variablesize_one2many_instances(name, size, n_cores):
            ''')
 
     Dequeue_get = create_element(prefix + "dequeue_get_ele",
-                             [], [Port("out", ["q_entry*"])],
+                             [Port("in", ["size_t"])], [Port("out", ["q_entry*"])],
                              r'''
-        q_entry* x = dequeue_get(&this);
+        (size_t c) = in();
+        circular_queue *q = this.cores[c];
+        q_entry* x = dequeue_get(q);
         //printf("deq_get = %ld\n", x);
-        output switch { case (x != NULL): out(x); }
-           ''', None, [("circular_queue", "this")])
+        output { out(x); }
+           ''', None, [(all_name, "this")])
 
     Dequeue_release = create_element(prefix + "dequeue_release_ele",
                              [Port("in", ["q_entry*"])], [],
@@ -252,40 +257,64 @@ def create_circular_queue_variablesize_one2many_instances(name, size, n_cores):
         dequeue_release(eqe);
            ''')
 
-    enq_alloc = Enqueue_alloc(prefix + "enqueue_alloc", [all])
-    enq_submit = Enqueue_submit(prefix + "enqueue_submit")
-    deqs_get = [Dequeue_get(prefix + "dequeue_get" + str(i), [deq_ones[i]]) for i in range(n_cores)]
-    deq_release = Dequeue_release(prefix + "dequeue_release" )
-    return enq_alloc, enq_submit, deqs_get, deq_release
+    def enq_alloc(name=None):
+        if not name:
+            global fresh_id
+            name = prefix + "enqueue_alloc" + str(fresh_id)
+            fresh_id += 1
+        return Enqueue_alloc(name, [enq_all])
+
+    def deq_alloc(name=None):
+        if not name:
+            global fresh_id
+            name = prefix + "dequeue_get" + str(fresh_id)
+            fresh_id += 1
+        return Dequeue_get(name, [deq_all])
+
+    #enq_alloc = Enqueue_alloc(prefix + "enqueue_alloc", [all])
+    #enq_submit = Enqueue_submit(prefix + "enqueue_submit")
+    #deqs_get = [Dequeue_get(prefix + "dequeue_get" + str(i), [deq_ones[i]]) for i in range(n_cores)]
+    #deq_release = Dequeue_release(prefix + "dequeue_release" )
+    return enq_alloc, Enqueue_submit, deq_alloc, Dequeue_release
 
 
+def create_circular_queue_variablesize_one2many_instances(name, size, n_cores):
+    prefix = "_%s_" % name
+    enq_alloc, enq_submit, deq_get, deq_release = create_circular_queue_variablesize_one2many(name, size, n_cores)
+    return enq_alloc(prefix + "enqueue_alloc"), enq_submit(prefix + "enqueue_submit"), \
+           deq_get(prefix + "dequeue_get"), deq_release(prefix + "dequeue_release")
 
-def create_circular_queue_variablesize_many2one_instances(name, size, n_cores):
+
+def create_circular_queue_variablesize_many2one(name, size, n_cores):
     prefix = "_%s_" % name
     one_name = prefix + "queue"
     all_name = prefix + "queues"
     one_instance_name = one_name + "_inst"
-    one_enq_instance_name = one_name + "_enq_inst"
+    one_deq_instance_name = one_name + "_deq_inst"
     all_instance_name = all_name + "_inst"
+    all_eq_instance_name = all_name + "_deq_inst"
 
     Dummy = create_state(one_name + "_dummy", "uint8_t queue[%d];" % size)
     dummies = [Dummy(one_name + "_dummy" + str(i)) for i in range(n_cores)]
-    ones = [create_state_instance_from("circular_queue", one_instance_name + str(i), [size, 0, AddressOf(dummies[i])])
+    enq_ones = [create_state_instance_from("circular_queue", one_instance_name + str(i), [size, 0, AddressOf(dummies[i])])
             for i in range(n_cores)]
-    enq_ones = [create_state_instance_from("circular_queue", one_enq_instance_name + str(i), [size, 0, AddressOf(dummies[i])])
+    deq_ones = [create_state_instance_from("circular_queue", one_deq_instance_name + str(i), [size, 0, AddressOf(dummies[i])])
             for i in range(n_cores)]
 
     All = create_state(all_name, "circular_queue* cores[%d];" % n_cores)
-    all = All(all_instance_name, [AddressOf(ones[i]) for i in range(n_cores)])
+    enq_all = All(all_instance_name, [AddressOf(enq_ones[i]) for i in range(n_cores)])
+    deq_all = All(all_eq_instance_name, [AddressOf(deq_ones[i]) for i in range(n_cores)])
 
     Enqueue_alloc = create_element(prefix + "enqueue_alloc_ele",
-                                   [Port("in_len", ["size_t"])],
+                                   [Port("in_core", ["size_t"]), Port("in_len", ["size_t"])],
                                    [Port("out", ["q_entry*"])],
                              r'''
+           (size_t c) = in_core();
            (size_t len) = in_len();
-           q_entry* entry = (q_entry*) enqueue_alloc(&this, len);
+           circular_queue *q = this.cores[c];
+           q_entry* entry = (q_entry*) enqueue_alloc(q, len);
            output { out(entry); }
-           ''', None, [("circular_queue", "this")])
+           ''', None, [(all_name, "this")])
 
     Enqueue_submit = create_element(prefix + "enqueue_submit_ele",
                                     [Port("in", ["q_entry*"])], [],
@@ -309,7 +338,7 @@ def create_circular_queue_variablesize_many2one_instances(name, size, n_cores):
                 break;
             }
         }
-        output switch { case (x != NULL): out(x); }
+        output { out(x); }
            ''' % (n_cores, "%", "%"), None, [(all_name, "this")])
 
     Dequeue_release = create_element(prefix + "dequeue_release_ele",
@@ -319,8 +348,29 @@ def create_circular_queue_variablesize_many2one_instances(name, size, n_cores):
         dequeue_release(eqe);
            ''')
 
-    enqs_alloc = [Enqueue_alloc(prefix + "enqueue_alloc" + str(i), [enq_ones[i]]) for i in range(n_cores)]
-    enq_submit = Enqueue_submit(prefix + "enqueue_submit")
-    deq_get = Dequeue_get(prefix + "dequeue_get", [all])
-    deq_release = Dequeue_release(prefix + "dequeue_release")
-    return enqs_alloc, enq_submit, deq_get, deq_release
+    def enq_alloc(name=None):
+        if not name:
+            global fresh_id
+            name = prefix + "enqueue_alloc" + str(fresh_id)
+            fresh_id += 1
+        return Enqueue_alloc(name, [enq_all])
+
+    def deq_alloc(name=None):
+        if not name:
+            global fresh_id
+            name = prefix + "dequeue_get" + str(fresh_id)
+            fresh_id += 1
+        return Dequeue_get(name, [deq_all])
+
+    #enqs_alloc = [Enqueue_alloc(prefix + "enqueue_alloc" + str(i), [enq_ones[i]]) for i in range(n_cores)]
+    #enq_submit = Enqueue_submit(prefix + "enqueue_submit")
+    #deq_get = Dequeue_get(prefix + "dequeue_get", [deq_all])
+    #deq_release = Dequeue_release(prefix + "dequeue_release")
+    return enq_alloc, Enqueue_submit, deq_alloc, Dequeue_release
+
+
+def create_circular_queue_variablesize_many2one_instances(name, size, n_cores):
+    prefix = "_%s_" % name
+    enq_alloc, enq_submit, deq_get, deq_release = create_circular_queue_variablesize_many2one(name, size, n_cores)
+    return enq_alloc(prefix + "enqueue_alloc"), enq_submit(prefix + "enqueue_submit"), \
+           deq_get(prefix + "dequeue_get"), deq_release(prefix + "dequeue_release")
