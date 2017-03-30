@@ -122,7 +122,7 @@ class Element:
                 count = {}
                 cases = cases[:-1]
 
-                m = re.search('^[ ]*else[ ]*:[ ]*([a-zA-Z0-9_]+)(\([^)]*\))[ ]*$', cases[-1])
+                m = re.search('^[ \n]*else[ ]*:[ ]*([a-zA-Z0-9_]+)(\([^)]*\))[ ]*$', cases[-1])
                 if m:
                     # has else
                     self.output_fire = "one"

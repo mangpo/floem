@@ -60,6 +60,7 @@ class TestDSL(unittest.TestCase):
                   "table.py",
                   "composite.py",
                   "variable_length_field.py",
+                  "choice_join.py",
                   #"extract_field_spec_impl.py",
                   ]
 

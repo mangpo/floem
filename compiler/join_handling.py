@@ -71,7 +71,7 @@ class FlowCollection:
 
     def __eq__(self, other):
         return (self.__class__ == other.__class__ and self.collection == other.collection and
-                self.target == other.target and self.total == other.total and self.goal == other.goal)
+                self.total == other.total and self.target == other.target)
 
     def clone(self):
         collection = []
@@ -284,7 +284,8 @@ def dfs_cover(g, node_name, port_name, target, num_ports, answer):
                     instance.join_partial_order.append((out1, out2))
 
     answer[node_name] = cover
-    return wrap_port(cover, instance, target, num_ports, port_name)
+    ret = wrap_port(cover, instance, target, num_ports, port_name)
+    return ret
 
 
 def annotate_for_instance(instance, g, roots):

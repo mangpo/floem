@@ -345,7 +345,7 @@ get_item_creator = create_element("get_item_creator",
         it = segment_item_alloc(this.segment, sizeof(item) + totlen);
     }
 
-    printf("get_item id: %d, keylen: %ld, hash: %d, totlen: %ld\n", m->mcr.request.magic, keylen, hash, totlen);
+    printf("get_item id: %d, keylen: %ld, hash: %d, totlen: %ld, item: %ld\n", m->mcr.request.magic, keylen, hash, totlen, it);
     it->hv = hash;
     it->vallen = totlen - keylen;
     it->keylen = keylen;
@@ -388,7 +388,8 @@ classifier_rx = create_element_instance("classifier_rx",
               [Port("in", ["q_entry*"])],
               [Port("out_get", ["cqe_send_getresponse*"]),
                Port("out_set", ["cqe_send_setresponse*"]),
-               Port("out_logseg", ["cqe_add_logseg*"])],
+               Port("out_logseg", ["cqe_add_logseg*"]),
+               Port("out_nop", ["q_entry*"])],
                r'''
 (q_entry* e) = in();
 uint8_t type = CQE_TYPE_NOP;
@@ -400,7 +401,7 @@ output switch{
   case (type == CQE_TYPE_GRESP): out_get((cqe_send_getresponse*) e);
   case (type == CQE_TYPE_SRESP): out_set((cqe_send_setresponse*) e);
   case (type == CQE_TYPE_LOG): out_logseg((cqe_add_logseg*) e);
-  // else drop
+  case e: out_nop(e);
 }
 ''')
 
@@ -409,7 +410,7 @@ msg_put = msg_put_creator("msg_put")
 msg_get_get = msg_get_creator("msg_get_get")
 msg_get_set = msg_get_creator("msg_get_set")
 
-Inject = create_inject("inject", "iokvs_message*", 4, "random_request")
+Inject = create_inject("inject", "iokvs_message*", 1000, "random_request")
 inject = Inject()
 
 #nic_rx = internal_thread("nic_rx")
@@ -487,7 +488,7 @@ def get_eq(core, type, pointer, opague):
 @internal_trigger("nic_tx")
 def tx_pipeline():
     cq_entry = tx_deq_get()
-    cqe_get, cqe_set, cqe_logseg = classifier_rx(cq_entry)
+    cqe_get, cqe_set, cqe_logseg, cqe_nop = classifier_rx(cq_entry)
 
     # get response
     opaque, item, cqe_get = unpack_get(cqe_get)
@@ -504,6 +505,9 @@ def tx_pipeline():
     # logseg
     cqe_logseg = add_logseg(cqe_logseg)
     tx_deq_release(cqe_logseg)  # dependency
+
+    # nop
+    tx_deq_release(cqe_nop)
 
     # print
     print_msg(get_response)
