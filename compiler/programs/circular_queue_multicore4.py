@@ -14,8 +14,8 @@ compute_core = create_element_instance("ComputeCore",
                          [Port("out_value", ["int"]), Port("out_core", ["size_t"]), Port("out_len", ["size_t"])],
                          r'''(int x, size_t core) = in(); output { out_value(x); out_core(core); out_len(4); }''')
 fill_entry = create_element_instance("fill_entry",
-                         [Port("in_entry", ["q_entry*"]), Port("in_value", ["int"])],
-                         [Port("out", ["q_entry*"])],
+                         [Port("in_entry", ["q_entry *"]), Port("in_value", ["int"])],
+                         [Port("out", ["q_entry *"])],
                          r'''
     my_entry* e = (my_entry*) in_entry();
     (int v) = in_value();
@@ -107,6 +107,6 @@ rx_write(14,1);
 
 '''
 
-c.generate_code_and_run() #[1,"enq",22,"enq", 11, "enq", 1, 11, 22,
-                         #1, "final", 22, "final", 11, "final",
-                         #0, 11, "enq", 12, "enq", 13, "enq", 11, 14, "enq"])
+c.generate_code_and_run([1,"enq",22,"enq", 11, "enq", 1, 11, 22,
+                         1, "final", 22, "final", 11, "final",
+                         0, 11, "enq", 12, "enq", 13, "enq", 11, 14, "enq"])

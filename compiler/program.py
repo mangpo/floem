@@ -126,8 +126,8 @@ class APIFunction:
         assert (return_type is None or isinstance(return_type, str)), \
             ("return_type argument of APIFunction should be a data type in string format. '%s' is given." % return_type)
         self.name = name
-        self.call_types = call_types
-        self.return_type = return_type
+        self.call_types = [sanitize_type(t) for t in call_types]
+        self.return_type = sanitize_type(return_type)
         self.default_val = default_val
         self.call_instance = None
         self.return_instance = None

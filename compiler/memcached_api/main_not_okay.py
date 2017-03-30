@@ -205,9 +205,6 @@ nop(full)
 nic_rx.run(nop)
 
 
-# TODO: 1. initialize segments
-# TODO: 2. use ialloc_from_offset and ialloc_to_offset (eq_entry contains item instead of item*)
-
 def spec_nic2app(x):
     rx_enq, rx_deq = queue.create_circular_queue_instances("rx_queue_spec", "eq_entry*", 4)
     rx_enq(x)

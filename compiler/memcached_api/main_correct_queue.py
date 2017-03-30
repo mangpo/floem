@@ -372,9 +372,6 @@ msg_get_set = msg_get_creator("msg_get_set")
 Inject = create_inject("inject", "iokvs_message*", 1000, "random_request")
 inject = Inject()
 
-#nic_rx = internal_thread("nic_rx")
-#nic_tx = internal_thread("nic_tx")
-
 ######################## NIC Rx #######################
 
 # Queue
@@ -501,3 +498,4 @@ run_impl()
 # TODO: proper initialization
 # TODO: queue -- owner bit & tail pointer update
 # TODO: opague #
+# TODO: spec/impl

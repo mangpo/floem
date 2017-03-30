@@ -12,7 +12,7 @@ compute_core = create_element_instance("ComputeCore",
                          r'''(int x, size_t core) = in(); output { out_value(x); out_core(core); out_len(4); }''')
 fill_entry = create_element_instance("fill_entry",
                          [Port("in_entry", ["q_entry*"]), Port("in_value", ["int"])],
-                         [Port("out", ["q_entry*"])],
+                         [Port("out", ["q_entry *"])],
                          r'''
     my_entry* e = (my_entry*) in_entry();
     (int v) = in_value();
@@ -28,8 +28,8 @@ entry = fill_entry(entry, val)
 enq_submit(entry)
 
 rx_nic = API_thread("rx_write", ["int", "size_t"], None)
-rx_app = API_thread("rx_read", ["size_t"], "q_entry*")
-rx_app_release = API_thread("rx_release", ["q_entry*"], None)
+rx_app = API_thread("rx_read", ["size_t"], "q_entry *")
+rx_app_release = API_thread("rx_release", [" q_entry*"], None)
 
 rx_nic.run_start(compute_core, enq_alloc, fill_entry, enq_submit)
 rx_app.run_start(deq_get)

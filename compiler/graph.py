@@ -13,6 +13,18 @@ class RedefineError(Exception):
     pass
 
 
+def sanitize_type(t):
+    if t is None:
+        return t
+    index = t.find('*')
+    if index > 0:
+        tokens = t[:index].rstrip().lstrip().split()
+        return ' '.join(tokens) + '*'
+    else:
+        tokens = t.strip().lstrip().split()
+        return ' '.join(tokens)
+
+
 def remove_comment(code):
     m = re.search("//[^\n]*\n", code)
     if m:
@@ -292,7 +304,7 @@ class ElementNode:
 class Port:
     def __init__(self, name, argtypes):
         self.name = name
-        self.argtypes = argtypes
+        self.argtypes = [sanitize_type(x) for x in argtypes]
 
     def __str__(self):
         return self.name

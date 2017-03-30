@@ -58,10 +58,12 @@ def first_non_space(s,i):
         return (None,-1)
 
 
-def get_type(s):
-    s = s.lstrip('\n').lstrip().rstrip('\n').rstrip()
-    index = s.rfind(' ')
-    return s[:index]
+def get_type(type_var):
+    type_var = type_var.lstrip('\n').lstrip().rstrip('\n').rstrip()
+    index1 = type_var.rfind(' ')
+    index2 = type_var.rfind('*')
+    index = max(index1, index2)
+    return sanitize_type(type_var[:index])
 
 
 def remove_asgn_stmt(funcname, src,port2args,port,p_eq, p_end, inport_types):
