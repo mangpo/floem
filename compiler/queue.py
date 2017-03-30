@@ -230,6 +230,7 @@ def create_circular_queue_variablesize_one2many(name, size, n_cores):
            (size_t c) = in_core();
            circular_queue *q = this.cores[c];
            q_entry* entry = (q_entry*) enqueue_alloc(q, len);
+           printf("ENQ core=%ld, entry=%ld\n", c, entry);
            output { out(entry); }
            ''', None, [(all_name, "this")])
 
@@ -247,6 +248,7 @@ def create_circular_queue_variablesize_one2many(name, size, n_cores):
         circular_queue *q = this.cores[c];
         q_entry* x = dequeue_get(q);
         //printf("deq_get = %ld\n", x);
+        if(x) printf("DEQ core=%ld, entry=%ld\n", c, x);
         output { out(x); }
            ''', None, [(all_name, "this")])
 

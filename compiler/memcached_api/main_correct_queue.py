@@ -146,11 +146,12 @@ fill_eqe_set = create_element_instance("fill_eqe_set",
                r'''
 eqe_rx_set* entry = (eqe_rx_set *) in_entry();
 (item* it, uint64_t opaque) = in_item();
-//printf("make_eqe_set: opaque = %ld, refcount = %d\n", opaque, it->refcount);
+printf("make_eqe_set: opaque = %ld, refcount = %d, entry = %ld\n", opaque, it->refcount, entry);
 if(entry) {
     entry->flags |= EQE_TYPE_RXSET << EQE_TYPE_SHIFT;
     entry->opaque = opaque;
     entry->item = it;
+    printf("set flag: %d\n", entry->flags);
 }
 output switch { case entry: out((q_entry*) entry); }
                ''')
@@ -188,7 +189,7 @@ output { out_len(len); out_core(0); }
 
 fill_eqe_full = create_element_instance("fill_eqe_full",
                [Port("in_entry", ["q_entry*"]), Port("in_segment", ["struct segment_header*"])],
-               [Port("out", ["eq_entry*"])],
+               [Port("out", ["q_entry*"])],
                r'''
 eqe_seg_full* entry = (eqe_seg_full *) in_entry();
 (struct segment_header* full) = in_segment();
@@ -196,7 +197,7 @@ if(full) {
     entry->flags |= EQE_TYPE_SEGFULL << EQE_TYPE_SHIFT;
     entry->segment = full;
 }
-output switch { case full: out((eq_entry*) entry); }
+output switch { case full: out((q_entry*) entry); }
                ''')
 
 len_cqe = create_element_instance("len_cqe",
@@ -217,14 +218,16 @@ output { out(len); }
 fill_cqe = create_element_instance("fill_cqe",
                [Port("in_entry", ["q_entry*"]), Port("in_type", ["uint8_t"]),
                 Port("in_pointer", ["void*"]), Port("in_opaque", ["uint64_t"])],
-               [Port("out", ["eq_entry*"])],
+               [Port("out", ["q_entry*"])],
                r'''
 (q_entry* e) = in_entry();
 (uint8_t t) = in_type();
 (void* p) = in_pointer();
 (uint64_t opaque) = in_opaque();
 if(e) {
+    //printf("fill_cqe (1): entry = %ld, len = %ld\n", e, e->len);
     e->flags |= (uint16_t) t << CQE_TYPE_SHIFT;
+    //printf("fill_cqe (2): entry = %ld, len = %ld\n", e, e->len);
 
     if(t == CQE_TYPE_GRESP) {
         cqe_send_getresponse* es = (cqe_send_getresponse*) e;
@@ -238,26 +241,28 @@ if(e) {
     else if(t == CQE_TYPE_LOG) {
         cqe_add_logseg* es = (cqe_add_logseg*) e;
         es->segment = p;
+    //printf("fill_cqe (3): entry = %ld, len = %ld\n", e, e->len);
     }
 }
 
+    //printf("fill_cqe (4): entry = %ld, len = %ld\n", e, e->len);
 output switch { case e: out(e); }
 ''')
 
 unpack_get = create_element_instance("unpack_get",
                  [Port("in", ["cqe_send_getresponse*"])],
-                 [Port("out_opaque", ["uint64_t"]), Port("out_item", ["item*"]), Port("out_entry", ["cqe_send_getresponse*"])],
+                 [Port("out_opaque", ["uint64_t"]), Port("out_item", ["item*"]), Port("out_entry", ["q_entry*"])],
                  r'''
 cqe_send_getresponse* entry = (cqe_send_getresponse*) in(); // TODO
-output { out_opaque(entry->opaque); out_item(entry->item); out_entry(entry); }
+output { out_opaque(entry->opaque); out_item(entry->item); out_entry((q_entry*) entry); }
                  ''')
 
 unpack_set = create_element_instance("unpack_set",
                  [Port("in", ["cqe_send_setresponse*"])],
-                 [Port("out_opaque", ["uint64_t"]), Port("out_entry", ["cqe_send_setresponse*"])],
+                 [Port("out_opaque", ["uint64_t"]), Port("out_entry", ["q_entry*"])],
                  r'''
 cqe_send_setresponse* entry = (cqe_send_setresponse*) in(); // TODO
-output { out_opaque(entry->opaque); out_entry(entry); }
+output { out_opaque(entry->opaque); out_entry((q_entry*) entry); }
                  ''')
 
 get_opaque = create_element_instance("GetOpaque",
@@ -290,13 +295,26 @@ get_core = create_element("get_core",
 get_core_get = get_core("get_core_get")
 get_core_set = get_core("get_core_set")
 
-get_core_full = create_element_instance("get_core_full",
-                   [Port("in", ["eq_entry*"])],
-                   [Port("out", ["size_t"])],
-                   r'''
-   (eq_entry* e) = in();
-   output { out(0); }
-   ''')
+# get_core_full = create_element_instance("get_core_full",
+#                    [Port("in", ["eq_entry*"])],
+#                    [Port("out", ["size_t"])],
+#                    r'''
+#    (eq_entry* e) = in();
+#    output { out(0); }
+#    ''')
+
+send_cq_dummy = create_element_instance("send_cq_dummy",
+               [Port("in_core", ["size_t"]), Port("in_type", ["uint8_t"]),
+                Port("in_pointer", ["void*"]), Port("in_opaque", ["uint64_t"])],
+               [Port("out_core", ["size_t"]), Port("out_type", ["uint8_t"]),
+                Port("out_pointer", ["void*"]), Port("out_opaque", ["uint64_t"])],
+               r'''
+(size_t c) = in_core();
+(uint8_t t) = in_type();
+(void* p) = in_pointer();
+(uint64_t opaque) = in_opaque();
+output { out_core(c); out_type(t); out_pointer(p); out_opaque(opaque); }
+''')
 
 ######################## Log segment ##########################
 Segments = create_state("segments_holder",
@@ -339,7 +357,7 @@ get_item_creator = create_element("get_item_creator",
 get_item = get_item_creator("get_item", [segments])
 
 add_logseg_creator = create_element("add_logseg_creator",
-                   [Port("in", ["cqe_add_logseg*"])], [Port("out", ["cqe_add_logseg*"])],
+                   [Port("in", ["cqe_add_logseg*"])], [Port("out", ["q_entry*"])],
                    r'''
     (cqe_add_logseg* e) = in();
     if(this.segment != NULL) {
@@ -360,26 +378,28 @@ add_logseg_creator = create_element("add_logseg_creator",
         p = p->next;
     }
     printf("logseg count = %d\n", count);
-    output { out(e); }
+    output { out((q_entry*) e); }
     ''', None, [("segments_holder", "this"), ("last_segment", "last")])
 add_logseg = add_logseg_creator("add_logseg", [segments, last_segment])
 
 
 ######################## Rx ##########################
 classifier_rx = create_element_instance("classifier_rx",
-              [Port("in", ["cq_entry*"])],
+              [Port("in", ["q_entry*"])],
               [Port("out_get", ["cqe_send_getresponse*"]),
                Port("out_set", ["cqe_send_setresponse*"]),
                Port("out_logseg", ["cqe_add_logseg*"])],
                r'''
-(cq_entry* e) = in();
-uint16_t flags = 0;
-if(e) flags = e->flags;
+(q_entry* e) = in();
+uint8_t type = CQE_TYPE_NOP;
+if(e) {
+    type = (e->flags & CQE_TYPE_MASK) >> CQE_TYPE_SHIFT;
+}
 
 output switch{
-  case (e && flags == CQE_TYPE_GRESP): out_get((cqe_send_getresponse*) e);
-  case (e && flags == CQE_TYPE_SRESP): out_set((cqe_send_setresponse*) e);
-  case (e && flags == CQE_TYPE_LOG): out_logseg((cqe_add_logseg*) e);
+  case (type == CQE_TYPE_GRESP): out_get((cqe_send_getresponse*) e);
+  case (type == CQE_TYPE_SRESP): out_set((cqe_send_setresponse*) e);
+  case (type == CQE_TYPE_LOG): out_logseg((cqe_add_logseg*) e);
   // else drop
 }
 ''')
@@ -389,7 +409,7 @@ msg_put = msg_put_creator("msg_put")
 msg_get_get = msg_get_creator("msg_get_get")
 msg_get_set = msg_get_creator("msg_get_set")
 
-Inject = create_inject("inject", "iokvs_message*", 1000, "random_request")
+Inject = create_inject("inject", "iokvs_message*", 4, "random_request")
 inject = Inject()
 
 #nic_rx = internal_thread("nic_rx")
@@ -399,7 +419,7 @@ inject = Inject()
 
 # Queue
 rx_enq_alloc_creator, rx_enq_submit_creator, rx_deq_get_creator, rx_deq_release_creator = \
-    queue.create_circular_queue_variablesize_one2many("rx_queue", 16, n_cores)
+    queue.create_circular_queue_variablesize_one2many("rx_queue", 256, n_cores)
 enq_alloc_get = rx_enq_alloc_creator("enq_alloc_get")
 enq_alloc_set = rx_enq_alloc_creator("enq_alloc_set")
 enq_alloc_full = rx_enq_alloc_creator("enq_alloc_full")
@@ -434,14 +454,14 @@ def tx_pipeline():
     # Full segment
     full_segment = filter_full(full_segment)  # Need this element
     length, core = len_core_full(full_segment)
-    eqe_full = enq_alloc_set(length, core)
+    eqe_full = enq_alloc_full(length, core)
     eqe_full = fill_eqe_full(eqe_full, full_segment)
     rx_enq_submit(eqe_full)
 
 # Dequeue
 @API("get_eq")
-def get_eq():
-    return rx_deq_get()
+def get_eq(core):
+    return rx_deq_get(core)
 
 @API("release")
 def release(x):
@@ -451,11 +471,14 @@ def release(x):
 
 # Queue
 tx_enq_alloc, tx_enq_submit, tx_deq_get, tx_deq_release = \
-    queue.create_circular_queue_variablesize_many2one_instances("tx_queue", 16, n_cores)  # TODO: create just one enq/deq, take core_id as parameter.
+    queue.create_circular_queue_variablesize_many2one_instances("tx_queue", 256, n_cores)  # TODO: create just one enq/deq, take core_id as parameter.
 
 # Enqueue
 @API("send_cq")
 def get_eq(core, type, pointer, opague):
+    # TODO: API 'send_cq' is defined to take arguments of types ['size_t', 'uint8_t', 'void*', 'uint64_t'],
+    # TODO: but the starting element '_element_len_cqe' take arguments of types ['uint8_t'].
+    core, type, pointer, opague = send_cq_dummy(core, type, pointer, opague)
     length = len_cqe(type)
     entry = tx_enq_alloc(core, length)
     entry = fill_cqe(entry, type, pointer, opague)
@@ -493,20 +516,21 @@ c.include = r'''
 #include "nicif.h"
 #include "iokvs.h"
 #include "protocol_binary.h"
+#include "../queue.h"
 '''
 c.depend = ['jenkins_hash', 'hashtable', 'ialloc']
 c.triggers = True
 c.I = '/home/mangpo/lib/dpdk-16.11/build/include'
 
-def run_spec():
-    c.desugar_mode = "spec"
-    c.generate_code_as_header("tmp_spec.h")
-    c.compile_and_run("test")
+# def run_spec():
+#     c.desugar_mode = "spec"
+#     c.generate_code_as_header("tmp_spec.h")
+#     c.compile_and_run("test")
 
 def run_impl():
     c.desugar_mode = "impl"
-    c.generate_code_as_header("tmp_impl.h")
-    c.compile_and_run("test_impl")
+    c.generate_code_as_header("tmp_impl_correct_queue.h")
+    c.compile_and_run("test_impl_correct_queue")
 
 #run_spec()
 run_impl()

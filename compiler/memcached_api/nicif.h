@@ -33,11 +33,11 @@ struct core_region {
 #define CQE_TYPE_LOG   0x04
 typedef struct {
     uint16_t flags;
-    //uint16_t len;
+    uint16_t len;
 } __attribute__((packed)) cq_entry;
 typedef struct {
     uint16_t flags;
-    //uint16_t len;
+    uint16_t len;
     //uint32_t client;
     //uint32_t vallen;
     //uint32_t keylen;
@@ -47,7 +47,7 @@ typedef struct {
 } __attribute__((packed)) cqe_send_getresponse;
 typedef struct {
     uint16_t flags;
-    //uint16_t len;
+    uint16_t len;
     //uint32_t client;
     uint64_t opaque;
 } __attribute__((packed)) cqe_send_setresponse;
@@ -61,7 +61,7 @@ typedef struct {
 } __attribute__((packed)) cqe_send_error;
 typedef struct {
     uint16_t flags;
-    //uint16_t len;
+    uint16_t len;
     //uint32_t pad0;
     //uint64_t segbase;
     //uint64_t seglen;

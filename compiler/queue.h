@@ -28,6 +28,7 @@ q_entry *enqueue_alloc(circular_queue* q, size_t len) {
     void *eq;
 
     /* Align to header size */
+    fflush(stdout);
     len = (len + ALIGN - 1) & (~(ALIGN - 1));
     eq = q->queue;
     eqe_off = off = q->offset;
@@ -72,23 +73,26 @@ q_entry *enqueue_alloc(circular_queue* q, size_t len) {
     }
     eqe->len = len;
     eqe->flags = 0;
+    //printf("enq_alloc (before): offset = %ld, len = %ld, mod = %ld\n", eqe_off, len, qlen);
     q->offset = (eqe_off + len) % qlen;
+    printf("enq_alloc: queue = %ld, entry = %ld, len = %ld, offset = %ld\n", q->queue, eqe, eqe->len, q->offset);
     return eqe;
 }
 
 void enqueue_submit(q_entry *e)
 {
     e->flags |= FLAG_OWN;
-    //printf("enq_submit %ld %d\n", e, e->flags);
-    fflush(stdout);
+    printf("enq_submit: entry = %ld, len = %d\n", e, e->len);
+    //fflush(stdout);
 }
 
 q_entry *dequeue_get(circular_queue* q) {
-    //printf("deq: queue = %ld\n", q->queue);
     q_entry* eqe = q->queue + q->offset;
-    //printf("deq_get %ld %d\n", eqe, eqe->flags);
+    fflush(stdout);
     if(eqe->flags & FLAG_OWN) {
+        //printf("dequeue_get (before): entry = %ld, len = %ld, mod = %ld\n", eqe, eqe->len, q->len);
         q->offset = (q->offset + eqe->len) % q->len;
+        //printf("dequeue_get_return: entry = %ld, offset = %ld\n", eqe, q->offset);
         return eqe;
     }
     else
@@ -98,7 +102,7 @@ q_entry *dequeue_get(circular_queue* q) {
 void dequeue_release(q_entry *e)
 {
     e->flags &= ~FLAG_OWN;
-    fflush(stdout);
+    //fflush(stdout);
 }
 
 #endif

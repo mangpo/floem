@@ -491,7 +491,7 @@ def thread_func_create_cancel(func, size=None):
     if size:
         func_src = r'''
             void *_run_%s(void *threadid) {
-                usleep(10000);
+                usleep(100000);
                 for(int i=0; i<%d; i++) {
                     //printf("inject = %s\n", i);
                     %s();
