@@ -78,20 +78,6 @@ m->mcr.request.bodylen = 0;
 output { out(m); }
 ''')
 
-# make_eqe_get = create_element_instance("make_eqe_get",
-#                [Port("in_pkt_hash", ["iokvs_message*", "void*", "size_t", "uint32_t"])],
-#                [Port("out", ["eq_entry*"])],
-#                r'''
-# (iokvs_message* m, void* key, size_t len, uint32_t hash) = in_pkt_hash();
-# eqe_rx_get* entry = (eqe_rx_get *) malloc(sizeof(eqe_rx_get));
-# entry->flags = EQE_TYPE_RXGET;
-# entry->opaque = m->mcr.request.magic;
-# entry->hash = hash;
-# entry->keylen = len;
-# entry->key = key;
-# output { out((eq_entry*) entry); }
-#                ''')
-
 len_get = create_element_instance("len_get",
                [Port("in_pkt_hash", ["iokvs_message*", "void*", "size_t", "uint32_t"])],
                [Port("out", ["size_t"])],
@@ -118,19 +104,6 @@ if(entry) {
 output switch { case entry: out((q_entry*) entry); }
                ''')
 
-# make_eqe_set = create_element_instance("make_eqe_set",
-#                [Port("in", ["item*", "uint64_t"])],
-#                [Port("out", ["eq_entry*"])],
-#                r'''
-# (item* it, uint64_t opaque) = in();
-# //printf("make_eqe_set: opaque = %ld, refcount = %d\n", opaque, it->refcount);
-# eqe_rx_set* entry = (eqe_rx_set *) malloc(sizeof(eqe_rx_set));
-# entry->flags = EQE_TYPE_RXSET;
-# entry->opaque = opaque;
-# entry->item = it;
-# output { out((eq_entry*) entry); }
-#                ''')
-
 len_set = create_element_instance("len_set",
                [Port("in_pkt_hash", ["iokvs_message*", "void*", "size_t", "uint32_t"])],
                [Port("out", ["size_t"])],
@@ -146,29 +119,15 @@ fill_eqe_set = create_element_instance("fill_eqe_set",
                r'''
 eqe_rx_set* entry = (eqe_rx_set *) in_entry();
 (item* it, uint64_t opaque) = in_item();
-printf("make_eqe_set: opaque = %ld, refcount = %d, entry = %ld\n", opaque, it->refcount, entry);
+//printf("make_eqe_set: opaque = %ld, refcount = %d, entry = %ld\n", opaque, it->refcount, entry);
 if(entry) {
     entry->flags |= EQE_TYPE_RXSET << EQE_TYPE_SHIFT;
     entry->opaque = opaque;
     entry->item = it;
-    printf("set flag: %d\n", entry->flags);
 }
 output switch { case entry: out((q_entry*) entry); }
                ''')
 
-# make_eqe_full = create_element_instance("make_eqe_full",
-#                [Port("in", ["struct segment_header*"])],
-#                [Port("out", ["eq_entry*"])],
-#                r'''
-# (struct segment_header* full) = in();
-# eqe_seg_full* entry;
-# if(full != NULL) {
-#     entry = (eqe_seg_full *) malloc(sizeof(eqe_seg_full));
-#     entry->flags = EQE_TYPE_SEGFULL;
-#     entry->segment = full;
-# }
-# output switch { case full: out((eq_entry*) entry); }
-#                ''')
 
 filter_full = create_element_instance("filter_full",
                [Port("in_segment", ["struct segment_header*"])],

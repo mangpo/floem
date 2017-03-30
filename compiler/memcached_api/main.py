@@ -377,7 +377,7 @@ nic_tx.run(print_msg)
 c = Compiler()
 c.include = r'''
 #include <rte_memcpy.h>
-#include "nicif.h"
+#include "nicif_old.h"
 #include "iokvs.h"
 #include "protocol_binary.h"
 '''

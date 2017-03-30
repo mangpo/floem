@@ -39,7 +39,7 @@ q_entry *enqueue_alloc(circular_queue* q, size_t len) {
         flags = (volatile uint16_t *) ((uintptr_t) eq + off);
         if ((*flags & FLAG_OWN) != 0) {
             q->offset = eqe_off;
-            printf("enq_alloc (NULL): queue = %ld, entry = %ld, flag = %ld\n", q->queue, eqe, *flags);
+            //printf("enq_alloc (NULL): queue = %ld, entry = %ld, flag = %ld\n", q->queue, eqe, *flags);
             return NULL;
         }
         elen = flags[1];
@@ -76,15 +76,15 @@ q_entry *enqueue_alloc(circular_queue* q, size_t len) {
     eqe->flags = 0;
     //printf("enq_alloc (before): offset = %ld, len = %ld, mod = %ld\n", eqe_off, len, qlen);
     q->offset = (eqe_off + len) % qlen;
-    printf("enq_alloc: queue = %ld, entry = %ld, len = %ld, offset = %ld\n", q->queue, eqe, eqe->len, q->offset);
+    //printf("enq_alloc: queue = %ld, entry = %ld, len = %ld, offset = %ld\n", q->queue, eqe, eqe->len, q->offset);
     return eqe;
 }
 
 void enqueue_submit(q_entry *e)
 {
     e->flags |= FLAG_OWN;
-    printf("enq_submit: entry = %ld, len = %d\n", e, e->len);
-    //fflush(stdout);
+    //printf("enq_submit: entry = %ld, len = %d\n", e, e->len);
+    fflush(stdout);
 }
 
 q_entry *dequeue_get(circular_queue* q) {
@@ -103,8 +103,8 @@ q_entry *dequeue_get(circular_queue* q) {
 void dequeue_release(q_entry *e)
 {
     e->flags &= ~FLAG_OWN;
-    printf("release: entry=%ld\n", e);
-    //fflush(stdout);
+    //printf("release: entry=%ld\n", e);
+    fflush(stdout);
 }
 
 #endif

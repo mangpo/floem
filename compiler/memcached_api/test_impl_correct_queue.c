@@ -35,7 +35,7 @@ void run_app(void *threadid) {
         //printf("eq_entry at core %ld is null.\n", tid);
       }
       uint8_t type = (e->flags & EQE_TYPE_MASK) >> EQE_TYPE_SHIFT;
-      printf("get_eq type %d, flag = %d\n", type, e->flags);
+      //printf("get_eq type %d, flag = %d\n", type, e->flags);
       if (type == EQE_TYPE_RXGET) {
 
         eqe_rx_get* e_get = (eqe_rx_get*) e;

@@ -158,13 +158,13 @@ void segment_item_free(struct segment_header *h, size_t total)
 
 item *segment_item_alloc(struct segment_header *h, size_t total)
 {
-    printf("segment_header = %ld\n", h);
+    //printf("segment_header = %ld\n", h);
     item *it = (item *) ((uintptr_t) h->data + h->offset);
     size_t avail;
 
     /* Not enough room in this segment */
     avail = h->size - h->offset;
-    printf("avail = %ld\n", avail);
+    //printf("avail = %ld\n", avail);
     if (avail == 0) {
         return NULL;
     } else if (avail < total) {

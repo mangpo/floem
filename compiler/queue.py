@@ -229,9 +229,9 @@ def create_circular_queue_variablesize_one2many(name, size, n_cores):
            (size_t len) = in_len();
            (size_t c) = in_core();
            circular_queue *q = this.cores[c];
-           printf("ENQ core=%ld, queue=%ld\n", c, q->queue);
+           //printf("ENQ core=%ld, queue=%ld\n", c, q->queue);
            q_entry* entry = (q_entry*) enqueue_alloc(q, len);
-           printf("ENQ' core=%ld, queue=%ld, entry=%ld\n", c, q->queue, entry);
+           //printf("ENQ' core=%ld, queue=%ld, entry=%ld\n", c, q->queue, entry);
            output { out(entry); }
            ''', None, [(all_name, "this")])
 
@@ -248,8 +248,7 @@ def create_circular_queue_variablesize_one2many(name, size, n_cores):
         (size_t c) = in();
         circular_queue *q = this.cores[c];
         q_entry* x = dequeue_get(q);
-        //printf("deq_get = %ld\n", x);
-        if(x) printf("DEQ core=%ld, entry=%ld\n", c, x);
+        //if(x) printf("DEQ core=%ld, entry=%ld\n", c, x);
         output { out(x); }
            ''', None, [(all_name, "this")])
 
@@ -274,10 +273,6 @@ def create_circular_queue_variablesize_one2many(name, size, n_cores):
             fresh_id += 1
         return Dequeue_get(name, [deq_all])
 
-    #enq_alloc = Enqueue_alloc(prefix + "enqueue_alloc", [all])
-    #enq_submit = Enqueue_submit(prefix + "enqueue_submit")
-    #deqs_get = [Dequeue_get(prefix + "dequeue_get" + str(i), [deq_ones[i]]) for i in range(n_cores)]
-    #deq_release = Dequeue_release(prefix + "dequeue_release" )
     return enq_alloc, Enqueue_submit, deq_alloc, Dequeue_release
 
 
@@ -365,10 +360,6 @@ def create_circular_queue_variablesize_many2one(name, size, n_cores):
             fresh_id += 1
         return Dequeue_get(name, [deq_all])
 
-    #enqs_alloc = [Enqueue_alloc(prefix + "enqueue_alloc" + str(i), [enq_ones[i]]) for i in range(n_cores)]
-    #enq_submit = Enqueue_submit(prefix + "enqueue_submit")
-    #deq_get = Dequeue_get(prefix + "dequeue_get", [deq_all])
-    #deq_release = Dequeue_release(prefix + "dequeue_release")
     return enq_alloc, Enqueue_submit, deq_alloc, Dequeue_release
 
 
