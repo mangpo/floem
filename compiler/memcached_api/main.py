@@ -397,8 +397,3 @@ def run_impl():
 
 #run_spec()
 run_impl()
-
-# TODO: 3. circular queue stores entries instead of pointers to entries ***
-# TODO: proper initialization
-# TODO: queue -- owner bit & tail pointer update
-# TODO: opague #
