@@ -376,13 +376,16 @@ inject = Inject()
 
 # Queue
 rx_enq_alloc_creator, rx_enq_submit_creator, rx_deq_get_creator, rx_deq_release_creator = \
-    queue.create_circular_queue_variablesize_one2many("rx_queue", 256, n_cores)
-enq_alloc_get = rx_enq_alloc_creator("enq_alloc_get")
-enq_alloc_set = rx_enq_alloc_creator("enq_alloc_set")
-enq_alloc_full = rx_enq_alloc_creator("enq_alloc_full")
+    queue.create_circular_queue_variablesize_one2many("rx_queue", 1024, n_cores)
 rx_enq_submit = rx_enq_submit_creator()
 rx_deq_get = rx_deq_get_creator()
 rx_deq_release = rx_deq_release_creator()
+
+def enqueue(fill, core, length, *args):
+    enq_alloc = rx_enq_alloc_creator()
+    entry = enq_alloc(length, core)
+    entry = fill(entry, *args)
+    rx_enq_submit(entry)
 
 @internal_trigger("nic_rx")
 def tx_pipeline():
@@ -396,24 +399,18 @@ def tx_pipeline():
     # Get request
     length = len_get(pkt_hash_get)
     core = get_core_get(pkt_hash_get)
-    eqe_get = enq_alloc_get(length, core)
-    eqe_get = fill_eqe_get(eqe_get, pkt_hash_get)
-    rx_enq_submit(eqe_get)
+    enqueue(fill_eqe_get, core, length, pkt_hash_get)
 
     # Set request
     length = len_set(pkt_hash_set)
     core = get_core_set(pkt_hash_set)
     item_opaque, full_segment = get_item(pkt_hash_set)
-    eqe_set = enq_alloc_set(length, core)
-    eqe_set = fill_eqe_set(eqe_set, item_opaque)
-    rx_enq_submit(eqe_set)
+    enqueue(fill_eqe_set, core, length, item_opaque)
 
     # Full segment
     full_segment = filter_full(full_segment)  # Need this element
     length, core = len_core_full(full_segment)
-    eqe_full = enq_alloc_full(length, core)
-    eqe_full = fill_eqe_full(eqe_full, full_segment)
-    rx_enq_submit(eqe_full)
+    enqueue(fill_eqe_full, core, length, full_segment)
 
 # Dequeue
 @API("get_eq")
@@ -428,7 +425,7 @@ def release(x):
 
 # Queue
 tx_enq_alloc, tx_enq_submit, tx_deq_get, tx_deq_release = \
-    queue.create_circular_queue_variablesize_many2one_instances("tx_queue", 256, n_cores)  # TODO: create just one enq/deq, take core_id as parameter.
+    queue.create_circular_queue_variablesize_many2one_instances("tx_queue", 1024, n_cores)  # TODO: create just one enq/deq, take core_id as parameter.
 
 # Enqueue
 @API("send_cq")
@@ -441,33 +438,36 @@ def send_cq(core, type, pointer, opague):
     entry = fill_cqe(entry, type, pointer, opague)
     tx_enq_submit(entry)
 
-@internal_trigger("nic_tx")
-def tx_pipeline():
+def dequeue_and_run(work):
     cq_entry = tx_deq_get()
-    cqe_get, cqe_set, cqe_logseg, cqe_nop = classifier_rx(cq_entry)
+    rets = work(cq_entry)
+    for ret in rets:
+        tx_deq_release(ret)
 
+def tx_pipeline(cq_entry):
+    cqe_get, cqe_set, cqe_logseg, cqe_nop = classifier_rx(cq_entry)  # Need to release cqe_nop!
     # get response
     opaque, item, cqe_get = unpack_get(cqe_get)
-    tx_deq_release(cqe_get)  # dependency
     pkt = msg_get_get(opaque)
     get_response = prepare_get_response(pkt, item)
 
     # set response
     opaque, cqe_set = unpack_set(cqe_set)
-    tx_deq_release(cqe_set)  # dependency
     pkt = msg_get_set(opaque)
     set_response = prepare_set_response(pkt)
 
     # logseg
     cqe_logseg = add_logseg(cqe_logseg)
-    tx_deq_release(cqe_logseg)  # dependency
-
-    # nop
-    tx_deq_release(cqe_nop)
 
     # print
     print_msg(get_response)
     print_msg(set_response)
+
+    return cqe_get, cqe_set, cqe_logseg, cqe_nop
+
+@internal_trigger("nic_tx")
+def nic_tx():
+    dequeue_and_run(tx_pipeline)
 
 ######################## Run test #######################
 c = Compiler()
@@ -495,9 +495,7 @@ def run_impl():
 #run_spec()
 run_impl()
 
-# TODO: send_cq_dummy
 # TODO: proper initialization
 # TODO: queue -- owner bit & tail pointer update
-# TODO: queue -- high order function
 # TODO: opague #
 # TODO: spec/impl
