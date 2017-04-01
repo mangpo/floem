@@ -496,8 +496,9 @@ def run_impl():
 run_impl()
 
 # TODO: send_cq_dummy
+# TODO: opague #
+# TODO: spec/impl
+
 # TODO: proper initialization
 # TODO: queue -- owner bit & tail pointer update
 # TODO: queue -- high order function
-# TODO: opague #
-# TODO: spec/impl

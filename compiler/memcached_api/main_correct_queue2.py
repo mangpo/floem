@@ -494,8 +494,3 @@ def run_impl():
 
 #run_spec()
 run_impl()
-
-# TODO: proper initialization
-# TODO: queue -- owner bit & tail pointer update
-# TODO: opague #
-# TODO: spec/impl
