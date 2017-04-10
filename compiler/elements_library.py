@@ -55,8 +55,8 @@ def create_table(put_name, get_name, index_type, val_type, size):
               (%s val) = in_value();
               uint32_t key = index %s %d;
               if(this.data[key] == NULL) this.data[key] = val;
-              else { printf("Hash collision!\n"); exit(-1); }
-              ''' % (index_type, val_type, '%', size),
+              else { printf("Hash collision! Key = %s\n", key); exit(-1); }
+              ''' % (index_type, val_type, '%', size, '%d'),
                               None, [(state_name, "this")])
 
     TableGet = create_element(get_name,

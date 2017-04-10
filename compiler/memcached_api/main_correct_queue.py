@@ -262,18 +262,6 @@ get_core_set = get_core("get_core_set")
 #    output { out(0); }
 #    ''')
 
-send_cq_dummy = create_element_instance("send_cq_dummy",
-               [Port("in_core", ["size_t"]), Port("in_type", ["uint8_t"]),
-                Port("in_pointer", ["void*"]), Port("in_opaque", ["uint64_t"])],
-               [Port("out_core", ["size_t"]), Port("out_type", ["uint8_t"]),
-                Port("out_pointer", ["void*"]), Port("out_opaque", ["uint64_t"])],
-               r'''
-(size_t c) = in_core();
-(uint8_t t) = in_type();
-(void* p) = in_pointer();
-(uint64_t opaque) = in_opaque();
-output { out_core(c); out_type(t); out_pointer(p); out_opaque(opaque); }
-''')
 
 ######################## Log segment ##########################
 Segments = create_state("segments_holder",
@@ -376,7 +364,7 @@ inject = Inject()
 
 # Queue
 rx_enq_alloc_creator, rx_enq_submit_creator, rx_deq_get_creator, rx_deq_release_creator = \
-    queue.create_circular_queue_variablesize_one2many("rx_queue", 256, n_cores)
+    queue.create_circular_queue_variablesize_one2many("rx_queue", 1024, n_cores)
 enq_alloc_get = rx_enq_alloc_creator("enq_alloc_get")
 enq_alloc_set = rx_enq_alloc_creator("enq_alloc_set")
 enq_alloc_full = rx_enq_alloc_creator("enq_alloc_full")
@@ -428,14 +416,11 @@ def release(x):
 
 # Queue
 tx_enq_alloc, tx_enq_submit, tx_deq_get, tx_deq_release = \
-    queue.create_circular_queue_variablesize_many2one_instances("tx_queue", 256, n_cores)  # TODO: create just one enq/deq, take core_id as parameter.
+    queue.create_circular_queue_variablesize_many2one_instances("tx_queue", 1024, n_cores)  # TODO: create just one enq/deq, take core_id as parameter.
 
 # Enqueue
 @API("send_cq")
 def send_cq(core, type, pointer, opague):
-    # TODO: API 'send_cq' is defined to take arguments of types ['size_t', 'uint8_t', 'void*', 'uint64_t'],
-    # TODO: but the starting element '_element_len_cqe' take arguments of types ['uint8_t'].
-    core, type, pointer, opague = send_cq_dummy(core, type, pointer, opague)
     length = len_cqe(type)
     entry = tx_enq_alloc(core, length)
     entry = fill_cqe(entry, type, pointer, opague)
@@ -495,7 +480,7 @@ def run_impl():
 #run_spec()
 run_impl()
 
-# TODO: send_cq_dummy
+# TODO: if composite can't contain spec/impl, why do we need to collect spec/impl related info in compo?
 # TODO: opague #
 # TODO: spec/impl
 

@@ -598,9 +598,9 @@ def thread_common(name, f, input, output):
             raise Exception("API '%s' can return no more than one value. Currently it has %d return values."
                             % (name, len(compo.outputs)))
 
-    assert len(compo.roots) == 1, \
-        ("API '%s' must have exactly one starting element, but currently these are starting elements: %s"
-         % (name, compo.roots))
+    # assert len(compo.roots) == 1, \
+    #     ("API '%s' must have exactly one starting element, but currently these are starting elements: %s"
+    #      % (name, compo.roots))
 
     return compo, input_types, output_type
 
@@ -615,14 +615,72 @@ def internal_trigger(name):
     return receptor
 
 
+def create_identity_multiports(ports_types):
+    src_in = ""
+    src_out = ""
+    for i in range(len(ports_types)):
+        types = ports_types[i]
+        types_args = []
+        args = []
+        for j in range(len(types)):
+            arg = "x%d_%d" % (i,j)
+            types_args.append("%s %s" % (types[j], arg))
+            args.append(arg)
+        types_args = ','.join(types_args)
+        args = ','.join(args)
+        src_in += "(%s) = in%d();\n" % (types_args, i)
+        src_out += "out%d(%s);\n" % (i, args)
+
+    src = src_in
+    src += "output {\n"
+    src += src_out
+    src += "}\n"
+    name = "identiy%d" % fresh_id
+    global fresh_id
+    fresh_id += 1
+    e = create_element(name,
+                       [Port("in%d" % i, ports_types[i]) for i in range(len(ports_types))],
+                       [Port("out%d" % i, ports_types[i]) for i in range(len(ports_types))],
+                       src)
+    return e
+
+
 def API_common(name, f, input=True, output=True, default_return=None):
     compo, input_types, output_type = thread_common(name, f, input, output)
     if default_return:
         default_return = str(default_return)
     t = API_thread(name, input_types, output_type, default_return)
     t.run(compo)
-    t.start([r for r in compo.roots][0])
-    return compo
+
+    spec_starts = []
+    impl_starts = []
+    for input in compo.inputs:
+        spec_starts += input.instance
+        impl_starts += input.impl_instance
+
+    if len(set(spec_starts)) > 1 or len(set(impl_starts)) > 1:
+        # If there are multiple starting elements, insert an element as a starting element that forwards values
+        # to proper elements.
+        ports_types = []
+        for input in compo.inputs:
+            ports_types.append(input.port_argtypes[0])
+
+        creator = create_identity_multiports(ports_types)
+        e = creator()
+        intermediates = e()
+        if isinstance(intermediates, tuple):
+            outputs = compo(*intermediates)
+        else:
+            outputs = compo(intermediates)
+        t.run_start(e)
+
+        def new_compo(*args):
+            e(*args)
+            return outputs
+        return new_compo
+    else:
+        t.start([r for r in compo.roots][0])
+        return compo
 
 
 def API(name, default_return=None):
