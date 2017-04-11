@@ -47,12 +47,8 @@ class Thread:
             if isinstance(instance, ElementInstance):
                 scope[-1].append(ResourceMap(self.name, instance.name))
             elif isinstance(instance, CompositeInstance):
-                if instance.impl_instances_names:
-                    scope[-1].append(Spec([ResourceMap(self.name, x) for x in instance.spec_instances_names]))
-                    scope[-1].append(Impl([ResourceMap(self.name, x) for x in instance.impl_instances_names]))
-                else:
-                    for name in instance.spec_instances_names:
-                        scope[-1].append(ResourceMap(self.name, name))
+                for name in instance.instances_names:
+                    scope[-1].append(ResourceMap(self.name, name))
             elif isinstance(instance, SpecImplInstance):
                 scope[-1].append(Spec([ResourceMap(self.name, x) for x in instance.spec_instances_names]))
                 scope[-1].append(Impl([ResourceMap(self.name, x) for x in instance.impl_instances_names]))
@@ -91,10 +87,9 @@ class ElementInstance:
 
 
 class CompositeInstance:
-    def __init__(self, connect, spec_instances_names, impl_instances_names, roots, inputs, outputs, scope):
+    def __init__(self, connect, instances_names, roots, inputs, outputs, scope):
         self.connect = connect
-        self.spec_instances_names = spec_instances_names
-        self.impl_instances_names = impl_instances_names
+        self.instances_names = instances_names
         self.roots = roots
         self.inputs = inputs
         self.outputs = outputs
@@ -473,18 +468,11 @@ def create_composite(composite_name, program):
 
         check_composite_outputs(inst_name, outs)
         check_composite_inputs(inst_name, fake_ports)
-        spec_impl = has_spec_impl(my_scope)
-        if spec_impl:
-            spec_instances_names = extract_instances_names(my_scope, fake_ports, outs, spec=True)
-            impl_instances_names = extract_instances_names(my_scope, fake_ports, outs, spec=False)
-        else:
-            spec_instances_names = extract_instances_names(my_scope, fake_ports, outs)
-            impl_instances_names = None
+        has_spec_impl(my_scope)
+        instances_names = extract_instances_names(my_scope, fake_ports, outs)
         roots = extract_roots(my_scope, fake_ports, outs)
 
         def connect(*ports):
-            # assert len(ports) == n_args, ("Instance of composite '%s' requires %d inputs, %d inputs are given."
-            #                               % (composite_name, n_args, len(ports)))
             for i in range(len(ports)):
                 from_port = ports[i]
                 to_port = fake_ports[i]
@@ -551,7 +539,7 @@ def create_composite(composite_name, program):
             return outs
         # end connect
 
-        return CompositeInstance(connect, spec_instances_names, impl_instances_names, roots, fake_ports, outs, my_scope)
+        return CompositeInstance(connect, instances_names, roots, fake_ports, outs, my_scope)
     # end create_instance
 
     return create_instance
@@ -616,6 +604,7 @@ def internal_trigger(name):
 
 
 def create_identity_multiports(ports_types):
+    global fresh_id
     src_in = ""
     src_out = ""
     for i in range(len(ports_types)):
@@ -636,7 +625,6 @@ def create_identity_multiports(ports_types):
     src += src_out
     src += "}\n"
     name = "identiy%d" % fresh_id
-    global fresh_id
     fresh_id += 1
     e = create_element(name,
                        [Port("in%d" % i, ports_types[i]) for i in range(len(ports_types))],

@@ -480,7 +480,6 @@ def run_impl():
 #run_spec()
 run_impl()
 
-# TODO: if composite can't contain spec/impl, why do we need to collect spec/impl related info in compo?
 # TODO: opague #
 # TODO: spec/impl
 
