@@ -21,6 +21,21 @@ output switch{
 }
 ''')
 
+extract_pkt_hash = create_element("extract_pkt_hash",
+              [Port("in", ["iokvs_message*", "void*", "size_t", "uint32_t"])],
+              [Port("out_pkt", ["iokvs_message*"]),
+               Port("out_hash", ["void*", "size_t", "uint32_t"])],
+               r'''
+(iokvs_message* m, void* key, size_t len, uint32_t hash) = in();
+
+output {
+  out_pkt(m);
+  out_hash(key, len, hash);
+}
+''')
+extract_pkt_hash_get = extract_pkt_hash()
+extract_pkt_hash_set = extract_pkt_hash()
+
 get_key = create_element_instance("GetKey",
               [Port("in", ["iokvs_message*"])],
               [Port("out", ["void*", "size_t"])],
@@ -39,6 +54,31 @@ jenkins_hash = create_element_instance("Jenkins_Hash",
 uint32_t hash = jenkins_hash(key, length);
 output { out(key, length, hash); }
 ''')
+
+lookup = create_element_instance("Lookup",
+              [Port("in", ["void*", "size_t", "uint32_t"])],
+              [Port("out", ["item*"])],
+               r'''
+(void* key, size_t length, uint32_t hash) = in();
+item *it = hasht_get(key, length, hash);
+output { out(it); }
+''')
+
+insert_item = create_element_instance("insert_item",
+              [Port("in", ["item*"])],
+              [],
+               r'''
+(item *it) = in();
+hasht_put(it, NULL);
+''')
+
+# print_hash = create_element_instance("print_hash",
+#               [Port("in", ["void*", "size_t", "uint32_t"])],
+#               [],
+#                r'''
+# (void* key, size_t length, uint32_t hash) = in();
+# printf("hash = %d\n", hash);
+# ''')
 
 prepare_get_response = create_element_instance("prepare_get_response",
                           [Port("in_packet", ["iokvs_message*"]), Port("in_item", ["item*"])],
@@ -303,6 +343,26 @@ get_item_creator = create_element("get_item_creator",
    ''', None, [("segments_holder", "this")])
 get_item = get_item_creator("get_item", [segments])
 
+get_item_spec = create_element_instance("get_item_spec",
+                   [Port("in_pkt", ["iokvs_message*"]), Port("in_hash", ["void*", "size_t", "uint32_t"])],
+                   [Port("out", ["item*"])],
+                   r'''
+    (iokvs_message* m) = in_pkt();
+    (void* key, size_t keylen, uint32_t hash) = in_hash();
+    size_t totlen = m->mcr.request.bodylen - m->mcr.request.extlen;
+
+    item *it = (item *) malloc(sizeof(item) + totlen);
+
+    //printf("get_item id: %d, keylen: %ld, hash: %d, totlen: %ld, item: %ld\n", m->mcr.request.magic, keylen, hash, totlen, it);
+    it->hv = hash;
+    it->vallen = totlen - keylen;
+    it->keylen = keylen;
+    it->refcount = 1;
+    rte_memcpy(item_key(it), key, totlen);
+
+    output { out(it); }
+   ''')
+
 add_logseg_creator = create_element("add_logseg_creator",
                    [Port("in", ["cqe_add_logseg*"])], [Port("out", ["q_entry*"])],
                    r'''
@@ -360,99 +420,129 @@ msg_get_set = msg_get_creator("msg_get_set")
 Inject = create_inject("inject", "iokvs_message*", 1000, "random_request")
 inject = Inject()
 
-######################## NIC Rx #######################
+Probe = create_probe("probe", "iokvs_message*", 1010, "cmp_func")
+probe_get = Probe()
+probe_set = Probe()
 
-# Queue
-rx_enq_alloc_creator, rx_enq_submit_creator, rx_deq_get_creator, rx_deq_release_creator = \
-    queue.create_circular_queue_variablesize_one2many("rx_queue", 1024, n_cores)
-enq_alloc_get = rx_enq_alloc_creator("enq_alloc_get")
-enq_alloc_set = rx_enq_alloc_creator("enq_alloc_set")
-enq_alloc_full = rx_enq_alloc_creator("enq_alloc_full")
-rx_enq_submit = rx_enq_submit_creator()
-rx_deq_get = rx_deq_get_creator()
-rx_deq_release = rx_deq_release_creator()
+def spec():
+    @internal_trigger("all")
+    def tx_pipeline():
+        # From network
+        pkt = inject()
+        key = get_key(pkt)
+        hash = jenkins_hash(key)
+        pkt_hash_get, pkt_hash_set = classifier(pkt, hash)
 
-@internal_trigger("nic_rx")
-def tx_pipeline():
-    # From network
-    pkt = inject()
-    opaque = get_opaque(pkt)  # TODO: opaque = count
-    msg_put(opaque, pkt)
-    hash = jenkins_hash(get_key(pkt))
-    pkt_hash_get, pkt_hash_set = classifier(pkt, hash)
+        # Get request
+        pkt, hash = extract_pkt_hash_get(pkt_hash_get)
+        item = lookup(hash)
+        get_response = prepare_get_response(pkt, item)
+        print_msg(probe_get(get_response))
 
-    # Get request
-    length = len_get(pkt_hash_get)
-    core = get_core_get(pkt_hash_get)
-    eqe_get = enq_alloc_get(length, core)
-    eqe_get = fill_eqe_get(eqe_get, pkt_hash_get)
-    rx_enq_submit(eqe_get)
+        # Set request
+        pkt, hash = extract_pkt_hash_set(pkt_hash_set)
+        item = get_item_spec(pkt, hash)
+        insert_item(item)
+        set_response = prepare_set_response(pkt)
+        print_msg(probe_set(set_response))
 
-    # Set request
-    length = len_set(pkt_hash_set)
-    core = get_core_set(pkt_hash_set)
-    item_opaque, full_segment = get_item(pkt_hash_set)
-    eqe_set = enq_alloc_set(length, core)
-    eqe_set = fill_eqe_set(eqe_set, item_opaque)
-    rx_enq_submit(eqe_set)
 
-    # Full segment
-    full_segment = filter_full(full_segment)  # Need this element
-    length, core = len_core_full(full_segment)
-    eqe_full = enq_alloc_full(length, core)
-    eqe_full = fill_eqe_full(eqe_full, full_segment)
-    rx_enq_submit(eqe_full)
+def impl():
+    ######################## NIC Rx #######################
 
-# Dequeue
-@API("get_eq")
-def get_eq(core):
-    return rx_deq_get(core)
+    # Queue
+    rx_enq_alloc_creator, rx_enq_submit_creator, rx_deq_get_creator, rx_deq_release_creator = \
+        queue.create_circular_queue_variablesize_one2many("rx_queue", 1024, n_cores)
+    enq_alloc_get = rx_enq_alloc_creator("enq_alloc_get")
+    enq_alloc_set = rx_enq_alloc_creator("enq_alloc_set")
+    enq_alloc_full = rx_enq_alloc_creator("enq_alloc_full")
+    rx_enq_submit = rx_enq_submit_creator()
+    rx_deq_get = rx_deq_get_creator()
+    rx_deq_release = rx_deq_release_creator()
 
-@API("release")
-def release(x):
-    rx_deq_release(x)
+    @internal_trigger("nic_rx")
+    def tx_pipeline():
+        # From network
+        pkt = inject()
+        opaque = get_opaque(pkt)  # TODO: opaque = count
+        msg_put(opaque, pkt)
+        hash = jenkins_hash(get_key(pkt))
+        pkt_hash_get, pkt_hash_set = classifier(pkt, hash)
 
-######################## NIC Tx #######################
+        # Get request
+        length = len_get(pkt_hash_get)
+        core = get_core_get(pkt_hash_get)
+        eqe_get = enq_alloc_get(length, core)
+        eqe_get = fill_eqe_get(eqe_get, pkt_hash_get)
+        rx_enq_submit(eqe_get)
 
-# Queue
-tx_enq_alloc, tx_enq_submit, tx_deq_get, tx_deq_release = \
-    queue.create_circular_queue_variablesize_many2one_instances("tx_queue", 1024, n_cores)  # TODO: create just one enq/deq, take core_id as parameter.
+        # Set request
+        length = len_set(pkt_hash_set)
+        core = get_core_set(pkt_hash_set)
+        item_opaque, full_segment = get_item(pkt_hash_set)
+        eqe_set = enq_alloc_set(length, core)
+        eqe_set = fill_eqe_set(eqe_set, item_opaque)
+        rx_enq_submit(eqe_set)
 
-# Enqueue
-@API("send_cq")
-def send_cq(core, type, pointer, opague):
-    length = len_cqe(type)
-    entry = tx_enq_alloc(core, length)
-    entry = fill_cqe(entry, type, pointer, opague)
-    tx_enq_submit(entry)
+        # Full segment
+        full_segment = filter_full(full_segment)  # Need this element
+        length, core = len_core_full(full_segment)
+        eqe_full = enq_alloc_full(length, core)
+        eqe_full = fill_eqe_full(eqe_full, full_segment)
+        rx_enq_submit(eqe_full)
 
-@internal_trigger("nic_tx")
-def tx_pipeline():
-    cq_entry = tx_deq_get()
-    cqe_get, cqe_set, cqe_logseg, cqe_nop = classifier_rx(cq_entry)
+    # Dequeue
+    @API("get_eq")
+    def get_eq(core):
+        return rx_deq_get(core)
 
-    # get response
-    opaque, item, cqe_get = unpack_get(cqe_get)
-    tx_deq_release(cqe_get)  # dependency
-    pkt = msg_get_get(opaque)
-    get_response = prepare_get_response(pkt, item)
+    @API("release")
+    def release(x):
+        rx_deq_release(x)
 
-    # set response
-    opaque, cqe_set = unpack_set(cqe_set)
-    tx_deq_release(cqe_set)  # dependency
-    pkt = msg_get_set(opaque)
-    set_response = prepare_set_response(pkt)
+    ######################## NIC Tx #######################
 
-    # logseg
-    cqe_logseg = add_logseg(cqe_logseg)
-    tx_deq_release(cqe_logseg)  # dependency
+    # Queue
+    tx_enq_alloc, tx_enq_submit, tx_deq_get, tx_deq_release = \
+        queue.create_circular_queue_variablesize_many2one_instances("tx_queue", 1024, n_cores)  # TODO: create just one enq/deq, take core_id as parameter.
 
-    # nop
-    tx_deq_release(cqe_nop)
+    # Enqueue
+    @API("send_cq")
+    def send_cq(core, type, pointer, opague):
+        length = len_cqe(type)
+        entry = tx_enq_alloc(core, length)
+        entry = fill_cqe(entry, type, pointer, opague)
+        tx_enq_submit(entry)
 
-    # print
-    print_msg(get_response)
-    print_msg(set_response)
+    @internal_trigger("nic_tx")
+    def tx_pipeline():
+        cq_entry = tx_deq_get()
+        cqe_get, cqe_set, cqe_logseg, cqe_nop = classifier_rx(cq_entry)
+
+        # get response
+        opaque, item, cqe_get = unpack_get(cqe_get)
+        tx_deq_release(cqe_get)  # dependency
+        pkt = msg_get_get(opaque)
+        get_response = prepare_get_response(pkt, item)
+
+        # set response
+        opaque, cqe_set = unpack_set(cqe_set)
+        tx_deq_release(cqe_set)  # dependency
+        pkt = msg_get_set(opaque)
+        set_response = prepare_set_response(pkt)
+
+        # logseg
+        cqe_logseg = add_logseg(cqe_logseg)
+        tx_deq_release(cqe_logseg)  # dependency
+
+        # nop
+        tx_deq_release(cqe_nop)
+
+        # print
+        print_msg(probe_get(get_response))
+        print_msg(probe_set(set_response))
+
+memcached = create_spec_impl("memcached", spec, impl)
 
 ######################## Run test #######################
 c = Compiler()
@@ -467,21 +557,27 @@ c.depend = ['jenkins_hash', 'hashtable', 'ialloc']
 c.triggers = True
 c.I = '/home/mangpo/lib/dpdk-16.11/build/include'
 
-# def run_spec():
-#     c.desugar_mode = "spec"
-#     c.generate_code_as_header("tmp_spec.h")
-#     c.compile_and_run("test")
+def run_spec():
+    c.desugar_mode = "spec"
+    c.generate_code_as_header("tmp_impl_correct_queue_spec.h")
+    c.compile_and_run("test_impl_correct_queue_spec")
 
 def run_impl():
     c.desugar_mode = "impl"
     c.generate_code_as_header("tmp_impl_correct_queue.h")
     c.compile_and_run("test_impl_correct_queue")
 
+def run_compare():
+    c.desugar_mode = "compare"
+    c.generate_code_as_header("tmp_impl_correct_queue_compare.h")
+    c.compile_and_run("test_impl_correct_queue_compare")
+
+
 #run_spec()
-run_impl()
+#run_impl()
+run_compare()
 
 # TODO: opague #
-# TODO: spec/impl
 # TODO: get rid of t.start()
 
 # TODO: proper initialization (run_threads_init: only run dequeue pipeline, run_threads: run dequeue and inject)

@@ -254,7 +254,7 @@ class TestDSL(unittest.TestCase):
         roots = g.find_roots()
         self.assertEqual(roots, set(['_spec_inc1', '_impl_inc1']))
         self.assertEqual(self.find_subgraph(g, '_impl_inc1', set()),
-                         set(['_impl_inc1', '_impl_inc1_out_fork_inst', '_impl_compo_inc2', '_impl_compo_inc3', '_impl_compo_drop']))
+                         set(['_impl_inc1', '_impl_inc1_out_fork1_inst', '_impl_compo_inc2', '_impl_compo_inc3', '_impl_compo_drop']))
 
     def test_compo_nop(self):
         reset()

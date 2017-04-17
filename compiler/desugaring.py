@@ -59,6 +59,7 @@ def insert_fork_other(x, connect_map, element_map, instance_map, resource_map, r
         resource_order[x.a] = x
     return False
 
+fork_id = 0
 
 def insert_fork_program(x):
     connect_map = {}
@@ -79,7 +80,10 @@ def insert_fork_program(x):
                 port = [port for port in element.outports if port.name == port_name][0]
 
                 # Statements to insert into program
-                fork = standard_elements.Fork_multi_values(inst_name + "_" + port_name + "_fork", len(connects), port.argtypes)
+                global fork_id
+                fork = standard_elements.Fork_multi_values(inst_name + "_" + port_name + "_fork" + str(fork_id),
+                                                           len(connects), port.argtypes)
+                fork_id += 1
                 fork_inst = ElementInstance(fork.name, fork.name + "_inst")
                 fork_connect = Connect(inst_name, fork_inst.name, port_name, "in")
 

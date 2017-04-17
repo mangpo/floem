@@ -2,6 +2,7 @@
 #include "iokvs.h"
 
 int main() {
+  hasht_init();
   init();
   run_threads();
   usleep(500000);

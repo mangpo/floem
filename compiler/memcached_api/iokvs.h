@@ -330,4 +330,52 @@ static iokvs_message* random_request(size_t v) {
         return random_get_request(v/2, v);
 }
 
+static void cmp_func(int spec_n, iokvs_message **spec_data, int impl_n, iokvs_message **impl_data) {
+  if(!(spec_n == impl_n)) {
+    printf("Spec records %d entries, but Impl records %d entries.\n", spec_n, impl_n);
+    exit(-1);
+  }
+  for(int i=0; i<spec_n; i++) {
+    iokvs_message *ref = spec_data[i];
+    bool found = false;
+    for(int j=0; j<impl_n; j++) {
+        iokvs_message *my = impl_data[i];
+        if(ref->mcr.request.opcode == PROTOCOL_BINARY_CMD_GET && my->mcr.request.opcode == PROTOCOL_BINARY_CMD_GET) {
+            if(ref->mcr.request.magic == my->mcr.request.magic
+            && ref->mcr.request.extlen == my->mcr.request.extlen
+            && ref->mcr.request.bodylen == my->mcr.request.bodylen) {
+              int vallen = ref->mcr.request.bodylen - 4;
+              uint8_t* ref_val = ref->payload + 4;
+              uint8_t* my_val = ref->payload + 4;
+              bool eq = true;
+              for(int k=0; k < vallen; k++) {
+                if(ref_val[k] != my_val[k]) {
+                  eq = false;
+                  break;
+                }
+              }
+              if(eq) {
+                found = true;
+                break;
+              }
+            }
+        }
+        else if (ref->mcr.request.opcode == PROTOCOL_BINARY_CMD_SET && my->mcr.request.opcode == PROTOCOL_BINARY_CMD_SET) {
+            if(ref->mcr.request.magic == my->mcr.request.magic
+            && ref->mcr.request.extlen == my->mcr.request.extlen
+            && ref->mcr.request.bodylen == my->mcr.request.bodylen) {
+                found = true;
+                break;
+            }
+        }
+          // TODO: continue
+    }
+    if(!found) {
+        printf("Impl doesn't some responses.");
+        exit(-1);
+    }
+  }
+  printf("PASSED: n = %d\n", spec_n);
+}
+
 #endif // ndef IOKVS_H_

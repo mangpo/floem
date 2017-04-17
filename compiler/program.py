@@ -236,6 +236,22 @@ class GraphGenerator:
 
         return new_name
 
+    def adjust_init(self, init):
+        if isinstance(init, str):
+            state_type_name = self.lookup(init)
+            if state_type_name:
+                return state_type_name[1]
+            return init
+        elif isinstance(init, AddressOf):
+            return AddressOf(self.adjust_init(init.of))
+        elif isinstance(init, list):
+            ret = []
+            for x in init:
+                ret.append(self.adjust_init(x))
+            return ret
+        else:
+            return init
+
     def interpret(self, x, stack=[]):
         if isinstance(x, Program):
             for s in x.statements:
@@ -264,7 +280,7 @@ class GraphGenerator:
             if x.name in self.graph.probe_compares:
                 self.graph.probe_compares[x.name].add(new_name)
             self.put_state(x.name, x.state, new_name)
-            self.graph.newStateInstance(x.state, new_name, x.init)
+            self.graph.newStateInstance(x.state, new_name, self.adjust_init(x.init))
         elif isinstance(x, Connect):
             self.interpret_Connect(x)
         elif isinstance(x, Composite):

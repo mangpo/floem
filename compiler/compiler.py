@@ -63,7 +63,7 @@ def get_type(type_var):
     index1 = type_var.rfind(' ')
     index2 = type_var.rfind('*')
     index = max(index1, index2)
-    return sanitize_type(type_var[:index])
+    return sanitize_type(type_var[:index+1])
 
 
 def remove_asgn_stmt(funcname, src,port2args,port,p_eq, p_end, inport_types):
