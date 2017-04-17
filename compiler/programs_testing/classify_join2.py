@@ -25,6 +25,7 @@ add1(y1, z2)
 add2(inc1(y2), inc2(z1))
 
 c = Compiler()
+c.remove_unused = False
 c.testing = r'''
 fork2(1);
 fork2(2);

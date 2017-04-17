@@ -26,6 +26,7 @@ def impl():
 compo = create_spec_impl("compo", spec, impl)
 
 c = Compiler()
+c.remove_unused = False
 c.include = r'''
 int gen_func(int i) { return i; }
 void cmp_func(int spec_n, int *spec_data, int impl_n, int *impl_data) {

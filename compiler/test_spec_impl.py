@@ -107,6 +107,7 @@ class TestSpecImpl(unittest.TestCase):
         e2(compo(e1(None)))
 
         c = Compiler()
+        c.remove_unused = False
         c.testing = 'f(0);'
         c.generate_code_and_run([4])
 
@@ -121,6 +122,7 @@ class TestSpecImpl(unittest.TestCase):
         x3 = e2(x2)
 
         c = Compiler()
+        c.remove_unused = False
         c.desugar_mode = "compare"
         c.testing = '_spec_f(0); _impl_f(0);'
         c.generate_code_and_run([3,4])
@@ -134,6 +136,7 @@ class TestSpecImpl(unittest.TestCase):
         c3(s2(e1(None)))
 
         c = Compiler()
+        c.remove_unused = False
         c.desugar_mode = "impl"
         c.testing = 'f(0);'
         c.generate_code_and_run([5])
@@ -151,6 +154,7 @@ class TestSpecImpl(unittest.TestCase):
 
         c3(s2(s1(c2(c1(e1(None))))))
         c = Compiler()
+        c.remove_unused = False
         c.desugar_mode = "compare"
         c.testing = '_spec_f(0); _impl_f(0);'
         c.generate_code_and_run([9, 11])
@@ -165,6 +169,7 @@ class TestSpecImpl(unittest.TestCase):
 
         e2(c3(c2(c1(e1(None)))))
         c = Compiler()
+        c.remove_unused = False
         c.desugar_mode = "compare"
         c.testing = '_spec_f(0); _impl_f(0);'
         c.generate_code_and_run([8,10])
@@ -177,6 +182,7 @@ class TestSpecImpl(unittest.TestCase):
 
         c2(c1(e1(None)))
         c = Compiler()
+        c.remove_unused = False
         c.desugar_mode = "compare"
         c.testing = '_spec_f(0); _impl_f(0);'
         c.generate_code_and_run([3, 5])

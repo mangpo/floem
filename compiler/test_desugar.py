@@ -28,7 +28,7 @@ class TestDesugar(unittest.TestCase):
             ResourceMap("identity[i]", "g[i]"),
         )
         p = desugar(p)
-        g = generate_graph(p, True)
+        g = generate_graph(p, True, False)
         self.assertEqual(8, len(g.instances))
         roots = self.find_roots(g)
         self.assertEqual(set(['f0','f1','f2','f3']), roots)
@@ -48,7 +48,7 @@ class TestDesugar(unittest.TestCase):
             ResourceMap("t[i]", "d[i]"),
         )
         p = desugar(p)
-        g = generate_graph(p, True)
+        g = generate_graph(p, True, False)
         self.assertEqual(16, len(g.instances))
         roots = self.find_roots(g)
         self.assertEqual(set(['f0','f1','f2','f3', 'd0_buffer_read', 'd1_buffer_read', 'd2_buffer_read', 'd3_buffer_read']), roots)
@@ -69,17 +69,17 @@ class TestDesugar(unittest.TestCase):
             ])
         )
         dp = desugar(p, "spec")
-        g = generate_graph(dp, True)
+        g = generate_graph(dp, True, False)
         self.assertEqual(2, len(g.instances))
         self.assertEqual(set(['f']), self.find_roots(g))
 
         dp = desugar(p, "impl")
-        g = generate_graph(dp, True)
+        g = generate_graph(dp, True, False)
         self.assertEqual(4, len(g.instances))
         self.assertEqual(set(['f', 'g_buffer_read']), self.find_roots(g))
 
         dp = desugar(p, "compare")
-        g = generate_graph(dp, True)
+        g = generate_graph(dp, True, False)
         self.assertEqual(6, len(g.instances))
         self.assertEqual(set(['_spec_f', '_impl_f', '_impl_g_buffer_read']), self.find_roots(g))
 
@@ -104,7 +104,7 @@ class TestDesugar(unittest.TestCase):
             StateInstance("Multi", "all", [AddressOf("one[4]")])
         )
         dp = desugar(p)
-        g = generate_graph(dp)
+        g = generate_graph(dp, False)
         all = g.state_instances["all"]
         expect = [[AddressOf("one" + str(i)) for i in range(4)]]
         self.assertEqual(expect, all.init)
@@ -117,6 +117,6 @@ class TestDesugar(unittest.TestCase):
             StateInstance("Multi", "all[4]", [AddressOf("one[4]")])
         )
         dp = desugar(p)
-        g = generate_graph(dp)
+        g = generate_graph(dp, False)
         all = g.state_instances["all0"]
         self.assertEqual([AddressOf("one0")], all.init)

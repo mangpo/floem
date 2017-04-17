@@ -353,6 +353,7 @@ class Graph:
         self.threads_internal = []
         self.threads_API = []
         self.threads_order = []
+        self.threads_roots = set()
 
         # Inject and probe
         self.inject_populates = {}
@@ -543,6 +544,22 @@ class Graph:
             for ele,port in instance.output2ele.values():
                 self.find_subgraph(ele, subgraph)
         return subgraph
+
+    def remove_unused_elements(self):
+        used = set([x.call_instance for x in self.threads_API])
+        delete = []
+        for name in self.instances:
+            instance = self.instances[name]
+            if len(instance.element.inports) > 0 and len(instance.input2ele) == 0 and instance.name not in used:
+                # No connection
+                delete.append(name)
+
+        for name in delete:
+            del self.instances[name]
+
+        if len(self.threads_roots) > 0:
+            for name in delete:
+                self.threads_roots.remove(name)
 
 '''
 State initialization related functions

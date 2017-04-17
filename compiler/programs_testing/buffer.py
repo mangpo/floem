@@ -19,5 +19,6 @@ write = Write("w", [buffer])
 read = BlockingRead("r", [buffer])
 
 c = Compiler()
+c.remove_unused = False
 c.testing = "w(42); r(); w(123); r();";
 c.generate_code_and_run([42, 123])

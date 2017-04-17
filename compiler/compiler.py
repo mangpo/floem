@@ -443,7 +443,7 @@ def get_element_port_avail(func, port):
     return "_%s_%s_avail" % (func, port)
 
 
-def generate_graph(program, resource=True):
+def generate_graph(program, resource=True, remove_unused=False):
     """
     Compile program to data-flow graph and insert necessary elements for resource mapping and join elements.
     :param program: program AST
@@ -457,9 +457,14 @@ def generate_graph(program, resource=True):
 
     if resource:
         # Insert necessary elements for resource mapping.
+        # Assign call_instance for each thread.
+        # Check that one thread has one starting element.
         gen.allocate_resources()
     else:
         gen.graph.clear_APIs()
+
+    if remove_unused:
+        gen.graph.remove_unused_elements()
 
     # Annotate join information
     annotate_join_info(gen.graph)

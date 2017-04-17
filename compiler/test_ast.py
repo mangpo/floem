@@ -83,8 +83,8 @@ class TestAST(unittest.TestCase):
             ResourceStart("consumer", "Comsumer"),
         )
 
-        g1 = generate_graph(p, False)
-        g2 = generate_graph(p, True)
+        g1 = generate_graph(p, False, False)
+        g2 = generate_graph(p, True, False)
 
         self.assertEqual(2, len(g1.instances))
         self.assertEqual(4, len(g2.instances))
@@ -112,7 +112,7 @@ class TestAST(unittest.TestCase):
             ElementInstance("Sum", "sum1", ["s"]),
             ElementInstance("Sum", "sum2", ["s"])
         )
-        g = generate_graph(p, True)
+        g = generate_graph(p, True, False)
         self.assertEqual(2, len(g.instances))
         roots = self.find_roots(g)
         self.assertEqual(set(['sum1', 'sum2']), roots)
@@ -127,7 +127,7 @@ class TestAST(unittest.TestCase):
             Connect("f1", "f3"),
             Connect("f2", "f3"),
         )
-        g = generate_graph(p)
+        g = generate_graph(p, True, False)
         self.assertEqual(3, len(g.instances))
         roots = self.find_roots(g)
         self.assertEqual(set(['f1', 'f2']), roots)
@@ -146,7 +146,7 @@ class TestAST(unittest.TestCase):
             ResourceMap("t", "drop"),
             ResourceStart("t", "drop"),
         )
-        g = generate_graph(p)
+        g = generate_graph(p, True, False)
         self.assertEqual(5, len(g.instances))
         roots = self.find_roots(g)
         self.assertEqual(set(['f1', 'f2', 'drop_buffer_read']), roots)
@@ -166,7 +166,7 @@ class TestAST(unittest.TestCase):
             ResourceStart("t", "f1"),
         )
         try:
-            g = generate_graph(p)
+            g = generate_graph(p, True, False)
         except Exception as e:
             self.assertNotEqual(e.message.find("Element instance 'f1' cannot be mapped to both 'api' and 't'."), -1)
         else:
@@ -190,7 +190,7 @@ class TestAST(unittest.TestCase):
             ResourceMap("add_and_print", "inc1"),
             ResourceMap("add_and_print", "print"),
         )
-        g = generate_graph(p)
+        g = generate_graph(p, True, False)
         self.assertEqual(2, len(g.instances))
         self.assertEqual(0, len(g.states))
         roots = self.find_roots(g)
@@ -209,7 +209,7 @@ class TestAST(unittest.TestCase):
             ResourceMap("read", "f2"),
             ResourceStart("read", "f2"),
         )
-        g = generate_graph(p)
+        g = generate_graph(p, True, False)
         self.assertEqual(4, len(g.instances))
         self.assertEqual(1, len(g.states))
         roots = self.find_roots(g)
@@ -233,7 +233,7 @@ class TestAST(unittest.TestCase):
             ResourceMap("func", "f2"),
         )
         try:
-            g = generate_graph(p)
+            g = generate_graph(p, True, False)
         except Exception as e:
             self.assertNotEqual(e.message.find("API 'func' should have no return value"), -1)
         else:
@@ -249,7 +249,7 @@ class TestAST(unittest.TestCase):
             ResourceMap("func", "f1"),
             ResourceStart("func", "f1"),
         )
-        g = generate_graph(p)
+        g = generate_graph(p, True, False)
         self.assertEqual(4, len(g.instances))
         self.assertEqual(1, len(g.states))
         roots = self.find_roots(g)
@@ -277,7 +277,7 @@ class TestAST(unittest.TestCase):
             ResourceMap("t", "fwd"),
             ResourceMap("t", "drop"),
         )
-        g = generate_graph(p)
+        g = generate_graph(p, True, False)
         self.assertEqual(5, len(g.instances))
         self.assertEqual(1, len(g.states))
         roots = self.find_roots(g)
@@ -318,7 +318,7 @@ class TestAST(unittest.TestCase):
             ResourceMap("func", "filter"),
             ResourceStart("func", "filter"),
         )
-        g = generate_graph(desugar(p))
+        g = generate_graph(desugar(p), True, False)
 
 
 if __name__ == '__main__':

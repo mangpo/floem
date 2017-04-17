@@ -1014,6 +1014,7 @@ class Compiler:
     def __init__(self):
         self.desugar_mode = "impl"
         self.resource = True
+        self.remove_unused = True
 
         # Extra code
         self.include = None
@@ -1028,7 +1029,7 @@ class Compiler:
         p1 = Program(*scope[0])
         p2 = desugaring.desugar(p1, self.desugar_mode)
         dp = desugaring.insert_fork(p2)
-        g = compiler.generate_graph(dp, self.resource)
+        g = compiler.generate_graph(dp, self.resource, self.remove_unused)
         return g
 
     def generate_code(self):

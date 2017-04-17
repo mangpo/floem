@@ -482,7 +482,8 @@ run_impl()
 
 # TODO: opague #
 # TODO: spec/impl
+# TODO: get rid of t.start()
 
-# TODO: proper initialization
+# TODO: proper initialization (run_threads_init: only run dequeue pipeline, run_threads: run dequeue and inject)
 # TODO: queue -- owner bit & tail pointer update
 # TODO: queue -- high order function

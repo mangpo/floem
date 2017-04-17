@@ -25,6 +25,7 @@ for(int i=0; i<vallen; i++) printf("%d\n", val[i]);
 p(get_key_val(None))
 
 c = Compiler()
+c.remove_unused = False
 c.testing = r'''
 KeyValue* m = malloc(sizeof(KeyValue)+4);
 m->keylen = 2;

@@ -31,5 +31,6 @@ x2 = outer_unit(x1)
 Print()(x2)
 
 c = Compiler()
+c.remove_unused = False
 c.testing = "start(11); start(22); start(33);"
 c.generate_code_and_run([1,2,3])

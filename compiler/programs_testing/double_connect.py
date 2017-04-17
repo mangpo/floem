@@ -20,5 +20,6 @@ x, y = gen()
 display(x,y)
 
 c = Compiler()
+c.remove_unused = False
 c.testing = "gen();"
 c.generate_code_and_run([1,2])

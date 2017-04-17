@@ -19,5 +19,6 @@ z1 = Add()(y1, y2)
 z2 = Add()(y3, y4)
 
 c = Compiler()
+c.remove_unused = False
 c.testing = "fork3(1);"
 c.generate_code_and_run([2,2])

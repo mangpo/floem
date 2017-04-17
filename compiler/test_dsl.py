@@ -83,6 +83,7 @@ class TestDSL(unittest.TestCase):
         add(f2(None), None)
 
         c = Compiler()
+        c.remove_unused = False
         try:
             c.generate_code()
         except Exception as e:
@@ -143,6 +144,7 @@ class TestDSL(unittest.TestCase):
         c2(c1(None))
 
         c = Compiler()
+        c.remove_unused = False
         g = c.generate_graph()
         self.assertEqual(4, len(g.instances))
         roots = g.find_roots()
@@ -216,6 +218,7 @@ class TestDSL(unittest.TestCase):
         x3 = inc3(x1)
 
         c = Compiler()
+        c.remove_unused = False
         g = c.generate_graph()
         self.assertEqual(4, len(g.instances))  # fork is added.
 
@@ -245,6 +248,7 @@ class TestDSL(unittest.TestCase):
         compo(inc1(None))
 
         c = Compiler()
+        c.remove_unused = False
         c.desugar_mode = "compare"
         g = c.generate_graph()
         roots = g.find_roots()

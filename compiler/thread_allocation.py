@@ -10,6 +10,11 @@ class ThreadAllocator:
         self.instances = graph.instances
 
     def transform(self):
+        """
+        1. Impose control dependence order.
+        2. Assign call_instance to each thread.
+        3. Insert read/write buffer elements when necessary.
+        """
         self.insert_resource_order()  # Impose scheduling order by inserting necessary edges.
         self.find_roots()
         self.check_resources()
@@ -73,10 +78,14 @@ class ThreadAllocator:
         return return_type, return_inst, return_port
 
     def check_resources(self):
+        """
+        1. Check that one thread has one starting element.
+        2. Assign call_instance to a thread.
+        """
         thread2start = {}
         thread2instances = {}
-        extra_edges = {}
 
+        # Check that one thread has one starting element.
         for instance in self.instances.values():
             t = instance.thread
             if t not in thread2instances:
@@ -88,6 +97,7 @@ class ThreadAllocator:
                     raise Exception("Resource '%s' has more than one starting element instance." % t)
                 thread2start[t] = instance
 
+        # Assign call_instance to each API.
         for api in self.graph.threads_API:
             assert (api.name in thread2start), ("API '%s' does not mark a starting element instance." % api.name)
             start = thread2start[api.name]
@@ -119,6 +129,7 @@ class ThreadAllocator:
             api.return_instance = return_inst
             api.return_port = return_port
 
+        # Assign call_instance to each internal trigger.
         for trigger in self.graph.threads_internal:
             assert (trigger.name in thread2start), \
                 ("Internal trigger '%s' does not mark a starting element instance." % trigger.name)
