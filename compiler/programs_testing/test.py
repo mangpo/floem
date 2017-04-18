@@ -11,6 +11,7 @@ t = API_thread("add2", ["int"], "int")
 t.run_start(inc1, inc2)
 
 c = Compiler()
+c.resource = False
 c.remove_unused = False
 c.testing = r'''printf("%d\n", add2(10));'''
 c.generate_code_and_run()

@@ -22,7 +22,7 @@ f = Inc("f")
 spec_impl(f(None))
 
 t = API_thread("run", ["int"], "int")
-t.run_start(f, spec_impl)
+t.run(f, spec_impl)
 
 c = Compiler()
 c.testing = "out(run(0));"

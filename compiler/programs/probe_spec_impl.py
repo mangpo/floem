@@ -17,13 +17,13 @@ drop(probe(g(f(inject()))))
 
 def spec():
     t1 = internal_thread("t1")
-    t1.run_start(inject, f, g, probe, drop)
+    t1.run(inject, f, g, probe, drop)
 
 def impl():
     t1 = internal_thread("t1")
     t2 = internal_thread("t2")
-    t1.run_start(inject, f)
-    t2.run_start(g, probe, drop)
+    t1.run(inject, f)
+    t2.run(g, probe, drop)
 
 compo = create_spec_impl("compo", spec, impl)
 

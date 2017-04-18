@@ -18,11 +18,11 @@ rx_apps = [API_thread("rx_read" + str(i), [], "int", "-1") for i in range(n_core
 tx_apps = [API_thread("tx_write" + str(i), ["int"], None) for i in range(n_cores)]
 tx_nic = API_thread("tx_read", [], "int", "-1")
 
-rx_nic.run_start(compute_core, rx_enq)
+rx_nic.run(compute_core, rx_enq)
 for i in range(n_cores):
-    rx_apps[i].run_start(rx_deqs[i])
-    tx_apps[i].run_start(tx_enqs[i])
-tx_nic.run_start(tx_deq)
+    rx_apps[i].run(rx_deqs[i])
+    tx_apps[i].run(tx_enqs[i])
+tx_nic.run(tx_deq)
 
 c = Compiler()
 c.testing = r'''

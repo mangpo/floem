@@ -239,7 +239,7 @@ class Element:
 
 
 class ElementNode:
-    def __init__(self, name, element, state_args, thread="main", thread_flag=None):
+    def __init__(self, name, element, state_args, thread="main"):
         self.name = name
         self.element = element
         self.output2ele = {}   # map output port name to (element name, port)
@@ -249,7 +249,6 @@ class ElementNode:
 
         # Thread
         self.thread = thread
-        self.thread_flag = thread_flag
 
         # Join information
         self.join_ports_same_thread = None
@@ -299,6 +298,12 @@ class ElementNode:
         if len(self.output2connect.keys()) > 0:
             print "  mark:", self.output2connect
         print "}"
+
+    def unused(self):
+        return len(self.element.inports) > 0 and len(self.input2ele) == 0
+
+    def no_inport(self):
+        return len(self.element.inports) == 0
 
 
 class Port:
@@ -378,7 +383,6 @@ class Graph:
         self.threads_internal = []
         for instance in self.instances.values():
             instance.thread = None
-            instance.thread_flag = None
 
     def has_element_instance(self, instance_name):
         return instance_name in self.instances
@@ -429,11 +433,11 @@ class Graph:
         self.state_instances[name] = ret
         self.state_instance_order.append(name)
 
-    def newElementInstance(self, element, name, state_args=[], thread=None, thread_flag=None):
+    def newElementInstance(self, element, name, state_args=[], thread=None):
         if not element in self.elements:
             raise Exception("Element '%s' is undefined." % element)
         e = self.elements[element]
-        ret = ElementNode(name, e, state_args, thread, thread_flag)
+        ret = ElementNode(name, e, state_args, thread)
         self.instances[name] = ret
 
         # Check state types
@@ -545,12 +549,12 @@ class Graph:
                 self.find_subgraph(ele, subgraph)
         return subgraph
 
-    def remove_unused_elements(self):
+    def remove_unused_elements(self, resource):
         used = set([x.call_instance for x in self.threads_API])
         delete = []
         for name in self.instances:
             instance = self.instances[name]
-            if len(instance.element.inports) > 0 and len(instance.input2ele) == 0 and instance.name not in used:
+            if instance.unused() and instance.name not in used:
                 # No connection
                 delete.append(name)
 
@@ -560,6 +564,19 @@ class Graph:
         if len(self.threads_roots) > 0:
             for name in delete:
                 self.threads_roots.remove(name)
+
+        if resource:
+            for instance in self.instances.values():
+                if instance.thread is None:
+                    raise "Element instance '%s' has not been assigned to any thread." % instance.name
+
+    def is_start(self, my):
+        for inst_list in my.input2ele.values():
+            for name, port in inst_list:
+                other = self.instances[name]
+                if other.thread == my.thread:
+                    return False
+        return True
 
 '''
 State initialization related functions

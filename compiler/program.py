@@ -149,12 +149,6 @@ class ResourceMap:
         return self.instance + "@" + self.resource
 
 
-class ResourceStart:
-    def __init__(self, resource, instance):
-        self.resource = resource
-        self.instance = instance
-
-
 class ResourceOrder:
     def __init__(self, a, b):
         self.a = a
@@ -316,12 +310,6 @@ class GraphGenerator:
             a_name = get_node_name(self.get_instance_stack(x.a), x.a)
             b_name = get_node_name(self.get_instance_stack(x.b), x.b)
             self.graph.threads_order.append((a_name, b_name))
-
-        elif isinstance(x, ResourceStart):
-            inst_name = get_node_name(self.get_instance_stack(x.instance), x.instance)
-            instance = self.graph.instances[inst_name]
-            if not instance.thread_flag:
-                instance.thread_flag = True
 
         elif isinstance(x, PopulateState):
             self.graph.inject_populates[x.state_instance] = x.clone()

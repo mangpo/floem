@@ -14,6 +14,7 @@ table_put(key,val)
 val_out = table_get(None)
 
 c = Compiler()
+c.resource = False
 c.remove_unused = False
 c.testing = "put(1,111); put(2,222); table_get(2); table_get(1);"
 c.generate_code_and_run([222,111])

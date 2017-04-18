@@ -33,7 +33,7 @@ p(out1)
 p(out2)
 
 t = API_thread("myfork", ["int", "int"], None)
-t.run_start(fork, add, sub, p)
+t.run(fork, add, sub, p)
 
 c = Compiler()
 c.testing = "myfork(10, 7);"

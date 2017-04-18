@@ -28,7 +28,7 @@ b(a())
 d(c())
 
 t = internal_thread("t")
-t.run_start(a,b,c,d)
+t.run(a,b,c,d)
 t.run_order(b,c)
 
 c = Compiler()

@@ -10,7 +10,7 @@ def unit_func(x0, t1, t2):
     x2 = f2(x1)
 
     t1.run(f1)
-    t2.run_start(f2)
+    t2.run(f2)
     return x2
 
 Unit = create_composite("Unit", unit_func)
@@ -26,7 +26,7 @@ x2 = unit(x1)
 x3 = post(x2)
 
 unit(None, t1, t2)
-t1.run_start(pre)
+t1.run(pre)
 t2.run(post)
 
 c = Compiler()

@@ -11,8 +11,8 @@ s2 = Sum()
 
 t1 = API_thread("sum1", ["int"], None)
 t2 = API_thread("sum2", ["int"], None)
-t1.run_start(s1)
-t2.run_start(s2)
+t1.run(s1)
+t2.run(s2)
 
 c = Compiler()
 c.testing = "sum1(1); sum1(2); sum2(0);"

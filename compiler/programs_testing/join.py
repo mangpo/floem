@@ -27,6 +27,7 @@ out2 = Sub()(in2)
 Print()(out1, out2)
 
 c = Compiler()
+c.resource = False
 c.remove_unused = False
 c.testing = "myfork(10, 7);"
 c.generate_code_and_run([17,3])

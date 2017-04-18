@@ -12,7 +12,7 @@ inc2(queue(inc1(None)))
 t1 = API_thread("enqueue", ["int"], None)
 t2 = API_thread("dequeue", [], "int", "-1")
 
-t1.run_start(inc1)
+t1.run(inc1)
 queue(None, t1, t2)
 t2.run(inc2)
 

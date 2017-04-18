@@ -29,18 +29,6 @@ class Thread:
     def __init__(self, name):
         self.name = name
 
-    def start(self, instance):
-        if isinstance(instance, str):
-            scope[-1].append(ResourceStart(self.name, instance))
-        else:
-            assert isinstance(instance, ElementInstance), \
-                "Resource '%s' must start at an element instance not a composite instance."
-            scope[-1].append(ResourceStart(self.name, instance.name))
-
-    def run_start(self, *instances):
-        self.run(*instances)
-        self.start(instances[0])
-
     def run(self, *instances):
         for i in range(len(instances)):
             instance = instances[i]
@@ -123,7 +111,6 @@ class InputPortCollect:
         self.port = []
         self.port_argtypes = []
         self.thread_run = None
-        self.thread_start = None
         self.thread_args = None
         self.thread_order = None
 
@@ -131,19 +118,11 @@ class InputPortCollect:
         self.impl_port = []
         self.impl_port_argtypes = []
         self.impl_thread_run = None
-        self.impl_thread_start = None
         self.impl_thread_args = None
         self.impl_thread_order = None
 
-    def start(self, e):
-        self.thread_start = e
-
     def run(self, *args):
         self.thread_run = args
-
-    def run_start(self, *args):
-        self.run(*args)
-        self.start(args[0])
 
     def run_order(self, *args):
         self.thread_order = args
@@ -153,7 +132,6 @@ class InputPortCollect:
         self.port += other.port
         self.port_argtypes += other.impl_port_argtypes
         self.thread_run = other.thread_run
-        self.thread_start = other.thread_start
         self.thread_args = other.thread_args
         self.thread_order = other.thread_order
 
@@ -162,7 +140,6 @@ class InputPortCollect:
         self.impl_port += other.port
         self.impl_port_argtypes += other.port_argtypes
         self.impl_thread_run = other.thread_run
-        self.impl_thread_start = other.thread_start
         self.impl_thread_args = other.thread_args
         self.impl_thread_order = other.thread_order
 
@@ -171,26 +148,21 @@ class InputPortCollect:
         self.impl_port += other.impl_port
         self.impl_port_argtypes += other.impl_port_argtypes
         self.impl_thread_run = other.impl_thread_run
-        self.impl_thread_start = other.impl_thread_start
         self.impl_thread_args = other.impl_thread_args
         self.impl_thread_order = other.impl_thread_order
 
     def has_impl(self):
-        return self.impl_thread_run or self.impl_thread_start or self.impl_thread_order
+        return self.impl_thread_run or self.impl_thread_order
 
     def spec_thread(self, t):
         if self.thread_run:
             t.run(*self.thread_run)
-        if self.thread_start:
-            t.start(self.thread_start)
         if self.thread_order:
             t.run_order(*self.thread_order)
 
     def impl_thread(self, t):
         if self.impl_thread_run:
             t.run(*self.impl_thread_run)
-        if self.impl_thread_start:
-            t.start(self.impl_thread_start)
         if self.impl_thread_order:
             t.run_order(*self.impl_thread_order)
 
@@ -598,7 +570,6 @@ def internal_trigger(name):
         compo, input_types, output_type = thread_common(name, f, False, False)
         t = internal_thread(name)
         t.run(compo)
-        t.start([r for r in compo.roots][0])
         return compo
     return receptor
 
@@ -660,14 +631,15 @@ def API_common(name, f, input=True, output=True, default_return=None):
             outputs = compo(*intermediates)
         else:
             outputs = compo(intermediates)
-        t.run_start(e)
+        #t.run_start(e)
+        t.run(e)
 
         def new_compo(*args):
             e(*args)
             return outputs
         return new_compo
     else:
-        t.start([r for r in compo.roots][0])
+        #t.start([r for r in compo.roots][0])
         return compo
 
 

@@ -92,7 +92,7 @@ class ThreadAllocator:
                 thread2instances[t] = []
             thread2instances[t].append(instance.name)
 
-            if instance.thread_flag:
+            if t and self.graph.is_start(instance):
                 if t in thread2start:
                     raise Exception("Resource '%s' has more than one starting element instance." % t)
                 thread2start[t] = instance
@@ -341,7 +341,10 @@ class ThreadAllocator:
         """
         bPointsTo = {}
         for a, b in self.graph.threads_order:
-            bPointsTo[b] = self.graph.find_subgraph(b, set())
+            if a not in bPointsTo:
+                bPointsTo[a] = self.graph.find_subgraph(a, set())
+            if b not in bPointsTo:
+                bPointsTo[b] = self.graph.find_subgraph(b, set())
 
         # Collect extra input and output ports for every instance.
         extra_out = {}
@@ -349,6 +352,9 @@ class ThreadAllocator:
         for a, b in self.graph.threads_order:
             if a in bPointsTo[b]:  # b points to a, illegal
                 raise Exception("Cannot order '{0}' before '{1}' because '{1}' points to '{0}'.".format(a, b))
+            if b in bPointsTo[a]:
+                continue  # if a already points to b, then we don't have to add this edge.
+
             if a not in extra_out:
                 extra_out[a] = []
             if b not in extra_in:

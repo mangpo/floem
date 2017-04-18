@@ -17,6 +17,7 @@ def compo_func():
 compo = create_composite_instance("compo", compo_func)
 
 c = Compiler()
+c.resource = False
 c.remove_unused = False
 c.include = r'''
 int gen_func(int i) { return i; }

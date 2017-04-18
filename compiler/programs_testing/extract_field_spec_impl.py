@@ -34,6 +34,7 @@ t = API_thread("get_key_val", ["Msg*"], None)
 t.run_start(f, compo, p)
 
 c = Compiler()
+c.resource = False
 c.remove_unused = False
 c.desugar_mode = "impl"
 c.testing = r'''

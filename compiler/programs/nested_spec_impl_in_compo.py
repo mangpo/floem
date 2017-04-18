@@ -22,7 +22,7 @@ compo = create_composite_instance("outer", compo)
 compo(f(None))
 
 t = API_thread("run", ["int"], "int")
-t.run_start(f, compo)
+t.run(f, compo)
 
 c = Compiler()
 c.testing = "out(run(0));"

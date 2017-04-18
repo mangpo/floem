@@ -82,13 +82,16 @@ class TestDSL(unittest.TestCase):
         add(f1(None), None)
         add(f2(None), None)
 
+        t = internal_thread("t")
+        t.run(f1, f2, add)
+
         c = Compiler()
         c.remove_unused = False
         try:
             c.generate_code()
         except Exception as e:
             self.assertNotEqual(
-                e.message.find("Some input port of join element instance 'add' is not connected to any instance."), -1)
+                e.message.find("has more than one starting element instance."), -1)
         else:
             self.fail('Exception is not raised.')
 
@@ -112,8 +115,8 @@ class TestDSL(unittest.TestCase):
         t2 = internal_thread("worker")
         t3 = API_thread("get", [], "int")
 
-        x1 = c1(None, t1.run_start, t2.run_start)
-        x2 = c2(x1, t2.run, t3.run_start)
+        x1 = c1(None, t1.run, t2.run)
+        x2 = c2(x1, t2.run, t3.run)
 
         c = Compiler()
         g = c.generate_graph()
@@ -229,8 +232,6 @@ class TestDSL(unittest.TestCase):
 
         inc1 = Inc("inc1")
 
-        x1 = inc1()
-
         def spec(x1):
             inc2 = Inc("inc2")
             return inc2(x1)
@@ -247,8 +248,12 @@ class TestDSL(unittest.TestCase):
         compo = create_spec_impl("compo", spec, impl)
         compo(inc1(None))
 
+        t = API_thread("f", ["int"], "int")
+        t.run(inc1, compo)
+
         c = Compiler()
         c.remove_unused = False
+        c.resource = False
         c.desugar_mode = "compare"
         g = c.generate_graph()
         roots = g.find_roots()
@@ -282,7 +287,7 @@ class TestDSL(unittest.TestCase):
 
         f3(f2(f1(None)))
         t = API_thread("run", ["int"], "int")
-        t.run_start(f1, f2, f3)
+        t.run(f1, f2, f3)
         t.run_order(f3, f2)
 
         try:
@@ -308,7 +313,7 @@ class TestDSL(unittest.TestCase):
         f3(f2(x2))
 
         t = API_thread("run", ["int"], "int")
-        t.run_start(fork, f1, f2, f3)
+        t.run(fork, f1, f2, f3)
 
         try:
             c = Compiler()
@@ -338,7 +343,7 @@ class TestDSL(unittest.TestCase):
         f2(f1(x1))
 
         t = API_thread("run", ["int"], "int", default_val=-1)
-        t.run_start(choice, f1, f2, drop)
+        t.run(choice, f1, f2, drop)
 
         c = Compiler()
         c.testing = "out(run(3)); out(run(-3)); out(run(0));"
@@ -364,7 +369,7 @@ class TestDSL(unittest.TestCase):
         end(inc(odd))
 
         t = API_thread("run", ["int"], "int")
-        t.run_start(choice, inc, nop, end)
+        t.run(choice, inc, nop, end)
 
         c = Compiler()
         c.testing = "out(run(3)); out(run(4)); out(run(5));"
@@ -453,7 +458,7 @@ class TestDSL(unittest.TestCase):
         c.testing = "out(run(1)); out(run(10)); out(run(-10));"
         c.generate_code_and_run([2, 20, -1])
 
-    def test_wrong_starting_element(self):
+    def test_starting_element(self):
         reset()
         Gen = create_element("Gen", [], [Port("out", ["int"])],
                              "output { out(1); }")
@@ -466,17 +471,12 @@ class TestDSL(unittest.TestCase):
         drop(f(gen()))
 
         t = internal_thread("t")
-        t.run_start(f, gen, drop)
+        t.run(f, gen, drop)
 
-        try:
-            c = Compiler()
-            c.triggers = True
-            c.testing = "run_threads(); usleep(1000); kill_threads();"
-            c.generate_code_and_run()
-        except Exception as e:
-            self.assertNotEqual(e.message.find("not reachable from the starting element of thread"), -1, 'Expect undefined exception.')
-        else:
-            self.fail('Exception is not raised.')
+        c = Compiler()
+        c.triggers = True
+        c.testing = "run_threads(); usleep(1000); kill_threads();"
+        c.generate_code_and_run()
 
     def test_disconnection(self):
         reset()
@@ -496,7 +496,7 @@ class TestDSL(unittest.TestCase):
         drop2(f2(gen2()))
 
         t = internal_thread("t")
-        t.run_start(gen, f, drop, gen2, f2, drop2)
+        t.run(gen, f, drop, gen2, f2, drop2)
 
         try:
             c = Compiler()
@@ -504,7 +504,8 @@ class TestDSL(unittest.TestCase):
             c.testing = "run_threads(); usleep(1000); kill_threads();"
             c.generate_code_and_run()
         except Exception as e:
-            self.assertNotEqual(e.message.find("not reachable from the starting element of thread"), -1, 'Expect undefined exception.')
+            self.assertNotEqual(e.message.find("Resource 't' has more than one starting element instance."),
+                                -1, 'Expect undefined exception.')
         else:
             self.fail('Exception is not raised.')
 

@@ -23,7 +23,6 @@ class TestDesugar(unittest.TestCase):
             ElementInstance("Forward", "g[4]"),
             Connect("f[i]", "g[i]"),
             APIFunction("identity[4]", ["int"], "int"),
-            ResourceStart("identity[i]", "f[i]"),
             ResourceMap("identity[i]", "f[i]"),
             ResourceMap("identity[i]", "g[i]"),
         )
@@ -43,8 +42,9 @@ class TestDesugar(unittest.TestCase):
             ElementInstance("Forward", "f[4]"),
             ElementInstance("Drop", "d[4]"),
             Connect("f[i]", "d[i]"),
+            APIFunction("run[4]", ["int"], None),
+            ResourceMap("run[i]", "f[i]"),
             InternalTrigger("t[4]"),
-            ResourceStart("t[i]", "d[i]"),
             ResourceMap("t[i]", "d[i]"),
         )
         p = desugar(p)
@@ -59,12 +59,16 @@ class TestDesugar(unittest.TestCase):
             ElementInstance("Forward", "f"),
             ElementInstance("Forward", "g"),
             Spec([
+                APIFunction("run", ["int"], "int"),
+                ResourceMap("run", "f"),
+                ResourceMap("run", "g"),
                 Connect("f", "g")
             ]),
             Impl([
                 Connect("f", "g"),
+                APIFunction("put", ["int"], None),
+                ResourceMap("put", "f"),
                 APIFunction("get", [], "int"),
-                ResourceStart("get", "g"),
                 ResourceMap("get", "g"),
             ])
         )

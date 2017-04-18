@@ -42,9 +42,9 @@ rx_nic = API_thread("rx_write", ["int", "size_t"], None)
 rx_app = API_thread("rx_read", ["size_t"], "q_entry*")
 rx_app_release = API_thread("rx_release", ["q_entry*"], None)
 
-rx_nic.run_start(compute_core, enq_alloc, fill_entry, enq_submit)
-rx_app.run_start(deq_get)
-rx_app_release.run_start(deq_release)
+rx_nic.run(compute_core, enq_alloc, fill_entry, enq_submit)
+rx_app.run(deq_get)
+rx_app_release.run(deq_release)
 
 entry = tx_deq_get()
 entry = print_msg(entry)
@@ -54,9 +54,9 @@ tx_nic = API_thread("tx_read", [], None)
 tx_app = API_thread("tx_alloc", ["size_t","size_t"], "q_entry*")
 tx_app_submit = API_thread("tx_submit", ["q_entry*"], None)
 
-tx_nic.run_start(tx_deq_get, print_msg, tx_deq_release)
-tx_app.run_start(tx_enq_alloc)
-tx_app_submit.run_start(tx_enq_submit)
+tx_nic.run(tx_deq_get, print_msg, tx_deq_release)
+tx_app.run(tx_enq_alloc)
+tx_app_submit.run(tx_enq_submit)
 
 
 c = Compiler()

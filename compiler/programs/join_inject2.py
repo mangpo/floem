@@ -10,7 +10,7 @@ add = Add()
 
 add(inject1(), inject2())
 t = API_thread("run", [], "int")
-t.run_start(add)
+t.run(add)
 
 c = Compiler()
 c.include = r'''int gen_func(int i) { return i; }'''

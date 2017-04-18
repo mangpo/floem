@@ -10,13 +10,13 @@ g(f(None))
 
 def spec():
     t1 = API_thread("all", ["int"], "int")
-    t1.run_start(f, g)
+    t1.run(f, g)
 
 def impl():
     t1 = API_thread("put", ["int"], None)
-    t1.run_start(f)
+    t1.run(f)
     t2 = API_thread("get", [], "int")
-    t2.run_start(g)
+    t2.run(g)
 
 mapping = create_spec_impl("mapping", spec, impl)
 

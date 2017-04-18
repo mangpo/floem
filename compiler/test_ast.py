@@ -79,8 +79,6 @@ class TestAST(unittest.TestCase):
             Connect("Forwarder", "Comsumer"),
             ResourceMap("producer", "Forwarder"),
             ResourceMap("consumer", "Comsumer"),
-            ResourceStart("producer", "Forwarder"),
-            ResourceStart("consumer", "Comsumer"),
         )
 
         g1 = generate_graph(p, False, False)
@@ -112,7 +110,7 @@ class TestAST(unittest.TestCase):
             ElementInstance("Sum", "sum1", ["s"]),
             ElementInstance("Sum", "sum2", ["s"])
         )
-        g = generate_graph(p, True, False)
+        g = generate_graph(p, False, False)
         self.assertEqual(2, len(g.instances))
         roots = self.find_roots(g)
         self.assertEqual(set(['sum1', 'sum2']), roots)
@@ -127,7 +125,7 @@ class TestAST(unittest.TestCase):
             Connect("f1", "f3"),
             Connect("f2", "f3"),
         )
-        g = generate_graph(p, True, False)
+        g = generate_graph(p, False, False)
         self.assertEqual(3, len(g.instances))
         roots = self.find_roots(g)
         self.assertEqual(set(['f1', 'f2']), roots)
@@ -142,17 +140,19 @@ class TestAST(unittest.TestCase):
             ElementInstance("Drop", "drop"),
             Connect("f1", "drop"),
             Connect("f2", "drop"),
-            InternalTrigger("t"),
-            ResourceMap("t", "drop"),
-            ResourceStart("t", "drop"),
+            InternalTrigger("t1"),
+            ResourceMap("t1", "drop"),
+            InternalTrigger("t2"),
+            ResourceMap("t2", "f1"),
+            ResourceMap("t2", "f2"),
         )
-        g = generate_graph(p, True, False)
-        self.assertEqual(5, len(g.instances))
-        roots = self.find_roots(g)
-        self.assertEqual(set(['f1', 'f2', 'drop_buffer_read']), roots)
-        self.assertEqual(set(['f1', 'drop_buffer_in_write']), self.find_subgraph(g, 'f1'))
-        self.assertEqual(set(['f2', 'drop_buffer_in_write']), self.find_subgraph(g, 'f2'))
-        self.assertEqual(set(['drop_buffer_read', 'drop']), self.find_subgraph(g, 'drop_buffer_read'))
+        try:
+            g = generate_graph(p, True, False)
+        except Exception as e:
+            self.assertNotEqual(e.message.find("Resource 't2' has more than one starting element instance."),
+                                -1, 'Expect undefined exception.')
+        else:
+            self.fail('Exception is not raised.')
 
     def test_error_both_internal_external(self):
         p = Program(
@@ -162,8 +162,6 @@ class TestAST(unittest.TestCase):
             InternalTrigger("t"),
             ResourceMap("api", "f1"),
             ResourceMap("t", "f1"),
-            ResourceStart("api", "f1"),
-            ResourceStart("t", "f1"),
         )
         try:
             g = generate_graph(p, True, False)
@@ -186,7 +184,6 @@ class TestAST(unittest.TestCase):
             ElementInstance("Inc", "inc1"),
             ElementInstance("Print", "print"),
             Connect("inc1", "print"),
-            ResourceStart("add_and_print", "inc1"),
             ResourceMap("add_and_print", "inc1"),
             ResourceMap("add_and_print", "print"),
         )
@@ -207,7 +204,6 @@ class TestAST(unittest.TestCase):
             Connect("f1", "f2"),
             APIFunction("read", [], "int"),
             ResourceMap("read", "f2"),
-            ResourceStart("read", "f2"),
         )
         g = generate_graph(p, True, False)
         self.assertEqual(4, len(g.instances))
@@ -228,7 +224,6 @@ class TestAST(unittest.TestCase):
             ElementInstance("Forward", "f2"),
             Connect("f1", "f2"),
             APIFunction("func", ["int"], None),
-            ResourceStart("func", "f1"),
             ResourceMap("func", "f1"),
             ResourceMap("func", "f2"),
         )
@@ -247,7 +242,6 @@ class TestAST(unittest.TestCase):
             Connect("f1", "f2"),
             APIFunction("func", ["int"], None),
             ResourceMap("func", "f1"),
-            ResourceStart("func", "f1"),
         )
         g = generate_graph(p, True, False)
         self.assertEqual(4, len(g.instances))
@@ -271,8 +265,6 @@ class TestAST(unittest.TestCase):
             Connect("fwd", "drop"),
             InternalTrigger("t"),
             APIFunction("func", ["int"], "int"),
-            ResourceStart("func", "dup"),
-            ResourceStart("t", "fwd"),
             ResourceMap("func", "dup"),
             ResourceMap("t", "fwd"),
             ResourceMap("t", "drop"),
@@ -298,7 +290,6 @@ class TestAST(unittest.TestCase):
             ElementInstance("Filter", "filter"),
             APIFunction("func", ["int"], "int"),
             ResourceMap("func", "filter"),
-            ResourceStart("func", "filter"),
         )
         try:
             g = generate_graph(desugar(p))
@@ -316,7 +307,6 @@ class TestAST(unittest.TestCase):
             ElementInstance("Filter", "filter"),
             APIFunction("func", ["int"], "int", "-1"),
             ResourceMap("func", "filter"),
-            ResourceStart("func", "filter"),
         )
         g = generate_graph(desugar(p), True, False)
 

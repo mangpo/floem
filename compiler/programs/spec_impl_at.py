@@ -25,7 +25,7 @@ p(x1)
 p(x2)
 
 t = API_thread("run", ["int"], None)
-t.run_start(f1, compo, p)
+t.run(f1, compo, p)
 
 c = Compiler()
 c.desugar_mode = "compare"

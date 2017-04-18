@@ -11,7 +11,7 @@ def compo(x):
 
 c = create_composite_instance("compo", compo)
 t = API_thread("run", ["int"], "int")
-t.run_start(f1)
+t.run(f1)
 
 c = Compiler()
 c.testing = "out(run(123));"

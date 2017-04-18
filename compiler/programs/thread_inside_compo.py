@@ -10,7 +10,7 @@ def compo():
     p(gen())
 
     t = internal_thread("t")
-    t.run_start(gen, p)
+    t.run(gen, p)
 
 Compo = create_composite("Compo", compo)
 c1 = Compo()

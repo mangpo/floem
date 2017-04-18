@@ -31,8 +31,7 @@ def impl():
 compo = create_spec_impl("compo", spec, impl)
 
 t = internal_thread("t")
-t.run(compo)
-t.start(inject)
+t.run(inject, compo)
 
 c = Compiler()
 c.include = r'''

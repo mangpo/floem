@@ -459,12 +459,13 @@ def generate_graph(program, resource=True, remove_unused=False):
         # Insert necessary elements for resource mapping.
         # Assign call_instance for each thread.
         # Check that one thread has one starting element.
+        # Impose control dependence order.
         gen.allocate_resources()
     else:
         gen.graph.clear_APIs()
 
     if remove_unused:
-        gen.graph.remove_unused_elements()
+        gen.graph.remove_unused_elements(resource)
 
     # Annotate join information
     annotate_join_info(gen.graph)

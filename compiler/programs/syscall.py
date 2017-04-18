@@ -13,7 +13,7 @@ def syscall(arg_app, ret_kernel, t_app, t_ker):
     ret_app = ker2app_deq()
 
     t_app.run_order(app2ker_enq, ker2app_deq)
-    t_ker.run_start(app2ker_deq, ker2app_enq)
+    t_ker.run(app2ker_deq, ker2app_enq)
 
     return arg_ker, ret_app
 
@@ -27,7 +27,7 @@ p = Print()
 
 t_app = API_thread("add_syscall", ["int"], None)
 t_ker = internal_thread("kernel")
-t_app.run_start(f, p)
+t_app.run(f, p)
 t_ker.run(inc)
 
 # TODO: use before definition. This is quite ugly.

@@ -205,16 +205,14 @@ To execute a program, you need to assign each element a thread to run. Currently
 
 The user application can invoke elements inside our system by calling `name`. Our system then use the application thread to execute all elements that map to such thread.
 
-- `thread.run(e0, e1, ...)` assigns elements `e0, e1, ...` to run on `thread`. 
-- `thread.run_start(e0, e1, ...)` assigns elements `e0, e1, ...` to run on `thread`, and marks `e0` as the starting element to run in each round. 
-- `thread.run_order(e0, e1, ...)` assigns elements `e0, e1, ...` to run on `thread`, and impose that in each round `e0` runs before `e1`, `e1` runs before `e2`, and so on. 
-- `thread.start(e)` marks `e` as the starting element to run in each round.
+- `thread.run(e0, e1, ...)` assigns elements `e0, e1, ...` to run on `thread`.  
+- `thread.run_order(e0, e1, ...)` assigns elements `e0, e1, ...` to run on `thread`, and impose that in each round `e0` runs before `e1`, `e1` runs before `e2`, and so on.
 
 ### 4.1 Order of Execution
 
 What is the order of execution within a thread?
 
-In each round, a thread starts invoke the starting element. Then, the rest of the elements assigned to the thread are executed in a topological order according to the dataflow and the order specified by `run_order`. If users erroneously assign  a starting element (e.g., the starting element requires an input from another element that is also assigned to the same thread), the compiler will throw an error. If an element assigned to a thread is unreachable (no data dependency or dependency imposed by `run_order`) from the starting element of the thread, the compiler will also throw an error. To fix this problem, introduce a partial order from the starting element to the problematic element using `run_order` (see Example 2).
+In each round, a thread starts invoke the starting element (an element that doesn't has any data dependency or dependency imposed by `run_order` on other elements of the same thread). Then, the rest of the elements assigned to the thread are executed in a topological order according to the dataflow and the order specified by `run_order`. If an element assigned to a thread is unreachable (no data dependency or dependency imposed by `run_order`) from the starting element of the thread, the compiler will also throw an error. To fix this problem, introduce a partial order from the starting element to the problematic element using `run_order` (see Example 2).
 
 For an internal thread, it will repeatedly invoke the starting element when each round is complete. For an API thread, it invokes the starting element whenever the user application calls the API.
 
@@ -226,27 +224,27 @@ hello2 = create_element_instance("hello2", [], [], r'''printf("hello 2\n");''')
 
 t1 = internal_thread("t1")
 t2 = internal_thread("t2")
-t1.run_start(hello1)
-t2.run_start(hello2)
+t1.run(hello1)
+t2.run(hello2)
 ```
 
 This program launches two threads that repeatedly print "hello 1"/"hello 2".
 
 #### Example 2
 
-If we want `hello1`, `hello2`, and `hello3` to run on the same thread in round-robin fashion: `hello1`, `hello2`, `hello3`, `hello1`, `hello2`, `hello3`, ... We first set `hello1` as the starting element, and introduce an order from `hello1` to `hello2`, and from `hello2` to `hello3`.
+If we want `hello1`, `hello2`, and `hello3` to run on the same thread in round-robin fashion: `hello1`, `hello2`, `hello3`, `hello1`, `hello2`, `hello3`, ... We introduce an order from `hello1` to `hello2`, and from `hello2` to `hello3` as follows.
 
 ```python
 t1 = internal_thread("t1")
-t1.run_start(hello1, hello2, hello3)
+t1.run(hello1, hello2, hello3)
 t1.run_order(hello1, hello2, hello3)
 ```
 
-If we exclude the last line, the compiler will throw an error because there is no data dependency or dependency imposed by `run_order` from the starting element `hello1` to `hello2` and `hello3`, so the compiler cannot figure out how to schedule elements to run on the thread.
+If we exclude the last line, the compiler will throw an error because there are multiple potential starting elements.
 
 ### 4.2 API Thread Handler
 
-API thread is slightly more complicated than an internal thread. It requires a user to provide the signature of the API function, and the compiler checks if it matches the inputs taken by the starting element and the outputs of the returning elements. The starting element is defined by the user; it is the first element given to `thread.run_start`. 
+API thread is slightly more complicated than an internal thread. It requires a user to provide the signature of the API function, and the compiler checks if it matches the inputs taken by the starting element and the outputs of the returning elements.
 
 - The inputs to the API function are the input ports to the starting element that **have not been connected**. 
 - A returning element is (i) an element that does not send any value to another element on the same thread, (ii) has only one output port, and (iii) its output port is not connected to anything. 
@@ -265,14 +263,14 @@ inc2 = Inc()
 inc2(inc1(None))
 
 t = API_thread("add2", ["int"], "int")
-t.run_start(inc1, inc2)
+t.run(inc1, inc2)
 ```
 
 Since we want to pass the argument from the API function as an input to `inc1`, we should not connect the input port of `inc1` to anything; hence, `inc1(None)`. Similarly, we want to pass the output from `inc2` as the return value of the API function, so we should not connect the output port of `inc2` to anything.
 
 #### Alternative Syntax
 
-It is somewhat cumbersome to define an API function like in the last example in terms of keeping track of the input ports to the starting elements that have not been connected, and the output port of the returning element. Therefore, we introduce a different way to define an API function using a decorator `@API(name, default_return=None)`. When you use the decorator to decorate a function, all the elements declared or used within the function will be mapped to this API thread. The arguments to the API are feed as inputs to the starting element, and the return value of the API is an output of an element that is returned from the function.
+It is somewhat cumbersome to define an API function like in the last example in terms of keeping track of the input ports to the starting elements that have not been connected, and the output port of the returning element. Therefore, we introduce a different way to define an API function using a decorator `@API(name, default_return=None)`. When you use the decorator to decorate a function, all the elements declared or used within the function will be mapped to this API thread. The arguments to the API are fed as inputs to the starting element, and the return value of the API is an output of an element that is returned from the function. It is allowed that the arguments to the API can be fed as inputs to multiple elements.
 
 ##### Example 2
 
@@ -303,8 +301,8 @@ inc2(inc1(None))
 
 t1 = API_thread("add2_first_half", ["int"], None)
 t2 = API_thread("add2_second_half", [], "int")
-t1.run_start(inc1)
-t2.run_start(inc2)
+t1.run(inc1)
+t2.run(inc2)
 ```
 
 which is equivalent to:
@@ -341,8 +339,8 @@ inc2(read())
 
 t1 = API_thread("add2_first_half", ["int"], None)
 t2 = API_thread("add2_second_half", [], "int")
-t1.run_start(inc1, write)
-t2.run_start(read, inc2)
+t1.run(inc1, write)
+t2.run(read, inc2)
 ```
 
 which is equivalent to:
@@ -401,7 +399,7 @@ inc2 = Inc()
 inc2(inc1(None))
 
 t = API_thread("add2", ["int"], "int")
-t.run_start(inc1, inc2)
+t.run(inc1, inc2)
 
 c = Compiler()
 c.testing = r'''printf("%d\n", add2(10));'''
@@ -512,7 +510,7 @@ def queue_func(x, t1, t2):
     enqueue(x)
     y = dequeue()
     t1.run(enqueue)
-    t2.run_start(dequeue)  # dequeue is the starting element on t2
+    t2.run(dequeue)
     return y
     
 queue = create_composite_instance("queue", queue_func)
@@ -520,7 +518,7 @@ queue = create_composite_instance("queue", queue_func)
 q_in = a()
 q_out = queue(q_in, t1, t2)
 b(q_out)
-t1.run_start(a)
+t1.run(a)
 t2.run(b)
 ```
 
@@ -533,7 +531,7 @@ q_out = queue(q_in)  # do not pass anything for thread arguments here
 b(q_out)
 
 # Thread assignment
-t1.run_start(a)
+t1.run(a)
 t2.run(b)
 queue(None, t1, t2)  # pass None for data connection
 ```

@@ -26,6 +26,7 @@ out = add(x1, x2)
 drop2(c2)
 
 c = Compiler()
+c.resource = False
 c.remove_unused = False
 c.testing = r'''
 choice(2);

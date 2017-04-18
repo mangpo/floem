@@ -9,7 +9,7 @@ x = inc1(None)
 y = inc2(x)
 
 t = API_thread("add2", ["int"], "int")
-t.run_start(inc1, inc2)
+t.run(inc1, inc2)
 
 c = Compiler()
 c.testing = "out(add2(11)); out(add2(0));"

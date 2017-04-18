@@ -13,8 +13,8 @@ inc2(deq())
 t1 = API_thread("enqueue", ["int"], None)
 t2 = API_thread("dequeue", [], "int", "-1")
 
-t1.run_start(inc1, enq)
-t2.run_start(deq, inc2)
+t1.run(inc1, enq)
+t2.run(deq, inc2)
 
 c = Compiler()
 c.testing = "enqueue(1); enqueue(4); enqueue(9); out(dequeue()); out(dequeue()); out(dequeue()); enqueue(0); enqueue(2); out(dequeue()); out(dequeue());"

@@ -25,7 +25,7 @@ def nic2app_func(x):
 
     for i in range(n_cores):
         # api = API_thread("get_eq" + str(i), [], "eq_entry*", "NULL")
-        # api.run_start(rx_deqs[i])
+        # api.run(rx_deqs[i])
         @API("get_eq" + str(i), "NULL")
         def get_eq():
             return rx_deqs[i]()
@@ -35,7 +35,7 @@ nic2app = create_composite_instance("nic2app", nic2app_func)
 x1, x2 = fork(gen())
 nic2app(x1)
 nic2app(x2)
-t.run_start(gen, fork)
+t.run(gen, fork)
 
 c = Compiler()
 c.testing = r'''

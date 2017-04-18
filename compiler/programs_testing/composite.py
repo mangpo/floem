@@ -29,6 +29,7 @@ x2 = Unit("u2")(x1)
 Print()(x2)
 
 c = Compiler()
+c.resource = False
 c.remove_unused = False
 c.testing = "u1_f1(123); u1_f1(42);"
 c.generate_code_and_run([1,1,2,2,1,3,2,4,123, 3,5,4,6,3,7,4,8,42])

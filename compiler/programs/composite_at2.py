@@ -5,13 +5,11 @@ Forward = create_identity("Forward", "int")
 
 t = API_thread("func", ["int"], "int")
 
-
 @composite_instance_at("compo", t)
 def compo(x):
     f1 = Forward()
     f2 = Forward()
 
-    t.start(f1)
     return f2(f1(x))
 
 y = compo(None)

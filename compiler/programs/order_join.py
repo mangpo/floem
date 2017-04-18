@@ -32,7 +32,7 @@ out2 = sub(in2)
 p(out1, out2)
 
 t = API_thread("myfork", ["int", "int"], None)
-t.run_start(fork, add, sub, p)
+t.run(fork, add, sub, p)
 t.run_order(sub, add)
 
 c = Compiler()

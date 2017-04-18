@@ -31,9 +31,9 @@ rx_nic = API_thread("rx_write", ["int", "size_t"], None)
 rx_app = API_thread("rx_read", ["size_t"], "q_entry *")
 rx_app_release = API_thread("rx_release", [" q_entry*"], None)
 
-rx_nic.run_start(compute_core, enq_alloc, fill_entry, enq_submit)
-rx_app.run_start(deq_get)
-rx_app_release.run_start(deq_release)
+rx_nic.run(compute_core, enq_alloc, fill_entry, enq_submit)
+rx_app.run(deq_get)
+rx_app_release.run(deq_release)
 
 c = Compiler()
 c.include = r'''#include "../queue.h"'''

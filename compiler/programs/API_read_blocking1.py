@@ -10,8 +10,8 @@ x = f2(f1(None))
 
 t1 = API_thread("put", ["int"], None)
 t2 = API_thread("get", [], "int")
-t1.run_start(f1)
-t2.run_start(f2)
+t1.run(f1)
+t2.run(f2)
 
 c = Compiler()
 c.testing = "put(42); out(get()); put(123); out(get());"

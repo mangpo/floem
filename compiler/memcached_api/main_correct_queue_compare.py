@@ -578,7 +578,6 @@ def run_compare():
 run_compare()
 
 # TODO: opague #
-# TODO: get rid of t.start()
 
 # TODO: proper initialization (run_threads_init: only run dequeue pipeline, run_threads: run dequeue and inject)
 # TODO: queue -- owner bit & tail pointer update

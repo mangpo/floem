@@ -20,12 +20,13 @@ def spec():
 def impl():
     t1 = internal_thread("t1")
     t2 = internal_thread("t2")
-    t1.run_start(inject, f1)
-    t2.run_start(f2, probe, drop)
+    t1.run(inject, f1)
+    t2.run(f2, probe, drop)
 
 compo = create_spec_impl("compo", spec, impl)
 
 c = Compiler()
+c.resource = False
 c.remove_unused = False
 c.include = r'''
 int gen_func(int i) { return i; }
