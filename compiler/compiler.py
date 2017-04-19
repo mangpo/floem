@@ -486,7 +486,8 @@ def generate_graph(program, resource=True, remove_unused=False):
     if resource:
         # Annotate APIs information. APIs ony make sense with resource mapping.
         annotate_api_info(gen.graph)
-        annotate_process_info(gen.graph)
+
+    annotate_process_info(gen.graph)
 
     return gen.graph
 
