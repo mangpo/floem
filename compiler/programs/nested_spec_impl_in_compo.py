@@ -27,8 +27,8 @@ t.run(f, compo)
 c = Compiler()
 c.testing = "out(run(0));"
 
-c.desugar_mode = "spec"
-c.generate_code_and_run([2])
+# c.desugar_mode = "spec"
+# c.generate_code_and_run([2])
 
 c.desugar_mode = "impl"
 c.generate_code_and_run([3])

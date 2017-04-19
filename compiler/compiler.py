@@ -1,6 +1,7 @@
 from program import *
 from join_handling import get_join_buffer_name, annotate_join_info
 from api_handling import annotate_api_info
+from process_handling import annotate_process_info
 import re, sys, os, subprocess
 from contextlib import contextmanager
 
@@ -149,7 +150,7 @@ def rename_state(rename, src):
                 index = index + match.start(1) + len(old)
     return src
 
-def element_to_function(instance, state_rename, graph):
+def element_to_function(instance, state_rename, graph, ext):
     """
     Turn an element into a function.
     - Read from an input port => input argument(s).
@@ -328,18 +329,22 @@ def element_to_function(instance, state_rename, graph):
     code = "%s %s(%s) {\n" % (return_type, funcname, ", ".join(args))
     code += state_src + join_create + src + define_ret + out_src + api_return
     code += "}\n"
-    print code
-    return code
+
+    name = instance.process + ext
+    with open(name, 'a') as f, redirect_stdout(f):
+        print code
 
 
-def generate_state(state):
+def generate_state(state, graph, ext):
     src = ""
     src += "typedef struct _%s { %s } %s;" % (state.name, state.content, state.name)
-    print src
-    return src
+    for process in graph.processes:
+        name = process + ext
+        with open(name, 'a') as f, redirect_stdout(f):
+            print src
 
 
-def generate_state_instance(name, state_instance):
+def generate_state_instance(name, state_instance, ext):
     state = state_instance.state
     src = ""
     src += "%s %s" % (state.name, name)
@@ -349,11 +354,13 @@ def generate_state_instance(name, state_instance):
     elif state.init:
         src += " = %s" % get_str_init(state.init)
     src += ";"
-    print src
-    return src
+    for process in state_instance.processes:
+        name = process + ext
+        with open(name, 'a') as f, redirect_stdout(f):
+            print src
 
 
-def generate_join_save_function(name, join_ports_same_thread):
+def generate_join_save_function(name, join_ports_same_thread, instance, ext):
     src = ""
 
     st_name = get_join_buffer_name(name)
@@ -369,8 +376,9 @@ def generate_join_save_function(name, join_ports_same_thread):
             src += "  p->%s = %s;\n" % (arg, arg)
         src += "}\n"
 
-    print src
-    return src
+    name = instance.process + ext
+    with open(name, 'a') as f, redirect_stdout(f):
+        print src
 
 
 # def generate_API_return_state(api, g):
@@ -390,13 +398,14 @@ def generate_join_save_function(name, join_ports_same_thread):
 #     return src
 
 
-def generate_API_identity_macro(api):
+def generate_API_identity_macro(api, ext):
     src = "#define _get_%s(X) X" % api.return_type.replace('*', '$')
-    print src
-    return src
+    name = api.process + ext
+    with open(name, 'a') as f, redirect_stdout(f):
+        print src
 
 
-def generate_API_function(api, g):
+def generate_API_function(api, ext):
     args = []
     types_args = []
     if api.call_types:
@@ -412,11 +421,13 @@ def generate_API_function(api, g):
     else:
         src += "void %s(%s) { " % (api.name, ", ".join(types_args))
         src += "%s(%s); }\n" % (api.call_instance, ", ".join(args))
-    print src
-    return src
+
+    name = api.process + ext
+    with open(name, 'a') as f, redirect_stdout(f):
+        print src
 
 
-def generate_signature(instance, funcname, inports):
+def generate_signature(instance, funcname, inports, ext):
     n = len(inports)
     args = []
     src = ""
@@ -431,8 +442,10 @@ def generate_signature(instance, funcname, inports):
         src += "%s %s(%s);" % (instance.API_return, funcname, ",".join(args))
     else:
         src += "void %s(%s);" % (funcname, ",".join(args))
-    print src
-    return src
+
+    name = instance.process + ext
+    with open(name, 'a') as f, redirect_stdout(f):
+        print src
 
 
 def get_element_port_arg_name(func, port, i):
@@ -473,25 +486,31 @@ def generate_graph(program, resource=True, remove_unused=False):
     if resource:
         # Annotate APIs information. APIs ony make sense with resource mapping.
         annotate_api_info(gen.graph)
+        annotate_process_info(gen.graph)
 
     return gen.graph
 
 
-def generate_header(testing):
+def generate_header(testing, processes, ext):
     src = ""
     for file in common.header_files + common.header_files_triggers:
         src += "#include <%s>\n" % file
 
     if testing:
         src += "void out(int x) { printf(\"%d\\n\", x); }"
-    print src
-    return src
+
+    for process in processes:
+        name = process + ext
+        with open(name, 'a') as f, redirect_stdout(f):
+            print src
 
 
-def generate_include(include):
+def generate_include(include, processes, ext):
     if include:
-        print include
-    return include
+        for process in processes:
+            name = process + ext
+            with open(name, 'a') as f, redirect_stdout(f):
+                print include
 
 n_threads = 0
 def thread_func_create_cancel(func, size=None):
@@ -557,7 +576,11 @@ def internal_thread_code(forever, graph):
     return global_src, run_src, kill_src
 
 
-def generate_internal_triggers(graph):
+# for state_instance in injects:
+#     if process in graph.state_instances[state_instance].processes:
+#         inject = injects[state_instance]
+
+def generate_internal_triggers_with_process(graph, process, ext):
     threads_internal = set([trigger.call_instance for trigger in graph.threads_internal])
     threads_api = set([trigger.call_instance for trigger in graph.threads_API])
     injects = graph.inject_populates
@@ -565,16 +588,26 @@ def generate_internal_triggers(graph):
     spec_injects = []
     impl_injects = []
     all_injects = []
-    for inject in injects.values():
-        spec_injects += [(x, inject.size) for x in inject.spec_ele_instances]
-        impl_injects += [(x, inject.size) for x in inject.impl_ele_instances]
-        all_injects += inject.spec_ele_instances
-        all_injects += inject.impl_ele_instances
+    for state_instance in injects:
+        #if process in graph.state_instances[state_instance].processes:
+        inject = injects[state_instance]
+        spec_injects += [(x, inject.size) for x in inject.spec_ele_instances if process == graph.instances[x].process]
+        impl_injects += [(x, inject.size) for x in inject.impl_ele_instances if process == graph.instances[x].process]
+        all_injects += [x for x in inject.spec_ele_instances if process == graph.instances[x].process]
+        all_injects += [x for x in inject.impl_ele_instances if process == graph.instances[x].process]
+    # for inject in injects.values():
+    #     spec_injects += [(x, inject.size) for x in inject.spec_ele_instances]
+    #     impl_injects += [(x, inject.size) for x in inject.impl_ele_instances]
+    #     all_injects += inject.spec_ele_instances
+    #     all_injects += inject.impl_ele_instances
 
     spec_impl = is_spec_impl(threads_internal.union(all_injects))
 
     forever = threads_internal.difference(all_injects)
     no_triggers = graph.threads_roots.difference(forever).difference(all_injects).difference(threads_api)
+
+    forever = [t for t in forever if graph.process_of_thread(t) == process]
+    no_triggers = [t for t in no_triggers if graph.process_of_thread(t) == process]
     if len(no_triggers) > 0:
         for inst in no_triggers:
             t = graph.instances[inst].thread
@@ -609,11 +642,17 @@ def generate_internal_triggers(graph):
         run_src += "void impl_run_threads() {\n" + r1 + r2 + "}\n"
         kill_src += "void impl_kill_threads() {\n" + k1 + k2 + "}\n"
 
-    print global_src + run_src + kill_src
-    return global_src + run_src + kill_src
+    name = process + ext
+    with open(name, 'a') as f, redirect_stdout(f):
+        print global_src + run_src + kill_src
 
 
-def generate_inject_probe_code(graph):
+def generate_internal_triggers(graph, ext):
+    for process in graph.processes:
+        generate_internal_triggers_with_process(graph, process, ext)
+
+
+def generate_inject_probe_code_with_process(graph, process, ext):
     injects = graph.inject_populates
     probes = graph.probe_compares
     src = ""
@@ -622,13 +661,17 @@ def generate_inject_probe_code(graph):
         for state_instance in injects:
             inject = injects[state_instance]
             for key in inject.spec_instances:
-                inject_src += generate_populate_state(inject, key)
+                spec_instance = inject.spec_instances[key]
+                if process in graph.state_instances[spec_instance].processes:
+                    inject_src += generate_populate_state(inject, key)
 
         probe_src = ""
         for state_instance in probes:
             probe = probes[state_instance]
             for key in probe.spec_instances:
-                probe_src += generate_compare_state(probe, key)
+                spec_instance = probe.spec_instances[key]
+                if process in graph.state_instances[spec_instance].processes:
+                    probe_src += generate_compare_state(probe, key)
 
         src += "void init() {\n"
         src += inject_src
@@ -641,10 +684,17 @@ def generate_inject_probe_code(graph):
         src += "void init() {}\n"
         src += "void finalize_and_check() {}\n"
 
-    print src
-    return src
+    name = process + ext
+    with open(name, 'a') as f, redirect_stdout(f):
+        print src
 
-def generate_testing_code(code):
+
+def generate_inject_probe_code(graph, ext):
+    for process in graph.processes:
+        generate_inject_probe_code_with_process(graph, process, ext)
+
+
+def generate_testing_code(graph, code, ext):
     src = "int main() {\n"
     src += "  init();\n"
     src += "  run_threads();\n"
@@ -654,8 +704,11 @@ def generate_testing_code(code):
     src += "  finalize_and_check();\n"
     src += "\n  return 0;\n"
     src += "}\n"
-    print src
-    return src
+
+    for process in graph.processes:
+        name = process + ext
+        with open(name, 'a') as f, redirect_stdout(f):
+            print src
 
 
 def generate_populate_state(inject, key):
@@ -680,43 +733,44 @@ def generate_compare_state(probe, key):
     src = "  {0}({1}.p, {1}.data, {2}.p, {2}.data);\n".format(probe.func, spec, impl)
     return src
 
-def generate_code(graph, testing=None, include=None):
+
+def generate_code(graph, ext, testing=None, include=None):
     """
     Display C code to stdout
     :param graph: data-flow graph
     """
-    generate_header(testing)
-    generate_include(include)
+    for process in graph.processes:
+        name = process + ext
+        os.system("rm " + name)
+
+    generate_header(testing, graph.processes, ext)
+    generate_include(include, graph.processes, ext)
 
     # Generate states.
     for state_name in graph.state_order:
-        generate_state(graph.states[state_name])
+        generate_state(graph.states[state_name], graph, ext)
 
     # Generate state instances.
     for name in graph.state_instance_order:
-        generate_state_instance(name, graph.state_instances[name])
+        generate_state_instance(name, graph.state_instances[name], ext)
 
     # Generate functions to save join buffers.
     for instance in graph.instances.values():
         if instance.join_ports_same_thread:
-            generate_join_save_function(instance.name, instance.join_ports_same_thread)
+            generate_join_save_function(instance.name, instance.join_ports_same_thread, instance, ext)
 
     # Generate functions to produce API return state
     return_funcs = []
     for api in graph.threads_API:
         if api.return_type and api.return_type not in return_funcs:
             return_funcs.append(api.return_type)
-            generate_API_identity_macro(api)
-            # if graph.get_outport_argtypes(api.return_instance, api.return_port) == [api.state_name]:
-            #     generate_API_identity_macro(api)
-            # else:
-            #     generate_API_return_state(api, graph)
+            generate_API_identity_macro(api, ext)
 
     # Generate signatures.
     for name in graph.instances:
         instance = graph.instances[name]
         e = instance.element
-        generate_signature(instance, name, e.inports)
+        generate_signature(instance, name, e.inports, ext)
 
     # Generate functions.
     for name in graph.instances:
@@ -725,11 +779,11 @@ def generate_code(graph, testing=None, include=None):
         state_rename = []
         for i in range(len(instance.state_args)):
             state_rename.append((e.state_params[i][1],instance.state_args[i]))
-        element_to_function(instance, state_rename, graph)
+        element_to_function(instance, state_rename, graph, ext)
 
     # Generate API functions.
     for api in graph.threads_API:
-        generate_API_function(api, graph)
+        generate_API_function(api, ext)
 
 
 def convert_type(result, expect):
@@ -741,26 +795,24 @@ def convert_type(result, expect):
         return result
 
 
-def generate_code_with_test(graph, testing, include=None):
-    generate_code(graph, testing, include)
-    generate_inject_probe_code(graph)
-    generate_internal_triggers(graph)
-    generate_testing_code(testing)
-
-
 def generate_code_as_header(graph, testing, include=None, header='tmp.h'):
-    with open(header, 'w') as f, redirect_stdout(f):
-        generate_code(graph, testing, include)
-        generate_inject_probe_code(graph)
-        generate_internal_triggers(graph)
+    # with open(header, 'w') as f, redirect_stdout(f):
+    #     generate_code(graph, testing, include)
+    #     generate_inject_probe_code(graph)
+    #     generate_internal_triggers(graph)
+
+    generate_code(graph, ".h", testing, include)
+    generate_inject_probe_code(graph, ".h")
+    generate_internal_triggers(graph, ".h")
 
 
 def generate_code_and_run(graph, testing, expect=None, include=None, depend=None, include_option=None):
-    with open('tmp.c', 'w') as f, redirect_stdout(f):
-        generate_code(graph, testing, include)
-        generate_inject_probe_code(graph)
-        generate_internal_triggers(graph)
-        generate_testing_code(testing)
+    # TODO
+    #with open('tmp.c', 'w') as f, redirect_stdout(f):
+    generate_code(graph, ".c", testing, include)
+    generate_inject_probe_code(graph, ".c")
+    generate_internal_triggers(graph, ".c")
+    generate_testing_code(graph, testing, ".c")
 
     extra = ""
     if depend:

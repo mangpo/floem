@@ -132,6 +132,7 @@ class APIFunction:
         self.call_instance = None
         self.return_instance = None
         self.return_port = None
+        self.process = None
 
 
 class InternalTrigger:
@@ -153,6 +154,15 @@ class ResourceOrder:
     def __init__(self, a, b):
         self.a = a
         self.b = b
+
+
+class ProcessMap:
+    def __init__(self, process, thread):
+        self.process = process
+        self.thread = thread
+
+    def __str__(self):
+        return self.thread + "@" + self.process
 
 
 class GraphGenerator:
@@ -310,6 +320,9 @@ class GraphGenerator:
             a_name = get_node_name(self.get_instance_stack(x.a), x.a)
             b_name = get_node_name(self.get_instance_stack(x.b), x.b)
             self.graph.threads_order.append((a_name, b_name))
+
+        elif isinstance(x, ProcessMap):
+            self.graph.thread2process[x.thread] = x.process
 
         elif isinstance(x, PopulateState):
             self.graph.inject_populates[x.state_instance] = x.clone()

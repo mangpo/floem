@@ -10,7 +10,9 @@ inject = Inject()
 inc1 = Inc()
 inc2 = Inc()
 
-enq(inc1(inject()))
+@internal_trigger("t")
+def enqueue():
+    enq(inc1(inject()))
 
 @API("dequeue", -1)
 def dequeue():

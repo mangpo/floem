@@ -249,6 +249,7 @@ class ElementNode:
 
         # Thread
         self.thread = thread
+        self.process = None
 
         # Join information
         self.join_ports_same_thread = None
@@ -324,6 +325,7 @@ class State:
         self.name = name
         self.content = content
         self.init = init
+        self.processes = set()
 
     def __str__(self):
         return self.name
@@ -338,6 +340,7 @@ class StateNode:
         self.name = name
         self.state = state
         self.init = init
+        self.processes = set()
 
 
 class Graph:
@@ -363,6 +366,10 @@ class Graph:
         # Inject and probe
         self.inject_populates = {}
         self.probe_compares = {}
+
+        # Process
+        self.processes = set()
+        self.thread2process = {}
 
     def __str__(self):
         s = "Graph:\n"
@@ -568,7 +575,7 @@ class Graph:
         if resource:
             for instance in self.instances.values():
                 if instance.thread is None:
-                    raise "Element instance '%s' has not been assigned to any thread." % instance.name
+                    raise Exception("Element instance '%s' has not been assigned to any thread." % instance.name)
 
     def is_start(self, my):
         for inst_list in my.input2ele.values():
@@ -577,6 +584,12 @@ class Graph:
                 if other.thread == my.thread:
                     return False
         return True
+
+    def process_of_thread(self, t):
+        if t in self.thread2process:
+            return self.thread2process[t]
+        else:
+            return "tmp"
 
 '''
 State initialization related functions

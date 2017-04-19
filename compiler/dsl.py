@@ -64,6 +64,18 @@ class internal_thread(Thread):
         scope[-1].insert(0, trigger)
 
 
+class Process():
+    def __init__(self, name, threads):
+        self.name = name
+        for t in threads:
+            scope[-1].append(ProcessMap(name, t.name))
+
+
+class CPU_process(Process):
+    def __init__(self, name, *threads):
+        Process.__init__(self, name, threads)
+
+
 class ElementInstance:
     def __init__(self, name, instance, connect):
         self.name = name
