@@ -373,8 +373,6 @@ def allocate_state(name, state_instance, ext):
     src = ""
     src += "{1} = ({0} *) malloc(sizeof({0}));\n".format(state.name, name)
     if state_instance.init or state.init:
-        if state.fields is None:
-            print state
         if state_instance.init:
             inits = state_instance.init
         else:
