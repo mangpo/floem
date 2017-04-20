@@ -862,10 +862,11 @@ def get_state_mapping(content):
     fixed_len = {}
     variable_len = {}
     for field in fields:
-        field = field.lstrip().rstrip()
-        index = field.rfind(' ')
-        t = field[:index].rstrip()
-        var = field[index+1:]
+        # field = field.lstrip().rstrip()
+        # index = field.rfind(' ')
+        # t = field[:index].rstrip()
+        # var = field[index+1:]
+        t, var = common.get_type_var(field)
         m = re.match('([^\[]+)\[([^\]]+)\]', var)  # only support one dimension
         if m:
             name = m.group(1)
@@ -931,7 +932,9 @@ def get_state_mapping(content):
         return content, True, field_mapping
 
 
-def create_state(st_name, content, init=None):
+def create_state(st_name, content, init=None, declare=True):
+    if init:
+        assert isinstance(init, list), "State init has to be a list of values."
     if isinstance(content, list):
         src = ""
         for t, var in content:
@@ -939,16 +942,18 @@ def create_state(st_name, content, init=None):
         content = src
 
     content, reorder, mapping = get_state_mapping(content)
-    assert st_name not in state_mapping, ("State '%s' is redefined." % st_name)
+    #assert st_name not in state_mapping, ("State '%s' is redefined." % st_name)
     state_mapping[st_name] = mapping
 
     if reorder and init:
         raise Exception("Cannot initialize state '%s' when there are more than one variable-length field." % st_name)
 
-    s = State(st_name, content, init)
+    s = State(st_name, content, init, declare)
     scope[-1].append(s)
 
-    def create_instance(inst_name=None, init=False):
+    def create_instance(inst_name=None, init=None):
+        if init:
+            assert isinstance(init, list), "State init has to be a list of values."
         if reorder and init:
             raise Exception(
                 "Cannot initialize state '%s' when there are more than one variable-length field." % st_name)

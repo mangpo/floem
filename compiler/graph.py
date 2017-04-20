@@ -1,4 +1,5 @@
 import re
+import common
 
 class UndefinedInstance(Exception):
     pass
@@ -11,18 +12,6 @@ class ConflictConnection(Exception):
 
 class RedefineError(Exception):
     pass
-
-
-def sanitize_type(t):
-    if t is None:
-        return t
-    index = t.find('*')
-    if index > 0:
-        tokens = t[:index].rstrip().lstrip().split()
-        return ' '.join(tokens) + '*'
-    else:
-        tokens = t.strip().lstrip().split()
-        return ' '.join(tokens)
 
 
 def remove_comment(code):
@@ -310,22 +299,26 @@ class ElementNode:
 class Port:
     def __init__(self, name, argtypes):
         self.name = name
-        self.argtypes = [sanitize_type(x) for x in argtypes]
+        self.argtypes = [common.sanitize_type(x) for x in argtypes]
 
     def __str__(self):
         return self.name
 
     def __eq__(self, other):
-        #print "Port.eq", self, other, (self.__class__ == other.__class__ and self.name == other.name and self.argtypes == other.argtypes)
         return self.__class__ == other.__class__ and self.name == other.name and self.argtypes == other.argtypes
 
 
 class State:
-    def __init__(self, name, content, init=None):
+    def __init__(self, name, content, init=None, declare= True):
         self.name = name
         self.content = content
         self.init = init
         self.processes = set()
+        self.declare = declare
+        if True:
+            self.fields = self.extract_fields()
+        else:
+            self.fields = None
 
     def __str__(self):
         return self.name
@@ -333,6 +326,10 @@ class State:
     def __eq__(self, other):
         return (self.__class__ == other.__class__ and
                 self.name == other.name and self.content == other.content and self.init == other.init)
+
+    def extract_fields(self):
+        fields = self.content.split(';')[:-1]  # ignore the last one
+        return [common.get_var(f) for f in fields]
 
 
 class StateNode:

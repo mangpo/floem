@@ -42,8 +42,45 @@ def types_args_port_list(ports, formatter):
         types += port.argtypes
     return types, args
 
+
 def types_port_list(ports):
     types = []
     for port in ports:
         types += port.argtypes
     return types
+
+
+def strip_all(s):
+    new_s = s.lstrip().lstrip('\n').rstrip().rstrip('\n')
+    if new_s == s:
+        return s
+    else:
+        return strip_all(new_s)
+
+
+def sanitize_type(t):
+    if t is None:
+        return t
+    index = t.find('*')
+    if index > 0:
+        tokens = strip_all(t[:index]).split()
+        return ' '.join(tokens) + '*'
+    else:
+        tokens = strip_all(t).split()
+        return ' '.join(tokens)
+
+
+def get_type_var(type_var):
+    type_var = strip_all(type_var)
+    index1 = type_var.rfind(' ')
+    index2 = type_var.rfind('*')
+    index = max(index1, index2)
+    return sanitize_type(type_var[:index + 1]), strip_all(type_var[index+1:])
+
+
+def get_type(type_var):
+    return get_type_var(type_var)[0]
+
+
+def get_var(type_var):
+    return get_type_var(type_var)[1]

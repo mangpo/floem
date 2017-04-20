@@ -97,7 +97,7 @@ def create_table_instances(put_name, get_name, index_type, val_type, size):
 def create_inject(name, type, size, func):
     st_name = name + "_state"
     st_inst_name = name + "_state_inst"
-    state = create_state(st_name, "%s data[%d]; int p;" % (type, size), "{{0},0}")
+    state = create_state(st_name, "%s data[%d]; int p;" % (type, size), [[0],0])
     state_inst = state(st_inst_name)
     src = r'''
         if(this.p >= %d) { printf("Error: inject more than available entries.\n"); exit(-1); }
@@ -124,7 +124,7 @@ def create_inject_instance(name, type, size, func):
 def create_probe(name, type, size, func):
     st_name = name + "_state"
     st_inst_name = name + "_state_inst"
-    state = create_state(st_name, "%s data[%d]; int p;" % (type, size), "{{0},0}")
+    state = create_state(st_name, "%s data[%d]; int p;" % (type, size), [[0],0])
     state_inst = state(st_inst_name)
 
     append = r'''

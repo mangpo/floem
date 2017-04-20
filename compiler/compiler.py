@@ -59,14 +59,6 @@ def first_non_space(s,i):
         return (None,-1)
 
 
-def get_type(type_var):
-    type_var = type_var.lstrip('\n').lstrip().rstrip('\n').rstrip()
-    index1 = type_var.rfind(' ')
-    index2 = type_var.rfind('*')
-    index = max(index1, index2)
-    return sanitize_type(type_var[:index+1])
-
-
 def remove_asgn_stmt(funcname, src,port2args,port,p_eq, p_end, inport_types):
     """
     Remove the reading from port statement from src, and put its LHS of the statement in port2args.
@@ -85,7 +77,7 @@ def remove_asgn_stmt(funcname, src,port2args,port,p_eq, p_end, inport_types):
     decl = src[p_start:p_eq].lstrip().rstrip().lstrip("(").rstrip(")").lstrip().rstrip()
     args = decl.split(",")
     port2args[port] = args
-    argtypes = [get_type(x) for x in args]
+    argtypes = [common.get_type(x) for x in args]
 
     if not(argtypes == inport_types):
         raise Exception("At element instance '%s', types mismatch at an input port '%s'. Expect %s, but got %s."
@@ -144,9 +136,9 @@ def rename_state(rename, src):
         match = True
         index = 0
         while match:
-            match = re.search('[^a-zA-Z0-9_]('+old+').', src[index:])
+            match = re.search('[^a-zA-Z0-9_]('+old+'\.)', src[index:])
             if match:
-                src = src[:index+match.start(1)] + new + src[index+match.end(1):]
+                src = src[:index+match.start(1)] + new + '->' + src[index+match.end(1):]
                 index = index + match.start(1) + len(old)
     return src
 
@@ -166,7 +158,6 @@ def element_to_function(instance, state_rename, graph, ext):
     inports = element.inports
     output2func = instance.output2ele
     local_state = element.local_state
-
 
     # Create join buffer
     join_create = ""
@@ -336,25 +327,97 @@ def element_to_function(instance, state_rename, graph, ext):
 
 
 def generate_state(state, graph, ext):
+    if state.declare:
+        src = ""
+        src += "typedef struct _%s { %s } %s;" % (state.name, state.content, state.name)
+        for process in graph.processes:
+            name = process + ext
+            with open(name, 'a') as f, redirect_stdout(f):
+                print src
+
+
+# def generate_state_instance(name, state_instance, ext):
+#     state = state_instance.state
+#     src = ""
+#     src += "%s %s" % (state.name, name)
+#     if state_instance.init:
+#         ret = get_str_init(state_instance.init)
+#         src += " = %s" % get_str_init(state_instance.init)
+#     elif state.init:
+#         src += " = %s" % get_str_init(state.init)
+#     src += ";"
+#     for process in state_instance.processes:
+#         name = process + ext
+#         with open(name, 'a') as f, redirect_stdout(f):
+#             print src
+
+def declare_state(name, state_instance, ext):
+    state = state_instance.state
     src = ""
-    src += "typedef struct _%s { %s } %s;" % (state.name, state.content, state.name)
-    for process in graph.processes:
+    src += "{0}* {1};\n".format(state.name, name)
+    for process in state_instance.processes:
         name = process + ext
         with open(name, 'a') as f, redirect_stdout(f):
             print src
 
 
-def generate_state_instance(name, state_instance, ext):
+def init_value(val):
+    if isinstance(val, AddressOf):
+        return '&' + val.of
+    else:
+        return val
+
+
+def allocate_state(name, state_instance, ext):
     state = state_instance.state
     src = ""
-    src += "%s %s" % (state.name, name)
-    if state_instance.init:
-        ret = get_str_init(state_instance.init)
-        src += " = %s" % get_str_init(state_instance.init)
-    elif state.init:
-        src += " = %s" % get_str_init(state.init)
-    src += ";"
+    src += "{1} = ({0} *) malloc(sizeof({0}));\n".format(state.name, name)
+    if state_instance.init or state.init:
+        if state.fields is None:
+            print state
+        if state_instance.init:
+            inits = state_instance.init
+        else:
+            inits = state.init
+        for i in range(len(state.fields)):
+            field = state.fields[i]
+            init = inits[i]
+            if isinstance(init, list):
+                # if init != [0]:
+                #     raise Exception("Currently not supporting initializing a field with %s." % init)
+                if init == [0]:
+                    pass  # Default is all zeros
+                else:
+                    m = re.match('([a-zA-Z0-9_]+)\[[0-9]+\]', field)
+                    array = m.group(1)
+                    for i in range(len(init)):
+                        src += "{0}->{1}[{2}] = {3};\n".format(name, array, i, init_value(init[i]))
+            else:
+                src += "{0}->{1} = {2};\n".format(name, field, init_value(init))
+
     for process in state_instance.processes:
+        name = process + ext
+        with open(name, 'a') as f, redirect_stdout(f):
+            print src
+
+
+def generate_state_instances(graph, ext):
+    # Declare states
+    for name in graph.state_instance_order:
+        declare_state(name, graph.state_instances[name], ext)
+
+    src = "void init_state_instances() {\n"
+    for process in graph.processes:
+        name = process + ext
+        with open(name, 'a') as f, redirect_stdout(f):
+            print src
+
+    # Initialize states
+    for name in graph.state_instance_order:
+        allocate_state(name, graph.state_instances[name], ext)
+
+    src = "}\n"
+    for process in graph.processes:
         name = process + ext
         with open(name, 'a') as f, redirect_stdout(f):
             print src
@@ -675,6 +738,7 @@ def generate_inject_probe_code_with_process(graph, process, ext):
                     probe_src += generate_compare_state(probe, key)
 
         src += "void init() {\n"
+        src += "  init_state_instances();\n"
         src += inject_src
         src += "}\n\n"
 
@@ -682,7 +746,9 @@ def generate_inject_probe_code_with_process(graph, process, ext):
         src += probe_src
         src += "}\n\n"
     else:
-        src += "void init() {}\n"
+        src += "void init() {\n"
+        src += "  init_state_instances();\n"
+        src += "}\n"
         src += "void finalize_and_check() {}\n"
 
     name = process + ext
@@ -717,9 +783,9 @@ def generate_populate_state(inject, key):
     #       (inject.name, inject.spec_instances[key], inject.impl_instances[key])
     src = "  for(int i = 0; i < %d; i++) {\n" % inject.size
     src += "    %s temp = %s(i);\n" % (inject.type, inject.func)
-    src += "    %s.data[i] = temp;\n" % inject.spec_instances[key]
+    src += "    %s->data[i] = temp;\n" % inject.spec_instances[key]
     if key in inject.impl_instances:
-        src += "    %s.data[i] = temp;\n" % inject.impl_instances[key]
+        src += "    %s->data[i] = temp;\n" % inject.impl_instances[key]
     src += "  }\n"
     return src
 
@@ -731,7 +797,7 @@ def generate_compare_state(probe, key):
     impl = probe.impl_instances[key]
     # src = "  // %s: compare %s and %s\n" % \
     #       (probe.name, probe.spec_instances[key], probe.impl_instances[key])
-    src = "  {0}({1}.p, {1}.data, {2}.p, {2}.data);\n".format(probe.func, spec, impl)
+    src = "  {0}({1}->p, {1}->data, {2}->p, {2}->data);\n".format(probe.func, spec, impl)
     return src
 
 
@@ -752,8 +818,9 @@ def generate_code(graph, ext, testing=None, include=None):
         generate_state(graph.states[state_name], graph, ext)
 
     # Generate state instances.
-    for name in graph.state_instance_order:
-        generate_state_instance(name, graph.state_instances[name], ext)
+    generate_state_instances(graph, ext)
+    # for name in graph.state_instance_order:
+    #     generate_state_instance(name, graph.state_instances[name], ext)
 
     # Generate functions to save join buffers.
     for instance in graph.instances.values():

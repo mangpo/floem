@@ -7,12 +7,17 @@ def assign_process_for_state_instance(g, process, st_inst_name):
     st_inst.processes.add(process)
     state.processes.add(process)
 
-    if isinstance(st_inst.init, list):
-        for x in st_inst.init:
-            if isinstance(x, AddressOf):
-                assign_process_for_state_instance(g, process, x.of)
-            elif isinstance(x, str) and x in g.state_instances:
-                assign_process_for_state_instance(g, process, x)
+    def inner(inits):
+        if inits:
+            for x in inits:
+                if isinstance(x, AddressOf):
+                    assign_process_for_state_instance(g, process, x.of)
+                elif isinstance(x, str) and x in g.state_instances:
+                    assign_process_for_state_instance(g, process, x)
+                elif isinstance(x, list):
+                    inner(x)
+
+    inner(st_inst.init)
 
 
 def annotate_process_info(g):

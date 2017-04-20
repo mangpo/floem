@@ -101,7 +101,7 @@ def create_circular_queue_one2many_instances(name, type, size, n_cores):
     ones = [One(one_instance_name + str(i)) for i in range(n_cores)]
 
     All = create_state(all_name, "%s* cores[%d];" % (one_name, n_cores))
-    all = All(all_instance_name, [AddressOf(ones[i]) for i in range(n_cores)])
+    all = All(all_instance_name, [[ones[i] for i in range(n_cores)]])
 
     Enqueue = create_element(prefix + "enqueue_ele",
                              [Port("in_entry", [type]), Port("in_core", ["size_t"])], [],
@@ -151,7 +151,7 @@ def create_circular_queue_many2one_instances(name, type, size, n_cores):
     ones = [One(one_instance_name + str(i)) for i in range(n_cores)]
 
     All = create_state(all_name, "%s* cores[%d];" % (one_name, n_cores))
-    all = All(all_instance_name, [AddressOf(ones[i]) for i in range(n_cores)])
+    all = All(all_instance_name, [[ones[i] for i in range(n_cores)]])
 
     Enqueue = create_element(prefix + "enqueue_ele",
                              [Port("in", [type])], [],
@@ -212,15 +212,16 @@ def create_circular_queue_variablesize_one2many(name, size, n_cores):
     all_eq_instance_name = all_name + "_deq_inst"
 
     Dummy = create_state(one_name + "_dummy", "uint8_t queue[%d];" % size)
+    circular = create_state("circular_queue", "size_t len; size_t offset; void* queue;", None, False)
     dummies = [Dummy(one_name + "_dummy" + str(i)) for i in range(n_cores)]
-    enq_ones = [create_state_instance_from("circular_queue", one_instance_name + str(i), [size, 0, AddressOf(dummies[i])])
+    enq_ones = [circular(one_instance_name + str(i), [size, 0, dummies[i]])
             for i in range(n_cores)]
-    deq_ones = [create_state_instance_from("circular_queue", one_deq_instance_name + str(i), [size, 0, AddressOf(dummies[i])])
+    deq_ones = [circular(one_deq_instance_name + str(i), [size, 0, dummies[i]])
             for i in range(n_cores)]
 
     All = create_state(all_name, "circular_queue* cores[%d];" % n_cores)
-    enq_all = All(all_instance_name, [AddressOf(enq_ones[i]) for i in range(n_cores)])
-    deq_all = All(all_eq_instance_name, [AddressOf(deq_ones[i]) for i in range(n_cores)])
+    enq_all = All(all_instance_name, [[enq_ones[i] for i in range(n_cores)]])
+    deq_all = All(all_eq_instance_name, [[deq_ones[i] for i in range(n_cores)]])
 
     Enqueue_alloc = create_element(prefix + "enqueue_alloc_ele",
                                    [Port("in_len", ["size_t"]), Port("in_core", ["size_t"])],
@@ -294,15 +295,16 @@ def create_circular_queue_variablesize_many2one(name, size, n_cores):
     all_eq_instance_name = all_name + "_deq_inst"
 
     Dummy = create_state(one_name + "_dummy", "uint8_t queue[%d];" % size)
+    circular = create_state("circular_queue", "size_t len; size_t offset; void* queue;", None, False)
     dummies = [Dummy(one_name + "_dummy" + str(i)) for i in range(n_cores)]
-    enq_ones = [create_state_instance_from("circular_queue", one_instance_name + str(i), [size, 0, AddressOf(dummies[i])])
+    enq_ones = [circular(one_instance_name + str(i), [size, 0, dummies[i]])
             for i in range(n_cores)]
-    deq_ones = [create_state_instance_from("circular_queue", one_deq_instance_name + str(i), [size, 0, AddressOf(dummies[i])])
+    deq_ones = [circular(one_deq_instance_name + str(i), [size, 0, dummies[i]])
             for i in range(n_cores)]
 
     All = create_state(all_name, "circular_queue* cores[%d];" % n_cores)
-    enq_all = All(all_instance_name, [AddressOf(enq_ones[i]) for i in range(n_cores)])
-    deq_all = All(all_eq_instance_name, [AddressOf(deq_ones[i]) for i in range(n_cores)])
+    enq_all = All(all_instance_name, [[enq_ones[i] for i in range(n_cores)]])
+    deq_all = All(all_eq_instance_name, [[deq_ones[i] for i in range(n_cores)]])
 
     Enqueue_alloc = create_element(prefix + "enqueue_alloc_ele",
                                    [Port("in_core", ["size_t"]), Port("in_len", ["size_t"])],

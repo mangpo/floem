@@ -1,10 +1,14 @@
 #include<stdio.h>
 #include<stdlib.h>
 
-int* p;
+typedef struct _abc { 
+  int a; int b; int c[10];
+} abc;
 
 int main() {
-  p = malloc(sizeof(int)* 10);
-  printf("%d %d\n", p[0], sizeof(int));
+  abc* x = (abc *) malloc(sizeof(abc));
+  for(int i=0; i<10; i++) {
+    printf("%d\n", x->c[i]);
+  }
   return 0;
 }
