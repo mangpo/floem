@@ -848,6 +848,14 @@ def sanitize_variable_length(code):
 
 
 def get_state_mapping(content):
+    """
+    Handle state with variable-length fields.
+    :param content: content of the original state
+    :return: content , reorder, mapping
+    content -- content for C struct
+    reorder -- true if the order of the new content differs from the old content
+    mapping -- mapping of field to the correct reference
+    """
     fields = content.split(';')[:-1]  # discard the last one
     fixed_len_order = []
     variable_len_order = []
@@ -1034,6 +1042,9 @@ class Compiler:
 
     def generate_code_and_run(self, expect=None):
         compiler.generate_code_and_run(self.generate_graph(), self.testing, expect, self.include, self.depend, self.I)
+
+    def generate_code_and_compile(self):
+        compiler.generate_code_and_compile(self.generate_graph(), self.testing, self.include, self.depend, self.I)
 
     def generate_code_as_header(self, header='tmp.h'):
         compiler.generate_code_as_header(self.generate_graph(), self.testing, self.include, header)

@@ -48,6 +48,7 @@ class TestDSL(unittest.TestCase):
                  "nested_spec_impl_in_compo.py",
                  "nested_compo_in_impl.py",
                  "API_insert_start_element.py",
+                 "multiprocesses.py",
                  ]
 
         tests2 = ["join.py",

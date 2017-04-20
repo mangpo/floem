@@ -607,8 +607,8 @@ def generate_internal_triggers_with_process(graph, process, ext):
     forever = threads_internal.difference(all_injects)
     no_triggers = graph.threads_roots.difference(forever).difference(all_injects).difference(threads_api)
 
-    forever = [t for t in forever if graph.process_of_thread(t) == process]
-    no_triggers = [t for t in no_triggers if graph.process_of_thread(t) == process]
+    forever = [t for t in forever if graph.instances[t].process == process]
+    no_triggers = [t for t in no_triggers if graph.instances[t].process == process]
     if len(no_triggers) > 0:
         for inst in no_triggers:
             t = graph.instances[inst].thread
@@ -797,19 +797,12 @@ def convert_type(result, expect):
 
 
 def generate_code_as_header(graph, testing, include=None, header='tmp.h'):
-    # with open(header, 'w') as f, redirect_stdout(f):
-    #     generate_code(graph, testing, include)
-    #     generate_inject_probe_code(graph)
-    #     generate_internal_triggers(graph)
-
     generate_code(graph, ".h", testing, include)
     generate_inject_probe_code(graph, ".h")
     generate_internal_triggers(graph, ".h")
 
 
-def generate_code_and_run(graph, testing, expect=None, include=None, depend=None, include_option=None):
-    # TODO
-    #with open('tmp.c', 'w') as f, redirect_stdout(f):
+def generate_code_and_compile(graph, testing, include=None, depend=None, include_option=None):
     generate_code(graph, ".c", testing, include)
     generate_inject_probe_code(graph, ".c")
     generate_internal_triggers(graph, ".c")
@@ -824,13 +817,21 @@ def generate_code_and_run(graph, testing, expect=None, include=None, depend=None
             if not status == 0:
                 raise Exception("Compile error: " + cmd)
 
-    cmd = 'gcc -O3 -msse4.1 -I %s -pthread tmp.c %s -o tmp' % (common.dpdk_include, extra)
-    status = os.system(cmd)
-    if not status == 0:
-        raise Exception("Compile error: " + cmd)
-    try:
-        result = subprocess.check_output('./tmp', stderr=subprocess.STDOUT, shell=True)
-        if expect is not None:
+    for process in graph.processes:
+        cmd = 'gcc -O3 -msse4.1 -I %s -pthread %s.c %s -o %s' % (common.dpdk_include, process, extra, process)
+        status = os.system(cmd)
+        if not status == 0:
+            raise Exception("Compile error: " + cmd)
+
+
+def generate_code_and_run(graph, testing, expect=None, include=None, depend=None, include_option=None):
+    generate_code_and_compile(graph, testing, include, depend, include_option)
+
+    if expect:
+        assert (len(graph.processes) == 1 and graph.processes == set(["tmp"])), \
+            "generate_code_and_run doesn't support multiple processes. Please use generate_code_and_compile()"
+        try:
+            result = subprocess.check_output('./tmp', stderr=subprocess.STDOUT, shell=True)
             result = result.split()
             if not len(result) == len(expect):
                 raise Exception("Expect %s. Actual %s." % (expect, result))
@@ -838,11 +839,18 @@ def generate_code_and_run(graph, testing, expect=None, include=None, depend=None
                 convert = convert_type(result[i], expect[i])
                 if not expect[i] == convert:
                     raise Exception("Expect %d. Actual %d." % (expect[i], convert))
-        else:
+        except subprocess.CalledProcessError as e:
+            print e.output
+            raise e
+    else:
+        try:
+            for process in graph.processes:
+                print "run:", process
+                result = subprocess.check_output('./' + process, stderr=subprocess.STDOUT, shell=True)
             print result
-    except subprocess.CalledProcessError as e:
-        print e.output
-        raise e
+        except subprocess.CalledProcessError as e:
+            print e.output
+            raise e
 
     print "PASSED!"
 
