@@ -282,14 +282,14 @@ get_item_creator = create_element("get_item_creator",
     size_t totlen = m->mcr.request.bodylen - m->mcr.request.extlen;
 
     struct segment_header* full = NULL;
-    item *it = segment_item_alloc(this.segment, sizeof(item) + totlen); // TODO
+    item *it = segment_item_alloc(this->segment, sizeof(item) + totlen); // TODO
     if(it == NULL) {
         printf("Segment is full.\n");
-        full = this.segment;
-        this.segment = this.next->segment;
-        this.next = this.next->next;
+        full = this->segment;
+        this->segment = this->next->segment;
+        this->next = this->next->next;
         // Assume that the next one is not full.
-        it = segment_item_alloc(this.segment, sizeof(item) + totlen);
+        it = segment_item_alloc(this->segment, sizeof(item) + totlen);
     }
 
     printf("get_item id: %d, keylen: %ld, hash: %d, totlen: %ld, item: %ld\n", m->mcr.request.magic, keylen, hash, totlen, it);
@@ -307,19 +307,19 @@ add_logseg_creator = create_element("add_logseg_creator",
                    [Port("in", ["cqe_add_logseg*"])], [Port("out", ["q_entry*"])],
                    r'''
     (cqe_add_logseg* e) = in();
-    if(this.segment != NULL) {
+    if(this->segment != NULL) {
         struct _segments_holder* holder = (struct _segments_holder*) malloc(sizeof(struct _segments_holder*));
         holder->segment = e->segment;
-        last.holder->next = holder;
-        last.holder = holder;
+        last->holder->next = holder;
+        last->holder = holder;
     }
     else {
-        this.segment = e->segment;
-        last.holder = &this;
+        this->segment = e->segment;
+        last->holder = this;
     }
 
     int count = 1;
-    segments_holder* p = &this;
+    segments_holder* p = this;
     while(p->next != NULL) {
         count++;
         p = p->next;
@@ -467,15 +467,10 @@ c.depend = ['jenkins_hash', 'hashtable', 'ialloc']
 c.triggers = True
 c.I = '/home/mangpo/lib/dpdk-16.11/build/include'
 
-# def run_spec():
-#     c.desugar_mode = "spec"
-#     c.generate_code_as_header("tmp_spec.h")
-#     c.compile_and_run("test")
 
 def run_impl():
     c.desugar_mode = "impl"
-    c.generate_code_as_header("tmp_impl_correct_queue.h")
+    c.generate_code_as_header("tmp_impl_correct_queue")
     c.compile_and_run("test_impl_correct_queue")
 
-#run_spec()
 run_impl()

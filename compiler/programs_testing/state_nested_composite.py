@@ -5,7 +5,7 @@ Count = create_state("Count", "int count;", [0])
 Forward = create_element("Identity",
             [Port("in", ["int"])],
             [Port("out", ["int"])],
-            r'''this.count++; int x = in(); output { out(this.count); }''',
+            r'''this->count++; int x = in(); output { out(this->count); }''',
             None,
             [("Count", "this")])
 Print = create_element("Print",

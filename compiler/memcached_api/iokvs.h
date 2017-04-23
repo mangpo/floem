@@ -1,6 +1,7 @@
 #ifndef IOKVS_H_
 #define IOKVS_H_
 
+#include <stdio.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>

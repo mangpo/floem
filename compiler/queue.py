@@ -10,24 +10,24 @@ def declare_circular_queue(name, type, size, blocking=False):
                              [Port("in", [type])], [],
                              r'''
            (%s x) = in();
-           int next = this.tail + 1;
-           if(next >= this.size) next = 0;
-           if(next == this.head) {
+           int next = this->tail + 1;
+           if(next >= this->size) next = 0;
+           if(next == this->head) {
              //printf("Circular queue '%s' is full. A packet is dropped.\n");
            } else {
-             this.data[this.tail] = x;
-             this.tail = next;
+             this->data[this->tail] = x;
+             this->tail = next;
            }
            ''' % (type, name), None, [(state_name, "this")])
 
     if blocking:
         src = r'''
             %s x;
-            while(this.head == this.tail) { fflush(stdout); }
-            x = this.data[this.head];
-            int next = this.head + 1;
-            if(next >= this.size) next = 0;
-            this.head = next;
+            while(this->head == this->tail) { fflush(stdout); }
+            x = this->data[this->head];
+            int next = this->head + 1;
+            if(next >= this->size) next = 0;
+            this->head = next;
             output { out(x); }
             ''' % type
     else:
@@ -35,15 +35,15 @@ def declare_circular_queue(name, type, size, blocking=False):
             fflush(stdout);
             %s x;
             bool avail = false;
-            if(this.head == this.tail) {
+            if(this->head == this->tail) {
                 //printf("Dequeue an empty circular queue '%s'. Default value is returned (for API call).\n");
                 //exit(-1);
             } else {
                 avail = true;
-                x = this.data[this.head];
-               int next = this.head + 1;
-                if(next >= this.size) next = 0;
-                this.head = next;
+                x = this->data[this->head];
+               int next = this->head + 1;
+                if(next >= this->size) next = 0;
+                this->head = next;
             }
             output switch { case avail: out(x); }
             ''' % (type, name)
@@ -108,7 +108,7 @@ def create_circular_queue_one2many_instances(name, type, size, n_cores):
                              r'''
            (size_t c) = in_core();
            (%s x) = in_entry();
-           %s* p = this.cores[c];
+           %s* p = this->cores[c];
            int next = p->tail + 1;
            if(next >= p->size) next = 0;
            if(next == p->head) {
@@ -125,13 +125,13 @@ def create_circular_queue_one2many_instances(name, type, size, n_cores):
                              r'''
            %s x;
            bool avail = false;
-           if(this.head == this.tail) {
+           if(this->head == this->tail) {
              //printf("Dequeue an empty circular queue '%s'. Default value is returned (for API call).\n");
              //exit(-1);
            } else {
                avail = true;
-               x = this.data[this.head];
-               this.head = (this.head + 1) %s this.size;
+               x = this->data[this->head];
+               this->head = (this->head + 1) %s this->size;
            }
            output switch { case avail: out(x); }
            ''' % (type, name, '%'), None, [(one_name, "this")])
@@ -157,13 +157,13 @@ def create_circular_queue_many2one_instances(name, type, size, n_cores):
                              [Port("in", [type])], [],
                              r'''
            (%s x) = in();
-           int next = this.tail + 1;
-           if(next >= this.size) next = 0;
-           if(next == this.head) {
+           int next = this->tail + 1;
+           if(next >= this->size) next = 0;
+           if(next == this->head) {
              printf("Circular queue '%s' is full. A packet is dropped.\n");
            } else {
-             this.data[this.tail] = x;
-             this.tail = next;
+             this->data[this->tail] = x;
+             this->tail = next;
            }
            ''' % (type, name), None, [(one_name, "this")])
 
@@ -177,7 +177,7 @@ def create_circular_queue_many2one_instances(name, type, size, n_cores):
            int n = %d;
            for(int i=0; i<n; i++) {
              int index = (c + i) %s n;
-             %s* p = this.cores[index];
+             %s* p = this->cores[index];
              if(p->head != p->tail) {
                avail = true;
                x = p->data[p->head];
@@ -229,7 +229,7 @@ def create_circular_queue_variablesize_one2many(name, size, n_cores):
                              r'''
            (size_t len) = in_len();
            (size_t c) = in_core();
-           circular_queue *q = this.cores[c];
+           circular_queue *q = this->cores[c];
            //printf("ENQ core=%ld, queue=%ld\n", c, q->queue);
            q_entry* entry = (q_entry*) enqueue_alloc(q, len);
            //if(entry == NULL) { printf("queue %d is full.\n", c); }
@@ -248,7 +248,7 @@ def create_circular_queue_variablesize_one2many(name, size, n_cores):
                              [Port("in", ["size_t"])], [Port("out", ["q_entry*"])],
                              r'''
         (size_t c) = in();
-        circular_queue *q = this.cores[c];
+        circular_queue *q = this->cores[c];
         q_entry* x = dequeue_get(q);
         //if(x) printf("DEQ core=%ld, entry=%ld\n", c, x);
         output { out(x); }
@@ -312,7 +312,7 @@ def create_circular_queue_variablesize_many2one(name, size, n_cores):
                              r'''
            (size_t c) = in_core();
            (size_t len) = in_len();
-           circular_queue *q = this.cores[c];
+           circular_queue *q = this->cores[c];
            q_entry* entry = (q_entry*) enqueue_alloc(q, len);
            output { out(entry); }
            ''', None, [(all_name, "this")])
@@ -332,7 +332,7 @@ def create_circular_queue_variablesize_many2one(name, size, n_cores):
         q_entry* x = NULL;
         for(int i=0; i<n; i++) {
             int index = (c + i) %s n;
-            circular_queue* q = this.cores[index];
+            circular_queue* q = this->cores[index];
             x = dequeue_get(q);
             if(x != NULL) {
                 c = (index + 1) %s n;

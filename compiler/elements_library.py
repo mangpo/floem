@@ -54,7 +54,7 @@ def create_table(put_name, get_name, index_type, val_type, size):
               (%s index) = in_index();
               (%s val) = in_value();
               uint32_t key = index %s %d;
-              if(this.data[key] == NULL) this.data[key] = val;
+              if(this->data[key] == NULL) this->data[key] = val;
               else { printf("Hash collision! Key = %s\n", key); exit(-1); }
               ''' % (index_type, val_type, '%', size, '%d'),
                               None, [(state_name, "this")])
@@ -64,9 +64,9 @@ def create_table(put_name, get_name, index_type, val_type, size):
                               r'''
               (%s index) = in();
               uint32_t key = index %s %d;
-              %s val = this.data[key];
+              %s val = this->data[key];
               if(val == NULL) { printf("No such entry in this table.\n"); exit(-1); }
-              this.data[key] = NULL;
+              this->data[key] = NULL;
               output { out(val); }
               ''' % (index_type, '%', size, val_type), None, [(state_name, "this")])
 
@@ -100,10 +100,10 @@ def create_inject(name, type, size, func):
     state = create_state(st_name, "%s data[%d]; int p;" % (type, size), [[0],0])
     state_inst = state(st_inst_name)
     src = r'''
-        if(this.p >= %d) { printf("Error: inject more than available entries.\n"); exit(-1); }
-        int temp = this.p;
-        this.p++;''' % size
-    src += "output { out(this.data[temp]); }"
+        if(this->p >= %d) { printf("Error: inject more than available entries.\n"); exit(-1); }
+        int temp = this->p;
+        this->p++;''' % size
+    src += "output { out(this->data[temp]); }"
     element = create_element(name, [], [Port("out", [type])], src, None, [(st_name, "this")])
     populte_state(name, st_inst_name, st_name, type, size, func)
     fresh_id = [0]
@@ -128,9 +128,9 @@ def create_probe(name, type, size, func):
     state_inst = state(st_inst_name)
 
     append = r'''
-        if(this.p >= %d) { printf("Error: probe more than available entries.\n"); exit(-1); }
-        this.data[this.p] = x;
-        this.p++;''' % size
+        if(this->p >= %d) { printf("Error: probe more than available entries.\n"); exit(-1); }
+        this->data[this->p] = x;
+        this->p++;''' % size
     src = "(%s x) = in(); %s output { out(x); }" % (type, append)
     element = create_element(name, [Port("in", [type])], [Port("out", [type])], src, None, [(st_name, "this")])
     compare_state(name, st_inst_name, st_name, type, size, func)

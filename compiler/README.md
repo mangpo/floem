@@ -72,8 +72,8 @@ obs_constructor = create_element("observer",
   # C implementation
   r'''
   int id = in(); 
-  this.total++; 
-  this.last = id; 
+  this->total++;   # state is referenced as a pointer to a struct.
+  this->last = id; 
   output { out(id); }''', 
   None,  # local state
   [("tracker", "this")])  # state params = a list of (state, local_name)
@@ -82,6 +82,8 @@ o2 = obs_constructor(tracker1)  # observer element 2
 ```
 
 Notice that `o1` and `o2` share the same tracker state, so they both contribute to `tracker1.total`. Also notice that there can be a race condition here because of the shared state.
+
+Also note that a state is referenced as a pointer to a struct, but a local state is referenced as a struct.
 
 ### 2.1 Element Port
 

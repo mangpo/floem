@@ -341,17 +341,17 @@ class StateNode:
 
 
 class Graph:
-    def __init__(self, elements=[], states=[]):
+    def __init__(self, default_process):  # , elements=[], states=[]
         self.elements = {}
         self.instances = {}
         self.states = {}
         self.state_order = []
         self.state_instances = {}
         self.state_instance_order = []
-        for e in elements:
-            self.elements[e.name] = e
-        for s in states:
-            self.states[s.name] = s
+        # for e in elements:
+        #     self.elements[e.name] = e
+        # for s in states:
+        #     self.states[s.name] = s
 
         self.identity = {}
 
@@ -367,6 +367,7 @@ class Graph:
         # Process
         self.processes = set()
         self.thread2process = {}
+        self.default_process = default_process
 
     def __str__(self):
         s = "Graph:\n"
@@ -586,7 +587,7 @@ class Graph:
         if t in self.thread2process:
             return self.thread2process[t]
         else:
-            return "tmp"
+            return self.default_process
 
 '''
 State initialization related functions

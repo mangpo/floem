@@ -75,7 +75,7 @@ void run_app(void *threadid) {
         segment_item_free(old, avail);
         old->offset += avail;
       }
-      release(e);
+      release((q_entry *) e);
       usleep(10);
   }
 }

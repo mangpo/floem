@@ -1031,12 +1031,12 @@ class Compiler:
         # Compiler option
         self.I = None
 
-    def generate_graph(self):
+    def generate_graph(self, filename="tmp"):
         assert len(scope) == 1, "Compile error: there are multiple scopes remained."
         p1 = Program(*scope[0])
         p2 = desugaring.desugar(p1, self.desugar_mode)
         dp = desugaring.insert_fork(p2)
-        g = compiler.generate_graph(dp, self.resource, self.remove_unused)
+        g = compiler.generate_graph(dp, self.resource, self.remove_unused, filename)
         return g
 
     def generate_code(self):
@@ -1051,8 +1051,8 @@ class Compiler:
     def generate_code_and_compile(self):
         compiler.generate_code_and_compile(self.generate_graph(), self.testing, self.include, self.depend, self.I)
 
-    def generate_code_as_header(self, header='tmp.h'):
-        compiler.generate_code_as_header(self.generate_graph(), self.testing, self.include, header)
+    def generate_code_as_header(self, header='tmp'):
+        compiler.generate_code_as_header(self.generate_graph(header), self.testing, self.include, header)
 
     def compile_and_run(self, name):
         compiler.compile_and_run(name, self.depend, self.I)

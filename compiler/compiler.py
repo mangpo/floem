@@ -136,9 +136,9 @@ def rename_state(rename, src):
         match = True
         index = 0
         while match:
-            match = re.search('[^a-zA-Z0-9_]('+old+'\.)', src[index:])
+            match = re.search('[^a-zA-Z0-9_]('+old+')[^a-zA-Z0-9_]', src[index:])
             if match:
-                src = src[:index+match.start(1)] + new + '->' + src[index+match.end(1):]
+                src = src[:index+match.start(1)] + new + src[index+match.end(1):]
                 index = index + match.start(1) + len(old)
     return src
 
@@ -517,7 +517,7 @@ def get_element_port_avail(func, port):
     return "_%s_%s_avail" % (func, port)
 
 
-def generate_graph(program, resource=True, remove_unused=False):
+def generate_graph(program, resource=True, remove_unused=False, default_process="tmp"):
     """
     Compile program to data-flow graph and insert necessary elements for resource mapping and join elements.
     :param program: program AST
@@ -525,7 +525,7 @@ def generate_graph(program, resource=True, remove_unused=False):
     :return: data-flow graph
     """
     # Generate data-flow graph.
-    gen = GraphGenerator()
+    gen = GraphGenerator(default_process)
     gen.interpret(program)
     #gen.graph.check_input_ports()
 
@@ -657,11 +657,6 @@ def generate_internal_triggers_with_process(graph, process, ext):
         impl_injects += [(x, inject.size) for x in inject.impl_ele_instances if process == graph.instances[x].process]
         all_injects += [x for x in inject.spec_ele_instances if process == graph.instances[x].process]
         all_injects += [x for x in inject.impl_ele_instances if process == graph.instances[x].process]
-    # for inject in injects.values():
-    #     spec_injects += [(x, inject.size) for x in inject.spec_ele_instances]
-    #     impl_injects += [(x, inject.size) for x in inject.impl_ele_instances]
-    #     all_injects += inject.spec_ele_instances
-    #     all_injects += inject.impl_ele_instances
 
     spec_impl = is_spec_impl(threads_internal.union(all_injects))
 

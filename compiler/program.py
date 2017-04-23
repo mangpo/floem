@@ -166,8 +166,8 @@ class ProcessMap:
 
 
 class GraphGenerator:
-    def __init__(self):
-        self.graph = Graph()
+    def __init__(self, default_process):
+        self.graph = Graph(default_process)
         self.composites = {}
         self.elements = {}
         self.env = {}

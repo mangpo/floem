@@ -200,7 +200,7 @@ class ThreadAllocator:
         # Generate port available indicators.
         for port in need_buffer:
             avail = port.name + "_avail"
-            this_avail = "this." + avail
+            this_avail = "this->" + avail
             avails.append(avail)
             this_avails.append(this_avail)
             clear += "  %s = false;\n" % this_avail
@@ -237,7 +237,7 @@ class ThreadAllocator:
         for port in need_buffer:
             for i in range(len(port.argtypes)):
                 buffer = "%s_arg%d" % (port.name, i)
-                this_buffer = "this." + buffer
+                this_buffer = "this->" + buffer
                 invoke += "  %s %s = %s;\n" % (port.argtypes[i], buffer, this_buffer)
         invoke += clear
         invoke += "  output { out(%s); }\n" % ",".join(all_args)
@@ -272,7 +272,7 @@ class ThreadAllocator:
                 self.graph.connect(instance.name, new_name, port.name, None, True)
 
     def create_buffer_write_element(self, instance, port, next_ele_name, next_port):
-        avail = "this." + next_port + "_avail"
+        avail = "this->" + next_port + "_avail"
 
         # Runtime check.
         types_buffers = []
@@ -286,7 +286,7 @@ class ThreadAllocator:
         src += "  while(%s) { fflush(stdout); }\n" % avail
         for i in range(len(port.argtypes)):
             buffer = buffers[i]
-            src += "  this.%s = %s;\n" % (buffer, buffer)
+            src += "  this->%s = %s;\n" % (buffer, buffer)
         src += "  %s = true;\n" % avail
 
         # Create element
