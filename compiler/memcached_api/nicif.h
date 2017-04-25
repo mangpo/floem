@@ -42,8 +42,8 @@ typedef struct {
     //uint32_t vallen;
     //uint32_t keylen;
     uint64_t opaque;
-    //uint64_t item;
-    void* item;
+    uint64_t item;
+    //void* item;
 } __attribute__((packed)) cqe_send_getresponse;
 typedef struct {
     uint16_t flags;
@@ -62,10 +62,10 @@ typedef struct {
 typedef struct {
     uint16_t flags;
     uint16_t len;
-    //uint32_t pad0;
-    //uint64_t segbase;
-    //uint64_t seglen;
-    void* segment;
+    uint32_t pad0;
+    uint64_t segbase;
+    uint64_t seglen;
+    //void* segment;
 } __attribute__((packed)) cqe_add_logseg;
 #define EQE_ALIGN 8U
 #define EQE_FLAG_SWOWN 0x0001
@@ -94,13 +94,14 @@ typedef struct {
     uint16_t len;
     //uint32_t client;
     uint64_t opaque;
-    void* item;
+    uint64_t item;
+    //void* item;
 } __attribute__((packed)) eqe_rx_set;
 typedef struct {
     uint16_t flags;
     uint16_t len;
-    //uint32_t pad0;
-    //uint64_t last;
-    void* segment;
+    uint32_t pad0;
+    uint64_t last;
+    //void* segment;
 } __attribute__((packed)) eqe_seg_full;
 #endif // ndef NICIF_H_

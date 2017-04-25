@@ -1,4 +1,4 @@
-// gcc -O3 -lrt shm_test.c -o shm_test
+// gcc -O3 shm_test.c -o shm_test -lrt
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>

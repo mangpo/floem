@@ -23,7 +23,7 @@ void run_app(void *threadid) {
   ialloc_init_allocator(&ia);
   iallocs[tid] = &ia;
   // pass ia->cur to NIC
-  send_cq(tid, CQE_TYPE_LOG, ia.cur, 0);
+  send_cq(tid, CQE_TYPE_LOG, get_pointer_offset(ia.cur->data), ia.cur->size, 0);
 
   printf("Worker %ld starting\n", tid);
 
@@ -47,11 +47,11 @@ void run_app(void *threadid) {
 //            printf("get id: %ld, key[%d] = %d\n", e_get->opaque, i, key[i]);
         uint8_t* val = item_value(it);
         printf("get at core %ld: id: %ld, keylen: %d, vallen %d, val: %d\n", tid, e_get->opaque, it->keylen, it->vallen, val[0]);
-        send_cq(tid, CQE_TYPE_GRESP, it, e_get->opaque);
+        send_cq(tid, CQE_TYPE_GRESP, get_pointer_offset(it), 0, e_get->opaque);
       }
       else if (type == EQE_TYPE_RXSET) {
         eqe_rx_set* e_set = (eqe_rx_set*) e;
-        item* it = e_set->item;
+        item* it = get_pointer(e_set->item);
         uint8_t * val = item_value(it);
 //        printf("set at core %ld: id: %ld, keylen: %d, hash: %d\n", tid, e_set->opaque, it->keylen, it->hv);
         printf("set at core %ld: id: %ld, item: %ld, keylen: %d, vallen: %d, val: %d\n", tid, e_set->opaque, it, it->keylen, it->vallen, val[0]);
@@ -59,7 +59,7 @@ void run_app(void *threadid) {
 //        for(int i=0; i<it->keylen; i++)
 //            printf("set id: %ld, key[%d] = %d\n", e_set->opaque, i, key[i]);
         hasht_put(it, NULL);
-        send_cq(tid, CQE_TYPE_SRESP, NULL, e_set->opaque);
+        send_cq(tid, CQE_TYPE_SRESP, 0, 0, e_set->opaque);
       }
       else if (type == EQE_TYPE_SEGFULL) {
         struct segment_header* segment = new_segment(&ia, false);
@@ -67,13 +67,14 @@ void run_app(void *threadid) {
             printf("Fail to allocate new segment.\n");
             exit(-1);
         }
-        send_cq(tid, CQE_TYPE_LOG, segment, 0);
+        send_cq(tid, CQE_TYPE_LOG, get_pointer_offset(segment->data), segment->size, 0);
 
-        eqe_seg_full* e_full = (eqe_seg_full*) e;
-        struct segment_header* old = e_full->segment;
-        size_t avail = old->size - old->offset;
-        segment_item_free(old, avail);
-        old->offset += avail;
+        // TODO: what to do with full segment?
+//        eqe_seg_full* e_full = (eqe_seg_full*) e;
+//        struct segment_header* old = e_full->segment;
+//        size_t avail = old->size - old->offset;
+//        segment_item_free(old, avail);
+//        old->offset += avail;
       }
       release((q_entry *) e);
       usleep(10);

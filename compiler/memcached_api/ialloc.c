@@ -22,6 +22,14 @@ void *mem_base;
 uint64_t mem_base_phys;
 #endif
 
+uint64_t get_pointer_offset(void* p) {
+    return (uintptr_t) p - (uintptr_t) seg_base;
+}
+
+void* get_pointer(uint64_t offset) {
+    return (void *) ((uintptr_t) seg_base + offset);
+}
+
 void ialloc_init(void)
 {
     rte_spinlock_init(&segalloc_lock);
@@ -108,6 +116,7 @@ static struct segment_header *segment_alloc(void)
 
     segsz = settings.segsize;
     data = (void *) ((uintptr_t) seg_base + segsz * i);
+    printf("segment alloc: seg_base = %ld, data = %ld\n", seg_base, data);
 #ifndef BARRELFISH
     if (mprotect(data, settings.segsize, PROT_READ | PROT_WRITE) != 0) {
         perror("mprotect failed");
@@ -156,7 +165,40 @@ void segment_item_free(struct segment_header *h, size_t total)
     }
 }
 
-item *segment_item_alloc(struct segment_header *h, size_t total)
+item *segment_item_alloc(uint64_t thisbase, uint64_t seglen, uint64_t* offset, size_t total)
+{
+    //printf("segment_header = %ld\n", h);
+    item *it = (item *) ((uintptr_t) seg_base + thisbase + *offset);
+    printf("item: seg_base = %ld, thisbase = %ld, offset = %ld\n", seg_base, thisbase, *offset);
+    size_t avail;
+
+    /* Not enough room in this segment */
+    avail = seglen - *offset;
+    //printf("avail = %ld\n", avail);
+    if (avail == 0) {
+        return NULL;
+    } else if (avail < total) {
+        if (avail >= sizeof(item)) {
+            it->refcount = 0;
+            /* needed for log scan */
+            it->keylen = avail - sizeof(item);
+            it->vallen = 0;
+        }
+        // The following should be done on APP.
+        //segment_item_free(h, avail);
+        //h->offset += avail;
+        return NULL;
+    }
+
+    /* Ordering here is important */
+    it->refcount = 1;
+
+    *offset += total;
+
+    return it;
+}
+
+item *segment_item_alloc_pointer(struct segment_header *h, size_t total)
 {
     //printf("segment_header = %ld\n", h);
     item *it = (item *) ((uintptr_t) h->data + h->offset);
@@ -187,6 +229,7 @@ item *segment_item_alloc(struct segment_header *h, size_t total)
 
     return it;
 }
+
 
 
 void ialloc_init_allocator(struct item_allocator *ia)
@@ -258,7 +301,7 @@ item *ialloc_alloc(struct item_allocator *ia, size_t total, bool cleanup)
     }
 
     old = ia->cur;
-    if ((it = segment_item_alloc(old, total)) != NULL) {
+    if ((it = segment_item_alloc_pointer(old, total)) != NULL) {
         return it;
     }
 
@@ -279,7 +322,7 @@ item *ialloc_alloc(struct item_allocator *ia, size_t total, bool cleanup)
     old->flags |= SF_INACTIVE;
     ia->cur = h;
 
-    it = segment_item_alloc(h, total);
+    it = segment_item_alloc_pointer(h, total);
     if (it == NULL) {
         printf("Fail 3!\n");
         return NULL;

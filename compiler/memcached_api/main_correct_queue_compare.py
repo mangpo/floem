@@ -163,40 +163,38 @@ eqe_rx_set* entry = (eqe_rx_set *) in_entry();
 if(entry) {
     entry->flags |= EQE_TYPE_RXSET << EQE_TYPE_SHIFT;
     entry->opaque = opaque;
-    entry->item = it;
+    entry->item = get_pointer_offset(it);
 }
 output switch { case entry: out((q_entry*) entry); }
                ''')
 
 
 filter_full = create_element_instance("filter_full",
-               [Port("in_segment", ["struct segment_header*"])],
-               [Port("out", ["struct segment_header*"])],
+               [Port("in_segment", ["uint64_t"])],
+               [Port("out", ["uint64_t"])],
                r'''
-(struct segment_header* full) = in_segment();
+(uint64_t full) = in_segment();
 output switch { case full: out(full); }
                ''')
 
 len_core_full = create_element_instance("len_core_set",
-               [Port("in_segment", ["struct segment_header*"])],
+               [Port("in_segment", ["uint64_t"])],
                [Port("out_len", ["size_t"]), Port("out_core", ["size_t"])],
                r'''
-(struct segment_header* full) = in_segment();
+(uint64_t full) = in_segment();
 size_t len = sizeof(eqe_seg_full);
 output { out_len(len); out_core(0); }
                ''')
 
 fill_eqe_full = create_element_instance("fill_eqe_full",
-               [Port("in_entry", ["q_entry*"]), Port("in_segment", ["struct segment_header*"])],
+               [Port("in_entry", ["q_entry*"]), Port("in_segment", ["uint64_t"])],
                [Port("out", ["q_entry*"])],
                r'''
 eqe_seg_full* entry = (eqe_seg_full *) in_entry();
-(struct segment_header* full) = in_segment();
-if(full) {
-    entry->flags |= EQE_TYPE_SEGFULL << EQE_TYPE_SHIFT;
-    entry->segment = full;
-}
-output switch { case full: out((q_entry*) entry); }
+(uint64_t full) = in_segment();
+entry->flags |= EQE_TYPE_SEGFULL << EQE_TYPE_SHIFT;
+entry->last = full;
+output { out((q_entry*) entry); }
                ''')
 
 len_cqe = create_element_instance("len_cqe",
@@ -216,12 +214,13 @@ output { out(len); }
 # fill_cqe(entry, type, pointer, opague)
 fill_cqe = create_element_instance("fill_cqe",
                [Port("in_entry", ["q_entry*"]), Port("in_type", ["uint8_t"]),
-                Port("in_pointer", ["void*"]), Port("in_opaque", ["uint64_t"])],
+                Port("in_pointer", ["uint64_t"]), Port("in_size", ["uint64_t"]), Port("in_opaque", ["uint64_t"])],
                [Port("out", ["q_entry*"])],
                r'''
 (q_entry* e) = in_entry();
 (uint8_t t) = in_type();
-(void* p) = in_pointer();
+(uint64_t base) = in_pointer();
+(uint64_t size) = in_size();
 (uint64_t opaque) = in_opaque();
 if(e) {
     //printf("fill_cqe (1): entry = %ld, len = %ld\n", e, e->len);
@@ -231,7 +230,7 @@ if(e) {
     if(t == CQE_TYPE_GRESP) {
         cqe_send_getresponse* es = (cqe_send_getresponse*) e;
         es->opaque = opaque;
-        es->item = p;
+        es->item = base;
     }
     else if(t == CQE_TYPE_SRESP) {
         cqe_send_setresponse* es = (cqe_send_setresponse*) e;
@@ -239,7 +238,8 @@ if(e) {
     }
     else if(t == CQE_TYPE_LOG) {
         cqe_add_logseg* es = (cqe_add_logseg*) e;
-        es->segment = p;
+        es->segbase = base;
+        es->seglen = size;
     //printf("fill_cqe (3): entry = %ld, len = %ld\n", e, e->len);
     }
 }
@@ -253,7 +253,7 @@ unpack_get = create_element_instance("unpack_get",
                  [Port("out_opaque", ["uint64_t"]), Port("out_item", ["item*"]), Port("out_entry", ["q_entry*"])],
                  r'''
 cqe_send_getresponse* entry = (cqe_send_getresponse*) in(); // TODO
-output { out_opaque(entry->opaque); out_item(entry->item); out_entry((q_entry*) entry); }
+output { out_opaque(entry->opaque); out_item(get_pointer(entry->item)); out_entry((q_entry*) entry); }
                  ''')
 
 unpack_set = create_element_instance("unpack_set",
@@ -305,8 +305,8 @@ get_core_set = get_core("get_core_set")
 
 ######################## Log segment ##########################
 Segments = create_state("segments_holder",
-                        "struct segment_header* segment; struct _segments_holder* next;",
-                        [0,0])
+                        "uint64_t segbase; uint64_t seglen; uint64_t offset; struct _segments_holder* next;",
+                        [0,0,0,0])
 segments = Segments()
 
 Last_segment = create_state("last_segment",
@@ -316,20 +316,22 @@ last_segment = Last_segment()
 
 get_item_creator = create_element("get_item_creator",
                    [Port("in", ["iokvs_message*", "void*", "size_t", "uint32_t"])],
-                   [Port("out_item", ["item*", "uint64_t"]), Port("out_full", ["struct segment_header*"])],
+                   [Port("out_item", ["item*", "uint64_t"]), Port("out_full", ["uint64_t"])],
                    r'''
     (iokvs_message* m, void* key, size_t keylen, uint32_t hash) = in();
     size_t totlen = m->mcr.request.bodylen - m->mcr.request.extlen;
 
-    struct segment_header* full = NULL;
-    item *it = segment_item_alloc(this->segment, sizeof(item) + totlen); // TODO
+    uint64_t full = 0;
+    item *it = segment_item_alloc(this->segbase, this->seglen, &this->offset, sizeof(item) + totlen); // TODO
     if(it == NULL) {
         printf("Segment is full.\n");
-        full = this->segment;
-        this->segment = this->next->segment;
+        full = this->segbase + this->offset;
+        this->segbase = this->next->segbase;
+        this->seglen = this->next->seglen;
+        this->offset = this->next->offset;
         this->next = this->next->next;
         // Assume that the next one is not full.
-        it = segment_item_alloc(this->segment, sizeof(item) + totlen);
+        it = segment_item_alloc(this->segbase, this->seglen, &this->offset, sizeof(item) + totlen);
     }
 
     printf("get_item id: %d, keylen: %ld, hash: %d, totlen: %ld, item: %ld\n", m->mcr.request.magic, keylen, hash, totlen, it);
@@ -367,14 +369,18 @@ add_logseg_creator = create_element("add_logseg_creator",
                    [Port("in", ["cqe_add_logseg*"])], [Port("out", ["q_entry*"])],
                    r'''
     (cqe_add_logseg* e) = in();
-    if(this->segment != NULL) {
-        struct _segments_holder* holder = (struct _segments_holder*) malloc(sizeof(struct _segments_holder*));
-        holder->segment = e->segment;
+    if(this->segbase) {
+        struct _segments_holder* holder = (struct _segments_holder*) malloc(sizeof(struct _segments_holder));
+        holder->segbase = e->segbase;
+        holder->seglen = e->seglen;
+        holder->offset = 0;
         last->holder->next = holder;
         last->holder = holder;
     }
     else {
-        this->segment = e->segment;
+        this->segbase = e->segbase;
+        this->seglen = e->seglen;
+        this->offset = 0;
         last->holder = this;
     }
 
@@ -508,10 +514,10 @@ def impl():
 
     # Enqueue
     @API("send_cq")
-    def send_cq(core, type, pointer, opague):
+    def send_cq(core, type, pointer, size, opague):
         length = len_cqe(type)
         entry = tx_enq_alloc(core, length)
-        entry = fill_cqe(entry, type, pointer, opague)
+        entry = fill_cqe(entry, type, pointer, size, opague)
         tx_enq_submit(entry)
 
     @internal_trigger("nic_tx")

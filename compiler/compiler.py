@@ -368,10 +368,30 @@ def init_value(val):
         return val
 
 
+def map_shared_state(name, state_instance, ext):
+    state = state_instance.state
+    src = "{1} = ({0} *) shm_p;\n".format(state.name, name)
+    src += "shm_p = shm_p + sizeof({0});\n".format(state.name)
+
+    for process in state_instance.processes:
+        name = process + ext
+        with open(name, 'a') as f, redirect_stdout(f):
+            print src
+
+
 def allocate_state(name, state_instance, ext):
     state = state_instance.state
+    src = "{1} = ({0} *) malloc(sizeof({0}));\n".format(state.name, name)
+
+    for process in state_instance.processes:
+        name = process + ext
+        with open(name, 'a') as f, redirect_stdout(f):
+            print src
+
+
+def init_state(name, state_instance, all_processes, ext):
+    state = state_instance.state
     src = ""
-    src += "{1} = ({0} *) malloc(sizeof({0}));\n".format(state.name, name)
     if state_instance.init or state.init:
         if state_instance.init:
             inits = state_instance.init
@@ -393,10 +413,13 @@ def allocate_state(name, state_instance, ext):
             else:
                 src += "{0}->{1} = {2};\n".format(name, field, init_value(init))
 
-    for process in state_instance.processes:
-        name = process + ext
-        with open(name, 'a') as f, redirect_stdout(f):
-            print src
+    if len(state_instance.processes) == 1:
+        process = state_instance.processes[0]
+    else:
+        process = all_processes[0]
+    name = process + ext
+    with open(name, 'a') as f, redirect_stdout(f):
+        print src
 
 
 def generate_state_instances(graph, ext):
@@ -404,21 +427,87 @@ def generate_state_instances(graph, ext):
     for name in graph.state_instance_order:
         declare_state(name, graph.state_instances[name], ext)
 
-    src = "void init_state_instances() {\n"
+    # Collect shared memory
+    shared = set()
+    #total_size = 0
+    all_processes = set()
+    for name in graph.state_instance_order:
+        inst = graph.state_instances[name]
+        if len(inst.processes) > 1:
+            #size = inst.state.size  # TODO
+            #shared[name] = size
+            #total_size += size
+            shared.add(name)
+            all_processes = all_processes.union(inst.processes)
+
+    all_processes = [x for x in all_processes]
+
+    src = "size_t shm_size = 0;\n"
+    src += "void *shm;\n"
+    src += "void init_state_instances() {\n"
     for process in graph.processes:
         name = process + ext
         with open(name, 'a') as f, redirect_stdout(f):
             print src
 
+    # Create shared memory
+    if len(all_processes) > 1:
+        shared_src = ""
+        for name in shared:
+            inst = graph.state_instances[name]
+            shared_src += "shm_size += sizeof(%s);\n" % inst.state.name
+        master_src = 'shm = util_create_shmsiszed("SHARED", shm_size);\n'
+        master_src += 'uintptr_t shm_p = (uintptr_t) shm;'
+        slave_src = 'shm = util_map_shm("SHARED", shm_size);\n'
+        slave_src += 'uintptr_t shm_p = (uintptr_t) shm;'
+        with open(all_processes[0] + ext, 'a') as f, redirect_stdout(f):
+            print shared_src
+            print master_src
+        for process in all_processes[1:]:
+            name = process + ext
+            with open(name, 'a') as f, redirect_stdout(f):
+                print shared_src
+                print slave_src
+
     # Initialize states
+    base = 0
     for name in graph.state_instance_order:
-        allocate_state(name, graph.state_instances[name], ext)
+        inst = graph.state_instances[name]
+        if name in shared:
+            map_shared_state(name, inst, ext)
+        else:
+            allocate_state(name, inst, ext)
+        init_state(name, inst, all_processes, ext)
 
     src = "}\n"
     for process in graph.processes:
         name = process + ext
         with open(name, 'a') as f, redirect_stdout(f):
             print src
+
+    src = "void finalize_state_instances() {\n"
+    for process in graph.processes:
+        name = process + ext
+        with open(name, 'a') as f, redirect_stdout(f):
+            print src
+
+    if len(all_processes) > 1:
+        master_src = 'shm_unlink("SHARED");\n'
+        with open(all_processes[0] + ext, 'a') as f, redirect_stdout(f):
+            print master_src
+
+        src = 'munmap(shm, shm_size);\n'
+        for process in all_processes:
+            name = process + ext
+            with open(name, 'a') as f, redirect_stdout(f):
+                print src
+
+    src = "}\n"
+    for process in graph.processes:
+        name = process + ext
+        with open(name, 'a') as f, redirect_stdout(f):
+            print src
+
 
 
 def generate_join_save_function(name, join_ports_same_thread, instance, ext):
@@ -737,12 +826,15 @@ def generate_inject_probe_code_with_process(graph, process, ext):
 
         src += "void finalize_and_check() {\n"
         src += probe_src
+        src += "finalize_state_instances();\n"
         src += "}\n\n"
     else:
         src += "void init() {\n"
         src += "  init_state_instances();\n"
         src += "}\n"
-        src += "void finalize_and_check() {}\n"
+        src += "void finalize_and_check() {\n"
+        src += "  finalize_state_instances();\n"
+        src += "}\n"
 
     name = process + ext
     with open(name, 'a') as f, redirect_stdout(f):
@@ -872,13 +964,13 @@ def generate_code_and_compile(graph, testing, include=None, depend=None, include
     if depend:
         for f in depend:
             extra += '%s.o ' % f
-            cmd = 'gcc -O3 -msse4.1 -I %s -c %s.c' % (common.dpdk_include, f)
+            cmd = 'gcc -O3 -msse4.1 -I %s -c %s.c -lrt' % (common.dpdk_include, f)
             status = os.system(cmd)
             if not status == 0:
                 raise Exception("Compile error: " + cmd)
 
     for process in graph.processes:
-        cmd = 'gcc -O3 -msse4.1 -I %s -pthread %s.c %s -o %s' % (common.dpdk_include, process, extra, process)
+        cmd = 'gcc -O3 -msse4.1 -I %s -pthread %s.c %s -o %s -lrt' % (common.dpdk_include, process, extra, process)
         status = os.system(cmd)
         if not status == 0:
             raise Exception("Compile error: " + cmd)
@@ -920,12 +1012,12 @@ def compile_and_run(name, depend, include_option):
     if depend:
         for f in depend:
             extra += '%s.o ' % f
-            cmd = 'gcc -O3 -msse4.1 -I %s -c %s.c' % (common.dpdk_include, f)
+            cmd = 'gcc -O3 -msse4.1 -I %s -c %s.c -lrt' % (common.dpdk_include, f)
             status = os.system(cmd)
             if not status == 0:
                 raise Exception("Compile error: " + cmd)
 
-    cmd = 'gcc -O3 -msse4.1 -I %s -pthread %s.c %s -o %s' % (common.dpdk_include, name, extra, name)
+    cmd = 'gcc -O3 -msse4.1 -I %s -pthread %s.c %s -o %s -lrt' % (common.dpdk_include, name, extra, name)
     print cmd
     status = os.system(cmd)
     if not status == 0:
