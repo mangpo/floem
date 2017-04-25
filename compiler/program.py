@@ -322,7 +322,7 @@ class GraphGenerator:
             self.graph.threads_order.append((a_name, b_name))
 
         elif isinstance(x, ProcessMap):
-            self.graph.thread2process[x.thread] = x.process
+            self.graph.thread2process[self.get_resource(x.thread)] = x.process
 
         elif isinstance(x, PopulateState):
             self.graph.inject_populates[x.state_instance] = x.clone()

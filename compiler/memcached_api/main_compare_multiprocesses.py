@@ -431,7 +431,7 @@ probe_get = Probe()
 probe_set = Probe()
 
 def spec():
-    @internal_trigger("all")
+    @internal_trigger("all", "nic")
     def tx_pipeline():
         # From network
         pkt = inject()
@@ -466,7 +466,7 @@ def impl():
     rx_deq_get = rx_deq_get_creator()
     rx_deq_release = rx_deq_release_creator()
 
-    @internal_trigger("nic_rx")
+    @internal_trigger("nic_rx", process="nic")
     def tx_pipeline():
         # From network
         pkt = inject()
@@ -498,11 +498,11 @@ def impl():
         rx_enq_submit(eqe_full)
 
     # Dequeue
-    @API("get_eq")
+    @API("get_eq", process="app")
     def get_eq(core):
         return rx_deq_get(core)
 
-    @API("release")
+    @API("release", process="app")
     def release(x):
         rx_deq_release(x)
 
@@ -513,14 +513,14 @@ def impl():
         queue.create_circular_queue_variablesize_many2one_instances("tx_queue", 1024, n_cores)  # TODO: create just one enq/deq, take core_id as parameter.
 
     # Enqueue
-    @API("send_cq")
+    @API("send_cq", process="app")
     def send_cq(core, type, pointer, size, opague):
         length = len_cqe(type)
         entry = tx_enq_alloc(core, length)
         entry = fill_cqe(entry, type, pointer, size, opague)
         tx_enq_submit(entry)
 
-    @internal_trigger("nic_tx")
+    @internal_trigger("nic_tx", process="nic")
     def tx_pipeline():
         cq_entry = tx_deq_get()
         cqe_get, cqe_set, cqe_logseg, cqe_nop = classifier_rx(cq_entry)
@@ -565,18 +565,18 @@ c.I = '/home/mangpo/lib/dpdk-16.11/build/include'
 
 def run_spec():
     c.desugar_mode = "spec"
-    c.generate_code_as_header("tmp_impl_correct_queue_spec")
-    c.compile_and_run("test_impl_correct_queue_spec")
+    c.generate_code_as_header("test_spec")
+    c.compile_and_run("test_spec")
 
 def run_impl():
     c.desugar_mode = "impl"
-    c.generate_code_as_header("tmp_impl_correct_queue")
-    c.compile_and_run("test_impl_correct_queue")
+    c.generate_code_as_header("test_impl")
+    c.compile_and_run("test_impl")
 
 def run_compare():
     c.desugar_mode = "compare"
-    c.generate_code_as_header("tmp_impl_correct_queue_compare")
-    c.compile_and_run("test_impl_correct_queue_compare")
+    c.generate_code_as_header("test_compare")
+    #c.compile_and_run("test_compare")
 
 
 #run_spec()
@@ -588,3 +588,6 @@ run_compare()
 # TODO: proper initialization (run_threads_init: only run dequeue pipeline, run_threads: run dequeue and inject)
 # TODO: queue -- owner bit & tail pointer update
 # TODO: queue -- high order function
+
+# TODO: try multiprocesses
+# TODO: memory barrier

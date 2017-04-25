@@ -1,4 +1,4 @@
-#include "tmp_impl_correct_queue_compare.h"
+#include "test_compare.h"
 #include "iokvs.h"
 
 #define NUM_THREADS     4

@@ -413,8 +413,8 @@ def init_state(name, state_instance, all_processes, ext):
             else:
                 src += "{0}->{1} = {2};\n".format(name, field, init_value(init))
 
-    if len(state_instance.processes) == 1:
-        process = state_instance.processes[0]
+    if len(state_instance.processes) <= 1:
+        process = [x for x in state_instance.processes][0]
     else:
         process = all_processes[0]
     name = process + ext
@@ -470,7 +470,6 @@ def generate_state_instances(graph, ext):
                 print slave_src
 
     # Initialize states
-    base = 0
     for name in graph.state_instance_order:
         inst = graph.state_instances[name]
         if name in shared:
@@ -638,6 +637,9 @@ def generate_graph(program, resource=True, remove_unused=False, default_process=
         annotate_api_info(gen.graph)
 
     annotate_process_info(gen.graph)
+
+    if remove_unused:
+        gen.graph.remove_unused_states()
 
     return gen.graph
 

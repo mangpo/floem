@@ -575,6 +575,18 @@ class Graph:
                 if instance.thread is None:
                     raise Exception("Element instance '%s' has not been assigned to any thread." % instance.name)
 
+
+    def remove_unused_states(self):
+        delete = []
+        for name in self.state_instances:
+            inst = self.state_instances[name]
+            if len(inst.processes) == 0:
+                delete.append(name)
+
+        for name in delete:
+            del self.state_instances[name]
+            self.state_instance_order.remove(name)
+
     def is_start(self, my):
         for inst_list in my.input2ele.values():
             for name, port in inst_list:

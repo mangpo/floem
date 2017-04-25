@@ -587,11 +587,13 @@ def thread_common(name, f, input, output):
     return compo, input_types, output_type
 
 
-def internal_trigger(name):
+def internal_trigger(name, process=None):
     def receptor(f):
         compo, input_types, output_type = thread_common(name, f, False, False)
         t = internal_thread(name)
         t.run(compo)
+        if process:
+            CPU_process(process, t)
         return compo
     return receptor
 
@@ -626,12 +628,14 @@ def create_identity_multiports(ports_types):
     return e
 
 
-def API_common(name, f, input=True, output=True, default_return=None):
+def API_common(name, f, input=True, output=True, default_return=None, process=None):
     compo, input_types, output_type = thread_common(name, f, input, output)
     if default_return:
         default_return = str(default_return)
     t = API_thread(name, input_types, output_type, default_return)
     t.run(compo)
+    if process:
+        CPU_process(process, t)
 
     spec_starts = []
     impl_starts = []
@@ -665,27 +669,27 @@ def API_common(name, f, input=True, output=True, default_return=None):
         return compo
 
 
-def API(name, default_return=None):
+def API(name, default_return=None, process=None):
     def receptor(f):
-        return API_common(name, f, default_return=default_return)
+        return API_common(name, f, default_return=default_return, process=process)
     return receptor
 
 
-def API_implicit_inputs(name, default_return=None):
+def API_implicit_inputs(name, default_return=None, process=None):
     def receptor(f):
-        return API_common(name, f, input=False, default_return=default_return)
+        return API_common(name, f, input=False, default_return=default_return, process=process)
     return receptor
 
 
-def API_implicit_outputs(name):
+def API_implicit_outputs(name, process=None):
     def receptor(f):
-        return API_common(name, f, output=False)
+        return API_common(name, f, output=False, process=process)
     return receptor
 
 
-def API_implicit_inputs_outputs(name):
+def API_implicit_inputs_outputs(name, process=None):
     def receptor(f):
-        return API_common(name, f, input=False, output=False)
+        return API_common(name, f, input=False, output=False, process=process)
     return receptor
 
 

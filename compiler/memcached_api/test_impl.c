@@ -1,14 +1,7 @@
-#include "tmp_impl.h"
+#include "tmp_impl_correct_queue.h"
 #include "iokvs.h"
 
 #define NUM_THREADS     4
-typedef eq_entry* (*feq)();
-typedef void (*fcq)(cq_entry*);
-
-feq get_eqs[4] = {get_eq0, get_eq1, get_eq2, get_eq3};  // array of pointers to API function get_eq
-fcq send_cqs[4] = {send_cq0, send_cq1, send_cq2, send_cq3};  // array of pointers to API function send_eq
-//feq get_eqs[1] = {get_eq0};  // array of pointers to API function get_eq
-//fcq send_cqs[1] = {send_cq0};  // array of pointers to API function send_eq
 
 static struct item_allocator **iallocs;
 
@@ -30,20 +23,20 @@ void run_app(void *threadid) {
   ialloc_init_allocator(&ia);
   iallocs[tid] = &ia;
   // pass ia->cur to NIC
-  cqe_add_logseg* log = (cqe_add_logseg *) malloc(sizeof(cqe_add_logseg));
-  log->flags = CQE_TYPE_LOG;
-  log->segment = ia.cur;
-  send_cqs[tid]((cq_entry*) log);
+  send_cq(tid, CQE_TYPE_LOG, ia.cur, 0);
 
   printf("Worker %ld starting\n", tid);
 
   while(true) {
-      eq_entry* e = get_eqs[tid]();
+      eq_entry* e = get_eq(tid);
       //printf("get_eq %ld\n", e);
       if(e == NULL) {
+        continue;
         //printf("eq_entry at core %ld is null.\n", tid);
       }
-      else if (e->flags == EQE_TYPE_RXGET) {
+      uint8_t type = (e->flags & EQE_TYPE_MASK) >> EQE_TYPE_SHIFT;
+      //printf("get_eq type %d, flag = %d\n", type, e->flags);
+      if (type == EQE_TYPE_RXGET) {
 
         eqe_rx_get* e_get = (eqe_rx_get*) e;
         item *it = hasht_get(e_get->key, e_get->keylen, e_get->hash);
@@ -54,13 +47,9 @@ void run_app(void *threadid) {
 //            printf("get id: %ld, key[%d] = %d\n", e_get->opaque, i, key[i]);
         uint8_t* val = item_value(it);
         printf("get at core %ld: id: %ld, keylen: %d, vallen %d, val: %d\n", tid, e_get->opaque, it->keylen, it->vallen, val[0]);
-        cqe_send_getresponse* c = (cqe_send_getresponse *) malloc(sizeof(cqe_send_getresponse));
-        c->flags = CQE_TYPE_GRESP;
-        c->item = it;
-        c->opaque = e_get->opaque;
-        send_cqs[tid]((cq_entry*) c);
+        send_cq(tid, CQE_TYPE_GRESP, it, e_get->opaque);
       }
-      else if (e->flags == EQE_TYPE_RXSET) {
+      else if (type == EQE_TYPE_RXSET) {
         eqe_rx_set* e_set = (eqe_rx_set*) e;
         item* it = e_set->item;
         uint8_t * val = item_value(it);
@@ -70,21 +59,15 @@ void run_app(void *threadid) {
 //        for(int i=0; i<it->keylen; i++)
 //            printf("set id: %ld, key[%d] = %d\n", e_set->opaque, i, key[i]);
         hasht_put(it, NULL);
-        cqe_send_setresponse* c = (cqe_send_setresponse *) malloc(sizeof(cqe_send_setresponse));
-        c->flags = CQE_TYPE_SRESP;
-        c->opaque = e_set->opaque;
-        send_cqs[tid]((cq_entry*) c);
+        send_cq(tid, CQE_TYPE_SRESP, NULL, e_set->opaque);
       }
-      else if (e->flags == EQE_TYPE_SEGFULL) {
+      else if (type == EQE_TYPE_SEGFULL) {
         struct segment_header* segment = new_segment(&ia, false);
         if(segment == NULL) {
             printf("Fail to allocate new segment.\n");
             exit(-1);
         }
-        cqe_add_logseg* log = (cqe_add_logseg *) malloc(sizeof(cqe_add_logseg));
-        log->flags = CQE_TYPE_LOG;
-        log->segment = segment;
-        send_cqs[tid]((cq_entry*) log);
+        send_cq(tid, CQE_TYPE_LOG, segment, 0);
 
         eqe_seg_full* e_full = (eqe_seg_full*) e;
         struct segment_header* old = e_full->segment;
@@ -92,6 +75,7 @@ void run_app(void *threadid) {
         segment_item_free(old, avail);
         old->offset += avail;
       }
+      release((q_entry *) e);
       usleep(10);
   }
 }
@@ -113,7 +97,6 @@ int main() {
   hasht_init();
   ialloc_init();
   iallocs = calloc(NUM_THREADS, sizeof(*iallocs));
-
   init();
 
   usleep(10);
@@ -128,6 +111,7 @@ int main() {
   }
 
   run_threads();
+  usleep(100000);
   maintenance();
   usleep(500000);
 
