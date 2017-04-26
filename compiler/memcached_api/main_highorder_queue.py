@@ -470,7 +470,7 @@ c.I = '/home/mangpo/lib/dpdk-16.11/build/include'
 
 def run_impl():
     c.desugar_mode = "impl"
-    c.generate_code_as_header("tmp_impl_correct_queue")
-    c.compile_and_run("test_impl_correct_queue")
+    c.generate_code_as_header("tmp_impl")
+    c.compile_and_run("test_impl")
 
 run_impl()

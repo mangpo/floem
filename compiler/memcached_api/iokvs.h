@@ -129,6 +129,9 @@ struct item_allocator {
 
 /** Initialize item allocation. Prepares memory regions etc. */
 void ialloc_init(void);
+void ialloc_init_slave(void);
+void ialloc_finalize(void);
+void ialloc_finalize_slave(void);
 
 /** Initialize an item allocator instance. */
 void ialloc_init_allocator(struct item_allocator *ia);

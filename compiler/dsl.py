@@ -80,6 +80,13 @@ class CPU_process(Process):
         Process.__init__(self, name, threads)
 
 
+def master_process(p):
+    if isinstance(p, CPU_process):
+        scope[-1].append(MasterProcess(p.name))
+    else:
+        scope[-1].append(MasterProcess(p))
+
+
 class ElementInstance:
     def __init__(self, name, instance, connect):
         self.name = name
@@ -1059,4 +1066,4 @@ class Compiler:
         compiler.generate_code_as_header(self.generate_graph(header), self.testing, self.include, header)
 
     def compile_and_run(self, name):
-        compiler.compile_and_run(name, self.depend, self.I)
+        compiler.compile_and_run(name, self.depend)

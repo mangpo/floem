@@ -65,10 +65,10 @@ def create_table(put_name, get_name, index_type, val_type, size):
               (%s index) = in();
               uint32_t key = index %s %d;
               %s val = this->data[key];
-              if(val == NULL) { printf("No such entry in this table.\n"); exit(-1); }
+              if(val == NULL) { printf("No such entry in this table. Key = %s\n", key); exit(-1); }
               this->data[key] = NULL;
               output { out(val); }
-              ''' % (index_type, '%', size, val_type), None, [(state_name, "this")])
+              ''' % (index_type, '%', size, val_type, '%d'), None, [(state_name, "this")])
 
     table = Table(state_instance_name)
 

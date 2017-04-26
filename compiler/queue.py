@@ -23,18 +23,19 @@ def declare_circular_queue(name, type, size, blocking=False):
     if blocking:
         src = r'''
             %s x;
-            while(this->head == this->tail) { fflush(stdout); }
+            while(this->head == this->tail) { __sync_synchronize(); }
             x = this->data[this->head];
             int next = this->head + 1;
             if(next >= this->size) next = 0;
             this->head = next;
+            __sync_synchronize();
             output { out(x); }
             ''' % type
     else:
         src = r'''
-            fflush(stdout);
             %s x;
             bool avail = false;
+            __sync_synchronize();
             if(this->head == this->tail) {
                 //printf("Dequeue an empty circular queue '%s'. Default value is returned (for API call).\n");
                 //exit(-1);
@@ -44,6 +45,7 @@ def declare_circular_queue(name, type, size, blocking=False):
                int next = this->head + 1;
                 if(next >= this->size) next = 0;
                 this->head = next;
+                __sync_synchronize();
             }
             output switch { case avail: out(x); }
             ''' % (type, name)
@@ -109,6 +111,7 @@ def create_circular_queue_one2many_instances(name, type, size, n_cores):
            (size_t c) = in_core();
            (%s x) = in_entry();
            %s* p = this->cores[c];
+           __sync_synchronize();
            int next = p->tail + 1;
            if(next >= p->size) next = 0;
            if(next == p->head) {
@@ -117,7 +120,7 @@ def create_circular_queue_one2many_instances(name, type, size, n_cores):
              p->data[p->tail] = x;
              p->tail = next;
            }
-            fflush(stdout);
+           __sync_synchronize();
            ''' % (type, one_name, name), None, [(all_name, "this")])
 
     Dequeue = create_element(prefix + "dequeue_ele",
@@ -170,11 +173,12 @@ def create_circular_queue_many2one_instances(name, type, size, n_cores):
     Dequeue = create_element(prefix + "dequeue_ele",
                              [], [Port("out", [type])],
                              r'''
-            fflush(stdout);
+
            static int c = 0;  // round robin schedule
            %s x;
            bool avail = false;
            int n = %d;
+           __sync_synchronize();
            for(int i=0; i<n; i++) {
              int index = (c + i) %s n;
              %s* p = this->cores[index];
@@ -182,6 +186,7 @@ def create_circular_queue_many2one_instances(name, type, size, n_cores):
                avail = true;
                x = p->data[p->head];
                p->head = (p->head + 1) %s p->size;
+               __sync_synchronize();
                c = (index + 1) %s n;
                break;
              }
@@ -230,9 +235,9 @@ def create_circular_queue_variablesize_one2many(name, size, n_cores):
            (size_t len) = in_len();
            (size_t c) = in_core();
            circular_queue *q = this->cores[c];
-           //printf("ENQ core=%ld, queue=%ld\n", c, q->queue);
+           printf("ENQ core=%ld, queue=%ld\n", c, q->queue);
            q_entry* entry = (q_entry*) enqueue_alloc(q, len);
-           //if(entry == NULL) { printf("queue %d is full.\n", c); }
+           if(entry == NULL) { printf("queue %d is full.\n", c); }
            //printf("ENQ' core=%ld, queue=%ld, entry=%ld\n", c, q->queue, entry);
            output { out(entry); }
            ''', None, [(all_name, "this")])

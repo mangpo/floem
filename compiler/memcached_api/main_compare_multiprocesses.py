@@ -418,7 +418,7 @@ output switch{
 }
 ''')
 
-msg_put_creator, msg_get_creator = create_table("msg_put_creator", "msg_get_creator", "uint64_t", "iokvs_message*", 256)
+msg_put_creator, msg_get_creator = create_table("msg_put_creator", "msg_get_creator", "uint64_t", "iokvs_message*", 500)
 msg_put = msg_put_creator("msg_put")
 msg_get_get = msg_get_creator("msg_get_get")
 msg_get_set = msg_get_creator("msg_get_set")
@@ -458,7 +458,7 @@ def impl():
 
     # Queue
     rx_enq_alloc_creator, rx_enq_submit_creator, rx_deq_get_creator, rx_deq_release_creator = \
-        queue.create_circular_queue_variablesize_one2many("rx_queue", 1024, n_cores)
+        queue.create_circular_queue_variablesize_one2many("rx_queue", 10000, n_cores)
     enq_alloc_get = rx_enq_alloc_creator("enq_alloc_get")
     enq_alloc_set = rx_enq_alloc_creator("enq_alloc_set")
     enq_alloc_full = rx_enq_alloc_creator("enq_alloc_full")
@@ -510,7 +510,7 @@ def impl():
 
     # Queue
     tx_enq_alloc, tx_enq_submit, tx_deq_get, tx_deq_release = \
-        queue.create_circular_queue_variablesize_many2one_instances("tx_queue", 1024, n_cores)  # TODO: create just one enq/deq, take core_id as parameter.
+        queue.create_circular_queue_variablesize_many2one_instances("tx_queue", 10000, n_cores)  # TODO: create just one enq/deq, take core_id as parameter.
 
     # Enqueue
     @API("send_cq", process="app")
@@ -549,6 +549,7 @@ def impl():
         print_msg(probe_set(set_response))
 
 memcached = create_spec_impl("memcached", spec, impl)
+master_process("app")
 
 ######################## Run test #######################
 c = Compiler()
@@ -558,8 +559,9 @@ c.include = r'''
 #include "iokvs.h"
 #include "protocol_binary.h"
 #include "../queue.h"
+#include "../shm.h"
 '''
-c.depend = ['jenkins_hash', 'hashtable', 'ialloc']
+c.depend = ['jenkins_hash', 'hashtable', 'ialloc_multiprocesses']
 c.triggers = True
 c.I = '/home/mangpo/lib/dpdk-16.11/build/include'
 
@@ -575,8 +577,8 @@ def run_impl():
 
 def run_compare():
     c.desugar_mode = "compare"
-    c.generate_code_as_header("test_compare")
-    #c.compile_and_run("test_compare")
+    c.generate_code_as_header()
+    c.compile_and_run(["test_compare_app", "test_compare_nic"])
 
 
 #run_spec()

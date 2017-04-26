@@ -233,13 +233,14 @@ class ThreadAllocator:
 
         # Generate code to invoke the main element and clear available indicators.
         all_avails = " && ".join(this_avails)
-        invoke += "  while(!(%s)) { fflush(stdout); }\n" % all_avails
+        invoke += "  while(!(%s)) { __sync_synchronize(); }\n" % all_avails
         for port in need_buffer:
             for i in range(len(port.argtypes)):
                 buffer = "%s_arg%d" % (port.name, i)
                 this_buffer = "this->" + buffer
                 invoke += "  %s %s = %s;\n" % (port.argtypes[i], buffer, this_buffer)
         invoke += clear
+        invoke += "  __sync_synchronize();"
         invoke += "  output { out(%s); }\n" % ",".join(all_args)
 
         # Create element
@@ -283,11 +284,12 @@ class ThreadAllocator:
             types_buffers.append("%s %s" % (port.argtypes[i], buffer))
 
         src = "  (%s) = in();" % ",".join(types_buffers)
-        src += "  while(%s) { fflush(stdout); }\n" % avail
+        src += "  while(%s) { __sync_synchronize(); }\n" % avail
         for i in range(len(port.argtypes)):
             buffer = buffers[i]
             src += "  this->%s = %s;\n" % (buffer, buffer)
         src += "  %s = true;\n" % avail
+        src += "  __sync_synchronize();"
 
         # Create element
         st_name = "%s_buffer" % next_ele_name

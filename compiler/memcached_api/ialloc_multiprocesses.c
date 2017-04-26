@@ -55,6 +55,19 @@ void ialloc_init_slave(void) {
     close(fd);
 }
 
+void ialloc_finalize_slave(void)
+{
+    size_t total = settings.segsize * settings.segmaxnum;
+    munmap(seg_base, total);
+}
+
+void ialloc_finalize(void)
+{
+    size_t total = settings.segsize * settings.segmaxnum;
+    shm_unlink(DATA_REGION_NAME);
+    munmap(seg_base, total);
+}
+
 void ialloc_init(void)
 {
     rte_spinlock_init(&segalloc_lock);
@@ -85,12 +98,25 @@ void ialloc_init(void)
         mem_base_phys = id.base;
     }
 #else
-    if ((seg_base = mmap(NULL, total, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS,
-                    -1, 0)) == MAP_FAILED)
-     {
-         perror("mmap() of segments base failed");
-         abort();
-     }
+    printf("ialloc: create shared memory.\n");
+    int fd;
+    if ((fd = shm_open(DATA_REGION_NAME, O_CREAT | O_EXCL | O_RDWR, 0600))
+            == -1)
+    {
+        perror("shm_open failed");
+        abort();
+    }
+    if (ftruncate(fd, total) != 0) {
+        perror("ftruncate failed");
+        abort();
+    }
+    if ((seg_base = mmap(NULL, total, PROT_READ | PROT_WRITE, MAP_SHARED, fd,
+                    0)) == MAP_FAILED)
+    {
+        perror("mmap() of segments base failed");
+        abort();
+    }
+    close(fd);
 #endif
     if ((seg_headers = calloc(settings.segmaxnum, sizeof(*seg_headers))) ==
             NULL)

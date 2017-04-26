@@ -458,7 +458,7 @@ def impl():
 
     # Queue
     rx_enq_alloc_creator, rx_enq_submit_creator, rx_deq_get_creator, rx_deq_release_creator = \
-        queue.create_circular_queue_variablesize_one2many("rx_queue", 1024, n_cores)
+        queue.create_circular_queue_variablesize_one2many("rx_queue", 10000, n_cores)
     enq_alloc_get = rx_enq_alloc_creator("enq_alloc_get")
     enq_alloc_set = rx_enq_alloc_creator("enq_alloc_set")
     enq_alloc_full = rx_enq_alloc_creator("enq_alloc_full")
@@ -510,7 +510,7 @@ def impl():
 
     # Queue
     tx_enq_alloc, tx_enq_submit, tx_deq_get, tx_deq_release = \
-        queue.create_circular_queue_variablesize_many2one_instances("tx_queue", 1024, n_cores)  # TODO: create just one enq/deq, take core_id as parameter.
+        queue.create_circular_queue_variablesize_many2one_instances("tx_queue", 10000, n_cores)  # TODO: create just one enq/deq, take core_id as parameter.
 
     # Enqueue
     @API("send_cq")
@@ -563,24 +563,11 @@ c.depend = ['jenkins_hash', 'hashtable', 'ialloc']
 c.triggers = True
 c.I = '/home/mangpo/lib/dpdk-16.11/build/include'
 
-def run_spec():
-    c.desugar_mode = "spec"
-    c.generate_code_as_header("test_spec")
-    c.compile_and_run("test_spec")
-
-def run_impl():
-    c.desugar_mode = "impl"
-    c.generate_code_as_header("test_impl")
-    c.compile_and_run("test_impl")
-
 def run_compare():
     c.desugar_mode = "compare"
     c.generate_code_as_header("test_compare")
     c.compile_and_run("test_compare")
 
-
-#run_spec()
-#run_impl()
 run_compare()
 
 # TODO: opague #

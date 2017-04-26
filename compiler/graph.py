@@ -368,6 +368,7 @@ class Graph:
         self.processes = set()
         self.thread2process = {}
         self.default_process = default_process
+        self.master_process = default_process
 
     def __str__(self):
         s = "Graph:\n"

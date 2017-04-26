@@ -165,6 +165,11 @@ class ProcessMap:
         return self.thread + "@" + self.process
 
 
+class MasterProcess:
+    def __init__(self, master):
+        self.master = master
+
+
 class GraphGenerator:
     def __init__(self, default_process):
         self.graph = Graph(default_process)
@@ -323,6 +328,9 @@ class GraphGenerator:
 
         elif isinstance(x, ProcessMap):
             self.graph.thread2process[self.get_resource(x.thread)] = x.process
+
+        elif isinstance(x, MasterProcess):
+            self.graph.master_process = x.master
 
         elif isinstance(x, PopulateState):
             self.graph.inject_populates[x.state_instance] = x.clone()

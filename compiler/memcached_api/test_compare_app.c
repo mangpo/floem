@@ -1,4 +1,4 @@
-#include "test_compare.h"
+#include "app.h"
 #include "iokvs.h"
 
 #define NUM_THREADS     4
@@ -28,7 +28,6 @@ void run_app(void *threadid) {
   printf("Worker %ld starting\n", tid);
 
   while(true) {
-      //printf("loop core %ld\n", tid);
       eq_entry* e = get_eq(tid);
       //printf("get_eq %ld\n", e);
       if(e == NULL) {
@@ -96,17 +95,13 @@ void maintenance()
 
 int main() {
   init();
+  settings_init();
+  ialloc_init();
 
   // spec
-  hasht_init();
-  spec_run_threads();
-  usleep(500000);
-  spec_kill_threads();
 
   // impl
-  settings_init();
   hasht_init();
-  ialloc_init();
   iallocs = calloc(NUM_THREADS, sizeof(*iallocs));
 
   usleep(10);
@@ -120,10 +115,9 @@ int main() {
        }
   }
 
-  impl_run_threads();
   //usleep(100000);
   //maintenance();
-  usleep(500000);
+  usleep(1000000);
 
   for(int t=0;t<NUM_THREADS;t++) {
        int rc = pthread_cancel(threads[t]);
@@ -132,10 +126,10 @@ int main() {
           exit(-1);
        }
   }
-  impl_kill_threads();
 
-
-  // compare
+  printf("UNMAP memory\n");
   finalize_and_check();
+  ialloc_finalize();
+
   return 0;
 }
