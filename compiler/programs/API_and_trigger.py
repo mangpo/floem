@@ -23,5 +23,5 @@ def i2(x):
 i2(i1(xxx(None)))
 
 c = Compiler()
-c.testing = "run(123); run(42); usleep(10);"
+c.testing = "run(123); run(42); usleep(100);"
 c.generate_code_and_run([123,42])

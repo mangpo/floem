@@ -998,14 +998,27 @@ def generate_code_and_run(graph, testing, expect=None, include=None, depend=None
         except subprocess.CalledProcessError as e:
             print e.output
             raise e
+        except Exception as e:
+            raise e
+
     else:
         try:
+            ps = []
+            p = subprocess.Popen(['./' + graph.master_process])
+            ps.append(p)
             for process in graph.processes:
-                print "run:", process
-                result = subprocess.check_output('./' + process, stderr=subprocess.STDOUT, shell=True)
-            print result
+                if process is not graph.master_process:
+                    #result = subprocess.check_output('./' + process, stderr=subprocess.STDOUT, shell=True)
+                    p = subprocess.Popen(['./' + process])
+                    ps.append(p)
+
+            time.sleep(0.1)
+            for p in ps:
+                p.kill()
         except subprocess.CalledProcessError as e:
             print e.output
+            raise e
+        except Exception as e:
             raise e
 
     print "PASSED!"
@@ -1047,3 +1060,6 @@ def compile_and_run(name, depend):
             ps.append(p)
 
         time.sleep(3)
+        for p in ps:
+            p.kill()
+
