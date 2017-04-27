@@ -50,6 +50,7 @@ class TestDSL(unittest.TestCase):
                  "API_insert_start_element.py",
                  "multiprocesses.py",
                  "multiprocesses_shm.py",
+                 "forkjoin.py",
                  ]
 
         tests2 = ["join.py",

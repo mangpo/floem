@@ -591,5 +591,4 @@ run_compare()
 # TODO: queue -- owner bit & tail pointer update
 # TODO: queue -- high order function
 
-# TODO: try multiprocesses
-# TODO: memory barrier
+# TODO: custom allocated shared memory (for log segments)
