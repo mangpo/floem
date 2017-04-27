@@ -32,6 +32,17 @@ void* get_pointer(uint64_t offset) {
     return (void *) ((uintptr_t) seg_base + offset);
 }
 
+void ialloc_init(void* p) {
+  seg_base = p;
+  if ((seg_headers = calloc(settings.segmaxnum, sizeof(*seg_headers))) ==
+            NULL)
+    {
+        perror("Allocating segment header array failed");
+        abort();
+    }
+}
+
+/*
 void ialloc_init_slave(void) {
     size_t total;
     total = settings.segsize * settings.segmaxnum;
@@ -124,7 +135,7 @@ void ialloc_init(void)
         perror("Allocating segment header array failed");
         abort();
     }
-}
+}*/
 
 static struct segment_header *segment_alloc(void)
 {

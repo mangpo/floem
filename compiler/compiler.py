@@ -326,6 +326,44 @@ def element_to_function(instance, state_rename, graph, ext):
         print code
 
 
+def generate_memory_regions(graph, ext):
+    master_src = ""
+    slave_src = ""
+
+    for region in graph.memory_regions:
+        master_src += 'void *%s;\n' % region.name
+        slave_src += 'void *%s;\n' % region.name
+
+    master_src += "void init_memory_regions() {\n"
+    slave_src += "void init_memory_regions() {\n"
+
+    for region in graph.memory_regions:
+        master_src += '  %s = util_create_shmsiszed("%s", %d);\n' % (region.name, region.name, region.size)
+        slave_src += '  %s = util_map_shm("%s", %d);\n' % (region.name, region.name, region.size)
+
+    master_src += "}\n"
+    slave_src += "}\n"
+
+    master_src += "void finalize_memory_regions() {\n"
+    slave_src += "void finalize_memory_regions() {\n"
+
+    for region in graph.memory_regions:
+        master_src += '  shm_unlink("%s");\n' % region.name
+        master_src += '  munmap(%s, %d);\n' % (region.name, region.size)
+        slave_src += '  munmap(%s, %d);\n' % (region.name, region.size)
+
+    master_src += "}\n"
+    slave_src += "}\n"
+
+    with open(graph.master_process + ext, 'a') as f, redirect_stdout(f):
+        print master_src
+
+    for process in graph.processes:
+        if process is not graph.master_process:
+            with open(process + ext, 'a') as f, redirect_stdout(f):
+                print slave_src
+
+
 def generate_state(state, graph, ext):
     if state.declare:
         src = ""
@@ -824,13 +862,15 @@ def generate_inject_probe_code_with_process(graph, process, ext):
                     probe_src += generate_compare_state(probe, key)
 
         src += "void init() {\n"
+        src += "  init_memory_regions();\n"
         src += "  init_state_instances();\n"
         src += inject_src
         src += "}\n\n"
 
         src += "void finalize_and_check() {\n"
         src += probe_src
-        src += "finalize_state_instances();\n"
+        src += "  finalize_memory_regions();\n"
+        src += "  finalize_state_instances();\n"
         src += "}\n\n"
     else:
         src += "void init() {\n"
@@ -901,6 +941,9 @@ def generate_code(graph, ext, testing=None, include=None):
 
     generate_header(testing, graph.processes, ext)
     generate_include(include, graph.processes, ext)
+
+    # Generate memory regions.
+    generate_memory_regions(graph, ext)
 
     # Generate states.
     for state_name in graph.state_order:
@@ -1029,13 +1072,13 @@ def compile_and_run(name, depend):
     if depend:
         for f in depend:
             extra += '%s.o ' % f
-            cmd = 'gcc -O3 -msse4.1 -I %s -c %s.c -lrt' % (common.dpdk_include, f)
+            cmd = 'gcc -O0 -g -msse4.1 -I %s -c %s.c -lrt' % (common.dpdk_include, f)
             status = os.system(cmd)
             if not status == 0:
                 raise Exception("Compile error: " + cmd)
 
     if isinstance(name, str):
-        cmd = 'gcc -O3 -msse4.1 -I %s -pthread %s.c %s -o %s -lrt' % (common.dpdk_include, name, extra, name)
+        cmd = 'gcc -O0 -g -msse4.1 -I %s -pthread %s.c %s -o %s -lrt' % (common.dpdk_include, name, extra, name)
         print cmd
         status = os.system(cmd)
         if not status == 0:
@@ -1048,7 +1091,7 @@ def compile_and_run(name, depend):
 
     elif isinstance(name, list):
         for f in name:
-            cmd = 'gcc -O3 -msse4.1 -I %s -pthread %s.c %s -o %s -lrt' % (common.dpdk_include, f, extra, f)
+            cmd = 'gcc -O0 -g -msse4.1 -I %s -pthread %s.c %s -o %s -lrt' % (common.dpdk_include, f, extra, f)
             print cmd
             status = os.system(cmd)
             if not status == 0:

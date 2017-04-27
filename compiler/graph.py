@@ -340,6 +340,12 @@ class StateNode:
         self.processes = set()
 
 
+class MemoryRegion:
+    def __init__(self, name, size):
+        self.name = name
+        self.size = size
+
+
 class Graph:
     def __init__(self, default_process):  # , elements=[], states=[]
         self.elements = {}
@@ -348,6 +354,7 @@ class Graph:
         self.state_order = []
         self.state_instances = {}
         self.state_instance_order = []
+        self.memory_regions = []
         # for e in elements:
         #     self.elements[e.name] = e
         # for s in states:
@@ -429,6 +436,9 @@ class Graph:
         else:
             self.elements[element.name] = element
             return True
+
+    def addMemoryRegion(self, region):
+        self.memory_regions.append(region)
 
     def newStateInstance(self, state, name, init=False):
         if state in self.states:

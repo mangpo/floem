@@ -27,9 +27,11 @@ void maintenance()
 }
 
 int main() {
+  usleep(1000);
   init();
   settings_init();
-  ialloc_init_slave();
+  ialloc_init(data_region);
+  //ialloc_init_slave();
 
   // spec
   hasht_init();
@@ -44,6 +46,6 @@ int main() {
 
   // compare
   finalize_and_check();
-  ialloc_finalize_slave();
+  //ialloc_finalize_slave();
   return 0;
 }

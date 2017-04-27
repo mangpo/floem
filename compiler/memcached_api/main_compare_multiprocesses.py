@@ -455,6 +455,7 @@ def spec():
 
 def impl():
     ######################## NIC Rx #######################
+    create_memory_region("data_region", 4 * 1024 * 512)
 
     # Queue
     rx_enq_alloc_creator, rx_enq_submit_creator, rx_deq_get_creator, rx_deq_release_creator = \
