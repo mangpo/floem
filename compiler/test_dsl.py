@@ -65,6 +65,7 @@ class TestDSL(unittest.TestCase):
                   "composite.py",
                   "variable_length_field.py",
                   "choice_join.py",
+                  "memory_region.py",
                   #"extract_field_spec_impl.py",
                   ]
 

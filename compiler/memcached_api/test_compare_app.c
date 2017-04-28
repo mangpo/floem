@@ -96,7 +96,7 @@ void maintenance()
 int main() {
   init();
   settings_init();
-  ialloc_init();
+  ialloc_init(data_region);
 
   // spec
 
@@ -129,7 +129,7 @@ int main() {
 
   printf("UNMAP memory\n");
   finalize_and_check();
-  ialloc_finalize();
+  //ialloc_finalize();
 
   return 0;
 }

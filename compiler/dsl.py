@@ -1028,6 +1028,16 @@ def compare_state(name, st_inst_name, st_name, type, size, func):
     scope[-1].insert(0, CompareState(name, st_inst_name, st_name, type, size, func))
 
 
+def create_memory_region(name, size):
+    """
+    :param name: name of the pointer to the memory region
+    :param size: size of memory region in bytes
+    :return: void
+    """
+    scope[-1].append(MemoryRegion(name, size))
+    return name
+
+
 class Compiler:
     def __init__(self):
         self.desugar_mode = "impl"
@@ -1051,10 +1061,7 @@ class Compiler:
         return g
 
     def generate_code(self):
-        compiler.generate_code(self.generate_graph(), self.testing, self.include)
-
-    def generate_code_with_test(self):
-        compiler.generate_code_with_test(self.generate_graph(), self.testing, self.include)
+        compiler.generate_code(self.generate_graph(), ".c", self.testing, self.include)
 
     def generate_code_and_run(self, expect=None):
         compiler.generate_code_and_run(self.generate_graph(), self.testing, expect, self.include, self.depend, self.I)

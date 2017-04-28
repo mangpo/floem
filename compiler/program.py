@@ -270,6 +270,8 @@ class GraphGenerator:
             self.graph.addElement(x)
         elif isinstance(x, State):
             self.graph.addState(x)
+        elif isinstance(x, MemoryRegion):
+            self.graph.addMemoryRegion(x)
         elif isinstance(x, ElementInstance):
             new_name = get_node_name(stack, x.name)
             # Collect inject information

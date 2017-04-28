@@ -21,6 +21,8 @@ def assign_process_for_state_instance(g, process, st_inst_name):
 
 
 def annotate_process_info(g):
+    g.processes.add(g.master_process)
+
     for instance in g.instances.values():
         process = g.process_of_thread(instance.thread)
 
