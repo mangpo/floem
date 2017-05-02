@@ -1,5 +1,5 @@
 #include "nic.h"
-#include "iokvs_multiprocesses.h"
+#include "iokvs.h"
 
 #define NUM_THREADS     4
 

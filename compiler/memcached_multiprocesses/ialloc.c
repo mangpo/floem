@@ -6,7 +6,7 @@
 
 #include <rte_spinlock.h>
 
-#include "iokvs_multiprocesses.h"
+#include "iokvs.h"
 
 
 #define SF_INACTIVE 1

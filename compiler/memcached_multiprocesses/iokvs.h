@@ -337,6 +337,13 @@ static iokvs_message* random_request(size_t v) {
         return random_get_request(v/2, v);
 }
 
+static iokvs_message* double_set_request(size_t v) {
+    if(v < 500)
+        return random_set_request(v, v);
+    else
+        return random_set_request(v - 500, v - 500);
+}
+
 static void cmp_func(int spec_n, iokvs_message **spec_data, int impl_n, iokvs_message **impl_data) {
   if(!(spec_n == impl_n)) {
     printf("Spec records %d entries, but Impl records %d entries.\n", spec_n, impl_n);
@@ -346,7 +353,7 @@ static void cmp_func(int spec_n, iokvs_message **spec_data, int impl_n, iokvs_me
     iokvs_message *ref = spec_data[i];
     bool found = false;
     for(int j=0; j<impl_n; j++) {
-        iokvs_message *my = impl_data[i];
+        iokvs_message *my = impl_data[j];
         if(ref->mcr.request.opcode == PROTOCOL_BINARY_CMD_GET && my->mcr.request.opcode == PROTOCOL_BINARY_CMD_GET) {
             if(ref->mcr.request.magic == my->mcr.request.magic
             && ref->mcr.request.extlen == my->mcr.request.extlen
@@ -378,7 +385,8 @@ static void cmp_func(int spec_n, iokvs_message **spec_data, int impl_n, iokvs_me
           // TODO: continue
     }
     if(!found) {
-        printf("Impl doesn't some responses.");
+        printf("Impl doesn't have a response for %d, %d, %ld, %ld.\n", ref->mcr.request.opcode, ref->mcr.request.magic, ref->mcr.request.extlen, ref->mcr.request.bodylen);
+        //printf("Impl doesn't have some responses.");
         exit(-1);
     }
   }

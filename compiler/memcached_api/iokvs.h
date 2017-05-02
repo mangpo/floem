@@ -342,7 +342,7 @@ static void cmp_func(int spec_n, iokvs_message **spec_data, int impl_n, iokvs_me
     iokvs_message *ref = spec_data[i];
     bool found = false;
     for(int j=0; j<impl_n; j++) {
-        iokvs_message *my = impl_data[i];
+        iokvs_message *my = impl_data[j];
         if(ref->mcr.request.opcode == PROTOCOL_BINARY_CMD_GET && my->mcr.request.opcode == PROTOCOL_BINARY_CMD_GET) {
             if(ref->mcr.request.magic == my->mcr.request.magic
             && ref->mcr.request.extlen == my->mcr.request.extlen

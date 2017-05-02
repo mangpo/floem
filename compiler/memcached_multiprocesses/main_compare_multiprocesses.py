@@ -443,6 +443,7 @@ msg_get_get = msg_get_creator("msg_get_get")
 msg_get_set = msg_get_creator("msg_get_set")
 
 Inject = create_inject("inject", "iokvs_message*", 1000, "random_request")
+#Inject = create_inject("inject", "iokvs_message*", 1000, "double_set_request")
 inject = Inject()
 
 Probe = create_probe("probe", "iokvs_message*", 1010, "cmp_func")
@@ -588,12 +589,12 @@ c = Compiler()
 c.include = r'''
 #include <rte_memcpy.h>
 #include "nicif.h"
-#include "iokvs_multiprocesses.h"
+#include "iokvs.h"
 #include "protocol_binary.h"
 #include "../queue.h"
 #include "../shm.h"
 '''
-c.depend = ['jenkins_hash', 'hashtable', 'ialloc_multiprocesses']
+c.depend = ['jenkins_hash', 'hashtable', 'ialloc']
 c.triggers = True
 c.I = '/home/mangpo/lib/dpdk-16.11/build/include'
 

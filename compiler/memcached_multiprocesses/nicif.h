@@ -37,23 +37,23 @@ typedef struct {
 } __attribute__((packed)) cq_entry;
 typedef struct {
     uint16_t flags;
-    //uint16_t len;
+    uint16_t len;
     //uint32_t client;
     //uint32_t vallen;
     //uint32_t keylen;
     uint64_t opaque;
-    //uint64_t item;
-    void* item;
+    uint64_t item;
+    //void* item;
 } __attribute__((packed)) cqe_send_getresponse;
 typedef struct {
     uint16_t flags;
-    //uint16_t len;
+    uint16_t len;
     //uint32_t client;
     uint64_t opaque;
 } __attribute__((packed)) cqe_send_setresponse;
 typedef struct {
     uint16_t flags;
-    //uint16_t len;
+    uint16_t len;
     uint16_t datalen;
     uint16_t error;
     uint64_t opaque;
@@ -61,11 +61,11 @@ typedef struct {
 } __attribute__((packed)) cqe_send_error;
 typedef struct {
     uint16_t flags;
-    //uint16_t len;
-    //uint32_t pad0;
-    //uint64_t segbase;
-    //uint64_t seglen;
-    void* segment;
+    uint16_t len;
+    uint32_t pad0;
+    uint64_t segbase;
+    uint64_t seglen;
+    //void* segment;
 } __attribute__((packed)) cqe_add_logseg;
 #define EQE_ALIGN 8U
 #define EQE_FLAG_SWOWN 0x0001
@@ -77,30 +77,31 @@ typedef struct {
 #define EQE_TYPE_SEGFULL 0x03
 typedef struct {
     uint16_t flags;
-    //uint16_t len;
+    uint16_t len;
 } __attribute__((packed)) eq_entry;
 typedef struct {
     uint16_t flags;
-    //uint16_t len;
+    uint16_t len;
     //uint32_t client;
     uint64_t opaque;
     uint32_t hash;
     uint16_t keylen;
-    //uint8_t key[];
-    void* key;
+    uint8_t key[];
+    //void* key;
 } __attribute__((packed)) eqe_rx_get;
 typedef struct {
     uint16_t flags;
-    //uint16_t len;
+    uint16_t len;
     //uint32_t client;
     uint64_t opaque;
-    void* item;
+    uint64_t item;
+    //void* item;
 } __attribute__((packed)) eqe_rx_set;
 typedef struct {
     uint16_t flags;
-    //uint16_t len;
-    //uint32_t pad0;
-    //uint64_t last;
-    void* segment;
+    uint16_t len;
+    uint32_t pad0;
+    uint64_t last;
+    //void* segment;
 } __attribute__((packed)) eqe_seg_full;
 #endif // ndef NICIF_H_

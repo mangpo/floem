@@ -1,5 +1,5 @@
 #include "app.h"
-#include "iokvs_multiprocesses.h"
+#include "iokvs.h"
 
 #define NUM_THREADS     4
 
@@ -152,9 +152,9 @@ int main() {
        }
   }
 
-  //usleep(100000);
-  //maintenance();
-  usleep(2000000);
+  usleep(100000);
+  maintenance();
+  //usleep(2000000);
 
   for(int t=0;t<NUM_THREADS;t++) {
        int rc = pthread_cancel(threads[t]);
