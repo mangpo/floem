@@ -240,12 +240,12 @@ item *segment_item_alloc(uint64_t thisbase, uint64_t seglen, uint64_t* offset, s
     if (avail == 0) {
         return NULL;
     } else if (avail < total) {
-        if (avail >= sizeof(item)) {
-            it->refcount = 0;
-            /* needed for log scan */
-            it->keylen = avail - sizeof(item);
-            it->vallen = 0;
-        }
+//        if (avail >= sizeof(item)) {
+//            it->refcount = 0;
+//            /* needed for log scan */
+//            it->keylen = avail - sizeof(item);
+//            it->vallen = 0;
+//        }
         // The following should be done on APP.
         //segment_item_free(h, avail);
         //h->offset += avail;
@@ -259,6 +259,28 @@ item *segment_item_alloc(uint64_t thisbase, uint64_t seglen, uint64_t* offset, s
 
     return it;
 }
+
+
+/** Mark NIC log segment as full. */
+void ialloc_nicsegment_full(uintptr_t last)
+{
+    printf("ialloc_nicsegment_full\n");
+    uintptr_t it_a = (uintptr_t) seg_base + last;
+    struct segment_header *h = segment_from_part((item *) (it_a - sizeof(item)));
+    size_t off = it_a - (uintptr_t) h->data;
+
+    /* If segment is not quite full yet, add dummy entry to fill up. */
+    if (off + sizeof(item) <= h->size) {
+        item *it = (item *) it_a;
+        it->refcount = 0;
+        it->keylen = h->size - off - sizeof(item);
+        it->vallen = 0;
+    }
+    segment_item_free(h, h->size - off);
+
+    h->flags |= SF_INACTIVE;
+}
+
 
 item *segment_item_alloc_pointer(struct segment_header *h, size_t total)
 {
@@ -291,7 +313,6 @@ item *segment_item_alloc_pointer(struct segment_header *h, size_t total)
 
     return it;
 }
-
 
 
 void ialloc_init_allocator(struct item_allocator *ia)

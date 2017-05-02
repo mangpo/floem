@@ -185,6 +185,7 @@ struct segment_header *new_segment(struct item_allocator *ia, bool cleanup);
 void segment_item_free(struct segment_header *h, size_t total);
 uint64_t get_pointer_offset(void* p);
 void* get_pointer(uint64_t offset);
+void ialloc_nicsegment_full(uintptr_t last);
 
 /******************************************************************************/
 /* Items */

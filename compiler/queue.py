@@ -235,7 +235,7 @@ def create_circular_queue_variablesize_one2many(name, size, n_cores):
            (size_t len) = in_len();
            (size_t c) = in_core();
            circular_queue *q = this->cores[c];
-           //printf("ENQ core=%ld, queue=%ld\n", c, q->queue);
+           printf("ENQ core=%ld, queue=%p, eq=%d\n", c, q->queue, this->cores[1]==this->cores[3]);
            q_entry* entry = (q_entry*) enqueue_alloc(q, len);
            //if(entry == NULL) { printf("queue %d is full.\n", c); }
            //printf("ENQ' core=%ld, queue=%ld, entry=%ld\n", c, q->queue, entry);
@@ -255,7 +255,7 @@ def create_circular_queue_variablesize_one2many(name, size, n_cores):
         (size_t c) = in();
         circular_queue *q = this->cores[c];
         q_entry* x = dequeue_get(q);
-        //if(x) printf("DEQ core=%ld, entry=%ld\n", c, x);
+        //if(c == 3) printf("DEQ core=%ld, queue=%p, entry=%ld\n", c, q->queue, x);
         output { out(x); }
            ''', None, [(all_name, "this")])
 
@@ -290,7 +290,7 @@ def create_circular_queue_variablesize_one2many_instances(name, size, n_cores):
            deq_get(prefix + "dequeue_get"), deq_release(prefix + "dequeue_release")
 
 
-def create_circular_queue_variablesize_many2one(name, size, n_cores):
+def create_circular_queue_variablesize_many2one(name, size, n_cores, scan_src=False, scan_enq=True):
     prefix = "_%s_" % name
     one_name = prefix + "queue"
     all_name = prefix + "queues"
@@ -354,6 +354,33 @@ def create_circular_queue_variablesize_many2one(name, size, n_cores):
         dequeue_release(eqe);
            ''')
 
+    if scan_src:
+        Scan = create_element(prefix + "scan_ele",
+                              [Port("in_core", ["size_t"])],
+                              [],
+                              r'''
+    (size_t c) = in_core();
+    circular_queue *q = this->cores[c];
+    size_t off = q->offset;
+    size_t len = q->len;
+    size_t clean = cleaning.pos;
+    void* base = q->queue;
+    while (clean != off) {
+        q_entry *entry = (q_entry *) ((uintptr_t) base + clean);
+        if ((entry->flags & FLAG_OWN) != 0) {
+            break;
+        }
+        /* insert code */
+        ''' + scan_src +
+                              r'''
+        clean = (clean + entry->len) % len;
+    }
+    cleaning.pos = clean;
+            ''', State("cleaning", "size_t pos;", "0"), [(all_name, "this")])
+    else:
+        Scan = None
+
+
     def enq_alloc(name=None):
         if not name:
             global fresh_id
@@ -368,11 +395,23 @@ def create_circular_queue_variablesize_many2one(name, size, n_cores):
             fresh_id += 1
         return Dequeue_get(name, [deq_all])
 
-    return enq_alloc, Enqueue_submit, deq_alloc, Dequeue_release
+    def scan_instance(name=None):
+        if not name:
+            global fresh_id
+            name = prefix + "scan" + str(fresh_id)
+            fresh_id += 1
+        if scan_enq:
+            return Scan(name, [enq_all])
+        else:
+            return Scan(name, [deq_all])
+
+    return enq_alloc, Enqueue_submit, deq_alloc, Dequeue_release, (scan_src and scan_instance)
 
 
-def create_circular_queue_variablesize_many2one_instances(name, size, n_cores):
+def create_circular_queue_variablesize_many2one_instances(name, size, n_cores, scan_src=None, scan_enq=True):
     prefix = "_%s_" % name
-    enq_alloc, enq_submit, deq_get, deq_release = create_circular_queue_variablesize_many2one(name, size, n_cores)
+    enq_alloc, enq_submit, deq_get, deq_release, scan = \
+        create_circular_queue_variablesize_many2one(name, size, n_cores, scan_src, scan_enq)
     return enq_alloc(prefix + "enqueue_alloc"), enq_submit(prefix + "enqueue_submit"), \
-           deq_get(prefix + "dequeue_get"), deq_release(prefix + "dequeue_release")
+           deq_get(prefix + "dequeue_get"), deq_release(prefix + "dequeue_release"), \
+           (scan_src and scan(prefix + "scan"))

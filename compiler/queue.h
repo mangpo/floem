@@ -84,6 +84,7 @@ void enqueue_submit(q_entry *e)
 {
     e->flags |= FLAG_OWN;
     //printf("enq_submit: entry = %ld, len = %d\n", e, e->len);
+    //__sync_fetch_and_or(&e->flags, FLAG_OWN);
     __sync_synchronize();
 }
 
@@ -104,6 +105,7 @@ void dequeue_release(q_entry *e)
 {
     e->flags &= ~FLAG_OWN;
     //printf("release: entry=%ld\n", e);
+    //__sync_fetch_and_and(&e->flags, ~FLAG_OWN);
     __sync_synchronize();
 }
 

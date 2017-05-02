@@ -43,17 +43,25 @@ get_key = create_element_instance("GetKey",
 (iokvs_message* m) = in();
 void *key = m->payload + m->mcr.request.extlen;
 size_t len = m->mcr.request.keylen;
+//printf("keylen = %s\n", len);
 output { out(key, len); }
-''')
+''' % '%ld')
 
 jenkins_hash = create_element_instance("Jenkins_Hash",
               [Port("in", ["void*", "size_t"])],
               [Port("out", ["void*", "size_t", "uint32_t"])],
                r'''
 (void* key, size_t length) = in();
+uint8_t* k = key;
+//printf("key = ");
+//for(int i=0; i< length; i++)
+//  printf("%s ", k[i]);
+//printf("\n");
+
 uint32_t hash = jenkins_hash(key, length);
+//printf("hash = %s\n", hash);
 output { out(key, length, hash); }
-''')
+''' % ('%d', '%d'))
 
 lookup = create_element_instance("Lookup",
               [Port("in", ["void*", "size_t", "uint32_t"])],
@@ -84,9 +92,12 @@ prepare_get_response = create_element_instance("prepare_get_response",
                           [Port("in_packet", ["iokvs_message*"]), Port("in_item", ["item*"])],
                           [Port("out", ["iokvs_message*"])],
                           r'''
-(iokvs_message* m) = in_packet();
+(iokvs_message* p) = in_packet();
+iokvs_message *m = (iokvs_message *) malloc(sizeof(iokvs_message) + 4 + it->vallen);
 (item* it) = in_item();
-// m->mcr.request.magic = PROTOCOL_BINARY_RES; // same
+m->mcr.request.opcode = PROTOCOL_BINARY_CMD_GET;
+//m->mcr.request.magic = PROTOCOL_BINARY_RES;
+m->mcr.request.magic = p->mcr.request.magic;
 m->mcr.request.keylen = 0;
 m->mcr.request.datatype = PROTOCOL_BINARY_RAW_BYTES;
 m->mcr.request.status = 0;
@@ -106,8 +117,11 @@ prepare_set_response = create_element_instance("prepare_set_response",
                           [Port("in_packet", ["iokvs_message*"])],
                           [Port("out", ["iokvs_message*"])],
                           r'''
-(iokvs_message* m) = in_packet();
-// m->mcr.request.magic = PROTOCOL_BINARY_RES; // same
+(iokvs_message* p) = in_packet();
+iokvs_message *m = (iokvs_message *) malloc(sizeof(iokvs_message) + 4);
+m->mcr.request.opcode = PROTOCOL_BINARY_CMD_SET;
+//m->mcr.request.magic = PROTOCOL_BINARY_RES;
+m->mcr.request.magic = p->mcr.request.magic;
 m->mcr.request.keylen = 0;
 m->mcr.request.datatype = PROTOCOL_BINARY_RAW_BYTES;
 m->mcr.request.status = 0;
@@ -140,6 +154,7 @@ if(entry) {
     entry->keylen = keylen;
     //entry->key = key;
     rte_memcpy(entry->key, key, keylen);
+    //__sync_synchronize();
 }
 output switch { case entry: out((q_entry*) entry); }
                ''')
@@ -164,6 +179,7 @@ if(entry) {
     entry->flags |= EQE_TYPE_RXSET << EQE_TYPE_SHIFT;
     entry->opaque = opaque;
     entry->item = get_pointer_offset(it);
+    //__sync_synchronize();
 }
 output switch { case entry: out((q_entry*) entry); }
                ''')
@@ -194,6 +210,7 @@ eqe_seg_full* entry = (eqe_seg_full *) in_entry();
 (uint64_t full) = in_segment();
 entry->flags |= EQE_TYPE_SEGFULL << EQE_TYPE_SHIFT;
 entry->last = full;
+//__sync_synchronize();
 output { out((q_entry*) entry); }
                ''')
 
@@ -290,7 +307,9 @@ get_core = create_element("get_core",
                                        [Port("out", ["size_t"])],
                                        r'''
     (iokvs_message* m, void* key, size_t keylen, uint32_t hash) = in();
-    output { out(hash %s %d); }''' % ('%', n_cores))
+    size_t core = hash %s %d;
+    //printf("hash = %s, %s\n", hash, core);
+    output { out(core); }''' % ('%', n_cores, '%d', '%d'))
 get_core_get = get_core("get_core_get")
 get_core_set = get_core("get_core_set")
 
@@ -423,7 +442,7 @@ msg_put = msg_put_creator("msg_put")
 msg_get_get = msg_get_creator("msg_get_get")
 msg_get_set = msg_get_creator("msg_get_set")
 
-Inject = create_inject("inject", "iokvs_message*", 1000, "random_request")
+Inject = create_inject("inject", "iokvs_message*", 10, "random_request")
 inject = Inject()
 
 Probe = create_probe("probe", "iokvs_message*", 1010, "cmp_func")
@@ -510,8 +529,16 @@ def impl():
     ######################## NIC Tx #######################
 
     # Queue
-    tx_enq_alloc, tx_enq_submit, tx_deq_get, tx_deq_release = \
-        queue.create_circular_queue_variablesize_many2one_instances("tx_queue", 10000, n_cores)  # TODO: create just one enq/deq, take core_id as parameter.
+    scan_src = r'''
+        if (((entry->flags & CQE_TYPE_MASK) >> CQE_TYPE_SHIFT) == CQE_TYPE_GRESP)
+        {
+            cqe_send_getresponse *csg = (cqe_send_getresponse *) entry;
+            item* it = (item *) get_pointer(csg->item);
+            item_unref(it);
+        }
+    '''
+    tx_enq_alloc, tx_enq_submit, tx_deq_get, tx_deq_release, scan = \
+        queue.create_circular_queue_variablesize_many2one_instances("tx_queue", 10000, n_cores, scan_src)
 
     # Enqueue
     @API("send_cq", process="app")
@@ -520,6 +547,10 @@ def impl():
         entry = tx_enq_alloc(core, length)
         entry = fill_cqe(entry, type, pointer, size, opague)
         tx_enq_submit(entry)
+
+    @API("clean_cq", process="app")
+    def clean_cq(core):
+        scan(core)
 
     @internal_trigger("nic_tx", process="nic")
     def tx_pipeline():
@@ -592,4 +623,20 @@ run_compare()
 # TODO: queue -- owner bit & tail pointer update
 # TODO: queue -- high order function
 
-# TODO: custom allocated shared memory (for log segments)
+'''
+item_unref >>>
+hasht_put: item_unref (done)
+main:
+- item_unref before sending response ***
+- clean_log after packet_loop (done)
+- full segment case: call segment_item_free ***
+
+item_ref >>>
+hasht_get: item_ref (done)
+hasht_put: item_ref (done)
+
+----------
+get_next_event: clean_cq: item_unref for getresponse (done)
+execute_request_set: item_unref (done)
+execute_segment_full: ialloc_nicsegment_full: segment_item_free (done)
+'''

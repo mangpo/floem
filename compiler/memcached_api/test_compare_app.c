@@ -15,6 +15,40 @@ void settings_init()
 }
 
 
+static size_t clean_log(struct item_allocator *ia, bool idle)
+{
+    item *it, *nit;
+    size_t n;
+
+    if (!idle) {
+        /* We're starting processing for a new request */
+        ialloc_cleanup_nextrequest(ia);
+    }
+
+    n = 0;
+    while ((it = ialloc_cleanup_item(ia, idle)) != NULL) {
+        n++;
+        if (it->refcount != 1) {
+            if ((nit = ialloc_alloc(ia, sizeof(*nit) + it->keylen + it->vallen,
+                    true)) == NULL)
+            {
+                fprintf(stderr, "Warning: ialloc_alloc failed during cleanup :-/\n");
+                abort();
+            }
+
+            nit->hv = it->hv;
+            nit->vallen = it->vallen;
+            nit->keylen = it->keylen;
+            rte_memcpy(item_key(nit), item_key(it), it->keylen + it->vallen);
+            hasht_put(nit, it);
+            item_unref(nit);
+        }
+        item_unref(it);
+    }
+    return n;
+}
+
+
 void run_app(void *threadid) {
   long tid = (long)threadid;
 
@@ -29,8 +63,10 @@ void run_app(void *threadid) {
 
   while(true) {
       eq_entry* e = get_eq(tid);
-      //printf("get_eq %ld\n", e);
+      //if(tid == 1) printf("get_eq %ld\n", e);
       if(e == NULL) {
+        clean_log(&ia, true);
+        clean_cq(tid);
         continue;
         //printf("eq_entry at core %ld is null.\n", tid);
       }
@@ -59,9 +95,11 @@ void run_app(void *threadid) {
 //        for(int i=0; i<it->keylen; i++)
 //            printf("set id: %ld, key[%d] = %d\n", e_set->opaque, i, key[i]);
         hasht_put(it, NULL);
+        item_unref(it);
         send_cq(tid, CQE_TYPE_SRESP, 0, 0, e_set->opaque);
       }
       else if (type == EQE_TYPE_SEGFULL) {
+        printf("new segment\n");
         struct segment_header* segment = new_segment(&ia, false);
         if(segment == NULL) {
             printf("Fail to allocate new segment.\n");
@@ -70,14 +108,13 @@ void run_app(void *threadid) {
         send_cq(tid, CQE_TYPE_LOG, get_pointer_offset(segment->data), segment->size, 0);
 
         // TODO: what to do with full segment?
-//        eqe_seg_full* e_full = (eqe_seg_full*) e;
-//        struct segment_header* old = e_full->segment;
-//        size_t avail = old->size - old->offset;
-//        segment_item_free(old, avail);
-//        old->offset += avail;
+        eqe_seg_full* e_full = (eqe_seg_full*) e;
+        ialloc_nicsegment_full(e_full->last);
       }
       release((q_entry *) e);
-      usleep(10);
+      clean_log(&ia, false);
+      clean_cq(tid);
+      //usleep(10);
   }
 }
 
