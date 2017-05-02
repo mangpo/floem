@@ -294,6 +294,7 @@ def create_circular_queue_variablesize_many2one(name, size, n_cores, scan_src=Fa
     prefix = "_%s_" % name
     one_name = prefix + "queue"
     all_name = prefix + "queues"
+    all_name_scan = prefix + "queues_scan"
     one_instance_name = one_name + "_inst"
     one_deq_instance_name = one_name + "_deq_inst"
     all_instance_name = all_name + "_inst"
@@ -301,15 +302,37 @@ def create_circular_queue_variablesize_many2one(name, size, n_cores, scan_src=Fa
 
     Dummy = create_state(one_name + "_dummy", "uint8_t queue[%d];" % size)
     circular = create_state("circular_queue", "size_t len; size_t offset; void* queue;", None, False)
+    circular_scan = create_state("circular_queue_scan", "size_t len; size_t offset; void* queue; size_t clean;", None, False)
     dummies = [Dummy(one_name + "_dummy" + str(i)) for i in range(n_cores)]
-    enq_ones = [circular(one_instance_name + str(i), [size, 0, dummies[i]])
-            for i in range(n_cores)]
-    deq_ones = [circular(one_deq_instance_name + str(i), [size, 0, dummies[i]])
-            for i in range(n_cores)]
 
     All = create_state(all_name, "circular_queue* cores[%d];" % n_cores)
-    enq_all = All(all_instance_name, [[enq_ones[i] for i in range(n_cores)]])
-    deq_all = All(all_eq_instance_name, [[deq_ones[i] for i in range(n_cores)]])
+    All_scan = create_state(all_name_scan, "circular_queue_scan* cores[%d];" % n_cores)
+
+    if scan_src and scan_enq:
+        circular_enq = circular_scan
+        All_enq = All_scan
+        all_name_enq = all_name_scan
+    else:
+        circular_enq = circular
+        All_enq = All
+        all_name_enq = all_name
+
+    if scan_src and not scan_enq:
+        circular_deq = circular_scan
+        All_deq = All_scan
+        all_name_deq = all_name_scan
+    else:
+        circular_deq = circular
+        All_deq = All
+        all_name_deq = all_name
+
+    enq_ones = [circular_enq(one_instance_name + str(i), [size, 0, dummies[i], 0])
+            for i in range(n_cores)]
+    deq_ones = [circular_deq(one_deq_instance_name + str(i), [size, 0, dummies[i], 0])
+            for i in range(n_cores)]
+
+    enq_all = All_enq(all_instance_name, [[enq_ones[i] for i in range(n_cores)]])
+    deq_all = All_deq(all_eq_instance_name, [[deq_ones[i] for i in range(n_cores)]])
 
     Enqueue_alloc = create_element(prefix + "enqueue_alloc_ele",
                                    [Port("in_core", ["size_t"]), Port("in_len", ["size_t"])],
@@ -320,7 +343,7 @@ def create_circular_queue_variablesize_many2one(name, size, n_cores, scan_src=Fa
            circular_queue *q = this->cores[c];
            q_entry* entry = (q_entry*) enqueue_alloc(q, len);
            output { out(entry); }
-           ''', None, [(all_name, "this")])
+           ''', None, [(all_name_enq, "this")])
 
     Enqueue_submit = create_element(prefix + "enqueue_submit_ele",
                                     [Port("in", ["q_entry*"])], [],
@@ -345,7 +368,7 @@ def create_circular_queue_variablesize_many2one(name, size, n_cores, scan_src=Fa
             }
         }
         output { out(x); }
-           ''' % (n_cores, "%", "%"), None, [(all_name, "this")])
+           ''' % (n_cores, "%", "%"), None, [(all_name_deq, "this")])
 
     Dequeue_release = create_element(prefix + "dequeue_release_ele",
                              [Port("in", ["q_entry*"])], [],
@@ -360,23 +383,27 @@ def create_circular_queue_variablesize_many2one(name, size, n_cores, scan_src=Fa
                               [],
                               r'''
     (size_t c) = in_core();
-    circular_queue *q = this->cores[c];
+    circular_queue_scan *q = this->cores[c];
     size_t off = q->offset;
     size_t len = q->len;
-    size_t clean = cleaning.pos;
+    size_t clean = q->clean;
     void* base = q->queue;
+    //if(c==1 && cleaning.last != off) printf("SCAN: start, last = %ld, offset = %ld, clean = %ld\n", cleaning.last, off, clean);
     while (clean != off) {
         q_entry *entry = (q_entry *) ((uintptr_t) base + clean);
         if ((entry->flags & FLAG_OWN) != 0) {
+            //if(c==1 && cleaning.last != off) printf("SCAN: offset = %ld, clean = %ld [BREAK]\n", off, clean);
             break;
         }
         /* insert code */
         ''' + scan_src +
                               r'''
+        //if(c==1) printf("SCAN: len = %ld, offset = %ld, clean = %ld, + %d\n", len, off, clean, entry->len);
+        //if(c==1 && clean==24) printf("SCAN: len = %ld, offset = %ld, clean = %ld, + %d\n", len, off, clean, entry->len);
         clean = (clean + entry->len) % len;
     }
-    cleaning.pos = clean;
-            ''', State("cleaning", "size_t pos;", "0"), [(all_name, "this")])
+    q->clean = clean;
+            ''', None, [(all_name_scan, "this")])
     else:
         Scan = None
 

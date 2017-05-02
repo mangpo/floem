@@ -34,16 +34,14 @@ int main() {
   //ialloc_init_slave();
 
   // spec
-/*
   hasht_init();
   spec_run_threads();
   usleep(500000);
   spec_kill_threads();
-*/
 
   // impl
   impl_run_threads();
-  usleep(3000000);
+  usleep(1000000);
   impl_kill_threads();
 
   // compare

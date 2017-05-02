@@ -442,7 +442,7 @@ msg_put = msg_put_creator("msg_put")
 msg_get_get = msg_get_creator("msg_get_get")
 msg_get_set = msg_get_creator("msg_get_set")
 
-Inject = create_inject("inject", "iokvs_message*", 10, "random_request")
+Inject = create_inject("inject", "iokvs_message*", 1000, "random_request")
 inject = Inject()
 
 Probe = create_probe("probe", "iokvs_message*", 1010, "cmp_func")
