@@ -588,7 +588,7 @@ c = Compiler()
 c.include = r'''
 #include <rte_memcpy.h>
 #include "nicif.h"
-#include "iokvs.h"
+#include "iokvs_multiprocesses.h"
 #include "protocol_binary.h"
 #include "../queue.h"
 #include "../shm.h"

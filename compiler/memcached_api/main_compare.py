@@ -84,9 +84,12 @@ prepare_get_response = create_element_instance("prepare_get_response",
                           [Port("in_packet", ["iokvs_message*"]), Port("in_item", ["item*"])],
                           [Port("out", ["iokvs_message*"])],
                           r'''
-(iokvs_message* m) = in_packet();
+(iokvs_message* p) = in_packet();
+iokvs_message *m = (iokvs_message *) malloc(sizeof(iokvs_message) + 4 + it->vallen);
 (item* it) = in_item();
-// m->mcr.request.magic = PROTOCOL_BINARY_RES; // same
+m->mcr.request.opcode = PROTOCOL_BINARY_CMD_GET;
+//m->mcr.request.magic = PROTOCOL_BINARY_RES;
+m->mcr.request.magic = p->mcr.request.magic;
 m->mcr.request.keylen = 0;
 m->mcr.request.datatype = PROTOCOL_BINARY_RAW_BYTES;
 m->mcr.request.status = 0;
@@ -106,8 +109,11 @@ prepare_set_response = create_element_instance("prepare_set_response",
                           [Port("in_packet", ["iokvs_message*"])],
                           [Port("out", ["iokvs_message*"])],
                           r'''
-(iokvs_message* m) = in_packet();
-// m->mcr.request.magic = PROTOCOL_BINARY_RES; // same
+(iokvs_message* p) = in_packet();
+iokvs_message *m = (iokvs_message *) malloc(sizeof(iokvs_message) + 4);
+m->mcr.request.opcode = PROTOCOL_BINARY_CMD_SET;
+//m->mcr.request.magic = PROTOCOL_BINARY_RES;
+m->mcr.request.magic = p->mcr.request.magic;
 m->mcr.request.keylen = 0;
 m->mcr.request.datatype = PROTOCOL_BINARY_RAW_BYTES;
 m->mcr.request.status = 0;
@@ -509,7 +515,7 @@ def impl():
     ######################## NIC Tx #######################
 
     # Queue
-    tx_enq_alloc, tx_enq_submit, tx_deq_get, tx_deq_release = \
+    tx_enq_alloc, tx_enq_submit, tx_deq_get, tx_deq_release, scan = \
         queue.create_circular_queue_variablesize_many2one_instances("tx_queue", 10000, n_cores)  # TODO: create just one enq/deq, take core_id as parameter.
 
     # Enqueue
