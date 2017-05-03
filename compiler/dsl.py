@@ -80,6 +80,10 @@ class CPU_process(Process):
         Process.__init__(self, name, threads)
 
 
+def pipeline_state(instance, state):
+    scope[-1].append(PipelineState(instance.name, state))
+
+
 def master_process(p):
     if isinstance(p, CPU_process):
         scope[-1].append(MasterProcess(p.name))

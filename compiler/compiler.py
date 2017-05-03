@@ -2,6 +2,7 @@ from program import *
 from join_handling import get_join_buffer_name, annotate_join_info
 from api_handling import annotate_api_info
 from process_handling import annotate_process_info
+from pipeline_state import compile_pipeline_states
 import re, sys, os, subprocess, time
 from contextlib import contextmanager
 
@@ -656,6 +657,8 @@ def generate_graph(program, resource=True, remove_unused=False, default_process=
     gen = GraphGenerator(default_process)
     gen.interpret(program)
     #gen.graph.check_input_ports()
+
+    compile_pipeline_states(gen.graph)
 
     if resource:
         # Insert necessary elements for resource mapping.

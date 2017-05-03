@@ -170,6 +170,12 @@ class MasterProcess:
         self.master = master
 
 
+class PipelineState:
+    def __init__(self, start_instance, state):
+        self.start_instance = start_instance
+        self.state = state
+
+
 class GraphGenerator:
     def __init__(self, default_process):
         self.graph = Graph(default_process)
@@ -333,6 +339,10 @@ class GraphGenerator:
 
         elif isinstance(x, MasterProcess):
             self.graph.master_process = x.master
+
+        elif isinstance(x, PipelineState):
+            inst_name = get_node_name(self.get_instance_stack(x.start_instance), x.start_instance)
+            self.graph.pipeline_states.append((inst_name, x.state))
 
         elif isinstance(x, PopulateState):
             self.graph.inject_populates[x.state_instance] = x.clone()

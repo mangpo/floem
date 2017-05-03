@@ -377,6 +377,9 @@ class Graph:
         self.default_process = default_process
         self.master_process = default_process
 
+        # Per-packet state
+        self.pipeline_states = []
+
     def __str__(self):
         s = "Graph:\n"
         # s += "  states: %s\n" % str(self.states)
