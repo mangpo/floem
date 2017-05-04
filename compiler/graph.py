@@ -259,7 +259,9 @@ class ElementNode:
         self.API_default_val = None   # default return value
 
         # Liveness analysis
-        self.output2live = {}
+        self.liveness = None
+        self.output_instances = None
+        self.vis_output_instances = set()
 
     def __str__(self):
         return self.element.name + "::" + self.name + "---OUT[" + str(self.output2ele) + "]" + "---IN[" + str(self.input2ele) + "]"
