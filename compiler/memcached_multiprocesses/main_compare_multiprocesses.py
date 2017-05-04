@@ -488,7 +488,7 @@ def impl():
     rx_deq_release = rx_deq_release_creator()
 
     @internal_trigger("nic_rx", process="nic")
-    def tx_pipeline():
+    def rx_pipeline():
         # From network
         pkt = inject()
         opaque = get_opaque(pkt)  # TODO: opaque = count

@@ -39,15 +39,19 @@ class Element:
         self.output_fire = None
         self.output_code = None
 
+        self.special = None
+        self.defs = set()
+        self.uses = set()
+
         if analyze:
             self.check_ports(inports + outports)
             self.analyze_output_type()
-            #self.reorder_outports()
 
     def clone(self, new_name):
         e = Element(new_name, self.inports[:], self.outports[:], self.code, self.local_state, self.state_params, False)
         e.output_fire = self.output_fire
         e.output_code = self.output_code
+        e.special = self.special
         return e
 
     def check_ports(self, ports):
@@ -253,6 +257,9 @@ class ElementNode:
         self.API_return_from = []   # which output node the the return value comes form
         self.API_return_final = None  # mark that this node has to create the return state
         self.API_default_val = None   # default return value
+
+        # Liveness analysis
+        self.output2live = {}
 
     def __str__(self):
         return self.element.name + "::" + self.name + "---OUT[" + str(self.output2ele) + "]" + "---IN[" + str(self.input2ele) + "]"
