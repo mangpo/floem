@@ -658,6 +658,8 @@ def generate_graph(program, resource=True, remove_unused=False, default_process=
     gen.interpret(program)
     #gen.graph.check_input_ports()
 
+    # Annotate minimal join information
+    annotate_join_info(gen.graph, False)
     compile_pipeline_states(gen.graph)
 
     if resource:
@@ -672,8 +674,8 @@ def generate_graph(program, resource=True, remove_unused=False, default_process=
     if remove_unused:
         gen.graph.remove_unused_elements(resource)
 
-    # Annotate join information
-    annotate_join_info(gen.graph)
+    # Annotate detaile join information
+    annotate_join_info(gen.graph, True)
 
     if resource:
         # Annotate APIs information. APIs ony make sense with resource mapping.

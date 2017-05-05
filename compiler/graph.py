@@ -260,8 +260,9 @@ class ElementNode:
 
         # Liveness analysis
         self.liveness = None
-        self.output_instances = None
-        self.vis_output_instances = set()
+        self.dominants = None
+        self.passing_nodes = None
+        self.dominant2kills = {}
 
     def __str__(self):
         return self.element.name + "::" + self.name + "---OUT[" + str(self.output2ele) + "]" + "---IN[" + str(self.input2ele) + "]"

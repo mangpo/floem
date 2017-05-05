@@ -288,7 +288,7 @@ def dfs_cover(g, node_name, port_name, target, num_ports, answer):
     return ret
 
 
-def annotate_for_instance(instance, g, roots):
+def annotate_for_instance(instance, g, roots, detail):
     """
     Mark each node an information about the given join element instance:
     1. if it needs to create the buffer state for the join node (instance.join_state_create)
@@ -318,19 +318,23 @@ def annotate_for_instance(instance, g, roots):
         elif not cover.empty():
             passing_nodes.append(name)
 
-    # Mark this node to create a buffer for target join element.
-    for dominant in dominant_nodes:
-        g.instances[dominant].join_state_create.append(target)
+    if detail:
+        # Mark this node to create a buffer for target join element.
+        for dominant in dominant_nodes:
+            g.instances[dominant].join_state_create.append(target)
 
-    # Mark these nodes to pass pointer to the buffer.
-    for node in passing_nodes:
-        g.instances[node].join_func_params.append(target)
+        # Mark these nodes to pass pointer to the buffer.
+        for node in passing_nodes:
+            g.instances[node].join_func_params.append(target)
 
-    # Mark this node to invoke the join element instance.
-    last_port = instance.element.inports[-1]
-    invoke_nodes = [name for name, port in instance.input2ele[last_port.name]]
-    for node in invoke_nodes:
-        g.instances[node].join_call.append(target)
+        # Mark this node to invoke the join element instance.
+        last_port = instance.element.inports[-1]
+        invoke_nodes = [name for name, port in instance.input2ele[last_port.name]]
+        for node in invoke_nodes:
+            g.instances[node].join_call.append(target)
+    else:
+        instance.dominants = dominant_nodes
+        instance.join_size = passing_nodes
 
 
 def topo_sort(join_partial_order, order, visit, port_name):
@@ -375,7 +379,7 @@ def get_join_buffer_name(name):
     return "_%s_join_buffer" % name
 
 
-def annotate_join_info(g):
+def annotate_join_info(g, detail):
     """
     Annotate element instances in the given graph on information necessary to handle join nodes.
     :param g: graph
@@ -435,17 +439,19 @@ def annotate_join_info(g):
 
     for instance in g.instances.values():
         if instance.join_ports_same_thread:
-            annotate_for_instance(instance, g, roots)
-            args = []
-            content = ""
-            for port in instance.join_ports_same_thread:
-                for i in range(len(port.argtypes)):
-                    arg = "%s_arg%d" % (port.name, i)
-                    args.append(arg)
-                    content += "%s %s; " % (port.argtypes[i], arg)
+            annotate_for_instance(instance, g, roots, detail)
+            if detail:
+                args = []
+                content = ""
+                for port in instance.join_ports_same_thread:
+                    for i in range(len(port.argtypes)):
+                        arg = "%s_arg%d" % (port.name, i)
+                        args.append(arg)
+                        content += "%s %s; " % (port.argtypes[i], arg)
 
-            g.addState(State(get_join_buffer_name(instance.name), content, init=None))
+                g.addState(State(get_join_buffer_name(instance.name), content, init=None))
 
-    # Order function calls
-    for instance in g.instances.values():
-        order_function_calls(instance)
+    if detail:
+        # Order function calls
+        for instance in g.instances.values():
+            order_function_calls(instance)

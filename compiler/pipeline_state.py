@@ -1,102 +1,4 @@
 import re
-import copy
-import queue_smart
-
-
-class LivenessInfo:
-    def __init__(self, instance, port, n_ports, version, killed):
-        self.instance = instance
-        self.port = port
-        self.n_ports = n_ports
-        self.version = version
-        self.killed = killed
-
-    def __copy__(self):
-        return LivenessInfo(self.instance, self.port, self.n_ports, self.version, self.killed)
-
-
-class LivenessCollection:
-    def __init__(self):
-        self.var2info = {}  # map var to (instance, port, n_ports, version, use/kill)
-
-    def add_liveness_collection(self, other, collapse):
-        if len(self.var2info) == 0:
-            self.var2info = copy.deepcopy(other.var2info)
-        else:
-            for var in other.var2info:
-                if var in self.var2info:
-                    self.var2info[var] = self.var2info[var] + other.var2info[var]
-                else:
-                    self.var2info[var] = copy.copy(other.var2info[var])
-
-                if collapse:
-                    self.var2info[var] = self.collapse_liveness(self.var2info[var])
-
-    def kill_var(self, var):
-        if var in self.var2info:
-            liveness_list = self.var2info[var]
-            for liveness in liveness_list:
-                liveness.killed = True
-
-            self.var2info[var] = self.collapse_liveness(liveness_list)
-
-
-    def add_var(self, var, instance, port, n_ports, version):
-        liveness = LivenessInfo(instance, port, n_ports, version, False)
-        if var not in self.var2info:
-            self.var2info[var] = []
-        self.var2info[var].append(liveness)
-
-
-    def collapse_liveness(self, liveness_list):
-        inst2info = {}
-        for liveness in liveness_list:
-            instance = liveness.instance
-            if instance not in inst2info:
-                inst2info[instance] = []
-            inst2info[instance].append(liveness)
-
-        for instance in inst2info:
-            inst_liveness_list = inst2info[instance]
-            n_ports = inst_liveness_list[0].n_ports
-
-            port2info = {}
-            for liveness in inst_liveness_list:
-                port = liveness.port
-                if port not in port2info:
-                    port2info[port] = []
-                port2info[port].append(liveness)
-
-            # Have all ports, try to collapse
-            if len(port2info) == n_ports:
-                can_remove = False
-                for port in port2info:
-                    all_killed = True
-                    port_liveness_list = port2info[port]
-                    for liveness in port_liveness_list:
-                        all_killed = all_killed and liveness.killed
-                        if not all_killed:
-                            break
-
-                    if all_killed:
-                        can_remove = True
-                        break
-
-                if can_remove:
-                    # Remove instance
-                    liveness_list = [x for x in liveness_list if x.instance is not instance]
-                else:
-                    # For each port, keep just one version
-                    add_list = []
-                    for port in port2info:
-                        port_liveness_list = port2info[port]
-                        liveness = port_liveness_list[0]
-                        new_liveness = liveness.copy()
-                        new_liveness.killed = False
-                        add_list.append(new_liveness)
-                    liveness_list = [x for x in liveness_list if x.instance is not instance] + add_list
-
-            return liveness_list
 
 
 def allocate_pipeline_state(element, state):
@@ -208,55 +110,101 @@ def collect_defs_uses(g):
     return src2fields
 
 
-def bypass_queue(inst, from_inst):
-    if not isinstance(inst.element.special, queue_smart.Queue):
-        return inst
+# def bypass_queue(inst, from_inst):
+#     if not isinstance(inst.element.special, queue_smart.Queue):
+#         return inst
+#
+#     for port in inst.output2ele:
+#         insts = inst.output2ele[port]
+#         if from_inst.name in insts:
+#             no = port[3:]
+#             port_in = "in" + no
+#             insts_in = inst.input2ele[port_in]
+#             return insts_in
 
-    for port in inst.output2ele:
-        insts = inst.output2ele[port]
-        if from_inst.name in insts:
-            no = port[3:]
-            port_in = "in" + no
-            insts_in = inst.input2ele[port_in]
-            return insts_in
+
+def analyze_fields_liveness_instance(g, name):
+    instance = g.instances[name]
+    if instance.liveness:
+        # visited
+        if instance.dominants:
+            return set()
+        else:
+            return instance.liveness
+
+    # Union its children
+    if instance.liveness:
+        live = instance.liveness
+    else:
+        live = set()
+    for next_name, next_port in instance.output2ele:
+        ret = analyze_fields_liveness_instance(g, next_name)
+        live = live.union(ret)
+
+    # - kills + uses
+    live = live.difference(instance.defs)
+    live = live.union(instance.uses)
+    instance.liveness = live
+
+    if instance.dominants:
+        for dominant in instance.dominants:
+            dom = g.instances[dominant]
+            kills = instance.dominant2kills[dominant]
+            updated_live = live.difference(kills)
+            if dom.liveness:
+                dom.liveness = dom.liveness.union(updated_live)
+            else:
+                dom.liveness = updated_live
+        return set()
+    else:
+        return live
 
 
 def analyze_fields_liveness(g):
-    vis = []
-    ready = []
-
     for instance in g.instances.values():
-        instance.liveness = LivenessCollection()
-        output_instances = []
-        for insts in instance.output2ele.values():
-            output_instances + insts
-        instance.output_instances = set(output_instances)
+        if len(instance.input2ele) == 0:
+            live = analyze_fields_liveness_instance(g, instance.name)
+            assert len(live == 0), "Fields %s of a pipeline state should not be live at the beginning." % live
 
-        if len(instance.output2ele) == 0:
-            ready.append(instance)
 
-    while len(ready) > 0:
-        working = ready.pop()
-        vis.append(working)
-        for def_var in working.element.defs:
-            working.liveness.kill_var(def_var)
+def join_collect_killset(g, inst_name, target, inst2kill, scope):
+    if inst_name == target:
+        return set()
+    elif inst_name in inst2kill:
+        return inst2kill[inst_name]
+    elif inst_name not in scope:
+        return set()
 
-        port_id = 0
-        n_ports = len(working.input2ele)
-        for port in working.input2ele:
-            insts = working.input2ele[port]
-            version = 0
-            for inst_name in insts:
-                inst = bypass_queue(g.instances[inst_name], working)  # TODO: bypass_queue may return a list
-                inst.vis_output_instances.add(working.name)
-                inst.liveness.add_liveness_collection(working.liveness)
-                for use_var in working.element.uses:
-                    inst.liveness.add_var(use_var, working.name, port_id, n_ports, version)
+    instance = g.instances[inst_name]
 
-                assert (inst not in vis), "Instance %s is already been visited." % inst.name
-                ready.append(inst)
-                version += 1
-            port_id += 1
+    if instance.element.output_fire == "all":
+        kills = set()
+        for next_name, next_port in instance.output2ele.values():
+            ret = g.instances[next_name].kills.union(join_collect_killset(g, next_name, target, inst2kill))
+            kills = kills.union(ret)
+    elif instance.element.output_fire == "one":
+        kills = set()
+        first = True
+        for next_name, next_port in instance.output2ele.values():
+            ret = g.instances[next_name].kills.union(join_collect_killset(g, next_name, target, inst2kill))
+            if first:
+                kills = ret
+                first = False
+            else:
+                kills = kills.intersect(ret)
+    else:
+        kills = set()
+
+    inst2kill[inst_name] = kills
+    return kills
+
+
+def compute_join_killset(g):
+    for instance in g.instances.values():
+        if instance.dominants:
+            for dominant in instance.dominants:
+                kills = join_collect_killset(g, dominant, instance.name, {}, instance.passing_nodes + [dominant])
+                instance.dominant2kills[dominant] = kills
 
 
 def compile_pipeline_states(g):
@@ -265,6 +213,7 @@ def compile_pipeline_states(g):
         return
 
     src2fields = collect_defs_uses(g)
+    compute_join_killset(g)
     analyze_fields_liveness(g)
-    compile_smart_queues(g)
+    # TODO: compile_smart_queues(g)
     insert_pipeline_states(g)
