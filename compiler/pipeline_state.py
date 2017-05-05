@@ -1,5 +1,6 @@
 import re
 import copy
+import queue_smart
 
 
 class LivenessInfo:
@@ -207,6 +208,19 @@ def collect_defs_uses(g):
     return src2fields
 
 
+def bypass_queue(inst, from_inst):
+    if not isinstance(inst.element.special, queue_smart.Queue):
+        return inst
+
+    for port in inst.output2ele:
+        insts = inst.output2ele[port]
+        if from_inst.name in insts:
+            no = port[3:]
+            port_in = "in" + no
+            insts_in = inst.input2ele[port_in]
+            return insts_in
+
+
 def analyze_fields_liveness(g):
     vis = []
     ready = []
@@ -233,7 +247,7 @@ def analyze_fields_liveness(g):
             insts = working.input2ele[port]
             version = 0
             for inst_name in insts:
-                inst = g.instances[inst_name]
+                inst = bypass_queue(g.instances[inst_name], working)  # TODO: bypass_queue may return a list
                 inst.vis_output_instances.add(working.name)
                 inst.liveness.add_liveness_collection(working.liveness)
                 for use_var in working.element.uses:
