@@ -60,6 +60,10 @@ def insert_pipeline_states(g):
 
 
 def find_all_fields(code):
+    """
+    :param code: string starting with . (. in state.<field>)
+    :return: src = (.<field>)+, a list of field, the rest of code after fields
+    """
     src = ""
     fields = []
     while True:
@@ -75,15 +79,19 @@ def find_all_fields(code):
             code = code[m.end(0) + 1:]
             fields.append(field)
         else:
+            field = code[:m.start(0)]
+            src += field
             code = code[m.start(0):]
+            fields.append(field)
             return src, fields, code
+
 
 def find_next_def_use(code):
     m = re.search('[^a-zA-Z0-9_]state\.', code)
     if not m:
         return None, None, None, None
 
-    src, fields, code = find_all_fields(code)
+    src, fields, code = find_all_fields(code[m.end(0):])
 
     use = True
     m = re.search('[^ ]', code)
@@ -137,13 +145,13 @@ def analyze_fields_liveness_instance(g, name):
         live = instance.liveness
     else:
         live = set()
-    for next_name, next_port in instance.output2ele:
+    for next_name, next_port in instance.output2ele.values():
         ret = analyze_fields_liveness_instance(g, next_name)
         live = live.union(ret)
 
     # - kills + uses
-    live = live.difference(instance.defs)
-    live = live.union(instance.uses)
+    live = live.difference(instance.element.defs)
+    live = live.union(instance.element.uses)
     instance.liveness = live
 
     if instance.dominants:
@@ -164,7 +172,7 @@ def analyze_fields_liveness(g):
     for instance in g.instances.values():
         if len(instance.input2ele) == 0:
             live = analyze_fields_liveness_instance(g, instance.name)
-            assert len(live == 0), "Fields %s of a pipeline state should not be live at the beginning." % live
+            assert len(live) == 0, "Fields %s of a pipeline state should not be live at the beginning." % live
 
 
 def join_collect_killset(g, inst_name, target, inst2kill, scope):

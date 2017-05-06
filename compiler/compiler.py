@@ -646,22 +646,20 @@ def get_element_port_avail(func, port):
     return "_%s_%s_avail" % (func, port)
 
 
-def generate_graph(program, resource=True, remove_unused=False, default_process="tmp"):
-    """
-    Compile program to data-flow graph and insert necessary elements for resource mapping and join elements.
-    :param program: program AST
-    :param resource: True if compile with resource mapping
-    :return: data-flow graph
-    """
+def program_to_graph_pass(program, default_process="tmp"):
     # Generate data-flow graph.
     gen = GraphGenerator(default_process)
     gen.interpret(program)
-    #gen.graph.check_input_ports()
+    return gen
 
+
+def pipeline_state_pass(gen):
     # Annotate minimal join information
     annotate_join_info(gen.graph, False)
     compile_pipeline_states(gen.graph)
 
+
+def join_and_resource_annotation_pass(gen, resource, remove_unused):
     if resource:
         # Insert necessary elements for resource mapping.
         # Assign call_instance for each thread.
@@ -685,6 +683,18 @@ def generate_graph(program, resource=True, remove_unused=False, default_process=
 
     if remove_unused:
         gen.graph.remove_unused_states()
+
+
+def generate_graph(program, resource=True, remove_unused=False, default_process="tmp"):
+    """
+    Compile program to data-flow graph and insert necessary elements for resource mapping and join elements.
+    :param program: program AST
+    :param resource: True if compile with resource mapping
+    :return: data-flow graph
+    """
+    gen = program_to_graph_pass(program, default_process)
+    pipeline_state_pass(gen)
+    join_and_resource_annotation_pass(gen, resource, remove_unused)
 
     return gen.graph
 
