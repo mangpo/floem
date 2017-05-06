@@ -6,20 +6,21 @@ def allocate_pipeline_state(element, state):
     element.code = add + element.code
 
 
-def insert_pipeline_state(element, state):
+def insert_pipeline_state(element, state, start):
     no_state = True
-    for port in element.inports:
-        if len(port.argtypes) == 0:
-            port.argtypes.append(state + "*")
-            if no_state:
-                m = re.search('[^a-zA-Z0-9_](' + port.name + ')\(', element.code)
-                if m:
-                    add = '%s *_state = ' % state
-                    element.code = element.code[:m.start(1)] + add + element.code[m.start(1):]
-                else:
-                    add = '  %s *_state = %s();\n' % (state, port.name)
-                    element.code = add + element.code
-                no_state = False
+    if not start:
+        for port in element.inports:
+            if len(port.argtypes) == 0:
+                port.argtypes.append(state + "*")
+                if no_state:
+                    m = re.search('[^a-zA-Z0-9_](' + port.name + ')\(', element.code)
+                    if m:
+                        add = '%s *_state = ' % state
+                        element.code = element.code[:m.start(1)] + add + element.code[m.start(1):]
+                    else:
+                        add = '  %s *_state = %s();\n' % (state, port.name)
+                        element.code = add + element.code
+                    no_state = False
 
     for port in element.outports:
         if len(port.argtypes) == 0:
@@ -36,13 +37,21 @@ def insert_pipeline_states(g):
             ele2inst[instance.element.name] = []
         ele2inst[instance.element.name].append(instance)
 
-    for instance, state in g.pipeline_states:
+    for start_name, state in g.pipeline_states:
         subgraph = set()
-        g.find_subgraph(instance, subgraph)
+        g.find_subgraph(start_name, subgraph)
 
         # Allocate state
-        element = g.instances[instance].element
-        allocate_pipeline_state(element, state)
+        instance = g.instances[start_name]
+        element = instance.element
+        if len(ele2inst[element.name]) == 1:
+            allocate_pipeline_state(element, state)
+        else:
+            new_element = element.clone(start_name + "_with_state_alloc")
+            allocate_pipeline_state(new_element, state)
+            g.addElement(new_element)
+            instance.element = new_element
+            ele2inst[new_element.name] = [start_name]
 
         # Pass state pointers
         for inst_name in subgraph:
@@ -50,11 +59,11 @@ def insert_pipeline_states(g):
             element = inst.element
             if len(ele2inst[element.name]) == 1:
                 # TODO: modify element: empty port -> send state*
-                insert_pipeline_state(element, state)
+                insert_pipeline_state(element, state, inst_name==start_name)
             else:
                 # TODO: create new element: empty port -> send state*
-                new_element = element.clone(element.name + "_with_state")
-                insert_pipeline_state(new_element, state)
+                new_element = element.clone(inst_name + "_with_state")
+                insert_pipeline_state(new_element, state, inst_name==start_name)
                 g.addElement(new_element)
                 instance.element = new_element
 
@@ -168,11 +177,12 @@ def analyze_fields_liveness_instance(g, name):
         return live
 
 
-def analyze_fields_liveness(g):
+def analyze_fields_liveness(g, check):
     for instance in g.instances.values():
         if len(instance.input2ele) == 0:
             live = analyze_fields_liveness_instance(g, instance.name)
-            assert len(live) == 0, "Fields %s of a pipeline state should not be live at the beginning." % live
+            if check:
+                assert len(live) == 0, "Fields %s of a pipeline state should not be live at the beginning." % live
 
 
 def join_collect_killset(g, inst_name, target, inst2kill, scope):
@@ -188,13 +198,15 @@ def join_collect_killset(g, inst_name, target, inst2kill, scope):
     if instance.element.output_fire == "all":
         kills = set()
         for next_name, next_port in instance.output2ele.values():
-            ret = g.instances[next_name].kills.union(join_collect_killset(g, next_name, target, inst2kill))
+            ret = g.instances[next_name].element.defs
+            ret = ret.union(join_collect_killset(g, next_name, target, inst2kill, scope))
             kills = kills.union(ret)
     elif instance.element.output_fire == "one":
         kills = set()
         first = True
         for next_name, next_port in instance.output2ele.values():
-            ret = g.instances[next_name].kills.union(join_collect_killset(g, next_name, target, inst2kill))
+            ret = g.instances[next_name].element.defs
+            ret = ret.union(join_collect_killset(g, next_name, target, inst2kill, scope))
             if first:
                 kills = ret
                 first = False
@@ -215,13 +227,13 @@ def compute_join_killset(g):
                 instance.dominant2kills[dominant] = kills
 
 
-def compile_pipeline_states(g):
+def compile_pipeline_states(g, check):
     if len(g.pipeline_states) == 0:
         # Never use per-packet states. No modification needed.
         return
 
     src2fields = collect_defs_uses(g)
     compute_join_killset(g)
-    analyze_fields_liveness(g)
+    analyze_fields_liveness(g, check)
     # TODO: compile_smart_queues(g)
     insert_pipeline_states(g)

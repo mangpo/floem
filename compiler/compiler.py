@@ -653,10 +653,10 @@ def program_to_graph_pass(program, default_process="tmp"):
     return gen
 
 
-def pipeline_state_pass(gen):
+def pipeline_state_pass(gen, check=True):
     # Annotate minimal join information
     annotate_join_info(gen.graph, False)
-    compile_pipeline_states(gen.graph)
+    compile_pipeline_states(gen.graph, check)
 
 
 def join_and_resource_annotation_pass(gen, resource, remove_unused):

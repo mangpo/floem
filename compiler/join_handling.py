@@ -334,7 +334,7 @@ def annotate_for_instance(instance, g, roots, detail):
             g.instances[node].join_call.append(target)
     else:
         instance.dominants = dominant_nodes
-        instance.join_size = passing_nodes
+        instance.passing_nodes = passing_nodes
 
 
 def topo_sort(join_partial_order, order, visit, port_name):

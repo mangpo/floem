@@ -42,13 +42,11 @@ class TestPipelineState(unittest.TestCase):
             PipelineState("e1", "mystate"),
         )
 
-        try:
-            gen = program_to_graph_pass(p)
-            g = pipeline_state_pass(gen)
-        except AssertionError as e:
-            self.assertNotEqual(e.message.find("Fields set(['b']) of a pipeline state should not be live at the beginning."), -1)
-        else:
-            self.fail('Exception is not raised.')
+        gen = program_to_graph_pass(p)
+        pipeline_state_pass(gen, check=False)
+        g = gen.graph
+
+        self.check_live_all(g, [("e1", ["b"]), ("e2", ["a", "b"])])
 
 
     def test_simple_pass(self):
@@ -77,7 +75,47 @@ class TestPipelineState(unittest.TestCase):
         )
 
         gen = program_to_graph_pass(p)
-        pipeline_state_pass(gen)
+        pipeline_state_pass(gen, check=False)
         g = gen.graph
 
         self.check_live_all(g, [("e1", ["a"]), ("e2", ["a", "b"])])
+
+
+    def test_still_live(self):
+        p = Program(
+            Element("MyFork",
+                    [Port("in", [])],
+                    [Port("out1", []), Port("out2", [])],
+                    r'''
+                    output { out1(); out2() }'''),
+            Element("Def",
+                    [Port("in", [])],
+                    [Port("out", [])],
+                    r'''state.a = 99; output { out(); }'''),
+            Element("Join",
+                    [Port("in1", []), Port("in2", [])],
+                    [],
+                    r'''printf("%d\n", state.a);'''),
+            Element("Use",
+                    [Port("in", [])],
+                    [],
+                    r'''printf("%d\n", state.a);'''),
+            ElementInstance("MyFork", "fork1"),
+            ElementInstance("MyFork", "fork2"),
+            ElementInstance("Def", "def"),
+            ElementInstance("Use", "use"),
+            ElementInstance("Join", "join"),
+            Connect("fork1", "def", "out1"),
+            Connect("fork1", "fork2", "out2"),
+            Connect("def", "join", "out", "in1"),
+            Connect("fork2", "join", "out1", "in2"),
+            Connect("fork2", "use", "out2"),
+            State("mystate", "int a;"),
+            PipelineState("fork1", "mystate"),
+        )
+
+        gen = program_to_graph_pass(p)
+        pipeline_state_pass(gen, check=False)
+        g = gen.graph
+
+        self.check_live_all(g, [("fork1", ["a"]), ("fork2", ["a"]), ("join", ["a"]), ("use", ["a"]), ("def", [])])
