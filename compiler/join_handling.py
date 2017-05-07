@@ -455,3 +455,8 @@ def annotate_join_info(g, detail):
         # Order function calls
         for instance in g.instances.values():
             order_function_calls(instance)
+
+
+def clean_minimal_join_info(g):
+    for instance in g.instances.values():
+        instance.join_ports_same_thread = None

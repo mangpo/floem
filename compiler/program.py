@@ -216,10 +216,16 @@ class GraphGenerator:
         self.env[local_name] = (stack, element)
 
     def get_instance_stack(self, name):
-        return self.lookup(name)[0]
+        try:
+            return self.lookup(name)[0]
+        except TypeError:
+            raise "%s is undefined." % name
 
     def get_instance_type(self, name):
-        return self.lookup(name)[1]
+        try:
+            return self.lookup(name)[1]
+        except TypeError:
+            raise "%s is undefined." % name
 
     def put_resource(self, local_name, global_name):
         if local_name in self.env:

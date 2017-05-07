@@ -73,7 +73,7 @@ class TestDSL(unittest.TestCase):
             status = os.system("cd programs; python " + test + "; cd ..")
             self.assertEqual(status, 0, "Error at " + test)
         for test in tests2:
-            status = os.system("python programs_testing/" + test)
+            status = os.system("cd programs_testing; python " + test + "; cd ..")
             self.assertEqual(status, 0, "Error at " + test)
 
     def test_conflict_input(self):
@@ -95,7 +95,7 @@ class TestDSL(unittest.TestCase):
             c.generate_code()
         except Exception as e:
             self.assertNotEqual(
-                e.message.find("has more than one starting element instance."), -1)
+                e.message.find("Some input port of join element instance 'add' is not connected to any instance."), -1)
         else:
             self.fail('Exception is not raised.')
 

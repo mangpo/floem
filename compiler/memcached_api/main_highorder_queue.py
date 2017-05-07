@@ -412,7 +412,7 @@ def release(x):
 ######################## NIC Tx #######################
 
 # Queue
-tx_enq_alloc, tx_enq_submit, tx_deq_get, tx_deq_release = \
+tx_enq_alloc, tx_enq_submit, tx_deq_get, tx_deq_release, scan = \
     queue.create_circular_queue_variablesize_many2one_instances("tx_queue", 1024, n_cores)  # TODO: create just one enq/deq, take core_id as parameter.
 
 # Enqueue

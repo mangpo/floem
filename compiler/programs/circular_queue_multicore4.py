@@ -7,7 +7,7 @@ s = create_state("my_entry", "uint16_t flags; uint16_t len; int val;")
 
 enq_alloc, enq_submit, deq_get, deq_release = \
     queue.create_circular_queue_variablesize_one2many_instances("rx_queue", 30, n_cores)
-tx_enq_alloc, tx_enq_submit, tx_deq_get, tx_deq_release = \
+tx_enq_alloc, tx_enq_submit, tx_deq_get, tx_deq_release, scan = \
     queue.create_circular_queue_variablesize_many2one_instances("tx_queue", 30, n_cores)
 compute_core = create_element_instance("ComputeCore",
                          [Port("in", ["int", "size_t"])],

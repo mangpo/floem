@@ -25,7 +25,15 @@ def insert_pipeline_state(element, state, start):
     for port in element.outports:
         if len(port.argtypes) == 0:
             port.argtypes.append(state + "*")
-            element.output_code[port.name] = '%s(_state)' % port.name
+            if element.output_fire == "all":
+                element.output_code[port.name] = '%s(_state)' % port.name
+            else:
+                for i in range(len(element.output_code)):
+                    case, code = element.output_code[i]
+                    m = re.search(port.name + '\(', code)
+                    if m:
+                        code = code[:m.end(0)] + '_state' + code[m.end(0):]
+                        element.output_code[i] = (case, code)
 
     element.code = element.code.replace('state.', '_state->')
 
@@ -54,18 +62,23 @@ def insert_pipeline_states(g):
             ele2inst[new_element.name] = [start_name]
 
         # Pass state pointers
+        vis = set()
         for inst_name in subgraph:
             inst = g.instances[inst_name]
             element = inst.element
-            if len(ele2inst[element.name]) == 1:
-                # TODO: modify element: empty port -> send state*
-                insert_pipeline_state(element, state, inst_name==start_name)
-            else:
-                # TODO: create new element: empty port -> send state*
-                new_element = element.clone(inst_name + "_with_state")
-                insert_pipeline_state(new_element, state, inst_name==start_name)
-                g.addElement(new_element)
-                instance.element = new_element
+            # If multiple instances can share the same element, make sure we don't modify an element more than once.
+            if element.name not in vis:
+                vis.add(element.name)
+                if len(ele2inst[element.name]) == 1:
+                    # TODO: modify element: empty port -> send state*
+                    insert_pipeline_state(element, state, inst_name == start_name)
+                else:
+                    # TODO: create new element: empty port -> send state*
+                    new_element = element.clone(inst_name + "_with_state")
+                    vis.add(new_element.name)
+                    insert_pipeline_state(new_element, state, inst_name == start_name)
+                    g.addElement(new_element)
+                    instance.element = new_element
 
 
 def find_all_fields(code):

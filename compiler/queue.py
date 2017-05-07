@@ -235,7 +235,7 @@ def create_circular_queue_variablesize_one2many(name, size, n_cores):
            (size_t len) = in_len();
            (size_t c) = in_core();
            circular_queue *q = this->cores[c];
-           printf("ENQ core=%ld, queue=%p, eq=%d\n", c, q->queue, this->cores[1]==this->cores[3]);
+           //printf("ENQ core=%ld, queue=%p, eq=%d\n", c, q->queue, this->cores[1]==this->cores[3]);
            q_entry* entry = (q_entry*) enqueue_alloc(q, len);
            //if(entry == NULL) { printf("queue %d is full.\n", c); }
            //printf("ENQ' core=%ld, queue=%ld, entry=%ld\n", c, q->queue, entry);

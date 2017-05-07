@@ -1,5 +1,5 @@
 from program import *
-from join_handling import get_join_buffer_name, annotate_join_info
+from join_handling import get_join_buffer_name, annotate_join_info, clean_minimal_join_info
 from api_handling import annotate_api_info
 from process_handling import annotate_process_info
 from pipeline_state import compile_pipeline_states
@@ -657,6 +657,7 @@ def pipeline_state_pass(gen, check=True):
     # Annotate minimal join information
     annotate_join_info(gen.graph, False)
     compile_pipeline_states(gen.graph, check)
+    clean_minimal_join_info(gen.graph)
 
 
 def join_and_resource_annotation_pass(gen, resource, remove_unused):
