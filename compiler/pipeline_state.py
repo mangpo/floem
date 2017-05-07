@@ -247,6 +247,6 @@ def compile_pipeline_states(g, check):
 
     src2fields = collect_defs_uses(g)
     compute_join_killset(g)
-    analyze_fields_liveness(g, check)
+    analyze_fields_liveness(g, check)  # TODO: bypass smart queue
     # TODO: compile_smart_queues(g)
     insert_pipeline_states(g)

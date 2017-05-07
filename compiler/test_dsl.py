@@ -51,6 +51,7 @@ class TestDSL(unittest.TestCase):
                  "multiprocesses.py",
                  "multiprocesses_shm.py",
                  "forkjoin.py",
+                 "double_connection.py",  # TODO: Is this the semantics we want?
                  ]
 
         tests2 = ["join.py",
