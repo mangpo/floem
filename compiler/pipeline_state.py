@@ -153,8 +153,27 @@ def collect_defs_uses(g):
 #             return insts_in
 
 
-def analyze_fields_liveness_instance(g, name):
+def analyze_fields_liveness_instance(g, name, in_port):
     instance = g.instances[name]
+
+    # Smart queue
+    queue = instance.element.special
+    if queue:
+        no = int(in_port[2:])
+        if instance.liveness:
+            return instance.liveness[no]
+
+        instance.liveness = {}
+        deq = queue.deq
+        for i in range(queue.n_cases):
+            out_port = "out" + str(i)
+            next_name, next_port = deq.output2ele[out_port]
+            ret = analyze_fields_liveness_instance(g, next_name, next_port)
+            instance.liveness[i] = ret
+
+        return instance.liveness[no]
+
+    # Other elements
     if instance.liveness:
         # visited
         if instance.dominants:
@@ -163,19 +182,22 @@ def analyze_fields_liveness_instance(g, name):
             return instance.liveness
 
     # Union its children
-    if instance.liveness:
-        live = instance.liveness
-    else:
-        live = set()
-    for next_name, next_port in instance.output2ele.values():
-        ret = analyze_fields_liveness_instance(g, next_name)
+    live = set()
+    for out_port in instance.output2ele:
+        next_name, next_port = instance.output2ele[out_port]
+        ret = analyze_fields_liveness_instance(g, next_name, next_port)
         live = live.union(ret)
+
+    # Union live from join node
+    if instance.liveness:
+        live = live.union(instance.liveness)
 
     # - kills + uses
     live = live.difference(instance.element.defs)
     live = live.union(instance.element.uses)
     instance.liveness = live
 
+    # Handle join element
     if instance.dominants:
         for dominant in instance.dominants:
             dom = g.instances[dominant]
@@ -193,7 +215,7 @@ def analyze_fields_liveness_instance(g, name):
 def analyze_fields_liveness(g, check):
     for instance in g.instances.values():
         if len(instance.input2ele) == 0:
-            live = analyze_fields_liveness_instance(g, instance.name)
+            live = analyze_fields_liveness_instance(g, instance.name, None)
             if check:
                 assert len(live) == 0, "Fields %s of a pipeline state should not be live at the beginning." % live
 

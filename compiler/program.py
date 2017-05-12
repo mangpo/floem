@@ -294,7 +294,7 @@ class GraphGenerator:
             except KeyError:
                 raise Exception("Element '%s' is undefined." % x.element)
             self.graph.newElementInstance(x.element, new_name,
-                                          [self.get_state_name(arg) for arg in x.args])
+                                          [self.get_state_name(arg) for arg in x.args], x)
         elif isinstance(x, StateInstance):
             new_name = get_node_name(stack, x.name)
             # Collect inject information

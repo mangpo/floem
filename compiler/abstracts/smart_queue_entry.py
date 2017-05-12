@@ -20,6 +20,8 @@ enq, deq = queue_smart.smart_circular_queue_variablesize_one2many_instances("que
 a1 = create_element_instance("a1", [Port("in", [])], [], r'''printf("a1 %d\n", state.a0);''')
 b1 = create_element_instance("b1", [Port("in", [])], [], r'''printf("b1 %d\n", state.b0);''')
 
+pipeline_state(save, state)
+
 a_in, b_in = classify(save(None))
 a0_out = a0(a_in)
 b0_out = b0(b_in)

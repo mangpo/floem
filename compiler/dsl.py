@@ -81,7 +81,10 @@ class CPU_process(Process):
 
 
 def pipeline_state(instance, state):
-    scope[-1].append(PipelineState(instance.name, state))
+    if isinstance(state, State):
+        scope[-1].append(PipelineState(instance.name, state.name))
+    else:
+        scope[-1].append(PipelineState(instance.name, state))
 
 
 def master_process(p):

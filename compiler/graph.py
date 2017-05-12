@@ -462,12 +462,22 @@ class Graph:
         self.state_instances[name] = ret
         self.state_instance_order.append(name)
 
-    def newElementInstance(self, element, name, state_args=[], thread=None):
+    def newElementInstance(self, element, name, state_args=[], user_instance=None):
         if not element in self.elements:
             raise Exception("Element '%s' is undefined." % element)
         e = self.elements[element]
-        ret = ElementNode(name, e, state_args, thread)
+        ret = ElementNode(name, e, state_args, None)
         self.instances[name] = ret
+
+        # Smart queue
+        if e.special:
+            if e.special.enq == user_instance:
+                e.special.enq = ret
+            elif e.special.deq == user_instance:
+                e.special.deq = ret
+            else:
+                raise Exception("Element instance '%s' is link to smart queue '%s', but the queue doesn't link to the instance."
+                                % (user_instance.name, e.special.name))
 
         # Check state types
         if not (len(state_args) == len(e.state_params)):

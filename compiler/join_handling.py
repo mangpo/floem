@@ -411,7 +411,7 @@ def annotate_join_info(g, detail):
                 ports_same_thread.append(port)
 
         # This is a join node.
-        if len(ports_same_thread) > 1:
+        if len(ports_same_thread) > 1 and (instance.element.special is None):
             connect = 0
             for port in instance.element.inports:
                 if port.name in instance.input2ele:

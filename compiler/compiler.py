@@ -421,6 +421,7 @@ def map_shared_state(name, state_instance, ext):
 def allocate_state(name, state_instance, ext):
     state = state_instance.state
     src = "{1} = ({0} *) malloc(sizeof({0}));\n".format(state.name, name)
+    src += "memset({0}, 0, sizeof({1}));\n".format(name, state.name)
 
     for process in state_instance.processes:
         name = process + ext
@@ -1029,13 +1030,15 @@ def generate_code_and_compile(graph, testing, include=None, depend=None, include
     if depend:
         for f in depend:
             extra += '%s.o ' % f
-            cmd = 'gcc -O3 -msse4.1 -I %s -c %s.c -lrt' % (common.dpdk_include, f)
+            #cmd = 'gcc -O3 -msse4.1 -I %s -c %s.c -lrt' % (common.dpdk_include, f)
+            cmd = 'gcc -O3 -msse4.1 -I %s -c %s.c' % (common.dpdk_include, f)
             status = os.system(cmd)
             if not status == 0:
                 raise Exception("Compile error: " + cmd)
 
     for process in graph.processes:
-        cmd = 'gcc -O3 -msse4.1 -I %s -pthread %s.c %s -o %s -lrt' % (common.dpdk_include, process, extra, process)
+        #cmd = 'gcc -O3 -msse4.1 -I %s -pthread %s.c %s -o %s -lrt' % (common.dpdk_include, process, extra, process)
+        cmd = 'gcc -O3 -msse4.1 -I %s -pthread %s.c %s -o %s' % (common.dpdk_include, process, extra, process)
         status = os.system(cmd)
         if not status == 0:
             raise Exception("Compile error: " + cmd)
@@ -1090,13 +1093,15 @@ def compile_and_run(name, depend):
     if depend:
         for f in depend:
             extra += '%s.o ' % f
-            cmd = 'gcc -O3 -msse4.1 -I %s -c %s.c -lrt' % (common.dpdk_include, f)
+            #cmd = 'gcc -O3 -msse4.1 -I %s -c %s.c -lrt' % (common.dpdk_include, f)
+            cmd = 'gcc -O3 -msse4.1 -I %s -c %s.c' % (common.dpdk_include, f)
             status = os.system(cmd)
             if not status == 0:
                 raise Exception("Compile error: " + cmd)
 
     if isinstance(name, str):
-        cmd = 'gcc -O3 -msse4.1 -I %s -pthread %s.c %s -o %s -lrt' % (common.dpdk_include, name, extra, name)
+        #cmd = 'gcc -O3 -msse4.1 -I %s -pthread %s.c %s -o %s -lrt' % (common.dpdk_include, name, extra, name)
+        cmd = 'gcc -O3 -msse4.1 -I %s -pthread %s.c %s -o %s' % (common.dpdk_include, name, extra, name)
         print cmd
         status = os.system(cmd)
         if not status == 0:
@@ -1109,7 +1114,8 @@ def compile_and_run(name, depend):
 
     elif isinstance(name, list):
         for f in name:
-            cmd = 'gcc -O3 -msse4.1 -I %s -pthread %s.c %s -o %s -lrt' % (common.dpdk_include, f, extra, f)
+            #cmd = 'gcc -O3 -msse4.1 -I %s -pthread %s.c %s -o %s -lrt' % (common.dpdk_include, f, extra, f)
+            cmd = 'gcc -O3 -msse4.1 -I %s -pthread %s.c %s -o %s' % (common.dpdk_include, f, extra, f)
             print cmd
             status = os.system(cmd)
             if not status == 0:
