@@ -20,6 +20,22 @@ class TestPipelineState(unittest.TestCase):
             if name not in visit:
                 self.assertEqual(set(), g.instances[name].liveness)
 
+    def check_uses_all(self, g, uses_list):
+        visit = []
+        for name, uses in uses_list:
+            visit.append(name)
+            if isinstance(uses, list):
+                self.assertEqual(set(uses), g.instances[name].uses, "Error at %s: expect %s, got %s."
+                                 % (name, uses, g.instances[name].uses))
+            else:
+                self.assertEqual(uses, g.instances[name].uses, "Error at %s: expect %s, got %s."
+                                 % (name, uses, g.instances[name].uses))
+
+        for name in g.instances:
+            if name not in visit:
+                self.assertEqual(set(), g.instances[name].uses, "Error at %s: expect empty, got %s."
+                                 % (name, g.instances[name].uses))
+
     def test_fields_extraction(self):
         src, fields, code = find_all_fields("pkt->mcr.request.opcode;")
         self.assertEqual(src, "pkt->mcr.request.opcode")
@@ -53,7 +69,7 @@ class TestPipelineState(unittest.TestCase):
         g = gen.graph
 
         self.check_live_all(g, [("e1", ["b"]), ("e2", ["a", "b"])])
-
+        self.check_uses_all(g, [("e1", ["a", "b"]), ("e2", ["a", "b"])])
 
     def test_simple_pass(self):
         p = Program(
@@ -85,7 +101,7 @@ class TestPipelineState(unittest.TestCase):
         g = gen.graph
 
         self.check_live_all(g, [("e1", ["a"]), ("e2", ["a", "b"])])
-
+        self.check_uses_all(g, [("e0", ["a", "b"]), ("e1", ["a", "b"]), ("e2", ["a", "b"])])
 
     def test_still_live(self):
         p = Program(
@@ -125,6 +141,7 @@ class TestPipelineState(unittest.TestCase):
         g = gen.graph
 
         self.check_live_all(g, [("fork1", ["a"]), ("fork2", ["a"]), ("join", ["a"]), ("use", ["a"]), ("def", [])])
+        self.check_uses_all(g, [("fork1", ["a"]), ("fork2", ["a"]), ("join", ["a"]), ("use", ["a"]), ("def", ["a"])])
 
     def test_either(self):
         p = Program(
@@ -165,6 +182,7 @@ class TestPipelineState(unittest.TestCase):
         g = gen.graph
 
         self.check_live_all(g, [("choice", ["a"]), ("nop1", ["a"]), ("nop2", ["a"]), ("use", ["a"]), ("def", [])])
+        self.check_uses_all(g, [("choice", ["a"]), ("nop1", ["a"]), ("nop2", ["a"]), ("use", ["a"]), ("def", ["a"])])
 
     def test_both(self):
         p = Program(
@@ -208,6 +226,7 @@ class TestPipelineState(unittest.TestCase):
         g = gen.graph
 
         self.check_live_all(g, [("fork", []), ("defA", []), ("defB", []), ("join", ["a", "b"]), ("use", ["a", "b"])])
+        self.check_uses_all(g, [("fork", ["a", "b"]), ("defA", ["a", "b"]), ("defB", ["a", "b"]), ("join", ["a", "b"]), ("use", ["a", "b"])])
 
     def test_complicated(self):
         p = Program(
@@ -270,6 +289,83 @@ class TestPipelineState(unittest.TestCase):
                                 ("b1", []), ("b2", ["b"]),
                                 ("c1", []), ("c2", []), # passing nodes
                                 ("use", ["a", "b"])])
+        self.check_uses_all(g, [("a", ["a", "b"]),
+                                ("b1", ["a", "b"]), ("b2", ["a", "b"]),
+                                ("c1", ["a", "b"]), ("c2", ["a", "b"]),
+                                ("use", ["a", "b"])])
+
+    def test_complicated2(self):
+        p = Program(
+            Element("Choice",
+                    [Port("in", ["int"])],
+                    [Port("out1", []), Port("out2", [])],
+                    r'''
+                    int c = in();
+                    output switch { case c: out1(); else: out2(); }'''),
+            Element("ForkB1",
+                    [Port("in", [])],
+                    [Port("out1", []), Port("out2", [])],
+                    r'''
+                    state.b = 99;
+                    output  { out1(); out2(); }'''),
+            Element("ForkB2",
+                    [Port("in", [])],
+                    [Port("out1", []), Port("out2", [])],
+                    r'''
+                    output  { out1(); out2(); }'''),
+            Element("C1",
+                    [Port("in", [])],
+                    [Port("out", [])],
+                    r'''
+                    state.a = 99;
+                    output { out(); }'''),
+            Element("C2",
+                    [Port("in", [])],
+                    [Port("out", []), Port("out1", [])],
+                    r'''
+                    output { out(); out1(); }'''),
+            Element("JoinUse",
+                    [Port("in1", []), Port("in2", [])],
+                    [],
+                    r'''
+                    printf("%d\n", state.a + state.b);'''),
+            Element("Print",
+                    [Port("in", [])],
+                    [],
+                    r'''
+                    printf("%d\n", state.c);'''),
+            ElementInstance("Choice", "a"),
+            ElementInstance("ForkB1", "b1"),
+            ElementInstance("ForkB2", "b2"),
+            ElementInstance("C1", "c1"),
+            ElementInstance("C2", "c2"),
+            ElementInstance("JoinUse", "use"),
+            ElementInstance("Print", "print"),
+            Connect("a", "b1", "out1"),
+            Connect("a", "b2", "out2"),
+            Connect("b1", "c1", "out1"),
+            Connect("b1", "c2", "out2"),
+            Connect("b2", "c1", "out1"),
+            Connect("b2", "c2", "out2"),
+            Connect("c1", "use", "out", "in1"),
+            Connect("c2", "use", "out", "in2"),
+            Connect("c2", "print", "out1"),
+            State("mystate", "int a; int b; int c;"),
+            PipelineState("a", "mystate"),
+        )
+
+        gen = program_to_graph_pass(p)
+        pipeline_state_pass(gen, check=False)
+        g = gen.graph
+
+        self.check_live_all(g, [("a", ["b", "c"]),
+                                ("b1", ["c"]), ("b2", ["b", "c"]),
+                                ("c1", []), ("c2", ["c"]), # passing nodes
+                                ("use", ["a", "b"]), ("print", ["c"])])
+        self.check_uses_all(g, [("a", ["a", "b", "c"]),
+                                ("b1", ["a", "b", "c"]), ("b2", ["a", "b", "c"]),
+                                ("c1", ["a", "b"]), ("c2", ["a", "b", "c"]),
+                                ("use", ["a", "b"]), ("print", ["c"])])
 
     def test_smart_queue(self):
         n_cases = 2
@@ -287,7 +383,7 @@ class TestPipelineState(unittest.TestCase):
         queue.enq = enq
         queue.deq = deq
         p = Program(
-            State("mystate", "int a; int a0; int b0;"),
+            State("mystate", "int a; int a0; int b0; int post;"),
             Element("Save",
                     [Port("in", ["int"])],
                     [Port("out", [])],
@@ -301,8 +397,8 @@ class TestPipelineState(unittest.TestCase):
                                     else: out1(); }'''),
             Element("A0", [Port("in", [])], [Port("out", [])], r'''state.a0 = state.a + 100; output { out(); }'''),
             Element("B0", [Port("in", [])], [Port("out", [])], r'''state.b0 = state.a * 2; output { out(); }'''),
-            Element("A1", [Port("in", [])], [], r'''printf("a1 %d\n", state.a0);'''),
-            Element("B1", [Port("in", [])], [], r'''printf("b1 %d\n", state.b0);'''),
+            Element("A1", [Port("in", [])], [], r'''printf("a1 %d\n", state.a0); state.post = 1;'''),
+            Element("B1", [Port("in", [])], [], r'''printf("b1 %d\n", state.b0); state.post = 2;'''),
             Enq_ele,
             Deq_ele,
             enq,
@@ -341,11 +437,17 @@ class TestPipelineState(unittest.TestCase):
         self.check_live_all(g, [("save", []),
                                 ("classify", ["a"]),
                                 ("a0", ["a"]), ("b0", ["a"]),
-                                ("a1", ["a0"]), ("b1", ["b0"]),
                                 ("smart_enq", {0: set(["a0"]), 1: set(["b0"])}),
-                                ("smart_deq", None)
+                                ("smart_deq", None),
+                                ("a1", ["a0"]), ("b1", ["b0"]),
                                 ])
-
+        self.check_uses_all(g, [("save", ["a", "a0", "b0"]),
+                                ("classify", ["a", "a0", "b0"]),
+                                ("a0", ["a", "a0"]), ("b0", ["a", "b0"]),
+                                ("smart_enq", {0: set(["a0"]), 1: set(["b0"])}),  # post shouldn't appear here.
+                                ("smart_deq", None),
+                                ("a1", ["a0", "post"]), ("b1", ["b0", "post"]),
+                                ])
 
     def test_smart_queue2(self):
         n_cases = 2
@@ -432,11 +534,22 @@ class TestPipelineState(unittest.TestCase):
         self.check_live_all(g, [("save", []),
                                 ("classify", ["a"]),
                                 ("a0", ["a"]), ("b0", ["a"]),
+                                ("smart_enq", {0: set(["a0"]), 1: set(["b0"])}),
+                                ("smart_deq", None),
                                 ("fork", ["a0"]),
                                 ("nop0", []),
                                 ("nop1", []),
                                 ("join", ["a0"]),
                                 ("b1", ["b0"]),
+                                ])
+        self.check_uses_all(g, [("save", ["a", "a0", "b0"]),
+                                ("classify", ["a", "a0", "b0"]),
+                                ("a0", ["a","a0"]), ("b0", ["a","b0"]),
                                 ("smart_enq", {0: set(["a0"]), 1: set(["b0"])}),
-                                ("smart_deq", None)
+                                ("smart_deq", None),
+                                ("fork", ["a0"]),
+                                ("nop0", ["a0"]),
+                                ("nop1", ["a0"]),
+                                ("join", ["a0"]),
+                                ("b1", ["b0"]),
                                 ])

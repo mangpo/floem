@@ -20,7 +20,7 @@ def smart_circular_queue_variablesize_one2many(name, size, n_cores, n_cases):
     queue = Queue(name, size, n_cores, n_cases)
     Smart_enq = create_element(prefix + "smart_enq_ele",
                                [Port("in" + str(i), []) for i in range(n_cases)],
-                               [Port("out", [])],"output { out(); }")
+                               [Port("out", [])], "state.core; output { out(); }")
 
     Smart_deq = create_element(prefix + "smart_deq_ele",
                                [Port("in_core", ["size_t"]), Port("in", [])],

@@ -263,6 +263,7 @@ class ElementNode:
         self.dominants = None
         self.passing_nodes = None
         self.dominant2kills = {}
+        self.uses = None
 
     def __str__(self):
         return self.element.name + "::" + self.name + "---OUT[" + str(self.output2ele) + "]" + "---IN[" + str(self.input2ele) + "]"

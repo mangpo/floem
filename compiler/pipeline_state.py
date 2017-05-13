@@ -161,32 +161,36 @@ def analyze_fields_liveness_instance(g, name, in_port):
     if queue:
         no = int(in_port[2:])
         if instance.liveness:
-            return instance.liveness[no]
+            return instance.liveness[no], instance.uses[no]
 
         instance.liveness = {}
+        instance.uses = {}
         deq = queue.deq
         for i in range(queue.n_cases):
             out_port = "out" + str(i)
             next_name, next_port = deq.output2ele[out_port]
-            ret = analyze_fields_liveness_instance(g, next_name, next_port)
-            instance.liveness[i] = ret
+            ret_live, ret_uses = analyze_fields_liveness_instance(g, next_name, next_port)
+            instance.liveness[i] = ret_live
+            instance.uses[i] = ret_live  # TODO: between queue, only keep live values
 
-        return instance.liveness[no]
+        return instance.liveness[no], instance.uses[no]
 
     # Other elements
-    if instance.liveness:
+    if instance.uses:
         # visited
         if instance.dominants:
-            return set()
+            return set(), instance.uses
         else:
-            return instance.liveness
+            return instance.liveness, instance.uses
 
     # Union its children
     live = set()
+    uses = set()
     for out_port in instance.output2ele:
         next_name, next_port = instance.output2ele[out_port]
-        ret = analyze_fields_liveness_instance(g, next_name, next_port)
-        live = live.union(ret)
+        ret_live, ret_uses = analyze_fields_liveness_instance(g, next_name, next_port)
+        live = live.union(ret_live)
+        uses = uses.union(ret_uses)
 
     # Union live from join node
     if instance.liveness:
@@ -195,7 +199,10 @@ def analyze_fields_liveness_instance(g, name, in_port):
     # - kills + uses
     live = live.difference(instance.element.defs)
     live = live.union(instance.element.uses)
+    uses = uses.union(instance.element.defs)
+    uses = uses.union(instance.element.uses)
     instance.liveness = live
+    instance.uses = uses
 
     # Handle join element
     if instance.dominants:
@@ -207,15 +214,15 @@ def analyze_fields_liveness_instance(g, name, in_port):
                 dom.liveness = dom.liveness.union(updated_live)
             else:
                 dom.liveness = updated_live
-        return set()
+        return set(), uses
     else:
-        return live
+        return live, uses
 
 
 def analyze_fields_liveness(g, check):
     for instance in g.instances.values():
         if len(instance.input2ele) == 0:
-            live = analyze_fields_liveness_instance(g, instance.name, None)
+            live, uses = analyze_fields_liveness_instance(g, instance.name, None)
             if check:
                 assert len(live) == 0, "Fields %s of a pipeline state should not be live at the beginning." % live
 
@@ -269,6 +276,6 @@ def compile_pipeline_states(g, check):
 
     src2fields = collect_defs_uses(g)
     compute_join_killset(g)
-    analyze_fields_liveness(g, check)  # TODO: bypass smart queue
+    analyze_fields_liveness(g, check)
     # TODO: compile_smart_queues(g)
     insert_pipeline_states(g)
