@@ -408,10 +408,9 @@ def compile_smart_queue(g, q, src2fields):
                            r'''
         (q_entry* e) = in();
         uint16_t type = (e->flags & TYPE_MASK) >> TYPE_SHIFT;
-        printf("type = %s\n", type);
         output switch {
             %s
-        }''' % ('%d', src_cases))
+        }''' % (src_cases))
 
     elements.append(classify_ele)
     for element in elements:
@@ -419,7 +418,7 @@ def compile_smart_queue(g, q, src2fields):
 
     enq_submit_inst = enq_submit()
     deq_get_inst = deq_get()
-    deq_release_inst = deq_release()  # TODO: deq_release
+    deq_release_inst = deq_release()
     classify_inst = ElementInstance(classify_ele.name, classify_ele.name + "_inst")
 
     new_instances = [enq_submit_inst, deq_get_inst, deq_release_inst, classify_inst]
@@ -488,7 +487,7 @@ def compile_smart_queue(g, q, src2fields):
         save = Element(q.name + "_save" + str(i),
                        [Port("in", ["q_entry*"])],
                        [Port("out", [])],
-                       r'''state.entry = in(); output { out(); }''')
+                       r'''state.entry = (%s *) in(); output { out(); }''' % state_entry.name)
         g.addElement(size_core_ele)
         g.addElement(fill_ele)
         g.addElement(fork)

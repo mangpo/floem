@@ -23,20 +23,18 @@ b1 = create_element_instance("b1", [Port("in", [])], [], r'''printf("b1 %d\n", s
 
 pipeline_state(save, "mystate")
 
-a_in, b_in = classify(save(None))
-a0_out = a0(a_in)
-b0_out = b0(b_in)
-enq(a0_out, b0_out)
+@API("run1")
+def run1(x):
+    a_in, b_in = classify(save(x))
+    a0_out = a0(a_in)
+    b0_out = b0(b_in)
+    enq(a0_out, b0_out)
 
-t1 = API_thread("run1", ["int"], None)
-t1.run(save, classify, a0, b0, enq)
-
-a1_in, b1_in = deq(None)
-a1(a1_in)
-b1(b1_in)
-
-t2 = API_thread("run2", ["size_t"], None)
-t2.run(deq, a1, b1)
+@API("run2")
+def run2(core):
+    a1_in, b1_in = deq(core)
+    a1(a1_in)
+    b1(b1_in)
 
 c = Compiler()
 c.include = r'''

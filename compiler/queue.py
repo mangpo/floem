@@ -297,7 +297,7 @@ def circular_queue_variablesize_one2many(name, size, n_cores):
     def deq_release(name=None):
         if not name:
             global fresh_id
-            name = prefix + "enqueue_submit" + str(fresh_id)
+            name = prefix + "dequeue_release" + str(fresh_id)
             fresh_id += 1
         return ElementInstance(Dequeue_release.name, name)
 
