@@ -1,25 +1,11 @@
 import dsl
 import graph
-
-
-class Queue:
-    def __init__(self, name, size, n_cores, n_cases):
-        self.name = name
-        self.size = size
-        self.n_cores = n_cores
-        self.n_cases = n_cases
-        self.enq = None
-        self.deq = None
-
-
-class QueueVariableSizeOne2Many(Queue):
-    def __init__(self, name, size, n_cores, n_cases):
-        Queue.__init__(self, name, size, n_cores, n_cases)
+import queue_ast
 
 
 def smart_circular_queue_variablesize_one2many(name, size, n_cores, n_cases):
     prefix = "_%s_" % name
-    queue = QueueVariableSizeOne2Many(name, size, n_cores, n_cases)
+    queue = queue_ast.QueueVariableSizeOne2Many(name, size, n_cores, n_cases)
     Smart_enq = dsl.create_element(prefix + "smart_enq_ele",
                                    [graph.Port("in" + str(i), []) for i in range(n_cases)],
                                    [graph.Port("out", [])],

@@ -27,7 +27,6 @@ void maintenance()
 }
 
 int main() {
-  usleep(1000);
   init();
   settings_init();
   ialloc_init(data_region);

@@ -1,10 +1,9 @@
-from dsl import *
 from elements_library import *
-from queue import *
+import queue
 
 Inc = create_add1("Inc", "int")
 Inject = create_inject("Inject", "int", 8, "gen_func")
-enq, deq = create_circular_queue_instances("queue", "int", 4)
+enq, deq = queue.create_circular_queue_instances("queue", "int", 4)
 
 inject = Inject()
 inc1 = Inc()
@@ -21,7 +20,7 @@ def dequeue():
 c = Compiler()
 c.include = r'''int gen_func(int i) { return i; }'''
 c.testing = r'''
-usleep(10000);
+usleep(1100);
 for(int i=0; i<8; i++) {
     printf("%d\n", dequeue());
     usleep(50);

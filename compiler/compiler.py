@@ -655,14 +655,12 @@ def program_to_graph_pass(program, default_process="tmp"):
 
 
 def pipeline_state_pass(gen, check=True):
-    # Annotate minimal join information
-    annotate_join_info(gen.graph, False)
     compile_pipeline_states(gen.graph, check)
     clean_minimal_join_info(gen.graph)
 
 
 def join_and_resource_annotation_pass(gen, resource, remove_unused):
-    gen.graph.print_graphviz()
+    #gen.graph.print_graphviz()
     if resource:
         # Insert necessary elements for resource mapping.
         # Assign call_instance for each thread.
@@ -730,7 +728,7 @@ def thread_func_create_cancel(func, size=None):
     if size:
         func_src = r'''
             void *_run_%s(void *threadid) {
-                usleep(100000);
+                usleep(1000);
                 for(int i=0; i<%d; i++) {
                     //printf("inject = %s\n", i);
                     %s();
@@ -1032,15 +1030,15 @@ def generate_code_and_compile(graph, testing, include=None, depend=None, include
     if depend:
         for f in depend:
             extra += '%s.o ' % f
-            #cmd = 'gcc -O3 -msse4.1 -I %s -c %s.c -lrt' % (common.dpdk_include, f)
-            cmd = 'gcc -O3 -msse4.1 -I %s -c %s.c' % (common.dpdk_include, f)
+            cmd = 'gcc -O3 -msse4.1 -I %s -c %s.c -lrt' % (common.dpdk_include, f)
+            #cmd = 'gcc -O3 -msse4.1 -I %s -c %s.c' % (common.dpdk_include, f)
             status = os.system(cmd)
             if not status == 0:
                 raise Exception("Compile error: " + cmd)
 
     for process in graph.processes:
-        #cmd = 'gcc -O3 -msse4.1 -I %s -pthread %s.c %s -o %s -lrt' % (common.dpdk_include, process, extra, process)
-        cmd = 'gcc -O3 -msse4.1 -I %s -pthread %s.c %s -o %s' % (common.dpdk_include, process, extra, process)
+        cmd = 'gcc -O3 -msse4.1 -I %s -pthread %s.c %s -o %s -lrt' % (common.dpdk_include, process, extra, process)
+        #cmd = 'gcc -O3 -msse4.1 -I %s -pthread %s.c %s -o %s' % (common.dpdk_include, process, extra, process)
         status = os.system(cmd)
         if not status == 0:
             raise Exception("Compile error: " + cmd)
@@ -1095,15 +1093,15 @@ def compile_and_run(name, depend):
     if depend:
         for f in depend:
             extra += '%s.o ' % f
-            #cmd = 'gcc -O3 -msse4.1 -I %s -c %s.c -lrt' % (common.dpdk_include, f)
-            cmd = 'gcc -O3 -msse4.1 -I %s -c %s.c' % (common.dpdk_include, f)
+            cmd = 'gcc -O3 -msse4.1 -I %s -c %s.c -lrt' % (common.dpdk_include, f)
+            #cmd = 'gcc -O3 -msse4.1 -I %s -c %s.c' % (common.dpdk_include, f)
             status = os.system(cmd)
             if not status == 0:
                 raise Exception("Compile error: " + cmd)
 
     if isinstance(name, str):
-        #cmd = 'gcc -O3 -msse4.1 -I %s -pthread %s.c %s -o %s -lrt' % (common.dpdk_include, name, extra, name)
-        cmd = 'gcc -O3 -msse4.1 -I %s -pthread %s.c %s -o %s' % (common.dpdk_include, name, extra, name)
+        cmd = 'gcc -O3 -msse4.1 -I %s -pthread %s.c %s -o %s -lrt' % (common.dpdk_include, name, extra, name)
+        #cmd = 'gcc -O3 -msse4.1 -I %s -pthread %s.c %s -o %s' % (common.dpdk_include, name, extra, name)
         print cmd
         status = os.system(cmd)
         if not status == 0:
@@ -1116,8 +1114,8 @@ def compile_and_run(name, depend):
 
     elif isinstance(name, list):
         for f in name:
-            #cmd = 'gcc -O3 -msse4.1 -I %s -pthread %s.c %s -o %s -lrt' % (common.dpdk_include, f, extra, f)
-            cmd = 'gcc -O3 -msse4.1 -I %s -pthread %s.c %s -o %s' % (common.dpdk_include, f, extra, f)
+            cmd = 'gcc -O3 -msse4.1 -I %s -pthread %s.c %s -o %s -lrt' % (common.dpdk_include, f, extra, f)
+            #cmd = 'gcc -O3 -msse4.1 -I %s -pthread %s.c %s -o %s' % (common.dpdk_include, f, extra, f)
             print cmd
             status = os.system(cmd)
             if not status == 0:

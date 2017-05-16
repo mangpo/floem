@@ -1,7 +1,7 @@
 from compiler import *
-from pipeline_state import find_all_fields
+from pipeline_state import find_all_fields, analyze_pipeline_states
 import unittest
-import queue_smart
+import queue_ast
 
 
 class TestPipelineState(unittest.TestCase):
@@ -369,7 +369,7 @@ class TestPipelineState(unittest.TestCase):
 
     def test_smart_queue(self):
         n_cases = 2
-        queue = queue_smart.Queue("smart_queue", 10, 4, 2)
+        queue = queue_ast.QueueVariableSizeOne2Many("smart_queue", 10, 4, 2)
         Enq_ele = Element("smart_enq_ele",
                                [Port("in" + str(i), []) for i in range(n_cases)],
                                [Port("out", [])],"output { out(); }")
@@ -431,7 +431,7 @@ class TestPipelineState(unittest.TestCase):
         )
 
         gen = program_to_graph_pass(p)
-        pipeline_state_pass(gen, check=False)
+        analyze_pipeline_states(gen.graph, check=False)
         g = gen.graph
 
         self.check_live_all(g, [("save", []),
@@ -451,7 +451,7 @@ class TestPipelineState(unittest.TestCase):
 
     def test_smart_queue2(self):
         n_cases = 2
-        queue = queue_smart.Queue("smart_queue", 10, 4, 2)
+        queue = queue_ast.QueueVariableSizeOne2Many("smart_queue", 10, 4, 2)
         Enq_ele = Element("smart_enq_ele",
                                [Port("in" + str(i), []) for i in range(n_cases)],
                                [Port("out", [])],"output { out(); }")
@@ -528,7 +528,7 @@ class TestPipelineState(unittest.TestCase):
         )
 
         gen = program_to_graph_pass(p)
-        pipeline_state_pass(gen, check=False)
+        analyze_pipeline_states(gen.graph, check=False)
         g = gen.graph
 
         self.check_live_all(g, [("save", []),

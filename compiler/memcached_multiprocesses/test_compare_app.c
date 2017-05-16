@@ -141,7 +141,6 @@ int main() {
   hasht_init();
   iallocs = calloc(NUM_THREADS, sizeof(*iallocs));
 
-  usleep(10);
   pthread_t threads[NUM_THREADS];
   for(int t=0;t<NUM_THREADS;t++) {
        printf("In main: creating thread %d\n", t);

@@ -1,6 +1,7 @@
-import queue_smart, queue
+import queue_ast
 from program import *
 from pipeline_state_join import get_node_before_release
+from join_handling import annotate_join_info
 
 
 def allocate_pipeline_state(element, state):
@@ -387,9 +388,9 @@ def compile_smart_queue(g, q, src2fields):
     enq_thread = g.get_thread_of(q.enq.name)
     deq_thread = g.get_thread_of(q.deq.name)
 
-    if isinstance(q, queue_smart.QueueVariableSizeOne2Many):
+    if isinstance(q, queue_ast.QueueVariableSizeOne2Many):
         states, state_insts, elements, enq_alloc, enq_submit, deq_get, deq_release = \
-            queue.circular_queue_variablesize_one2many(q.name, q.size, q.n_cores)
+            queue_ast.circular_queue_variablesize_one2many(q.name, q.size, q.n_cores)
     else:
         raise Exception("Smart queue: unimplemented for %s." % q)
 
@@ -559,14 +560,21 @@ def compile_smart_queues(g, src2fields):
         compile_smart_queue(g, q, src2fields)
 
 
+def analyze_pipeline_states(g, check=True):
+    # Annotate minimal join information
+    annotate_join_info(g, False)
+    src2fields = collect_defs_uses(g)
+    compute_join_killset(g)
+    analyze_fields_liveness(g, check)
+    return src2fields
+
+
 def compile_pipeline_states(g, check):
     if len(g.pipeline_states) == 0:
         # Never use per-packet states. No modification needed.
         return
 
-    src2fields = collect_defs_uses(g)
-    compute_join_killset(g)
-    analyze_fields_liveness(g, check)
+    src2fields = analyze_pipeline_states(g, check)
     compile_smart_queues(g, src2fields)
     rename_references(g, src2fields)  # for state.entry
     insert_pipeline_states(g)
