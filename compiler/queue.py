@@ -238,7 +238,7 @@ def circular_queue_variablesize_one2many(name, size, n_cores):
                                    [Port("in", ["size_t", "size_t"])],
                                    [Port("out", ["q_entry*"])],
                              r'''
-           (size_t c, size_t len) = in();
+           (size_t len, size_t c) = in();
            circular_queue *q = this->cores[c];
            //printf("ENQ core=%ld, queue=%p, eq=%d\n", c, q->queue, this->cores[1]==this->cores[3]);
            q_entry* entry = (q_entry*) enqueue_alloc(q, len);

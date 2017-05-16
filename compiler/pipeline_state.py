@@ -459,6 +459,7 @@ def compile_smart_queue(g, q, src2fields):
 
         # Create states
         state_entry = State("entry_" + q.name + str(i),
+                            "uint16_t flags; uint16_t len; " +
                             get_state_content(live, pipeline_state, g.state_mapping, src2fields))
         state_pipeline = State("pipeline_" + q.name + str(i),
                                state_entry.name + "* entry; " +
@@ -475,6 +476,7 @@ def compile_smart_queue(g, q, src2fields):
         for var in live:
             field = get_entry_field(var, src2fields)
             src += "e->%s = state.%s;\n" % (field, var)
+        src += "e->flags |= %d << TYPE_SHIFT;\n" % (i+1)
         src += "output { out((q_entry*) e); }"
         fill_ele = Element(q.name + "_fill" + str(i),
                            [Port("in_entry", ["q_entry*"]), Port("in_pkt", [])],
