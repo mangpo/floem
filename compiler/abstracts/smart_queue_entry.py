@@ -2,8 +2,9 @@ from dsl import *
 from elements_library import *
 import queue_smart
 
-state = create_state("mystate", "int a; int a0; int b0;")
-save = create_element_instance("save", [Port("in", ["int"])], [Port("out", [])], r'''state.a = in(); output { out(); }''')
+state = create_state("mystate", "int a; int a0; int b0; size_t core;")
+save = create_element_instance("save", [Port("in", ["int"])], [Port("out", [])],
+                               r'''state.a = in(); state.core = 0; output { out(); }''')
 classify = create_element_instance("classify",
                                    [Port("in", [])],
                                    [Port("out1", []), Port("out2", [])],
@@ -20,7 +21,7 @@ enq, deq = queue_smart.smart_circular_queue_variablesize_one2many_instances("que
 a1 = create_element_instance("a1", [Port("in", [])], [], r'''printf("a1 %d\n", state.a0);''')
 b1 = create_element_instance("b1", [Port("in", [])], [], r'''printf("b1 %d\n", state.b0);''')
 
-pipeline_state(save, state)
+pipeline_state(save, "mystate")
 
 a_in, b_in = classify(save(None))
 a0_out = a0(a_in)
@@ -34,9 +35,16 @@ a1_in, b1_in = deq(None)
 a1(a1_in)
 b1(b1_in)
 
-t2 = API_thread("run2", ["int"], None)
-t1.run(deq, a1, b1)
+t2 = API_thread("run2", ["size_t"], None)
+t2.run(deq, a1, b1)
 
-# TODO: collect uses and defs for each element
-# TODO: analyze live-in
+c = Compiler()
+c.include = r'''
+#include "../queue.h"
+'''
+c.testing = "run1(123); run1(42); run2(0); run2(0);"
+c.generate_code_and_run()
+
+
+
 # TODO: try @API syntax

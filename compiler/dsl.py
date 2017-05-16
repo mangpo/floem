@@ -253,8 +253,9 @@ class OutputPortCollect:
         return out
 
 
-def create_element(ele_name, inports, outports, code, local_state=None, state_params=[]):
+def create_element(ele_name, inports, outports, code, local_state=None, state_params=[], special=None):
     e = Element(ele_name, inports, outports, sanitize_variable_length(code), local_state, state_params)
+    e.special = special
     scope[-1].append(e)
 
     def create_instance(inst_name=None, args=[]):
@@ -874,6 +875,7 @@ def get_state_mapping(content):
     reorder -- true if the order of the new content differs from the old content
     mapping -- mapping of field to the correct reference
     """
+    # TODO: int a, b, c;
     fields = content.split(';')[:-1]  # discard the last one
     fixed_len_order = []
     variable_len_order = []
@@ -1064,7 +1066,7 @@ class Compiler:
         p1 = Program(*scope[0])
         p2 = desugaring.desugar(p1, self.desugar_mode)
         dp = desugaring.insert_fork(p2)
-        g = compiler.generate_graph(dp, self.resource, self.remove_unused, filename)
+        g = compiler.generate_graph(dp, self.resource, self.remove_unused, filename, state_mapping)
         return g
 
     def generate_code(self):

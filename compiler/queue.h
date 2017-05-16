@@ -8,6 +8,8 @@
 #define ALIGN 8U
 #define FLAG_OWN 1
 #define TYPE_NOP 0
+#define TYPE_SHIFT 8
+#define TYPE_MASK  0xFF00
 
 typedef struct {
     size_t len;

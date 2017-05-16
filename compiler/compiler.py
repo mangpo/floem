@@ -60,7 +60,7 @@ def first_non_space(s,i):
         return (None,-1)
 
 
-def remove_asgn_stmt(funcname, src,port2args,port,p_eq, p_end, inport_types):
+def remove_asgn_stmt(funcname, src, port2args,port,p_eq, p_end, inport_types):
     """
     Remove the reading from port statement from src, and put its LHS of the statement in port2args.
     :param src:       string source code
@@ -662,6 +662,7 @@ def pipeline_state_pass(gen, check=True):
 
 
 def join_and_resource_annotation_pass(gen, resource, remove_unused):
+    gen.graph.print_graphviz()
     if resource:
         # Insert necessary elements for resource mapping.
         # Assign call_instance for each thread.
@@ -687,7 +688,7 @@ def join_and_resource_annotation_pass(gen, resource, remove_unused):
         gen.graph.remove_unused_states()
 
 
-def generate_graph(program, resource=True, remove_unused=False, default_process="tmp"):
+def generate_graph(program, resource=True, remove_unused=False, default_process="tmp", state_mapping=None):
     """
     Compile program to data-flow graph and insert necessary elements for resource mapping and join elements.
     :param program: program AST
@@ -695,7 +696,8 @@ def generate_graph(program, resource=True, remove_unused=False, default_process=
     :return: data-flow graph
     """
     gen = program_to_graph_pass(program, default_process)
-    pipeline_state_pass(gen)
+    gen.graph.state_mapping = state_mapping
+    pipeline_state_pass(gen, True)
     join_and_resource_annotation_pass(gen, resource, remove_unused)
 
     return gen.graph

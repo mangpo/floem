@@ -348,7 +348,7 @@ class GraphGenerator:
 
         elif isinstance(x, PipelineState):
             inst_name = get_node_name(self.get_instance_stack(x.start_instance), x.start_instance)
-            self.graph.pipeline_states.append((inst_name, x.state))
+            self.graph.add_pipeline_state(inst_name, x.state)
 
         elif isinstance(x, PopulateState):
             self.graph.inject_populates[x.state_instance] = x.clone()

@@ -1,4 +1,6 @@
-from dsl import *
+import dsl
+import graph
+
 
 class Queue:
     def __init__(self, name, size, n_cores, n_cases):
@@ -11,36 +13,40 @@ class Queue:
 
 
 class QueueVariableSizeOne2Many(Queue):
-    def __init__(self, name, size, n_cores):
-        Queue.__init__(self, name, size, n_cores)
+    def __init__(self, name, size, n_cores, n_cases):
+        Queue.__init__(self, name, size, n_cores, n_cases)
 
 
 def smart_circular_queue_variablesize_one2many(name, size, n_cores, n_cases):
     prefix = "_%s_" % name
-    queue = Queue(name, size, n_cores, n_cases)
-    Smart_enq = create_element(prefix + "smart_enq_ele",
-                               [Port("in" + str(i), []) for i in range(n_cases)],
-                               [Port("out", [])], "state.core; output { out(); }")
+    queue = QueueVariableSizeOne2Many(name, size, n_cores, n_cases)
+    Smart_enq = dsl.create_element(prefix + "smart_enq_ele",
+                                   [graph.Port("in" + str(i), []) for i in range(n_cases)],
+                                   [graph.Port("out", [])],
+                                   "state.core; output { out(); }",
+                                   special=queue)
 
-    Smart_deq = create_element(prefix + "smart_deq_ele",
-                               [Port("in_core", ["size_t"]), Port("in", [])],
-                               [Port("out" + str(i), []) for i in range(n_cases)],"output { }")
+    src = ""
+    for i in range(n_cases):
+        src += "out%d(); " % i
+    Smart_deq = dsl.create_element(prefix + "smart_deq_ele",
+                                   [graph.Port("in_core", ["size_t"]), graph.Port("in", [])],
+                                   [graph.Port("out" + str(i), []) for i in range(n_cases)],
+                                   "output { %s }" % src,
+                                   special=queue)
 
-    Smart_enq.special = queue
-    Smart_deq.special = queue
-
-    return Smart_enq, Smart_deq
+    return Smart_enq, Smart_deq, queue
 
 
 def smart_circular_queue_variablesize_one2many_instances(name, size, n_cores, n_cases):
-    Enq, Deq = smart_circular_queue_variablesize_one2many(name, size, n_cores, n_cases)
+    Enq, Deq, queue = smart_circular_queue_variablesize_one2many(name, size, n_cores, n_cases)
     enq = Enq()
     deq = Deq()
 
     x = enq()
     deq(None, x)
 
-    Enq.special.enq = enq
-    Deq.special.deq = deq
+    queue.enq = enq.instance
+    queue.deq = deq.instance
 
     return enq, deq

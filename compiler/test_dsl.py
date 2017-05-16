@@ -27,6 +27,7 @@ class TestDSL(unittest.TestCase):
                  "API_read_blocking1.py",
                  "API_read_blocking2.py",
                  "API_and_trigger.py",
+                 "API_return.py",
                  "spec_impl.py",
                  "spec_impl_at.py",
                  "probe_spec_impl.py",

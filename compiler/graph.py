@@ -264,6 +264,7 @@ class ElementNode:
         self.passing_nodes = None
         self.dominant2kills = {}
         self.uses = None
+        self.extras = None
 
     def __str__(self):
         return self.element.name + "::" + self.name + "---OUT[" + str(self.output2ele) + "]" + "---IN[" + str(self.input2ele) + "]"
@@ -390,6 +391,7 @@ class Graph:
 
         # Per-packet state
         self.pipeline_states = []
+        self.state_mapping = None
 
     def __str__(self):
         s = "Graph:\n"
@@ -401,6 +403,28 @@ class Graph:
         for x in self.instances.values():
             s += "    " + str(x) + "\n"
         return s
+
+    def print_graphviz(self):
+        for name in self.instances:
+            instance = self.instances[name]
+            if instance.element.output_fire == "all":
+                from_suffix = ""
+            elif instance.element.output_fire == "one":
+                from_suffix = "_f1"
+            else:
+                from_suffix = "_f0"
+
+            for port in instance.output2ele:
+                next_name, next_port = instance.output2ele[port]
+                next = self.instances[next_name]
+                if next.element.output_fire == "all":
+                    to_suffix = ""
+                elif next.element.output_fire == "one":
+                    to_suffix = "_f1"
+                else:
+                    to_suffix = "_f0"
+
+                print '%s%s -> %s%s [ label = "%s" ];' % (name, from_suffix, next_name, to_suffix, port)
 
     def is_state(self, state_name):
         return state_name in self.states
@@ -540,6 +564,39 @@ class Graph:
         else:
             for port_name in in2:
                 i2.connect_input_port(port_name, i1.name, out1)
+
+    def delete_instance(self, name):
+        instance = self.instances[name]
+        del self.instances[name]
+        for port in instance.input2ele:
+            l = instance.input2ele[port]
+            for next_name, next_port in l:
+                other = self.instances[next_name]
+                this_name, this_port = other.output2ele[next_port]
+                if this_name == name:
+                    del other.output2ele[next_port]
+
+        for port in instance.output2ele:
+            next_name, next_port = instance.output2ele[port]
+            other = self.instances[next_name]
+            l = other.input2ele[next_port]
+            new_l = []
+            for this_name, this_port in l:
+                if not this_name == name:
+                    new_l.append((this_name, this_port))
+            if len(new_l) == 0:
+                del other.input2ele[next_port]
+            else:
+                other.input2ele[next_port] = new_l
+
+    def get_thread_of(self, name):
+        return self.instances[name].thread
+
+    def set_thread(self, name, t):
+        self.instances[name].thread = t
+
+    def add_pipeline_state(self, inst_name, state_name):
+        self.pipeline_states.append((inst_name, state_name))
 
     def get_identity_element(self, argtypes):
         name = "_identity_" + "_".join(argtypes)
