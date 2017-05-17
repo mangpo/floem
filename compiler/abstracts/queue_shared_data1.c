@@ -6,5 +6,5 @@ int main() {
     push(i, i);
 
   usleep(10000);
-  //finalize_and_check();
+  finalize_and_check();
 }

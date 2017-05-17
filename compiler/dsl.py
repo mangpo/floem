@@ -908,11 +908,14 @@ def get_state_mapping(content):
 
     if len(variable_len) == 0:
         field_mapping = {}
-        content = ""
         for var in fixed_len_order:
             t = fixed_len[var]
             field_mapping[var] = (t, "{0}%s" % var) + extras[var]
-            content += "%s %s;\n" % (fixed_len[var], var)
+        # Get rid of annotations.
+        m = re.search('@[^;]+;', content)
+        while m:
+            content = content[:m.start(0)] + content[m.end(0)-1:]
+            m = re.search('@[^;]+;', content)
         return content, False, field_mapping
     elif len(variable_len_order) == 1:
         var_len_var = variable_len_order[0]

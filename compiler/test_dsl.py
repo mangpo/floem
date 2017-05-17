@@ -97,7 +97,7 @@ class TestDSL(unittest.TestCase):
             c.generate_code()
         except Exception as e:
             self.assertNotEqual(
-                e.message.find("Some input port of join element instance 'add' is not connected to any instance."), -1)
+                e.message.find("Resource 't' has more than one starting element instance."), -1)
         else:
             self.fail('Exception is not raised.')
 
