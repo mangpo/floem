@@ -91,11 +91,15 @@ def replace_var(element, var, src2fields, prefix):
             element.output_code[i] = (case, out_code)
 
 
-def replace_states(element, live, extras, src2fields):
+def replace_states(element, live, extras, special_fields, src2fields):
     for var in live:
-        replace_var(element, var, src2fields, "entry->")
+        if var not in special_fields:
+            replace_var(element, var, src2fields, "entry->")
 
     for var in extras:
+        replace_var(element, var, src2fields, "")
+
+    for var in special_fields:
         replace_var(element, var, src2fields, "")
 
 
@@ -117,10 +121,10 @@ def rename_references(g, src2fields):
                 element = child.element
                 if need_replacement(element, instance.liveness, instance.extras):
                     if len(ele2inst[element.name]) == 1:
-                        replace_states(element, instance.liveness, instance.extras, src2fields)
+                        replace_states(element, instance.liveness, instance.extras, instance.special_fields, src2fields)
                     else:
                         new_element = element.clone(inst_name + "_with_state_at_" + instance.name)
-                        replace_states(new_element, instance.liveness, instance.extras, src2fields)
+                        replace_states(new_element, instance.liveness, instance.extras, instance.special_fields, src2fields)
                         g.addElement(new_element)
                         child.element = new_element
 
@@ -205,7 +209,11 @@ def find_next_def_use(code):
     use = True
     m = re.search('[^ ]', code)
     if m.group() == '=':
-        if code[m.start()+1] is not '=':
+        if code[m.start()+1] is not '=':  # not a comparison
+            use = False
+    else:
+        m2 = re.match('(\[[^\]]+\])*[ ]*=[^=]', code[m.start():])  # TODO: nested array
+        if m2:
             use = False
 
     return src, fields, use, code
@@ -365,7 +373,31 @@ def find_pipeline_state(g, instance):
             return state
 
 
-def get_state_content(vars, pipeline_state, state_mapping, src2fields):
+def get_entry_content(vars, pipeline_state, state_mapping, src2fields):
+    content = " "
+    end = ""
+    special = {}
+    for var in vars:
+        fields = src2fields[var]
+        current_type = pipeline_state
+        for field in fields:
+            if current_type[-1] == "*":
+                current_type.rstrip('*').rstip()
+            current_type = state_mapping[current_type][field]
+        if current_type[2] is None:
+            content += "%s %s; " % (current_type[0], fields[-1])
+        elif current_type[2] is "shared":
+            content += "uint64_t %s; " % fields[-1]  # convert pointer to number
+            special[var] = (current_type[0], fields[-1], "shared", current_type[3])
+        elif current_type[2] is "copysize":
+            if end is not "":
+                raise Exception("Currently do not support copying multiple variable-length fields over smart queue.")
+            end = "uint8_t %s[]; " % fields[-1]
+            special[var] = (current_type[0], fields[-1], "copysize", current_type[3])
+    return content + end, special
+
+
+def get_state_content(vars, pipeline_state, state_mapping, src2fields, special):
     content = " "
     for var in vars:
         fields = src2fields[var]
@@ -375,6 +407,10 @@ def get_state_content(vars, pipeline_state, state_mapping, src2fields):
                 current_type.rstrip('*').rstip()
             current_type = state_mapping[current_type][field]
         content += "%s %s; " % (current_type[0], fields[-1])
+
+    for var in special:
+        t, name, special_t, info = special[var]
+        content += "%s %s; " % (t, name)
     return content
 
 
@@ -408,7 +444,8 @@ def compile_smart_queue(g, q, src2fields):
                            [Port("out" + str(i), ["q_entry*"]) for i in range(q.n_cases)],
                            r'''
         (q_entry* e) = in();
-        uint16_t type = (e->flags & TYPE_MASK) >> TYPE_SHIFT;
+        uint16_t type = 0;
+        if (e != NULL) type = (e->flags & TYPE_MASK) >> TYPE_SHIFT;
         output switch {
             %s
         }''' % (src_cases))
@@ -458,37 +495,57 @@ def compile_smart_queue(g, q, src2fields):
         out = out_map[i]
 
         # Create states
+        content, special = get_entry_content(live, pipeline_state, g.state_mapping, src2fields)
         state_entry = State("entry_" + q.name + str(i),
-                            "uint16_t flags; uint16_t len; " +
-                            get_state_content(live, pipeline_state, g.state_mapping, src2fields))
+                            "uint16_t flags; uint16_t len; " + content)
         state_pipeline = State("pipeline_" + q.name + str(i),
                                state_entry.name + "* entry; " +
-                               get_state_content(extras, pipeline_state, g.state_mapping, src2fields))
+                               get_state_content(extras, pipeline_state, g.state_mapping, src2fields, special))
         g.addState(state_entry)
         g.addState(state_pipeline)
 
         # Create elements
-        # TODO: var-length field
+        size_src = "sizeof(%s)" % state_entry.name
+        for var in special:
+            t, name, special_t, info = special[var]
+            if special_t == "copysize":
+                size_src += " + %s" % info
         size_core_ele = Element(q.name + "_size_core" + str(i), [Port("in", [])], [Port("out", ["size_t", "size_t"])],
-                                r'''output { out(sizeof(%s), state.core); }''' % state_entry.name)
+                                r'''output { out(%s, state.core); }''' % size_src)
 
-        src = "%s* e = (%s*) in_entry();\n" % (state_entry.name, state_entry.name)
+        fill_src = "%s* e = (%s*) in_entry();\n" % (state_entry.name, state_entry.name)
         for var in live:
             field = get_entry_field(var, src2fields)
-            src += "e->%s = state.%s;\n" % (field, var)
-        src += "e->flags |= %d << TYPE_SHIFT;\n" % (i+1)
-        src += "output { out((q_entry*) e); }"
+            if var in special:
+                t, name, special_t, info = special[var]
+                if special_t == "shared":
+                    fill_src += "e->%s = (uintptr_t) state.%s - (uintptr_t) %s;\n" % (field, var, info)
+                elif special_t == "copysize":
+                    fill_src += "rte_memcpy(e->%s, state.%s, %s);\n" % (field, var, info)
+            else:
+                fill_src += "e->%s = state.%s;\n" % (field, var)
+        fill_src += "e->flags |= %d << TYPE_SHIFT;\n" % (i+1)
+        fill_src += "output { out((q_entry*) e); }"
         fill_ele = Element(q.name + "_fill" + str(i),
                            [Port("in_entry", ["q_entry*"]), Port("in_pkt", [])],
-                           [Port("out", ["q_entry*"])], src)
+                           [Port("out", ["q_entry*"])], fill_src)  # TODO
         fork = Element(q.name + "_fork" + str(i),
                        [Port("in", [])],
                        [Port("out_size_core", []), Port("out_fill", [])],
                        r'''output { out_size_core(); out_fill(); }''')
+
+        save_src = "state.entry = (%s *) in();\n" % state_entry.name
+        for var in special:
+            t, name, special_t, info = special[var]
+            if special_t == "shared":
+                save_src += "state.{0} = (uintptr_t) {1} + (uintptr_t) state.entry->{0};\n".format(name, info)
+            elif special_t == "copysize":
+                save_src += "state.{0} = state.entry->{0};\n".format(name)
+        save_src += "output { out(); }\n"
         save = Element(q.name + "_save" + str(i),
                        [Port("in", ["q_entry*"])],
                        [Port("out", [])],
-                       r'''state.entry = (%s *) in(); output { out(); }''' % state_entry.name)
+                       save_src)
         g.addElement(size_core_ele)
         g.addElement(fill_ele)
         g.addElement(fork)
@@ -514,6 +571,7 @@ def compile_smart_queue(g, q, src2fields):
         save_inst = g.instances[save_inst.name]
         save_inst.liveness = live
         save_inst.extras = extras
+        save_inst.special_fields = special
 
         # Enqueue connection
         for in_inst, in_port in ins:

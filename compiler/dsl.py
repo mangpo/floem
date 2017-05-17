@@ -881,16 +881,18 @@ def get_state_mapping(content):
     variable_len_order = []
     fixed_len = {}
     variable_len = {}
+    extras = {}
     for field in fields:
         # field = field.lstrip().rstrip()
         # index = field.rfind(' ')
         # t = field[:index].rstrip()
         # var = field[index+1:]
-        t, var = common.get_type_var(field)
+        t, var, special_t, extra = common.get_type_var(field)
         m = re.match('([^\[]+)\[([^\]]+)\]', var)  # only support one dimension
         if m:
             name = m.group(1)
             l = m.group(2)
+            extras[name] = (special_t, extra)
             try:
                 size = int(l)
                 fixed_len[name] = (t + '*')
@@ -900,14 +902,17 @@ def get_state_mapping(content):
                 variable_len[name] = (t, l)
                 variable_len_order.append(name)
         else:
+            extras[var] = (special_t, extra)
             fixed_len[var] = t
             fixed_len_order.append(var)
 
     if len(variable_len) == 0:
         field_mapping = {}
+        content = ""
         for var in fixed_len_order:
             t = fixed_len[var]
-            field_mapping[var] = (t, "{0}%s" % var)
+            field_mapping[var] = (t, "{0}%s" % var) + extras[var]
+            content += "%s %s;\n" % (fixed_len[var], var)
         return content, False, field_mapping
     elif len(variable_len_order) == 1:
         var_len_var = variable_len_order[0]
@@ -915,8 +920,8 @@ def get_state_mapping(content):
         field_mapping = {}
         for var in fixed_len_order:
             t = fixed_len[var]
-            field_mapping[var] = (t, "{0}%s" % var)
-        field_mapping[var_len_var] = (var_t + '*', "{0}%s" % var_len_var)
+            field_mapping[var] = (t, "{0}%s" % var) + extras[var]
+        field_mapping[var_len_var] = (var_t + '*', "{0}%s" % var_len_var, None, None)
 
         content = ""
         for var in fixed_len:

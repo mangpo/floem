@@ -265,6 +265,7 @@ class ElementNode:
         self.dominant2kills = {}
         self.uses = None
         self.extras = None
+        self.special_fields = None
 
     def __str__(self):
         return self.element.name + "::" + self.name + "---OUT[" + str(self.output2ele) + "]" + "---IN[" + str(self.input2ele) + "]"

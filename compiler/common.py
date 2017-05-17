@@ -1,3 +1,5 @@
+import re
+
 standard_arg_format = "{0}_arg{1}"
 header_files = ["stdio.h", "stdlib.h", "string.h", "stddef.h", "stdint.h", "stdbool.h"]
 header_files_triggers = ["unistd.h", "pthread.h"]
@@ -71,11 +73,28 @@ def sanitize_type(t):
 
 
 def get_type_var(type_var):
-    type_var = strip_all(type_var)
-    index1 = type_var.rfind(' ')
-    index2 = type_var.rfind('*')
-    index = max(index1, index2)
-    return sanitize_type(type_var[:index + 1]), strip_all(type_var[index+1:])
+    # type_var = strip_all(type_var)
+    # index1 = type_var.rfind(' ')
+    # index2 = type_var.rfind('*')
+    # index = max(index1, index2)
+    # return sanitize_type(type_var[:index + 1]), strip_all(type_var[index+1:])
+
+    m = re.match('[ \n]*((struct[ ]+)?[a-zA-Z0-9_]+[ ]*[\*]?)[ ]*([a-zA-Z0-9_]+(\[[a-zA-Z_0-9]*\])*)', type_var)
+    t = sanitize_type(m.group(1))
+    var = m.group(3)
+    m2 = re.match('[ ]*@shared\((.*)', type_var[m.end(3):])
+    if m2:
+        end = m2.group(1).rfind(')')
+        pointer = m2.group(1)[:end]
+        return t, var, "shared", pointer
+
+    m2 = re.match('[ ]*@copysize\((.*)', type_var[m.end(3):])
+    if m2:
+        end = m2.group(1).rfind(')')
+        pointer = m2.group(1)[:end]
+        return t, var, "copysize", pointer
+
+    return t, var, None, None
 
 
 def get_type(type_var):
