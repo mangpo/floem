@@ -72,9 +72,10 @@ class TestDSL(unittest.TestCase):
                   ]
 
         tests3 = ["simple.py",
-                 "multiple_queues.py",
-                 "queue_shared_pointer.py",
-                 "queue_shared_data.py"]
+                  "multiple_queues.py",
+                  "queue_shared_pointer.py",
+                  "queue_shared_data.py",
+                  "auto_inserted_queue.py"]
 
         for test in tests:
             status = os.system("cd programs; python " + test + "; cd ..")
@@ -523,7 +524,7 @@ class TestDSL(unittest.TestCase):
         else:
             self.fail('Exception is not raised.')
 
-    def classify_join2(self):
+    def test_classify_join2(self):
         reset()
         fork = create_fork_instance("fork2", 2, "int")
 
@@ -550,9 +551,38 @@ class TestDSL(unittest.TestCase):
 
         try:
             c = Compiler()
+            c.resource = False
+            c.remove_unused = False
             c.generate_code_and_run()
         except Exception as e:
             self.assertNotEqual(e.message.find("All its output ports must fire the same input ports of the join instance 'add2'."), -1, 'Expect undefined exception.')
+        else:
+            self.fail('Exception is not raised.')
+
+    def test_auto_queue_error(self):
+        reset()
+        state = create_state("mystate", "int a;")
+        gen = create_element_instance("gen", [Port("in", ["int"])], [Port("out", [])],
+                                      "state.a = in(); output { out(); }")
+        display = create_element_instance("display", [Port("in", [])], [], r'''printf("%d\n", state.a);''')
+
+        display(gen(None))
+        pipeline_state(gen, "mystate")
+
+        t1 = API_thread("put", ["int"], None)
+        t2 = API_thread("get", [], None)
+        t1.run(gen)
+        t2.run(display)
+
+        CPU_process("p1", t1)
+        CPU_process("p2", t2)
+        master_process("p1")
+
+        try:
+            c = Compiler()
+            c.generate_code_and_run([42, 123])
+        except Exception as e:
+            self.assertNotEqual(e.message.find("Consider inserting a smart queue between the sender instance and the receiver instance 'display'."), -1)
         else:
             self.fail('Exception is not raised.')
 

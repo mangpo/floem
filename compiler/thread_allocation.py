@@ -221,6 +221,8 @@ class ThreadAllocator:
         state = State(st_name, st_content, st_init)
         self.graph.addState(state)
         self.graph.newStateInstance(st_name, '_'+st_name)
+        state_inst = self.graph.state_instances['_'+st_name]
+        state_inst.buffer_for = instance.name
 
         # All args
         all_types, all_args = common.types_args_port_list(instance.element.inports, common.standard_arg_format)

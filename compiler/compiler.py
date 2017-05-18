@@ -673,7 +673,7 @@ def join_and_resource_annotation_pass(gen, resource, remove_unused):
     if remove_unused:
         gen.graph.remove_unused_elements(resource)
 
-    # Annotate detaile join information
+    # Annotate detailed join information
     annotate_join_info(gen.graph, True)
 
     if resource:

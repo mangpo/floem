@@ -351,6 +351,7 @@ class StateNode:
         self.state = state
         self.init = init
         self.processes = set()
+        self.buffer_for = None
 
 
 class MemoryRegion:

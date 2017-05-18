@@ -34,3 +34,18 @@ def annotate_process_info(g):
     for api in g.threads_API:
         process = g.process_of_thread(api.name)
         api.process = process
+
+    for state_inst in g.state_instances.values():
+        if len(state_inst.processes) > 1:
+            pointer = state_inst.state.content.find('*')
+            if pointer >= 0:
+                if state_inst.buffer_for:
+                    raise Exception("Element instance '%s' is receiving data from an instance in a different process.\n"
+                                    % state_inst.name
+                                    + "The data includes a pointer, which shouldn't be shared between multiple processes.\n"
+                                    + "Consider inserting a smart queue between the sender instance and the receiver instance '%s'."
+                                    % state_inst.buffer_for)
+                else:
+                    raise Exception("State instance '%s' is shared between multiple processes, but it contains pointer,\n"
+                                    + "which shouldn't be shared between multiple processes."
+                                    % state_inst.name)
