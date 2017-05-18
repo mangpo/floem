@@ -71,11 +71,19 @@ class TestDSL(unittest.TestCase):
                   #"extract_field_spec_impl.py",
                   ]
 
+        tests3 = ["simple.py",
+                 "multiple_queues.py",
+                 "queue_shared_pointer.py",
+                 "queue_shared_data.py"]
+
         for test in tests:
             status = os.system("cd programs; python " + test + "; cd ..")
             self.assertEqual(status, 0, "Error at " + test)
         for test in tests2:
             status = os.system("cd programs_testing; python " + test + "; cd ..")
+            self.assertEqual(status, 0, "Error at " + test)
+        for test in tests3:
+            status = os.system("cd abstracts; python " + test + "; cd ..")
             self.assertEqual(status, 0, "Error at " + test)
 
     def test_conflict_input(self):

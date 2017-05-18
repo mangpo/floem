@@ -237,7 +237,7 @@ def element_to_function(instance, state_rename, graph, ext):
     for o in output2func:
         m = re.search('(' + o + '[ ]*\()[^;]*;', out_src)
         if m is None:
-            raise Exception("Element '%s' never send data from output port '%s'." % (funcname,o))
+            raise Exception("Element instance '%s' never send data from output port '%s'." % (funcname,o))
         (f, fport) = output2func[o]
         if o in instance.join_output2save:
             if isinstance(fport, list):

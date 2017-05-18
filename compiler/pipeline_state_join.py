@@ -25,7 +25,7 @@ def merge_as_join(g, nodes, name):
                          r'''output { }''')
     new_inst_name = name + "_merge%d" % n
     g.addElement(join)
-    g.newElementInstance(new_inst_name, join.name, [])
+    g.newElementInstance(join.name, new_inst_name, [])
 
     i = 0
     for instance in nodes:
@@ -44,7 +44,7 @@ def merge_as_no_join(g, nodes, name):
                    r'''output { }''')
     new_inst_name = name + "_merge"
     g.addElement(join)
-    g.newElementInstance(new_inst_name, join.name, [])
+    g.newElementInstance(join.name, new_inst_name, [])
 
     for instance in nodes:
         add_release_port(g, instance)
@@ -55,7 +55,7 @@ def merge_as_no_join(g, nodes, name):
 
 def handle_either_or_node(instance, g, lives, ans):
     merge_nodes = []
-    for next_name, next_port in instance.output2ele:
+    for next_name, next_port in instance.output2ele.values():
         ret = live_leaf_nodes(next_name, g, lives, ans)
         if len(ret) == 0:
             merge_nodes.append(g.instances[next_name])
@@ -77,7 +77,7 @@ def live_leaf_nodes(name, g, lives, ans):
         ret = set()
     elif element.output_fire == "all":
         ret = set()
-        for next_name, next_port in instance.output2ele:
+        for next_name, next_port in instance.output2ele.values():
             ret = ret.union(live_leaf_nodes(next_name, g, lives, ans))
         if len(ret) == 0:
             ret = set([instance])

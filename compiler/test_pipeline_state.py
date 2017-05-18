@@ -438,14 +438,14 @@ class TestPipelineState(unittest.TestCase):
                                 ("classify", ["a"]),
                                 ("a0", ["a"]), ("b0", ["a"]),
                                 ("smart_enq", {0: set(["a0"]), 1: set(["b0"])}),
-                                ("smart_deq", None),
+                                ("smart_deq", {0: set(["a0"]), 1: set(["b0"])}),
                                 ("a1", ["a0"]), ("b1", ["b0"]),
                                 ])
         self.check_uses_all(g, [("save", ["a", "a0", "b0"]),
                                 ("classify", ["a", "a0", "b0"]),
                                 ("a0", ["a", "a0"]), ("b0", ["a", "b0"]),
                                 ("smart_enq", {0: set(["a0"]), 1: set(["b0"])}),  # post shouldn't appear here.
-                                ("smart_deq", None),
+                                ("smart_deq", {0: set(["a0", "post"]), 1: set(["b0", "post"])}),
                                 ("a1", ["a0", "post"]), ("b1", ["b0", "post"]),
                                 ])
 
@@ -535,7 +535,7 @@ class TestPipelineState(unittest.TestCase):
                                 ("classify", ["a"]),
                                 ("a0", ["a"]), ("b0", ["a"]),
                                 ("smart_enq", {0: set(["a0"]), 1: set(["b0"])}),
-                                ("smart_deq", None),
+                                ("smart_deq", {0: set(["a0"]), 1: set(["b0"])}),
                                 ("fork", ["a0"]),
                                 ("nop0", []),
                                 ("nop1", []),
@@ -546,10 +546,183 @@ class TestPipelineState(unittest.TestCase):
                                 ("classify", ["a", "a0", "b0"]),
                                 ("a0", ["a","a0"]), ("b0", ["a","b0"]),
                                 ("smart_enq", {0: set(["a0"]), 1: set(["b0"])}),
-                                ("smart_deq", None),
+                                ("smart_deq", {0: set(["a0"]), 1: set(["b0"])}),
                                 ("fork", ["a0"]),
                                 ("nop0", ["a0"]),
                                 ("nop1", ["a0"]),
                                 ("join", ["a0"]),
                                 ("b1", ["b0"]),
                                 ])
+
+    def test_array_field(self):
+        p = Program(
+            State("mystate", "int keylen; uint8_t *key @copysize(state.keylen);"),
+            Element("Save",
+                    [Port("in", ["int", "uint8_t"])],
+                    [Port("out", [])],
+    r'''(int len, uint8_t data) = in();
+    state.key = (uint8_t *) malloc(len);
+    state.keylen = len;
+    for(int i=0; i<len ; i++)
+        state.key[i] = data;
+    output { out(); }'''),
+            ElementInstance("Save", "save"),
+            PipelineState("save", "mystate"))
+
+        gen = program_to_graph_pass(p)
+        analyze_pipeline_states(gen.graph, check=False)
+        g = gen.graph
+
+        self.check_live_all(g, [("save", [])])
+        self.check_uses_all(g, [("save", ['keylen', 'key'])])
+
+    def test_queue_release(self):
+        n_cases = 1
+        queue = queue_ast.QueueVariableSizeOne2Many("smart_queue", 10, 4, n_cases)
+        Enq_ele = Element("smart_enq_ele",
+                               [Port("in" + str(i), []) for i in range(n_cases)],
+                               [Port("out", [])],"output { out(); }")
+        Deq_ele = Element("smart_deq_ele",
+                               [Port("in_core", ["int"]), Port("in", [])],
+                               [Port("out" + str(i), []) for i in range(n_cases)],"output { out0(); out1(); }")
+        Enq_ele.special = queue
+        Deq_ele.special = queue
+        enq = ElementInstance("smart_enq_ele", "smart_enq")
+        deq = ElementInstance("smart_deq_ele", "smart_deq")
+        queue.enq = enq
+        queue.deq = deq
+        p = Program(
+            State("mystate", "int a;"),
+            Element("Save",
+                    [Port("in", ["int"])],
+                    [Port("out", [])],
+                    r'''
+                    state.a = in(); output { out(); }'''),
+            Enq_ele,
+            Deq_ele,
+            enq,
+            deq,
+            Element("Fork",
+                    [Port("in", [])],
+                    [Port("out0", []), Port("out1", [])],
+                    r'''output { out0(); out1(); }'''),
+            Element("Choose",
+                    [Port("in", [])],
+                    [Port("out0", []), Port("out1", [])],
+                    r'''output switch { case (state.a % 2 == 0): out0(); else: out1(); }'''),
+            Element("Print",
+                    [Port("in", [])],
+                    [],
+                    r'''printf("%d\n", state.a);'''),
+            Element("Hello",
+                    [Port("in", [])],
+                    [],
+                    r'''printf("hello\n");'''),
+            ElementInstance("Save", "save"),
+            ElementInstance("Fork", "myfork"),
+            ElementInstance("Choose", "choose"),
+            ElementInstance("Hello", "hello"),
+            ElementInstance("Print", "p2"),
+            ElementInstance("Print", "p3"),
+            PipelineState("save", "mystate"),
+            Connect("save", "smart_enq"),
+            Connect("smart_enq", "smart_deq", "out", "in"),
+            Connect("smart_deq", "myfork"),
+            Connect("myfork", "choose", "out0"),
+            Connect("myfork", "p3", "out1"),
+            Connect("choose", "hello", "out0"),
+            Connect("choose", "p2", "out1"),
+            APIFunction("tin", ["int"], None),
+            APIFunction("tout", ["int"], None),
+            ResourceMap("tin", "save"),
+            ResourceMap("tin", "smart_enq"),
+            ResourceMap("tout", "smart_deq"),
+            ResourceMap("tout", "myfork"),
+            ResourceMap("tout", "choose"),
+            ResourceMap("tout", "hello"),
+            ResourceMap("tout", "p2"),
+            ResourceMap("tout", "p3"),
+        )
+
+        gen = program_to_graph_pass(p)
+        gen.graph.state_mapping = {'mystate': {'a': ('int', None, None, None)}}
+        pipeline_state_pass(gen, check=False)
+        g = gen.graph
+
+        #g.print_graphviz()
+        deq_release = g.instances["_smart_queue_dequeue_release2"]
+        name, port = deq_release.input2ele["in"][0]
+        self.assertEqual(name, "myfork_merge2")
+
+        merges = set()
+        myfork_merge2 = g.instances["myfork_merge2"]
+        name, port = myfork_merge2.input2ele["in0"][0]
+        merges.add(name)
+        name, port = myfork_merge2.input2ele["in1"][0]
+        merges.add(name)
+        self.assertEqual(merges, set(["choose_merge","p3"]))
+
+    def test_queue_release2(self):
+        n_cases = 1
+        queue = queue_ast.QueueVariableSizeOne2Many("smart_queue", 10, 4, n_cases)
+        Enq_ele = Element("smart_enq_ele",
+                               [Port("in" + str(i), []) for i in range(n_cases)],
+                               [Port("out", [])],"output { out(); }")
+        Deq_ele = Element("smart_deq_ele",
+                               [Port("in_core", ["int"]), Port("in", [])],
+                               [Port("out" + str(i), []) for i in range(n_cases)],"output { out0(); out1(); }")
+        Enq_ele.special = queue
+        Deq_ele.special = queue
+        enq = ElementInstance("smart_enq_ele", "smart_enq")
+        deq = ElementInstance("smart_deq_ele", "smart_deq")
+        queue.enq = enq
+        queue.deq = deq
+        p = Program(
+            State("mystate", "int a;"),
+            Element("Save",
+                    [Port("in", ["int"])],
+                    [Port("out", [])],
+                    r'''
+                    state.a = in(); output { out(); }'''),
+            Enq_ele,
+            Deq_ele,
+            enq,
+            deq,
+            Element("Choose",
+                    [Port("in", [])],
+                    [Port("out0", []), Port("out1", [])],
+                    r'''output switch { case (state.a % 2 == 0): out0(); case (state.a > 0): out1(); }'''),
+            Element("Print",
+                    [Port("in", [])],
+                    [],
+                    r'''printf("%d\n", state.a);'''),
+            ElementInstance("Save", "save"),
+            ElementInstance("Choose", "choose"),
+            ElementInstance("Print", "p0"),
+            ElementInstance("Print", "p1"),
+            PipelineState("save", "mystate"),
+            Connect("save", "smart_enq"),
+            Connect("smart_enq", "smart_deq", "out", "in"),
+            Connect("smart_deq", "choose"),
+            Connect("choose", "p0", "out0"),
+            Connect("choose", "p1", "out1"),
+            APIFunction("tin", ["int"], None),
+            APIFunction("tout", ["int"], None),
+            ResourceMap("tin", "save"),
+            ResourceMap("tin", "smart_enq"),
+            ResourceMap("tout", "smart_deq"),
+            ResourceMap("tout", "choose"),
+            ResourceMap("tout", "p0"),
+            ResourceMap("tout", "p1"),
+        )
+
+        gen = program_to_graph_pass(p)
+        gen.graph.state_mapping = {'mystate': {'a': ('int', None, None, None)}}
+        try:
+            pipeline_state_pass(gen, check=False)
+        except Exception as e:
+            self.assertNotEqual(e.message.find("Cannot insert dequeue release automatically"), -1)
+        else:
+            self.fail('Exception is not raised.')
+
+

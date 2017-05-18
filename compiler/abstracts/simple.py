@@ -13,4 +13,4 @@ def run(x):
 
 c = Compiler()
 c.testing = "run(123); run(42);"
-c.generate_code_and_run()
+c.generate_code_and_run([123, 42])

@@ -75,19 +75,30 @@ def need_replacement(element, live, extras):
     return False
 
 
+def replace_recursive(code, var, new_var):
+    m = re.search('[^a-zA-Z_0-9]state\.(' + var + ')[^a-zA-Z_0-9]', code)
+    if m:
+        code = code[:m.start(1)] + new_var + code[m.end(1):]
+        return replace_recursive(code, var, new_var)
+    else:
+        return code
+
+
 def replace_var(element, var, src2fields, prefix):
     new_var = prefix + src2fields[var][-1]
-    element.code = element.code.replace(var, new_var)
+    if var == new_var:
+        return
+    element.code = replace_recursive(element.code, var, new_var)
 
     if element.output_fire == "all":
         for port in element.output_code:
             code = element.output_code[port]
-            element.output_code[port] = code.replace(var, new_var)
+            element.output_code[port] = replace_recursive(code, var, new_var)
     else:
         for i in range(len(element.output_code)):
             case, out_code = element.output_code[i]
             case = case.replace(var, new_var)
-            out_code = out_code.replace(var, new_var)
+            out_code = replace_recursive(out_code, var, new_var)
             element.output_code[i] = (case, out_code)
 
 
@@ -261,12 +272,16 @@ def analyze_fields_liveness_instance(g, name, in_port):
         instance.liveness = {}
         instance.uses = {}
         deq = q.deq
+        deq.liveness = {}
+        deq.uses = {}
         for i in range(q.n_cases):
             out_port = "out" + str(i)
             next_name, next_port = deq.output2ele[out_port]
             ret_live, ret_uses = analyze_fields_liveness_instance(g, next_name, next_port)
             instance.liveness[i] = ret_live
-            instance.uses[i] = ret_live  # TODO: between queue, only keep live values
+            instance.uses[i] = ret_live
+            deq.liveness[i] = ret_live
+            deq.uses[i] = ret_uses
 
         return instance.liveness[no], instance.uses[no]
 
@@ -487,8 +502,8 @@ def compile_smart_queue(g, q, src2fields):
     g.delete_instance(q.deq.name)
 
     for i in range(q.n_cases):
-        live = q.enq.liveness[i]
-        uses = q.enq.uses[i]
+        live = q.deq.liveness[i]
+        uses = q.deq.uses[i]
         extras = uses.difference(live)
 
         ins = ins_map[i]
@@ -589,7 +604,7 @@ def compile_smart_queue(g, q, src2fields):
 
         # Dequeue release connection
         node = get_node_before_release(out_inst, g, live)
-        g.connect(node.name, deq_release_inst.name)
+        g.connect(node.name, deq_release_inst.name, "release")
 
 
 def order_smart_queues(name, vis, order, g):
