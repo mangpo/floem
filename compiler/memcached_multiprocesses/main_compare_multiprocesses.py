@@ -530,16 +530,23 @@ def impl():
     ######################## NIC Tx #######################
 
     # Queue
-    scan_src = r'''
-        if (((entry->flags & CQE_TYPE_MASK) >> CQE_TYPE_SHIFT) == CQE_TYPE_GRESP)
+    unref = create_element_instance("unref",
+                                    [Port("in", ["q_entry*"])],
+                                    [Port("out", ["bool"])],
+                                    r'''
+        q_entry* entry = in();
+        bool clean = false;
+        if (entry && ((entry->flags & CQE_TYPE_MASK) >> CQE_TYPE_SHIFT) == CQE_TYPE_GRESP)
         {
             cqe_send_getresponse *csg = (cqe_send_getresponse *) entry;
             item* it = (item *) get_pointer(csg->item);
             item_unref(it);
+            clean = true;
         }
-    '''
+        output { out(clean); }
+                                    ''')
     tx_enq_alloc, tx_enq_submit, tx_deq_get, tx_deq_release, scan = \
-        queue.create_circular_queue_variablesize_many2one_instances("tx_queue", 10000, n_cores, scan_src)
+        queue.create_circular_queue_variablesize_many2one_instances("tx_queue", 10000, n_cores, scan="enq")
 
     # Enqueue
     @API("send_cq", process="app")
@@ -551,7 +558,8 @@ def impl():
 
     @API("clean_cq", process="app")
     def clean_cq(core):
-        scan(core)
+        e = scan(core)
+        return unref(e)
 
     @internal_trigger("nic_tx", process="nic")
     def tx_pipeline():

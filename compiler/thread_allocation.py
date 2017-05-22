@@ -68,10 +68,12 @@ class ThreadAllocator:
                 ret = self.dfs_collect_return(next_inst, thread, visit)
                 return_type += ret[0]
                 if ret[1]:
+                    assert return_inst == None, \
+                        ("An API has too many return instances: %s and %s." % (return_inst, ret[1]))
                     return_inst = ret[1]
                 if ret[2]:
                     return_port = ret[2]
-            else:
+            elif len(port.argtypes) > 0:
                 return_type += port.argtypes
                 return_inst = inst_name
                 return_port = port.name
@@ -119,12 +121,12 @@ class ThreadAllocator:
             return_type, return_inst, return_port = self.dfs_collect_return(start.name, api.name, visit)
             if api.return_type:
                 assert len(return_type) == 1 and return_type[0] == api.return_type, \
-                    ("API '%s' should return '%s', but the returning element instance inside the API returns '%s'"
-                     % (api.name, api.return_type, return_type))
+                    ("API '%s' should return '%s', but the returning element instance '%s' inside the API returns '%s'"
+                     % (api.name, api.return_type, return_inst, return_type))
             else:
                 assert len(return_type) == 0, \
-                    ("API '%s' should have no return value, but the returning element instance inside the API returns %s"
-                     % (api.name, return_type))
+                    ("API '%s' should have no return value, but the returning element instance '%s' inside the API returns %s"
+                     % (api.name, return_inst, return_type))
 
             api.return_instance = return_inst
             api.return_port = return_port

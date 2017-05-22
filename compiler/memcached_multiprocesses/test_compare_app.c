@@ -66,7 +66,9 @@ void run_app(void *threadid) {
       //if(tid == 1) printf("get_eq %ld\n", e);
       if(e == NULL) {
         clean_log(&ia, true);
-        clean_cq(tid);
+        //clean_cq(tid);
+        bool cleaning = true;
+        while(cleaning) { cleaning = clean_cq(tid); }
         continue;
         //printf("eq_entry at core %ld is null.\n", tid);
       }
@@ -113,7 +115,9 @@ void run_app(void *threadid) {
       }
       release((q_entry *) e);
       clean_log(&ia, false);
-      clean_cq(tid);
+      //clean_cq(tid);
+      bool cleaning = true;
+      while(cleaning) { cleaning = clean_cq(tid); }
       //usleep(10);
   }
 }
