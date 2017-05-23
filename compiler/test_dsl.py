@@ -76,7 +76,10 @@ class TestDSL(unittest.TestCase):
                   "multiple_queues.py",
                   "queue_shared_pointer.py",
                   "queue_shared_data.py",
-                  "auto_inserted_queue.py"]
+                  "auto_inserted_queue.py",
+                  "smart_queue_entry.py",
+                  "smart_queue_entry2.py",
+                  "smart_queue_many2one.py",]
 
         for test in tests:
             status = os.system("cd programs; python " + test + "; cd ..")

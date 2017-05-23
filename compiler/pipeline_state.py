@@ -331,7 +331,8 @@ def analyze_fields_liveness_instance(g, name, in_port):
 
 def analyze_fields_liveness(g, check):
     for instance in g.instances.values():
-        if len(instance.input2ele) == 0:
+        q = instance.element.special
+        if len(instance.input2ele) == 0 and (not q or not q.scan == instance):
             live, uses = analyze_fields_liveness_instance(g, instance.name, None)
             if check:
                 assert len(live) == 0, "Fields %s of a pipeline state should not be live at the beginning." % live
@@ -438,10 +439,15 @@ def compile_smart_queue(g, q, src2fields):
     pipeline_state = find_pipeline_state(g, q.enq)
     enq_thread = g.get_thread_of(q.enq.name)
     deq_thread = g.get_thread_of(q.deq.name)
+    scan_thread = g.get_thread_of(q.scan.name)
 
     if isinstance(q, queue_ast.QueueVariableSizeOne2Many):
         states, state_insts, elements, enq_alloc, enq_submit, deq_get, deq_release = \
             queue_ast.circular_queue_variablesize_one2many(q.name, q.size, q.n_cores)
+        scan = None
+    elif isinstance(q, queue_ast.QueueVariableSizeMany2One):
+        states, state_insts, elements, enq_alloc, enq_submit, deq_get, deq_release, scan = \
+            queue_ast.circular_queue_variablesize_many2one(q.name, q.size, q.n_cores, q.scan_type)
     else:
         raise Exception("Smart queue: unimplemented for %s." % q)
 
@@ -473,33 +479,63 @@ def compile_smart_queue(g, q, src2fields):
     deq_get_inst = deq_get()
     deq_release_inst = deq_release()
     classify_inst = ElementInstance(classify_ele.name, classify_ele.name + "_inst")
-
     new_instances = [enq_submit_inst, deq_get_inst, deq_release_inst, classify_inst]
+
+    if scan:
+        scan_inst = scan()
+        scan_classify_inst = ElementInstance(classify_ele.name, classify_ele.name + "_scan_inst")
+        new_instances.append(scan_inst)
+        new_instances.append(scan_classify_inst)
+
     for inst in new_instances:
         g.newElementInstance(inst.element, inst.name, inst.args)
 
     # Connect deq_get -> classify
     g.connect(deq_get_inst.name, classify_inst.name)
+    if scan:
+        g.connect(scan_inst.name, scan_classify_inst.name)
 
     # Resource
     g.set_thread(enq_submit_inst.name, enq_thread)
     g.set_thread(deq_get_inst.name, deq_thread)
     g.set_thread(classify_inst.name, deq_thread)
-    g.set_thread(deq_release_inst.name, deq_thread)  # TODO: deq_release
+    g.set_thread(deq_release_inst.name, deq_thread)
+    if scan:
+        g.set_thread(scan_inst.name, scan_thread)
+        g.set_thread(scan_classify_inst.name, scan_thread)
 
     # Memorize connections
     ins_map = []
     out_map = []
+    scan_map = []
 
     for i in range(q.n_cases):
         ins = q.enq.input2ele["in" + str(i)]
         out = q.deq.output2ele["out" + str(i)]
         ins_map.append(ins)
         out_map.append(out)
+        if scan:
+            clean = q.scan.output2ele["out" + str(i)]
+            scan_map.append(clean)
 
     # Delete dummy dequeue and enqueue instances
     g.delete_instance(q.enq.name)
     g.delete_instance(q.deq.name)
+    if scan:
+        g.delete_instance(q.scan.name)
+
+    # Preserve original dequeue connection
+    for port in q.deq.input2ele:
+        l = q.deq.input2ele[port]
+        for prev_inst, prev_port in l:
+            if not prev_inst == q.enq.name:
+                g.connect(prev_inst, deq_get_inst.name, prev_port, port)
+
+    # Preserve original dequeue connection
+    for port in q.scan.input2ele:
+        l = q.scan.input2ele[port]
+        for prev_inst, prev_port in l:
+            g.connect(prev_inst, scan_inst.name, prev_port, port)
 
     for i in range(q.n_cases):
         live = q.deq.liveness[i]
@@ -605,6 +641,22 @@ def compile_smart_queue(g, q, src2fields):
         # Dequeue release connection
         node = get_node_before_release(out_inst, g, live)
         g.connect(node.name, deq_release_inst.name, "release")
+
+        if scan:
+            # Create scan save
+            scan_save_inst = ElementInstance(save.name, save.name + "_scan_inst")
+            g.newElementInstance(scan_save_inst.element, scan_save_inst.name, scan_save_inst.args)
+            g.set_thread(scan_save_inst.name, scan_thread)
+
+            scan_save_inst = g.instances[scan_save_inst.name]
+            g.add_pipeline_state(scan_save_inst.name, state_pipeline.name)
+            scan_save_inst.liveness = live
+            scan_save_inst.extras = extras
+            scan_save_inst.special_fields = special
+
+            clean_inst, clean_port = scan_map[i]
+            g.connect(scan_classify_inst.name, scan_save_inst.name, "out" + str(i))
+            g.connect(scan_save_inst.name, clean_inst, "out", clean_port)
 
 
 def order_smart_queues(name, vis, order, g):

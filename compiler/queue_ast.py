@@ -8,9 +8,16 @@ class Queue:
         self.n_cases = n_cases
         self.enq = None
         self.deq = None
+        self.scan = None
+        self.scan_type = None
 
 
 class QueueVariableSizeOne2Many(Queue):
+    def __init__(self, name, size, n_cores, n_cases):
+        Queue.__init__(self, name, size, n_cores, n_cases)
+
+
+class QueueVariableSizeMany2One(Queue):
     def __init__(self, name, size, n_cores, n_cases):
         Queue.__init__(self, name, size, n_cores, n_cases)
 
@@ -112,7 +119,7 @@ def circular_queue_variablesize_one2many(name, size, n_cores):
     return states, state_insts, elements, enq_alloc, enq_submit, deq_get, deq_release
 
 
-def circular_queue_variablesize_many2one(name, size, n_cores, scan_src=False, scan_enq=True):
+def circular_queue_variablesize_many2one(name, size, n_cores, scan=None):
     prefix = "_%s_" % name
     one_name = prefix + "queue"
     all_name = prefix + "queues"
@@ -126,12 +133,12 @@ def circular_queue_variablesize_many2one(name, size, n_cores, scan_src=False, sc
     circular = State("circular_queue", "size_t len; size_t offset; void* queue;", None, False)
     circular_scan = State("circular_queue_scan", "size_t len; size_t offset; void* queue; size_t clean;", None,
                                  False)
-    dummies = [Dummy(one_name + "_dummy" + str(i)) for i in range(n_cores)]
+    dummies = [StateInstance(Dummy.name, one_name + "_dummy" + str(i)) for i in range(n_cores)]
 
     All = State(all_name, "circular_queue* cores[%d];" % n_cores)
     All_scan = State(all_name_scan, "circular_queue_scan* cores[%d];" % n_cores)
 
-    if scan_src and scan_enq:
+    if scan == "enq":
         circular_enq = circular_scan
         All_enq = All_scan
         all_name_enq = all_name_scan
@@ -140,7 +147,7 @@ def circular_queue_variablesize_many2one(name, size, n_cores, scan_src=False, sc
         All_enq = All
         all_name_enq = all_name
 
-    if scan_src and not scan_enq:
+    if scan == "deq":
         circular_deq = circular_scan
         All_deq = All_scan
         all_name_deq = all_name_scan
@@ -149,13 +156,16 @@ def circular_queue_variablesize_many2one(name, size, n_cores, scan_src=False, sc
         All_deq = All
         all_name_deq = all_name
 
-    enq_ones = [StateInstance(circular_enq.name, one_instance_name + str(i), [size, 0, dummies[i], 0])
+    enq_ones = [StateInstance(circular_enq.name, one_instance_name + str(i), [size, 0, dummies[i].name, 0])
                 for i in range(n_cores)]
-    deq_ones = [StateInstance(circular_deq.name, one_deq_instance_name + str(i), [size, 0, dummies[i], 0])
+    deq_ones = [StateInstance(circular_deq.name, one_deq_instance_name + str(i), [size, 0, dummies[i].name, 0])
                 for i in range(n_cores)]
 
-    enq_all = StateInstance(All_enq.name, all_instance_name, [[enq_ones[i] for i in range(n_cores)]])
-    deq_all = StateInstance(All_deq.name, all_eq_instance_name, [[deq_ones[i] for i in range(n_cores)]])
+    enq_all = StateInstance(All_enq.name, all_instance_name, [[enq_ones[i].name for i in range(n_cores)]])
+    deq_all = StateInstance(All_deq.name, all_eq_instance_name, [[deq_ones[i].name for i in range(n_cores)]])
+
+    states = [Dummy, circular, circular_scan, All, All_scan]
+    state_insts = dummies + enq_ones + deq_ones + [enq_all, deq_all]
 
     Enqueue_alloc = Element(prefix + "enqueue_alloc_ele",
                                    [Port("in", ["size_t", "size_t"])],
@@ -199,10 +209,10 @@ def circular_queue_variablesize_many2one(name, size, n_cores, scan_src=False, sc
                 dequeue_release(eqe);
                    ''')
 
-    if scan_src:
+    if scan:
         Scan = Element(prefix + "scan_ele",
                               [Port("in_core", ["size_t"])],
-                              [],
+                              [Port("out", ["q_entry*"])],
                               r'''
     (size_t c) = in_core();
     circular_queue_scan *q = this->cores[c];
@@ -211,20 +221,60 @@ def circular_queue_variablesize_many2one(name, size, n_cores, scan_src=False, sc
     size_t clean = q->clean;
     void* base = q->queue;
     //if(c==1 && cleaning.last != off) printf("SCAN: start, last = %ld, offset = %ld, clean = %ld\n", cleaning.last, off, clean);
-    while (clean != off) {
-        q_entry *entry = (q_entry *) ((uintptr_t) base + clean);
+    q_entry *entry = NULL;
+    if (clean != off) {
+        entry = (q_entry *) ((uintptr_t) base + clean);
         if ((entry->flags & FLAG_OWN) != 0) {
-            //if(c==1 && cleaning.last != off) printf("SCAN: offset = %ld, clean = %ld [BREAK]\n", off, clean);
-            break;
+            entry = NULL;
+        } else {
+            q->clean = (clean + entry->len) % len;
         }
-        /* insert code */
-        ''' + scan_src +
-                              r'''
-        //if(c==1) printf("SCAN: len = %ld, offset = %ld, clean = %ld, + %d\n", len, off, clean, entry->len);
-        //if(c==1 && clean==24) printf("SCAN: len = %ld, offset = %ld, clean = %ld, + %d\n", len, off, clean, entry->len);
-        clean = (clean + entry->len) % len;
     }
-    q->clean = clean;
+    output { out(entry); }
             ''', None, [(all_name_scan, "this")])
     else:
         Scan = None
+
+    elements = [Enqueue_alloc, Enqueue_submit, Dequeue_get, Dequeue_release]
+    if Scan:
+        elements.append(Scan)
+
+    def enq_alloc(name=None):
+        if not name:
+            global fresh_id
+            name = prefix + "enqueue_alloc" + str(fresh_id)
+            fresh_id += 1
+        return ElementInstance(Enqueue_alloc.name, name, [enq_all.name])
+
+    def enq_submit(name=None):
+        if not name:
+            global fresh_id
+            name = prefix + "enqueue_submit" + str(fresh_id)
+            fresh_id += 1
+        return ElementInstance(Enqueue_submit.name, name)
+
+    def deq_get(name=None):
+        if not name:
+            global fresh_id
+            name = prefix + "dequeue_get" + str(fresh_id)
+            fresh_id += 1
+        return ElementInstance(Dequeue_get.name, name, [deq_all.name])
+
+    def deq_release(name=None):
+        if not name:
+            global fresh_id
+            name = prefix + "dequeue_release" + str(fresh_id)
+            fresh_id += 1
+        return ElementInstance(Dequeue_release.name, name)
+
+    def scan_instance(name=None):
+        if not name:
+            global fresh_id
+            name = prefix + "scan" + str(fresh_id)
+            fresh_id += 1
+        if scan == "enq":
+            return ElementInstance(Scan.name, name, [enq_all.name])
+        elif scan == "deq":
+            return ElementInstance(Scan.name, name, [deq_all.name])
+
+    return states, state_insts, elements, enq_alloc, enq_submit, deq_get, deq_release, (scan and scan_instance)

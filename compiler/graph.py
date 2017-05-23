@@ -502,6 +502,8 @@ class Graph:
                 e.special.enq = ret
             elif e.special.deq == user_instance:
                 e.special.deq = ret
+            elif e.special.scan == user_instance:
+                e.special.scan = ret
             else:
                 raise Exception("Element instance '%s' is link to smart queue '%s', but the queue doesn't link to the instance."
                                 % (user_instance.name, e.special.name))
