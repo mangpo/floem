@@ -439,7 +439,6 @@ def compile_smart_queue(g, q, src2fields):
     pipeline_state = find_pipeline_state(g, q.enq)
     enq_thread = g.get_thread_of(q.enq.name)
     deq_thread = g.get_thread_of(q.deq.name)
-    scan_thread = g.get_thread_of(q.scan.name)
 
     if isinstance(q, queue_ast.QueueVariableSizeOne2Many):
         states, state_insts, elements, enq_alloc, enq_submit, deq_get, deq_release = \
@@ -448,6 +447,7 @@ def compile_smart_queue(g, q, src2fields):
     elif isinstance(q, queue_ast.QueueVariableSizeMany2One):
         states, state_insts, elements, enq_alloc, enq_submit, deq_get, deq_release, scan = \
             queue_ast.circular_queue_variablesize_many2one(q.name, q.size, q.n_cores, q.scan_type)
+        scan_thread = g.get_thread_of(q.scan.name)
     else:
         raise Exception("Smart queue: unimplemented for %s." % q)
 
@@ -532,10 +532,11 @@ def compile_smart_queue(g, q, src2fields):
                 g.connect(prev_inst, deq_get_inst.name, prev_port, port)
 
     # Preserve original dequeue connection
-    for port in q.scan.input2ele:
-        l = q.scan.input2ele[port]
-        for prev_inst, prev_port in l:
-            g.connect(prev_inst, scan_inst.name, prev_port, port)
+    if scan:
+        for port in q.scan.input2ele:
+            l = q.scan.input2ele[port]
+            for prev_inst, prev_port in l:
+                g.connect(prev_inst, scan_inst.name, prev_port, port)
 
     for i in range(q.n_cases):
         live = q.deq.liveness[i]
