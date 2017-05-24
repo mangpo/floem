@@ -9,8 +9,10 @@ def allocate_pipeline_state(element, state):
     element.code = add + element.code
 
 
-def insert_pipeline_state(element, state, start):
+def insert_pipeline_state(element, state, start, instance, g):
     no_state = True
+    if element.name == "_impl_prepare_get_response_release_version":
+        print element
     if not start:
         for port in element.inports:
             if len(port.argtypes) == 0:
@@ -24,19 +26,24 @@ def insert_pipeline_state(element, state, start):
                         add = '  %s *_state = %s();\n' % (state, port.name)
                         element.code = add + element.code
                     no_state = False
+                    if element.name == "_impl_prepare_get_response_release_version":
+                        print element
 
     for port in element.outports:
         if len(port.argtypes) == 0:
-            port.argtypes.append(state + "*")
-            if element.output_fire == "all":
-                element.output_code[port.name] = '%s(_state)' % port.name
-            else:
-                for i in range(len(element.output_code)):
-                    case, code = element.output_code[i]
-                    m = re.search(port.name + '\(', code)
-                    if m:
-                        code = code[:m.end(0)] + '_state' + code[m.end(0):]
-                        element.output_code[i] = (case, code)
+            next_name, next_port = instance.output2ele[port.name]
+            next_inst = g.instances[next_name]
+            if len(next_inst.uses) > 0:
+                port.argtypes.append(state + "*")
+                if element.output_fire == "all":
+                    element.output_code[port.name] = '%s(_state)' % port.name
+                else:
+                    for i in range(len(element.output_code)):
+                        case, code = element.output_code[i]
+                        m = re.search(port.name + '\(', code)
+                        if m:
+                            code = code[:m.end(0)] + '_state' + code[m.end(0):]
+                            element.output_code[i] = (case, code)
 
     element.code = element.code.replace('state.', '_state->')
     if element.output_fire == "all":
@@ -140,7 +147,50 @@ def rename_references(g, src2fields):
                         child.element = new_element
 
 
+def code_change(instance):
+    return len(instance.uses) > 0
+    # if len(instance.uses) == 0:
+    #     return False
+    #
+    # for port in instance.element.inports:
+    #     if len(port.argtypes) == 0:
+    #         return True
+    #
+    # for port in instance.element.outports:
+    #     if len(port.argtypes) == 0:
+    #         return True
+    #
+    # return False
+
+
+def duplicate_instances(g):
+    parents = {}
+    for instance in g.instances.values():
+        parents[instance.name] = []
+
+    for start_name, state in g.pipeline_states:
+        subgraph = set()
+        g.find_subgraph(start_name, subgraph)
+
+        for inst_name in subgraph:
+            parents[inst_name].append(start_name)
+
+    duplicate = False
+    for inst_name in parents:
+        myparents = parents[inst_name]
+        instance = g.instances[inst_name]
+
+        if len(myparents) > 1 and code_change(instance):
+            duplicate = True
+            break
+
+    if duplicate:
+        raise Exception("Unimplemented.")
+
+
 def insert_pipeline_states(g):
+    duplicate_instances(g)
+
     ele2inst = {}
     for instance in g.instances.values():
         if instance.element.name not in ele2inst:
@@ -161,7 +211,7 @@ def insert_pipeline_states(g):
             allocate_pipeline_state(new_element, state)
             g.addElement(new_element)
             instance.element = new_element
-            ele2inst[new_element.name] = [start_name]
+            ele2inst[new_element.name] = [instance]
 
         # Pass state pointers
         vis = set()
@@ -169,16 +219,16 @@ def insert_pipeline_states(g):
             child = g.instances[inst_name]
             element = child.element
             # If multiple instances can share the same element, make sure we don't modify an element more than once.
-            if element.name not in vis:
+            if element.name not in vis and code_change(child):
                 vis.add(element.name)
                 if len(ele2inst[element.name]) == 1:
                     # TODO: modify element: empty port -> send state*
-                    insert_pipeline_state(element, state, inst_name == start_name)
+                    insert_pipeline_state(element, state, inst_name == start_name, child, g)
                 else:
                     # TODO: create new element: empty port -> send state*
                     new_element = element.clone(inst_name + "_with_state")
                     vis.add(new_element.name)
-                    insert_pipeline_state(new_element, state, inst_name == start_name)
+                    insert_pipeline_state(new_element, state, inst_name == start_name, child, g)
                     g.addElement(new_element)
                     child.element = new_element
 
@@ -246,17 +296,18 @@ def collect_defs_uses(g):
     return src2fields
 
 
-# def bypass_queue(inst, from_inst):
-#     if not isinstance(inst.element.special, queue_smart.Queue):
-#         return inst
-#
-#     for port in inst.output2ele:
-#         insts = inst.output2ele[port]
-#         if from_inst.name in insts:
-#             no = port[3:]
-#             port_in = "in" + no
-#             insts_in = inst.input2ele[port_in]
-#             return insts_in
+def kill_live(live, defs):
+    ret = set()
+    for var in live:
+        include = True
+        for d in defs:
+            m = re.match(d, var)
+            if m:
+                include = False
+                break
+        if include:
+            ret.add(var)
+    return ret
 
 
 def analyze_fields_liveness_instance(g, name, in_port):
@@ -264,7 +315,7 @@ def analyze_fields_liveness_instance(g, name, in_port):
 
     # Smart queue
     q = instance.element.special
-    if q:
+    if q and q.enq == instance:
         no = int(in_port[2:])
         if instance.liveness:
             return instance.liveness[no], instance.uses[no]
@@ -307,7 +358,7 @@ def analyze_fields_liveness_instance(g, name, in_port):
         live = live.union(instance.liveness)
 
     # - kills + uses
-    live = live.difference(instance.element.defs)
+    live = kill_live(live, instance.element.defs) # live.difference(instance.element.defs)
     live = live.union(instance.element.uses)
     uses = uses.union(instance.element.defs)
     uses = uses.union(instance.element.uses)
@@ -329,13 +380,18 @@ def analyze_fields_liveness_instance(g, name, in_port):
         return live, uses
 
 
-def analyze_fields_liveness(g, check):
+def analyze_fields_liveness(g):
     for instance in g.instances.values():
         q = instance.element.special
-        if len(instance.input2ele) == 0 and (not q or not q.scan == instance):
+        if len(instance.input2ele) == 0:
             live, uses = analyze_fields_liveness_instance(g, instance.name, None)
-            if check:
-                assert len(live) == 0, "Fields %s of a pipeline state should not be live at the beginning." % live
+
+
+def check_pipeline_state_liveness(g):
+    for instance in g.instances.values():
+        if len(instance.input2ele) == 0 and instance.liveness:
+            assert len(instance.liveness) == 0, \
+                ("Fields %s of a pipeline state should not be live at the beginning." % instance.liveness)
 
 
 def join_collect_killset(g, inst_name, target, inst2kill, scope):
@@ -398,8 +454,16 @@ def get_entry_content(vars, pipeline_state, state_mapping, src2fields):
         current_type = pipeline_state
         for field in fields:
             if current_type[-1] == "*":
-                current_type.rstrip('*').rstip()
-            current_type = state_mapping[current_type][field]
+                current_type = current_type.rstrip('*').rstrip()
+
+            try:
+                mapping = state_mapping[current_type]
+            except KeyError:
+                raise Exception("Undefined state type '%s'." % current_type)
+            try:
+                current_type = mapping[field][0]
+            except KeyError:
+                raise Exception("Field '%s' is undefined in state type '%s'." % (field, current_type))
         if current_type[2] is None:
             content += "%s %s; " % (current_type[0], fields[-1])
         elif current_type[2] is "shared":
@@ -489,6 +553,9 @@ def compile_smart_queue(g, q, src2fields):
 
     for inst in new_instances:
         g.newElementInstance(inst.element, inst.name, inst.args)
+        instance = g.instances[inst.name]
+        instance.liveness = set()
+        instance.uses = set()
 
     # Connect deq_get -> classify
     g.connect(deq_get_inst.name, classify_inst.name)
@@ -612,6 +679,9 @@ def compile_smart_queue(g, q, src2fields):
         for inst in new_instances:
             g.newElementInstance(inst.element, inst.name, inst.args)
             g.set_thread(inst.name, enq_thread)
+            instance = g.instances[inst.name]
+            instance.liveness = set()
+            instance.uses = set()
 
         # Create deq instances
         save_inst = ElementInstance(save.name, save.name + "_inst")
@@ -622,21 +692,23 @@ def compile_smart_queue(g, q, src2fields):
         g.add_pipeline_state(save_inst.name, state_pipeline.name)
         save_inst = g.instances[save_inst.name]
         save_inst.liveness = live
+        save_inst.uses = uses
         save_inst.extras = extras
         save_inst.special_fields = special
 
         # Enqueue connection
         for in_inst, in_port in ins:
-            g.connect(in_inst, fork_inst.name)
-            g.connect(fork_inst.name, size_core.name, "out_size_core")
-            g.connect(size_core.name, enq_alloc_inst.name)
-            g.connect(enq_alloc_inst.name, fill_inst.name, "out", "in_entry")
-            g.connect(fork_inst.name, fill_inst.name, "out_fill", "in_pkt")
-            g.connect(fill_inst.name, enq_submit_inst.name)
+            g.connect(in_inst, fork_inst.name, in_port)
+
+        g.connect(fork_inst.name, size_core.name, "out_size_core")
+        g.connect(size_core.name, enq_alloc_inst.name)
+        g.connect(enq_alloc_inst.name, fill_inst.name, "out", "in_entry")
+        g.connect(fork_inst.name, fill_inst.name, "out_fill", "in_pkt")
+        g.connect(fill_inst.name, enq_submit_inst.name)
 
         # Dequeue connection
         out_inst, out_port = out
-        g.connect(classify_inst.name, save_inst.name, "out" + str(i))
+        g.connect(classify_inst.name, save_inst.name, "out" + str(i))  # TODO: check else case
         g.connect(save_inst.name, out_inst, "out", out_port)
 
         # Dequeue release connection
@@ -652,6 +724,7 @@ def compile_smart_queue(g, q, src2fields):
             scan_save_inst = g.instances[scan_save_inst.name]
             g.add_pipeline_state(scan_save_inst.name, state_pipeline.name)
             scan_save_inst.liveness = live
+            scan_save_inst.uses = uses
             scan_save_inst.extras = extras
             scan_save_inst.special_fields = special
 
@@ -686,21 +759,22 @@ def compile_smart_queues(g, src2fields):
         compile_smart_queue(g, q, src2fields)
 
 
-def analyze_pipeline_states(g, check=True):
+def analyze_pipeline_states(g):
     # Annotate minimal join information
+    g.print_graphviz()
     annotate_join_info(g, False)
     src2fields = collect_defs_uses(g)
     compute_join_killset(g)
-    analyze_fields_liveness(g, check)
+    analyze_fields_liveness(g)
     return src2fields
 
 
-def compile_pipeline_states(g, check):
+def compile_pipeline_states(g):
     if len(g.pipeline_states) == 0:
         # Never use per-packet states. No modification needed.
         return
 
-    src2fields = analyze_pipeline_states(g, check)
+    src2fields = analyze_pipeline_states(g)
     compile_smart_queues(g, src2fields)
     rename_references(g, src2fields)  # for state.entry
     insert_pipeline_states(g)

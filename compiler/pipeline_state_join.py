@@ -73,7 +73,7 @@ def live_leaf_nodes(name, g, lives, ans):
 
     instance = g.instances[name]
     element = instance.element
-    if len(lives.intersection(instance.uses)) == 0:
+    if instance.uses is None or len(lives.intersection(instance.uses)) == 0:
         ret = set()
     elif element.output_fire == "all":
         ret = set()

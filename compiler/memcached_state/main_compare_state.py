@@ -271,6 +271,7 @@ mystate = create_state("mystate",
 iokvs_message* pkt;
 item* it @shared(data_region);
 void* key @copysize(state.pkt->mcr.request.keylen);
+uint32_t hash;
 uint64_t segfull;
 uint64_t segbase;
 uint64_t seglen;
@@ -283,6 +284,11 @@ iokvs_message = create_state("iokvs_message",
                              ''', None, declare=False)
 
 protocol_binary_request_header = create_state("protocol_binary_request_header",
+                             r'''
+protocol_binary_request_header_request request;
+                             ''', None, declare=False)
+
+protocol_binary_request_header = create_state("protocol_binary_request_header_request",
                              r'''
             uint8_t magic;
             uint8_t opcode;
@@ -336,7 +342,7 @@ def impl():
     rx_enq, rx_deq = queue_smart.smart_circular_queue_variablesize_one2many_instances(
         "rx_queue", 10000, n_cores, 3)
     tx_enq, tx_deq, tx_scan = queue_smart.smart_circular_queue_variablesize_many2one_instances(
-        "queue", 10000, n_cores, 3, clean="enq")
+        "tx_queue", 10000, n_cores, 3, clean="enq")
 
     ######################## NIC Rx #######################
 
@@ -357,15 +363,15 @@ def impl():
 
     ######################## APP #######################
 
-    @API("get_eq", process="app")
-    def get_eq(core):
+    @API("process_eq", process="app")
+    def process_eq(core):
         pkt_get, pkt_set, full_segment = rx_deq(core)
         get_done = lookup(pkt_get)
         set_done = hash_put(pkt_set)
         segment_done = new_segment(full_segment)
         tx_enq(get_done, set_done, segment_done)
 
-    @API("clean_cq", process="app")
+    @API("clean_cq", default_return="false", process="app")
     def clean_cq(core):
         get, set, full = tx_scan(core)
         get = unref(get)

@@ -1,5 +1,6 @@
 import re
 import common
+import copy
 
 class UndefinedInstance(Exception):
     pass
@@ -48,9 +49,10 @@ class Element:
             self.analyze_output_type()
 
     def clone(self, new_name):
-        e = Element(new_name, self.inports[:], self.outports[:], self.code, self.local_state, self.state_params, False)
+        e = Element(new_name, [x.clone() for x in self.inports], [x.clone() for x in self.outports],
+                    self.code, self.local_state, self.state_params, False)
         e.output_fire = self.output_fire
-        e.output_code = self.output_code
+        e.output_code = copy.copy(self.output_code)
         e.special = self.special
         return e
 
@@ -319,6 +321,9 @@ class Port:
 
     def __eq__(self, other):
         return self.__class__ == other.__class__ and self.name == other.name and self.argtypes == other.argtypes
+
+    def clone(self):
+        return Port(self.name, self.argtypes[:])
 
 
 class State:

@@ -19,6 +19,9 @@ class ElementInstance:
     def __str__(self):
         return self.name + '<' + self.element + '>'
 
+    def __eq__(self, other):
+        return self.__class__ == other.__class__ and self.name == other.name and self.element == other.element
+
 
 class Connect:
     def __init__(self, ele1, ele2, out1=None, in2=None):

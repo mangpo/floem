@@ -654,8 +654,8 @@ def program_to_graph_pass(program, default_process="tmp"):
     return gen
 
 
-def pipeline_state_pass(gen, check=True):
-    compile_pipeline_states(gen.graph, check)
+def pipeline_state_pass(gen):
+    compile_pipeline_states(gen.graph)
     clean_minimal_join_info(gen.graph)
 
 
@@ -695,7 +695,7 @@ def generate_graph(program, resource=True, remove_unused=False, default_process=
     """
     gen = program_to_graph_pass(program, default_process)
     gen.graph.state_mapping = state_mapping
-    pipeline_state_pass(gen, True)
+    pipeline_state_pass(gen)
     join_and_resource_annotation_pass(gen, resource, remove_unused)
 
     return gen.graph

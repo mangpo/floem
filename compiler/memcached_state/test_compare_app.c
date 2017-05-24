@@ -62,63 +62,10 @@ void run_app(void *threadid) {
   printf("Worker %ld starting\n", tid);
 
   while(true) {
-      eq_entry* e = get_eq(tid);
-      //if(tid == 1) printf("get_eq %ld\n", e);
-      if(e == NULL) {
-        clean_log(&ia, true);
-        //clean_cq(tid);
-        bool cleaning = true;
-        while(cleaning) { cleaning = clean_cq(tid); }
-        continue;
-        //printf("eq_entry at core %ld is null.\n", tid);
-      }
-      uint8_t type = (e->flags & EQE_TYPE_MASK) >> EQE_TYPE_SHIFT;
-      //printf("get_eq type %d, flag = %d\n", type, e->flags);
-      if (type == EQE_TYPE_RXGET) {
-
-        eqe_rx_get* e_get = (eqe_rx_get*) e;
-        item *it = hasht_get(e_get->key, e_get->keylen, e_get->hash);
-//        printf("get at core %ld: id: %ld, keylen: %d, hash: %d\n", tid, e_get->opaque, e_get->keylen, e_get->hash);
-//        printf("get at core %ld: id: %ld, item = %ld.....\n", tid, e_get->opaque, it);
-//        uint8_t* key = e_get->key;
-//        for(int i=0; i<e_get->keylen; i++)
-//            printf("get id: %ld, key[%d] = %d\n", e_get->opaque, i, key[i]);
-        uint8_t* val = item_value(it);
-        printf("get at core %ld: id: %ld, keylen: %d, vallen %d, val: %d\n", tid, e_get->opaque, it->keylen, it->vallen, val[0]);
-        send_cq(tid, CQE_TYPE_GRESP, get_pointer_offset(it), 0, e_get->opaque);
-      }
-      else if (type == EQE_TYPE_RXSET) {
-        eqe_rx_set* e_set = (eqe_rx_set*) e;
-        item* it = get_pointer(e_set->item);
-        uint8_t * val = item_value(it);
-//        printf("set at core %ld: id: %ld, keylen: %d, hash: %d\n", tid, e_set->opaque, it->keylen, it->hv);
-        printf("set at core %ld: id: %ld, item: %ld, keylen: %d, vallen: %d, val: %d\n", tid, e_set->opaque, it, it->keylen, it->vallen, val[0]);
-//        uint8_t* key = item_key(it);
-//        for(int i=0; i<it->keylen; i++)
-//            printf("set id: %ld, key[%d] = %d\n", e_set->opaque, i, key[i]);
-        hasht_put(it, NULL);
-        item_unref(it);
-        send_cq(tid, CQE_TYPE_SRESP, 0, 0, e_set->opaque);
-      }
-      else if (type == EQE_TYPE_SEGFULL) {
-        printf("new segment\n");
-        struct segment_header* segment = new_segment(&ia, false);
-        if(segment == NULL) {
-            printf("Fail to allocate new segment.\n");
-            exit(-1);
-        }
-        send_cq(tid, CQE_TYPE_LOG, get_pointer_offset(segment->data), segment->size, 0);
-
-        // TODO: what to do with full segment?
-        eqe_seg_full* e_full = (eqe_seg_full*) e;
-        ialloc_nicsegment_full(e_full->last);
-      }
-      release((q_entry *) e);
-      clean_log(&ia, false);
-      //clean_cq(tid);
-      bool cleaning = true;
-      while(cleaning) { cleaning = clean_cq(tid); }
-      //usleep(10);
+    process_eq(tid);
+    clean_log(&ia, true);
+    bool cleaning = true;
+    while(cleaning) { cleaning = clean_cq(tid); }
   }
 }
 

@@ -65,7 +65,7 @@ class TestPipelineState(unittest.TestCase):
         )
 
         gen = program_to_graph_pass(p)
-        pipeline_state_pass(gen, check=False)
+        pipeline_state_pass(gen)
         g = gen.graph
 
         self.check_live_all(g, [("e1", ["b"]), ("e2", ["a", "b"])])
@@ -97,7 +97,7 @@ class TestPipelineState(unittest.TestCase):
         )
 
         gen = program_to_graph_pass(p)
-        pipeline_state_pass(gen, check=False)
+        pipeline_state_pass(gen)
         g = gen.graph
 
         self.check_live_all(g, [("e1", ["a"]), ("e2", ["a", "b"])])
@@ -137,7 +137,7 @@ class TestPipelineState(unittest.TestCase):
         )
 
         gen = program_to_graph_pass(p)
-        pipeline_state_pass(gen, check=False)
+        pipeline_state_pass(gen)
         g = gen.graph
 
         self.check_live_all(g, [("fork1", ["a"]), ("fork2", ["a"]), ("join", ["a"]), ("use", ["a"]), ("def", [])])
@@ -178,7 +178,7 @@ class TestPipelineState(unittest.TestCase):
         )
 
         gen = program_to_graph_pass(p)
-        pipeline_state_pass(gen, check=False)
+        pipeline_state_pass(gen)
         g = gen.graph
 
         self.check_live_all(g, [("choice", ["a"]), ("nop1", ["a"]), ("nop2", ["a"]), ("use", ["a"]), ("def", [])])
@@ -222,7 +222,7 @@ class TestPipelineState(unittest.TestCase):
         )
 
         gen = program_to_graph_pass(p)
-        pipeline_state_pass(gen, check=False)
+        pipeline_state_pass(gen)
         g = gen.graph
 
         self.check_live_all(g, [("fork", []), ("defA", []), ("defB", []), ("join", ["a", "b"]), ("use", ["a", "b"])])
@@ -282,7 +282,7 @@ class TestPipelineState(unittest.TestCase):
         )
 
         gen = program_to_graph_pass(p)
-        pipeline_state_pass(gen, check=False)
+        pipeline_state_pass(gen)
         g = gen.graph
 
         self.check_live_all(g, [("a", ["b"]),
@@ -355,7 +355,7 @@ class TestPipelineState(unittest.TestCase):
         )
 
         gen = program_to_graph_pass(p)
-        pipeline_state_pass(gen, check=False)
+        pipeline_state_pass(gen)
         g = gen.graph
 
         self.check_live_all(g, [("a", ["b", "c"]),
@@ -646,7 +646,7 @@ class TestPipelineState(unittest.TestCase):
 
         gen = program_to_graph_pass(p)
         gen.graph.state_mapping = {'mystate': {'a': ('int', None, None, None)}}
-        pipeline_state_pass(gen, check=False)
+        pipeline_state_pass(gen)
         g = gen.graph
 
         #g.print_graphviz()
@@ -719,7 +719,7 @@ class TestPipelineState(unittest.TestCase):
         gen = program_to_graph_pass(p)
         gen.graph.state_mapping = {'mystate': {'a': ('int', None, None, None)}}
         try:
-            pipeline_state_pass(gen, check=False)
+            pipeline_state_pass(gen)
         except Exception as e:
             self.assertNotEqual(e.message.find("Cannot insert dequeue release automatically"), -1)
         else:
