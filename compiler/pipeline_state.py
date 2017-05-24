@@ -680,8 +680,8 @@ def compile_smart_queue(g, q, src2fields):
             g.newElementInstance(inst.element, inst.name, inst.args)
             g.set_thread(inst.name, enq_thread)
             instance = g.instances[inst.name]
-            instance.liveness = set()
-            instance.uses = set()
+            instance.liveness = live
+            instance.uses = uses
 
         # Create deq instances
         save_inst = ElementInstance(save.name, save.name + "_inst")

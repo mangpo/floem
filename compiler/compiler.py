@@ -195,7 +195,11 @@ def element_to_function(instance, state_rename, graph, ext):
         while not(match):
             m = re.search(port + '[ ]*\(([^\)]*)\)',src[index:])
             if m == None:
-                raise Exception("Element '%s' never gets data from input port '%s'." % (funcname,port))
+                if len(argtypes) > 0:
+                    raise Exception("Element '%s' never gets data from input port '%s'." % (funcname,port))
+                else:
+                    break
+
             p = m.start(0)
             if p == 0 or re.search('[^a-zA-Z0-9_]',src[p-1]):
                 check_no_args(m.group(1))
@@ -311,7 +315,8 @@ def element_to_function(instance, state_rename, graph, ext):
         args.append("%s* _p_%s" % (get_join_buffer_name(join), join))
     # Normal args
     for port in inports:
-        args = args + port2args[port.name]
+        if port.name in port2args:
+            args = args + port2args[port.name]
 
     # Code
     if instance.API_return:
