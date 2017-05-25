@@ -431,7 +431,7 @@ class TestPipelineState(unittest.TestCase):
         )
 
         gen = program_to_graph_pass(p)
-        analyze_pipeline_states(gen.graph, check=False)
+        analyze_pipeline_states(gen.graph)
         g = gen.graph
 
         self.check_live_all(g, [("save", []),
@@ -528,7 +528,7 @@ class TestPipelineState(unittest.TestCase):
         )
 
         gen = program_to_graph_pass(p)
-        analyze_pipeline_states(gen.graph, check=False)
+        analyze_pipeline_states(gen.graph)
         g = gen.graph
 
         self.check_live_all(g, [("save", []),
@@ -570,7 +570,7 @@ class TestPipelineState(unittest.TestCase):
             PipelineState("save", "mystate"))
 
         gen = program_to_graph_pass(p)
-        analyze_pipeline_states(gen.graph, check=False)
+        analyze_pipeline_states(gen.graph)
         g = gen.graph
 
         self.check_live_all(g, [("save", [])])
@@ -650,9 +650,9 @@ class TestPipelineState(unittest.TestCase):
         g = gen.graph
 
         #g.print_graphviz()
-        deq_release = g.instances["_smart_queue_dequeue_release2"]
-        name, port = deq_release.input2ele["in"][0]
-        self.assertEqual(name, "myfork_merge2")
+        deq_release = g.instances["smart_deq_release"]
+        prevs = set([name for name, port in deq_release.input2ele["in"]])
+        self.assertEqual(prevs, set(["smart_deq_classify_inst", "myfork_merge2"]))
 
         merges = set()
         myfork_merge2 = g.instances["myfork_merge2"]

@@ -4,6 +4,7 @@ import queue_smart
 state = create_state("mystate", "int core; int keylen; uint8_t *key @copysize(state.keylen);")
 save = create_element_instance("save", [Port("in", ["int", "uint8_t"])], [Port("out", [])],
     r'''(int len, uint8_t data) = in();
+    state.core = 0;
     state.key = (uint8_t *) malloc(len);
     state.keylen = len;
     for(int i=0; i<len ; i++)

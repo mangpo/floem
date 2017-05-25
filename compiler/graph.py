@@ -269,6 +269,16 @@ class ElementNode:
         self.extras = set()
         self.special_fields = {}
 
+    def deep_clone(self, suffix):
+        new_element = self.element.clone(self.element.name + suffix)
+        node = ElementNode(self.name + suffix, new_element, self.state_args)
+        node.thread = self.thread
+        node.process = self.process
+        node.liveness = self.liveness
+        node.uses = self.uses
+        node.extras = self.extras
+        return node
+
     def __str__(self):
         return self.element.name + "::" + self.name + "---OUT[" + str(self.output2ele) + "]" + "---IN[" + str(self.input2ele) + "]"
 
@@ -526,6 +536,13 @@ class Graph:
 
         return ret
 
+    def copy_node_and_element(self, inst_name, suffix):
+        instance = self.instances[inst_name]
+        new_instance = instance.deep_clone(suffix)
+        new_element = new_instance.element
+        self.instances[new_instance.name] = new_instance
+        self.elements[new_element.name] = new_element
+
     def connect(self, name1, name2, out1=None, in2=None, overwrite=False):
         i1 = self.instances[name1]
         i2 = self.instances[name2]
@@ -574,6 +591,14 @@ class Graph:
             for port_name in in2:
                 i2.connect_input_port(port_name, i1.name, out1)
 
+    def disconnect(self, name1, name2, out1, in2):
+        i1 = self.instances[name1]
+        i2 = self.instances[name2]
+
+        del i1.output2ele[out1]
+        i2.input2ele[in2].remove((name1, out1))
+        print name1
+
     def delete_instance(self, name):
         instance = self.instances[name]
         del self.instances[name]
@@ -597,6 +622,7 @@ class Graph:
                 del other.input2ele[next_port]
             else:
                 other.input2ele[next_port] = new_l
+
 
     def get_thread_of(self, name):
         return self.instances[name].thread

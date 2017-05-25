@@ -26,6 +26,10 @@ def merge_as_join(g, nodes, name, prefix):
     new_inst_name = name + "_merge%d" % n
     g.addElement(join)
     g.newElementInstance(join.name, prefix + new_inst_name, [])
+    instance = g.instances[prefix + new_inst_name]
+    instance.liveness = set()
+    instance.uses = set()
+    instance.extras = set()
 
     i = 0
     for instance in nodes:
@@ -45,6 +49,10 @@ def merge_as_no_join(g, nodes, name, prefix):
     new_inst_name = name + "_merge"
     g.addElement(join)
     g.newElementInstance(join.name, prefix + new_inst_name, [])
+    instance = g.instances[prefix + new_inst_name]
+    instance.liveness = set()
+    instance.uses = set()
+    instance.extras = set()
 
     for instance in nodes:
         add_release_port(g, instance)
