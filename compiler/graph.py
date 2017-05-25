@@ -266,8 +266,8 @@ class ElementNode:
         self.passing_nodes = None
         self.dominant2kills = {}
         self.uses = None
-        self.extras = None
-        self.special_fields = None
+        self.extras = set()
+        self.special_fields = {}
 
     def __str__(self):
         return self.element.name + "::" + self.name + "---OUT[" + str(self.output2ele) + "]" + "---IN[" + str(self.input2ele) + "]"
@@ -397,7 +397,7 @@ class Graph:
         self.master_process = default_process
 
         # Per-packet state
-        self.pipeline_states = []
+        self.pipeline_states = {}
         self.state_mapping = None
 
     def __str__(self):
@@ -605,7 +605,10 @@ class Graph:
         self.instances[name].thread = t
 
     def add_pipeline_state(self, inst_name, state_name):
-        self.pipeline_states.append((inst_name, state_name))
+        assert inst_name not in self.pipeline_states, \
+            "Element instance '%s' was assigned to pipeline state '%s', but it is again assigned to '%s'." \
+            % (inst_name, self.pipeline_states[inst_name], state_name)
+        self.pipeline_states[inst_name] = state_name
 
     def get_identity_element(self, argtypes):
         name = "_identity_" + "_".join(argtypes)

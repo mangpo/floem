@@ -51,13 +51,10 @@ static size_t clean_log(struct item_allocator *ia, bool idle)
 
 void run_app(void *threadid) {
   long tid = (long)threadid;
-
-  // init worker
   struct item_allocator ia;
   ialloc_init_allocator(&ia);
   iallocs[tid] = &ia;
-  // pass ia->cur to NIC
-  send_cq(tid, CQE_TYPE_LOG, get_pointer_offset(ia.cur->data), ia.cur->size, 0);
+  init_segment(tid, &ia);
 
   printf("Worker %ld starting\n", tid);
 

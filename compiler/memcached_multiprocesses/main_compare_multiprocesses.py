@@ -348,6 +348,7 @@ get_item_creator = create_element("get_item_creator",
         this->segbase = this->next->segbase;
         this->seglen = this->next->seglen;
         this->offset = this->next->offset;
+        //free(this->next);
         this->next = this->next->next;
         // Assume that the next one is not full.
         it = segment_item_alloc(this->segbase, this->seglen, &this->offset, sizeof(item) + totlen);
@@ -388,7 +389,7 @@ add_logseg_creator = create_element("add_logseg_creator",
                    [Port("in", ["cqe_add_logseg*"])], [Port("out", ["q_entry*"])],
                    r'''
     (cqe_add_logseg* e) = in();
-    if(this->segbase) {
+    if(last->holder != NULL) {
         struct _segments_holder* holder = (struct _segments_holder*) malloc(sizeof(struct _segments_holder));
         holder->segbase = e->segbase;
         holder->seglen = e->seglen;

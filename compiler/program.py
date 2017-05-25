@@ -333,7 +333,7 @@ class GraphGenerator:
             inst_name = get_node_name(self.get_instance_stack(x.instance), x.instance)
             resource_name = self.get_resource(x.resource)
             instance = self.graph.instances[inst_name]
-            if instance.thread and resource_name is not instance.thread:
+            if instance.thread and resource_name is not instance.thread and not instance.element.special:
                 raise Exception("Element instance '%s' cannot be mapped to both '%s' and '%s'."
                                 % (x.instance, instance.thread, resource_name))
             instance.thread = resource_name

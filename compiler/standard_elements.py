@@ -20,7 +20,10 @@ def Fork_multi_values(name, n, types):
     args_str = ",".join(args)
     outports = [Port("out%d" % (i + 1), types) for i in range(n)]
     calls = ["out%d(%s);" % ((i + 1), args_str) for i in range(n)]
-    src = "(%s) = in(); output { %s }" % (",".join(types_args), " ".join(calls))
+    if len(types) == 0:
+        src = "output { %s }" % (" ".join(calls))
+    else:
+        src = "(%s) = in(); output { %s }" % (",".join(types_args), " ".join(calls))
     return Element(name, [Port("in", types)], outports, src)
 
 

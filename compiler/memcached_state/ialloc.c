@@ -314,6 +314,12 @@ item *segment_item_alloc_pointer(struct segment_header *h, size_t total)
     return it;
 }
 
+//struct item_allocator *init_allocator() {
+//  struct item_allocator *ia = (struct item_allocator *) malloc(sizeof(struct item_allocator));
+//  ialloc_init_allocator(ia);
+//  return ia;
+//}
+
 
 void ialloc_init_allocator(struct item_allocator *ia)
 {

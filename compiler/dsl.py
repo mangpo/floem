@@ -1081,13 +1081,13 @@ class Compiler:
         compiler.generate_code(self.generate_graph(), ".c", self.testing, self.include)
 
     def generate_code_and_run(self, expect=None):
-        compiler.generate_code_and_run(self.generate_graph(), self.testing, expect, self.include, self.depend, self.I)
+        compiler.generate_code_and_run(self.generate_graph(), self.testing, self.desugar_mode, expect, self.include, self.depend)
 
     def generate_code_and_compile(self):
-        compiler.generate_code_and_compile(self.generate_graph(), self.testing, self.include, self.depend, self.I)
+        compiler.generate_code_and_compile(self.generate_graph(), self.testing, self.desugar_mode, self.include, self.depend)
 
     def generate_code_as_header(self, header='tmp'):
-        compiler.generate_code_as_header(self.generate_graph(header), self.testing, self.include, header)
+        compiler.generate_code_as_header(self.generate_graph(header), self.testing, self.desugar_mode, self.include)
 
     def compile_and_run(self, name):
         compiler.compile_and_run(name, self.depend)

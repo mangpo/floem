@@ -132,6 +132,7 @@ struct item_allocator {
 //void ialloc_init_slave(void);
 //void ialloc_finalize(void);
 //void ialloc_finalize_slave(void);
+uint64_t get_pointer_offset(void* p);
 void ialloc_init(void*);
 
 /** Initialize an item allocator instance. */
@@ -288,6 +289,7 @@ static iokvs_message* random_get_request(size_t v, size_t id) {
   iokvs_message *m = (iokvs_message *) malloc(sizeof(iokvs_message) + extlen + keylen);
   m->mcr.request.opcode = PROTOCOL_BINARY_CMD_GET;
   m->mcr.request.magic = id; // PROTOCOL_BINARY_REQ
+  m->mcr.request.opaque = id; // PROTOCOL_BINARY_REQ
   m->mcr.request.keylen = keylen;
   m->mcr.request.datatype = PROTOCOL_BINARY_RAW_BYTES;
   m->mcr.request.status = 0;
@@ -311,6 +313,7 @@ static iokvs_message* random_set_request(size_t v, size_t id) {
   iokvs_message *m = (iokvs_message *) malloc(sizeof(iokvs_message) + extlen + keylen + vallen);
   m->mcr.request.opcode = PROTOCOL_BINARY_CMD_SET;
   m->mcr.request.magic = id; // PROTOCOL_BINARY_REQ
+  m->mcr.request.opaque = id; // PROTOCOL_BINARY_REQ
   m->mcr.request.keylen = keylen;
   m->mcr.request.datatype = PROTOCOL_BINARY_RAW_BYTES;
   m->mcr.request.status = 0;
@@ -355,7 +358,7 @@ static void cmp_func(int spec_n, iokvs_message **spec_data, int impl_n, iokvs_me
     for(int j=0; j<impl_n; j++) {
         iokvs_message *my = impl_data[j];
         if(ref->mcr.request.opcode == PROTOCOL_BINARY_CMD_GET && my->mcr.request.opcode == PROTOCOL_BINARY_CMD_GET) {
-            if(ref->mcr.request.magic == my->mcr.request.magic
+            if(ref->mcr.request.opaque == my->mcr.request.opaque
             && ref->mcr.request.extlen == my->mcr.request.extlen
             && ref->mcr.request.bodylen == my->mcr.request.bodylen) {
               int vallen = ref->mcr.request.bodylen - 4;
@@ -375,7 +378,7 @@ static void cmp_func(int spec_n, iokvs_message **spec_data, int impl_n, iokvs_me
             }
         }
         else if (ref->mcr.request.opcode == PROTOCOL_BINARY_CMD_SET && my->mcr.request.opcode == PROTOCOL_BINARY_CMD_SET) {
-            if(ref->mcr.request.magic == my->mcr.request.magic
+            if(ref->mcr.request.opaque == my->mcr.request.opaque
             && ref->mcr.request.extlen == my->mcr.request.extlen
             && ref->mcr.request.bodylen == my->mcr.request.bodylen) {
                 found = true;
@@ -385,7 +388,7 @@ static void cmp_func(int spec_n, iokvs_message **spec_data, int impl_n, iokvs_me
           // TODO: continue
     }
     if(!found) {
-        printf("Impl doesn't have a response for %d, %d, %ld, %ld.\n", ref->mcr.request.opcode, ref->mcr.request.magic, ref->mcr.request.extlen, ref->mcr.request.bodylen);
+        printf("Impl doesn't have a response for %d, %d, %ld, %ld.\n", ref->mcr.request.opcode, ref->mcr.request.opaque, ref->mcr.request.extlen, ref->mcr.request.bodylen);
         //printf("Impl doesn't have some responses.");
         exit(-1);
     }

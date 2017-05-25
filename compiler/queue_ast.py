@@ -70,13 +70,13 @@ def circular_queue_variablesize_one2many(name, size, n_cores):
            ''')
 
     Dequeue_get = Element(prefix + "dequeue_get_ele",
-                             [Port("in", ["size_t"])], [Port("out", ["q_entry*"])],
+                             [Port("in", ["size_t"])], [Port("out", ["q_entry*", "size_t"])],
                              r'''
         (size_t c) = in();
         circular_queue *q = this->cores[c];
         q_entry* x = dequeue_get(q);
         //if(c == 3) printf("DEQ core=%ld, queue=%p, entry=%ld\n", c, q->queue, x);
-        output { out(x); }
+        output { out(x, c); }
            ''', None, [(all_name, "this")])
 
     Dequeue_release = Element(prefix + "dequeue_release_ele",

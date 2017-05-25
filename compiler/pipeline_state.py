@@ -5,14 +5,12 @@ from join_handling import annotate_join_info
 
 
 def allocate_pipeline_state(element, state):
-    add = '  {0} *_state = ({0} *) malloc(sizeof({0}));\n'.format(state)
+    add = "  {0} *_state = ({0} *) malloc(sizeof({0}));\n".format(state)
     element.code = add + element.code
 
 
 def insert_pipeline_state(element, state, start, instance, g):
     no_state = True
-    if element.name == "_impl_prepare_get_response_release_version":
-        print element
     if not start:
         for port in element.inports:
             if len(port.argtypes) == 0:
@@ -42,6 +40,9 @@ def insert_pipeline_state(element, state, start, instance, g):
                         case, code = element.output_code[i]
                         m = re.search(port.name + '\(', code)
                         if m:
+                            m2 = re.search(port.name + '\([ ]*\)', code)
+                            assert m2, "Output port '%s' of element '%s' takes no argument, but it is called with argument(s): %s." \
+                                       % (port.name, element.name, code)
                             code = code[:m.end(0)] + '_state' + code[m.end(0):]
                             element.output_code[i] = (case, code)
 
@@ -120,31 +121,34 @@ def replace_states(element, live, extras, special_fields, src2fields):
     for var in special_fields:
         replace_var(element, var, src2fields, "")
 
+    if element.name.find("filter_full") >= 0:
+        print element
 
-def rename_references(g, src2fields):
+
+def rename_entry_references(g, src2fields):
     ele2inst = {}
     for instance in g.instances.values():
         if instance.element.name not in ele2inst:
             ele2inst[instance.element.name] = []
         ele2inst[instance.element.name].append(instance)
 
-    for start_name, state in g.pipeline_states:
+    for start_name in g.pipeline_states:
         instance = g.instances[start_name]
-        if instance.extras is not None:
-            subgraph = set()
-            g.find_subgraph(start_name, subgraph)
+        # if instance.extras is not None:
+        subgraph = set()
+        g.find_subgraph(start_name, subgraph)
 
-            for inst_name in subgraph:
-                child = g.instances[inst_name]
-                element = child.element
-                if need_replacement(element, instance.liveness, instance.extras):
-                    if len(ele2inst[element.name]) == 1:
-                        replace_states(element, instance.liveness, instance.extras, instance.special_fields, src2fields)
-                    else:
-                        new_element = element.clone(inst_name + "_with_state_at_" + instance.name)
-                        replace_states(new_element, instance.liveness, instance.extras, instance.special_fields, src2fields)
-                        g.addElement(new_element)
-                        child.element = new_element
+        for inst_name in subgraph:
+            child = g.instances[inst_name]
+            element = child.element
+            if need_replacement(element, instance.liveness, instance.extras):
+                if len(ele2inst[element.name]) == 1:
+                    replace_states(element, instance.liveness, instance.extras, instance.special_fields, src2fields)
+                else:
+                    new_element = element.clone(inst_name + "_with_state_at_" + instance.name)
+                    replace_states(new_element, instance.liveness, instance.extras, instance.special_fields, src2fields)
+                    g.addElement(new_element)
+                    child.element = new_element
 
 
 def code_change(instance):
@@ -168,7 +172,7 @@ def duplicate_instances(g):
     for instance in g.instances.values():
         parents[instance.name] = []
 
-    for start_name, state in g.pipeline_states:
+    for start_name in g.pipeline_states:
         subgraph = set()
         g.find_subgraph(start_name, subgraph)
 
@@ -197,7 +201,8 @@ def insert_pipeline_states(g):
             ele2inst[instance.element.name] = []
         ele2inst[instance.element.name].append(instance)
 
-    for start_name, state in g.pipeline_states:
+    for start_name in g.pipeline_states:
+        state = g.pipeline_states[start_name]
         subgraph = set()
         g.find_subgraph(start_name, subgraph)
 
@@ -329,10 +334,10 @@ def analyze_fields_liveness_instance(g, name, in_port):
             out_port = "out" + str(i)
             next_name, next_port = deq.output2ele[out_port]
             ret_live, ret_uses = analyze_fields_liveness_instance(g, next_name, next_port)
-            instance.liveness[i] = ret_live
-            instance.uses[i] = ret_live
             deq.liveness[i] = ret_live
             deq.uses[i] = ret_uses
+            instance.liveness[i] = ret_live.union(instance.element.uses)
+            instance.uses[i] = ret_live.union(instance.element.uses)
 
         return instance.liveness[no], instance.uses[no]
 
@@ -391,7 +396,8 @@ def check_pipeline_state_liveness(g):
     for instance in g.instances.values():
         if len(instance.input2ele) == 0 and instance.liveness:
             assert len(instance.liveness) == 0, \
-                ("Fields %s of a pipeline state should not be live at the beginning." % instance.liveness)
+                ("Fields %s of a pipeline state should not be live at the beginning at element instance '%s'." %
+                 (instance.liveness, instance.name))
 
 
 def join_collect_killset(g, inst_name, target, inst2kill, scope):
@@ -437,7 +443,8 @@ def compute_join_killset(g):
 
 
 def find_pipeline_state(g, instance):
-    for start_name, state in g.pipeline_states:
+    for start_name in g.pipeline_states:
+        state = g.pipeline_states[start_name]
         subgraph = set()
         g.find_subgraph(start_name, subgraph)
 
@@ -452,6 +459,7 @@ def get_entry_content(vars, pipeline_state, state_mapping, src2fields):
     for var in vars:
         fields = src2fields[var]
         current_type = pipeline_state
+        current_info = None
         for field in fields:
             if current_type[-1] == "*":
                 current_type = current_type.rstrip('*').rstrip()
@@ -461,19 +469,25 @@ def get_entry_content(vars, pipeline_state, state_mapping, src2fields):
             except KeyError:
                 raise Exception("Undefined state type '%s'." % current_type)
             try:
-                current_type = mapping[field][0]
+                current_info = mapping[field]
+                current_type = current_info[0]
             except KeyError:
                 raise Exception("Field '%s' is undefined in state type '%s'." % (field, current_type))
-        if current_type[2] is None:
-            content += "%s %s; " % (current_type[0], fields[-1])
-        elif current_type[2] is "shared":
+
+        annotation = current_info[2]
+        if annotation is None:
+            content += "%s %s; " % (current_type, fields[-1])
+        elif annotation is "shared":
             content += "uint64_t %s; " % fields[-1]  # convert pointer to number
-            special[var] = (current_type[0], fields[-1], "shared", current_type[3])
-        elif current_type[2] is "copysize":
+            special[var] = (current_type, fields[-1], "shared", current_info[3])
+        elif annotation is "copysize":
             if end is not "":
                 raise Exception("Currently do not support copying multiple variable-length fields over smart queue.")
             end = "uint8_t %s[]; " % fields[-1]
-            special[var] = (current_type[0], fields[-1], "copysize", current_type[3])
+            special[var] = (current_type, fields[-1], "copysize", current_info[3])
+        else:
+            raise Exception("Unknown type annotation '%s' for field '%s' of type '%s'." %
+                            (annotation, fields[-1], current_type))
     return content + end, special
 
 
@@ -504,6 +518,13 @@ def compile_smart_queue(g, q, src2fields):
     enq_thread = g.get_thread_of(q.enq.name)
     deq_thread = g.get_thread_of(q.deq.name)
 
+    if re.match("_impl", q.enq.name):
+        prefix = "_impl_"
+    elif re.match("_spec", q.enq.name):
+        prefix = "_spec_"
+    else:
+        prefix = ""
+
     if isinstance(q, queue_ast.QueueVariableSizeOne2Many):
         states, state_insts, elements, enq_alloc, enq_submit, deq_get, deq_release = \
             queue_ast.circular_queue_variablesize_one2many(q.name, q.size, q.n_cores)
@@ -521,32 +542,40 @@ def compile_smart_queue(g, q, src2fields):
     for state_inst in state_insts:
         g.newStateInstance(state_inst.state, state_inst.name, state_inst.init)
 
+    if isinstance(q, queue_ast.QueueVariableSizeOne2Many):
+        deq_types = ["q_entry*", "size_t"]
+        deq_src_in = "(q_entry* e, size_t core) = in();"
+        deq_args_out = "e,core"
+    elif isinstance(q, queue_ast.QueueVariableSizeMany2One):
+        deq_types = ["q_entry*"]
+        deq_src_in = "(q_entry* e) = in();"
+        deq_args_out = "e"
+
     src_cases = ""
     for i in range(q.n_cases):
-        src_cases += "    case (type == %d): out%d(e);\n" % (i+1, i)
+        src_cases += "    case (type == %d): out%d(%s);\n" % (i + 1, i, deq_args_out)
     classify_ele = Element(q.deq.name + "_classify",
-                           [Port("in", ["q_entry*"])],
-                           [Port("out" + str(i), ["q_entry*"]) for i in range(q.n_cases)],
+                           [Port("in", deq_types)],
+                           [Port("out" + str(i), deq_types) for i in range(q.n_cases)],
                            r'''
-        (q_entry* e) = in();
+        %s
         uint16_t type = 0;
         if (e != NULL) type = (e->flags & TYPE_MASK) >> TYPE_SHIFT;
         output switch {
             %s
-        }''' % (src_cases))
+        }''' % (deq_src_in, src_cases))
 
     elements.append(classify_ele)
     for element in elements:
         g.addElement(element)
 
-    enq_submit_inst = enq_submit()
-    deq_get_inst = deq_get()
-    deq_release_inst = deq_release()
+    deq_get_inst = deq_get(q.deq.name + "_get")
+    deq_release_inst = deq_release(q.deq.name + "_release")
     classify_inst = ElementInstance(classify_ele.name, classify_ele.name + "_inst")
-    new_instances = [enq_submit_inst, deq_get_inst, deq_release_inst, classify_inst]
+    new_instances = [deq_get_inst, deq_release_inst, classify_inst]
 
     if scan:
-        scan_inst = scan()
+        scan_inst = scan(q.enq.name + "_scan")
         scan_classify_inst = ElementInstance(classify_ele.name, classify_ele.name + "_scan_inst")
         new_instances.append(scan_inst)
         new_instances.append(scan_classify_inst)
@@ -563,7 +592,6 @@ def compile_smart_queue(g, q, src2fields):
         g.connect(scan_inst.name, scan_classify_inst.name)
 
     # Resource
-    g.set_thread(enq_submit_inst.name, enq_thread)
     g.set_thread(deq_get_inst.name, deq_thread)
     g.set_thread(classify_inst.name, deq_thread)
     g.set_thread(deq_release_inst.name, deq_thread)
@@ -610,6 +638,10 @@ def compile_smart_queue(g, q, src2fields):
         uses = q.deq.uses[i]
         extras = uses.difference(live)
 
+        if isinstance(q, queue_ast.QueueVariableSizeOne2Many) and 'core' in live:
+            live = live.difference(set(['core']))
+            extras.add('core')
+
         ins = ins_map[i]
         out = out_map[i]
 
@@ -653,7 +685,10 @@ def compile_smart_queue(g, q, src2fields):
                        [Port("out_size_core", []), Port("out_fill", [])],
                        r'''output { out_size_core(); out_fill(); }''')
 
-        save_src = "state.entry = (%s *) in();\n" % state_entry.name
+        save_src = deq_src_in
+        if isinstance(q, queue_ast.QueueVariableSizeOne2Many) and 'core' in live:
+                save_src += "state.core = core;\n"
+        save_src += "state.entry = ({0} *) e;\n".format(state_entry.name)
         for var in special:
             t, name, special_t, info = special[var]
             if special_t == "shared":
@@ -661,30 +696,46 @@ def compile_smart_queue(g, q, src2fields):
             elif special_t == "copysize":
                 save_src += "state.{0} = state.entry->{0};\n".format(name)
         save_src += "output { out(); }\n"
-        save = Element(q.name + "_save" + str(i),
-                       [Port("in", ["q_entry*"])],
-                       [Port("out", [])],
-                       save_src)
+        save = Element(q.name + "_save" + str(i), [Port("in", deq_types)], [Port("out", [])], save_src)
         g.addElement(size_core_ele)
         g.addElement(fill_ele)
         g.addElement(fork)
         g.addElement(save)
 
-        # Create enq instances
-        enq_alloc_inst = enq_alloc(q.name + "_enq_alloc" + str(i))
-        size_core = ElementInstance(size_core_ele.name, size_core_ele.name + "_inst")
-        fill_inst = ElementInstance(fill_ele.name, fill_ele.name + "_inst")
-        fork_inst = ElementInstance(fork.name, fork.name + "_inst")
-        new_instances = [enq_alloc_inst, size_core, fill_inst, fork_inst]
-        for inst in new_instances:
-            g.newElementInstance(inst.element, inst.name, inst.args)
-            g.set_thread(inst.name, enq_thread)
-            instance = g.instances[inst.name]
-            instance.liveness = live
-            instance.uses = uses
+        # Enqueue
+        for in_inst, in_port in ins:
+            in_thread = g.instances[in_inst].thread
+
+            # Enqueue instances
+            enq_alloc_inst = enq_alloc(prefix + q.name + "_enq_alloc" + str(i) + "_from_" + in_inst)
+            enq_submit_inst = enq_submit(prefix + q.name + "_enq_submit" + str(i) + "_from_" + in_inst)
+            size_core = ElementInstance(size_core_ele.name, prefix + size_core_ele.name + "_from_" + in_inst)
+            fill_inst = ElementInstance(fill_ele.name, prefix + fill_ele.name + "_from_" + in_inst)
+            fork_inst = ElementInstance(fork.name, prefix + fork.name + "_from_" + in_inst)
+            new_instances = [enq_alloc_inst, size_core, fill_inst, fork_inst]
+            for inst in new_instances:
+                g.newElementInstance(inst.element, inst.name, inst.args)
+                g.set_thread(inst.name, in_thread)
+                instance = g.instances[inst.name]
+                instance.liveness = live
+                instance.uses = uses
+
+            g.newElementInstance(enq_submit_inst.element, enq_submit_inst.name, enq_submit_inst.args)
+            g.set_thread(enq_submit_inst.name, in_thread)
+            instance = g.instances[enq_submit_inst.name]
+            instance.liveness = set()
+            instance.uses = set()
+
+            # Enqueue connection
+            g.connect(in_inst, fork_inst.name, in_port)
+            g.connect(fork_inst.name, size_core.name, "out_size_core")
+            g.connect(size_core.name, enq_alloc_inst.name)
+            g.connect(enq_alloc_inst.name, fill_inst.name, "out", "in_entry")
+            g.connect(fork_inst.name, fill_inst.name, "out_fill", "in_pkt")
+            g.connect(fill_inst.name, enq_submit_inst.name)
 
         # Create deq instances
-        save_inst = ElementInstance(save.name, save.name + "_inst")
+        save_inst = ElementInstance(save.name, prefix + save.name + "_inst")
         g.newElementInstance(save_inst.element, save_inst.name, save_inst.args)
         g.set_thread(save_inst.name, deq_thread)
 
@@ -696,28 +747,18 @@ def compile_smart_queue(g, q, src2fields):
         save_inst.extras = extras
         save_inst.special_fields = special
 
-        # Enqueue connection
-        for in_inst, in_port in ins:
-            g.connect(in_inst, fork_inst.name, in_port)
-
-        g.connect(fork_inst.name, size_core.name, "out_size_core")
-        g.connect(size_core.name, enq_alloc_inst.name)
-        g.connect(enq_alloc_inst.name, fill_inst.name, "out", "in_entry")
-        g.connect(fork_inst.name, fill_inst.name, "out_fill", "in_pkt")
-        g.connect(fill_inst.name, enq_submit_inst.name)
-
         # Dequeue connection
         out_inst, out_port = out
         g.connect(classify_inst.name, save_inst.name, "out" + str(i))  # TODO: check else case
         g.connect(save_inst.name, out_inst, "out", out_port)
 
         # Dequeue release connection
-        node = get_node_before_release(out_inst, g, live)
+        node = get_node_before_release(out_inst, g, live, prefix)
         g.connect(node.name, deq_release_inst.name, "release")
 
         if scan:
             # Create scan save
-            scan_save_inst = ElementInstance(save.name, save.name + "_scan_inst")
+            scan_save_inst = ElementInstance(save.name, prefix + save.name + "_scan_inst")
             g.newElementInstance(scan_save_inst.element, scan_save_inst.name, scan_save_inst.args)
             g.set_thread(scan_save_inst.name, scan_thread)
 
@@ -776,5 +817,7 @@ def compile_pipeline_states(g):
 
     src2fields = analyze_pipeline_states(g)
     compile_smart_queues(g, src2fields)
-    rename_references(g, src2fields)  # for state.entry
+    print "------------------------------------------"
+    g.print_graphviz()
+    rename_entry_references(g, src2fields)  # for state.entry
     insert_pipeline_states(g)

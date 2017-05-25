@@ -2,7 +2,7 @@ from program import *
 from join_handling import get_join_buffer_name, annotate_join_info, clean_minimal_join_info
 from api_handling import annotate_api_info
 from process_handling import annotate_process_info
-from pipeline_state import compile_pipeline_states
+from pipeline_state import compile_pipeline_states, check_pipeline_state_liveness
 import re, sys, os, subprocess, time
 from contextlib import contextmanager
 
@@ -690,6 +690,8 @@ def join_and_resource_annotation_pass(gen, resource, remove_unused):
     if remove_unused:
         gen.graph.remove_unused_states()
 
+    check_pipeline_state_liveness(gen.graph)
+
 
 def generate_graph(program, resource=True, remove_unused=False, default_process="tmp", state_mapping=None):
     """
@@ -795,7 +797,7 @@ def internal_thread_code(forever, graph):
 #     if process in graph.state_instances[state_instance].processes:
 #         inject = injects[state_instance]
 
-def generate_internal_triggers_with_process(graph, process, ext):
+def generate_internal_triggers_with_process(graph, process, ext, mode):
     threads_internal = set([trigger.call_instance for trigger in graph.threads_internal])
     threads_api = set([trigger.call_instance for trigger in graph.threads_API])
     injects = graph.inject_populates
@@ -811,7 +813,7 @@ def generate_internal_triggers_with_process(graph, process, ext):
         all_injects += [x for x in inject.spec_ele_instances if process == graph.instances[x].process]
         all_injects += [x for x in inject.impl_ele_instances if process == graph.instances[x].process]
 
-    spec_impl = is_spec_impl(threads_internal.union(all_injects))
+    #spec_impl = is_spec_impl(threads_internal.union(all_injects))
 
     forever = threads_internal.difference(all_injects)
     no_triggers = graph.threads_roots.difference(forever).difference(all_injects).difference(threads_api)
@@ -829,7 +831,7 @@ def generate_internal_triggers_with_process(graph, process, ext):
                     % (t, t, inst)
                 )
 
-    if not spec_impl:
+    if not mode == "compare":
         g1, r1, k1 = inject_thread_code(spec_injects + impl_injects)
         g2, r2, k2 = internal_thread_code(forever, graph)
         global_src = g1 + g2
@@ -857,9 +859,9 @@ def generate_internal_triggers_with_process(graph, process, ext):
         print global_src + run_src + kill_src
 
 
-def generate_internal_triggers(graph, ext):
+def generate_internal_triggers(graph, ext, mode):
     for process in graph.processes:
-        generate_internal_triggers_with_process(graph, process, ext)
+        generate_internal_triggers_with_process(graph, process, ext, mode)
 
 
 def generate_inject_probe_code_with_process(graph, process, ext):
@@ -1019,16 +1021,16 @@ def convert_type(result, expect):
         return result
 
 
-def generate_code_as_header(graph, testing, include=None, header='tmp.h'):
+def generate_code_as_header(graph, testing, mode, include=None):
     generate_code(graph, ".h", testing, include)
     generate_inject_probe_code(graph, ".h")
-    generate_internal_triggers(graph, ".h")
+    generate_internal_triggers(graph, ".h", mode)
 
 
-def generate_code_and_compile(graph, testing, include=None, depend=None, include_option=None):
+def generate_code_and_compile(graph, testing, mode, include=None, depend=None):
     generate_code(graph, ".c", testing, include)
     generate_inject_probe_code(graph, ".c")
-    generate_internal_triggers(graph, ".c")
+    generate_internal_triggers(graph, ".c", mode)
     generate_testing_code(graph, testing, ".c")
 
     extra = ""
@@ -1049,8 +1051,8 @@ def generate_code_and_compile(graph, testing, include=None, depend=None, include
             raise Exception("Compile error: " + cmd)
 
 
-def generate_code_and_run(graph, testing, expect=None, include=None, depend=None, include_option=None):
-    generate_code_and_compile(graph, testing, include, depend, include_option)
+def generate_code_and_run(graph, testing, mode, expect=None, include=None, depend=None):
+    generate_code_and_compile(graph, testing, mode, include, depend)
 
     if expect:
         assert (len(graph.processes) == 1 and graph.processes == set(["tmp"])), \
@@ -1098,14 +1100,14 @@ def compile_and_run(name, depend):
     if depend:
         for f in depend:
             extra += '%s.o ' % f
-            cmd = 'gcc -O3 -msse4.1 -I %s -c %s.c -lrt' % (common.dpdk_include, f)
+            cmd = 'gcc -O0 -g -msse4.1 -I %s -c %s.c -lrt' % (common.dpdk_include, f)
             #cmd = 'gcc -O3 -msse4.1 -I %s -c %s.c' % (common.dpdk_include, f)
             status = os.system(cmd)
             if not status == 0:
                 raise Exception("Compile error: " + cmd)
 
     if isinstance(name, str):
-        cmd = 'gcc -O3 -msse4.1 -I %s -pthread %s.c %s -o %s -lrt' % (common.dpdk_include, name, extra, name)
+        cmd = 'gcc -O0 -g -msse4.1 -I %s -pthread %s.c %s -o %s -lrt' % (common.dpdk_include, name, extra, name)
         #cmd = 'gcc -O3 -msse4.1 -I %s -pthread %s.c %s -o %s' % (common.dpdk_include, name, extra, name)
         print cmd
         status = os.system(cmd)
@@ -1119,7 +1121,7 @@ def compile_and_run(name, depend):
 
     elif isinstance(name, list):
         for f in name:
-            cmd = 'gcc -O3 -msse4.1 -I %s -pthread %s.c %s -o %s -lrt' % (common.dpdk_include, f, extra, f)
+            cmd = 'gcc -O0 -g -msse4.1 -I %s -pthread %s.c %s -o %s -lrt' % (common.dpdk_include, f, extra, f)
             #cmd = 'gcc -O3 -msse4.1 -I %s -pthread %s.c %s -o %s' % (common.dpdk_include, f, extra, f)
             print cmd
             status = os.system(cmd)

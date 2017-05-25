@@ -33,7 +33,7 @@ get_key = create_element_instance("GetKey",
               [Port("out", [])],
                r'''
 state.key = state.pkt->payload + state.pkt->mcr.request.extlen;
-state.keylen = state.pkt->mcr.request.keylen;
+//state.keylen = state.pkt->mcr.request.keylen;
 //printf("keylen = %s\n", len);
 output { out(); }
 ''' % '%ld')
@@ -81,8 +81,8 @@ prepare_get_response = create_element_instance("prepare_get_response",
                           [Port("in", [])],
                           [Port("out", ["iokvs_message*"])],
                           r'''
-iokvs_message *m = (iokvs_message *) malloc(sizeof(iokvs_message) + 4 + it->vallen);
 item* it = state.it;
+iokvs_message *m = (iokvs_message *) malloc(sizeof(iokvs_message) + 4 + it->vallen);
 m->mcr.request.opcode = PROTOCOL_BINARY_CMD_GET;
 m->mcr.request.magic = state.pkt->mcr.request.magic;
 m->mcr.request.opaque = state.pkt->mcr.request.opaque;
@@ -134,26 +134,45 @@ print_msg = create_element_instance("print_msg",
 
 ######################## log segment #######################
 
+item_allocators_creator = create_state("item_allocators", "struct item_allocator* ia[%d];" % n_cores)
+item_allocators = item_allocators_creator()
+
+
 filter_full = create_element_instance("filter_full",
                [Port("in", [])],
                [Port("out", [])],
                r'''
-output switch { case state.segfull: out(full); }
+output switch { case state.segfull: out(); }
                ''')
 
-new_segment = create_element_instance("create_new_segment",
+new_segment_creator = create_element("create_new_segment_creator",
               [Port("in", [])],
               [Port("out", [])],
                r'''
-struct segment_header* segment = new_segment(&ia, false);
+struct segment_header* segment = new_segment(this->ia[state.core], false);
 if(segment == NULL) {
     printf("Fail to allocate new segment.\n");
     exit(-1);
 }
 state.segbase = segment->data;
 state.seglen = segment->size;
+ialloc_nicsegment_full(state.segfull);
 output { out(); }
-''')
+''', None, [("item_allocators", "this")])
+new_segment = new_segment_creator("create_new_segment", [item_allocators])
+
+first_segment_creator = create_element("first_segment_creator",
+              [Port("in", ["size_t", "struct item_allocator*"])],
+              [Port("out", [])],
+               r'''
+(size_t core, struct item_allocator* ia) = in();
+this->ia[core] = ia;
+state.core = core;
+state.segbase = get_pointer_offset(ia->cur->data);
+state.seglen = ia->cur->size;
+output { out(); }
+''', None, [("item_allocators", "this")])
+first_segment = first_segment_creator("first_segment", [item_allocators])
 
 Segments = create_state("segments_holder",
                         "uint64_t segbase; uint64_t seglen; uint64_t offset; struct _segments_holder* next;",
@@ -168,13 +187,15 @@ last_segment = Last_segment()
 add_logseg_creator = create_element("add_logseg_creator",
                    [Port("in", [])], [],
                    r'''
-    if(this->segbase) {
+    if(last->holder != NULL) {
+        //printf("this (before): %u, base = %u\n", this, this->segbase);
         struct _segments_holder* holder = (struct _segments_holder*) malloc(sizeof(struct _segments_holder));
         holder->segbase = state.segbase;
         holder->seglen = state.seglen;
         holder->offset = 0;
         last->holder->next = holder;
         last->holder = holder;
+        //printf("this (after): %u, base = %u\n", this, this->segbase);
     }
     else {
         this->segbase = state.segbase;
@@ -189,6 +210,7 @@ add_logseg_creator = create_element("add_logseg_creator",
         count++;
         p = p->next;
     }
+    printf("addlog: new->segbase = %ld, cur->segbase = %ld\n", state.segbase, this->segbase);
     printf("logseg count = %d\n", count);
     ''', None, [("segments_holder", "this"), ("last_segment", "last")])
 add_logseg = add_logseg_creator("add_logseg", [segments, last_segment])
@@ -202,6 +224,7 @@ get_item_creator = create_element("get_item_creator",
     size_t totlen = state.pkt->mcr.request.bodylen - state.pkt->mcr.request.extlen;
 
     uint64_t full = 0;
+    printf("item_alloc: segbase = %ld\n", this->segbase);
     item *it = segment_item_alloc(this->segbase, this->seglen, &this->offset, sizeof(item) + totlen); // TODO
     if(it == NULL) {
         printf("Segment is full.\n");
@@ -209,13 +232,14 @@ get_item_creator = create_element("get_item_creator",
         this->segbase = this->next->segbase;
         this->seglen = this->next->seglen;
         this->offset = this->next->offset;
+        //free(this->next);
         this->next = this->next->next;
         // Assume that the next one is not full.
         it = segment_item_alloc(this->segbase, this->seglen, &this->offset, sizeof(item) + totlen);
     }
 
     printf("get_item id: %d, keylen: %ld, hash: %d, totlen: %ld, item: %ld\n",
-           m->mcr.request.opaque, state.pkt->mcr.request.keylen, state.hash, totlen, it);
+           state.pkt->mcr.request.opaque, state.pkt->mcr.request.keylen, state.hash, totlen, it);
     it->hv = state.hash;
     it->vallen = totlen - state.pkt->mcr.request.keylen;
     it->keylen = state.pkt->mcr.request.keylen;
@@ -232,19 +256,17 @@ get_item_spec = create_element_instance("get_item_spec",
                    [Port("in", [])],
                    [Port("out", [])],
                    r'''
-    (iokvs_message* m) = in_pkt();
-    (void* key, size_t keylen, uint32_t hash) = in_hash();
-    size_t totlen = m->mcr.request.bodylen - m->mcr.request.extlen;
+    size_t totlen = state.pkt->mcr.request.bodylen - state.pkt->mcr.request.extlen;
 
     item *it = (item *) malloc(sizeof(item) + totlen);
 
     //printf("get_item id: %d, keylen: %ld, hash: %d, totlen: %ld, item: %ld\n",
-             m->mcr.request.opaque, state.pkt->mcr.request.keylen, state.hash, totlen, it);
-    it->hv = hash;
-    it->vallen = totlen - keylen;
-    it->keylen = keylen;
+    //         state.pkt->mcr.request.opaque, state.pkt->mcr.request.keylen, state.hash, totlen, it);
+    it->hv = state.hash;
+    it->vallen = totlen - state.pkt->mcr.request.keylen;
+    it->keylen = state.pkt->mcr.request.keylen;
     it->refcount = 1;
-    rte_memcpy(item_key(it), key, totlen);
+    rte_memcpy(item_key(it), state.key, totlen);
     state.it = it;
 
     output { out(); }
@@ -275,6 +297,7 @@ uint32_t hash;
 uint64_t segfull;
 uint64_t segbase;
 uint64_t seglen;
+uint16_t core;
                        ''')
 
 iokvs_message = create_state("iokvs_message",
@@ -370,6 +393,12 @@ def impl():
         set_done = hash_put(pkt_set)
         segment_done = new_segment(full_segment)
         tx_enq(get_done, set_done, segment_done)
+
+    @API("init_segment", process="app")
+    def init_segment(core):
+        segment = first_segment(core)
+        pipeline_state(first_segment, "mystate")
+        tx_enq(None, None, segment)
 
     @API("clean_cq", default_return="false", process="app")
     def clean_cq(core):
