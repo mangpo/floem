@@ -75,6 +75,15 @@ item_unref(state.it);
 output { out(); }
 ''')
 
+hash_put_spec = create_element_instance("hash_put_spec",
+              [Port("in", [])],
+              [Port("out", [])],
+               r'''
+hasht_put(state.it, NULL);
+//item_unref(state.it);
+output { out(); }
+''')
+
 ######################## responses ########################
 
 prepare_get_response = create_element_instance("prepare_get_response",
@@ -154,7 +163,7 @@ if(segment == NULL) {
     printf("Fail to allocate new segment.\n");
     exit(-1);
 }
-state.segbase = segment->data;
+state.segbase = get_pointer_offset(segment->data);
 state.seglen = segment->size;
 ialloc_nicsegment_full(state.segfull);
 output { out(); }
@@ -337,7 +346,7 @@ probe_set = Probe()
 
 def spec():
     @internal_trigger("all", "nic")
-    def tx_pipeline(): # TODO
+    def tx_pipeline():
         # From network
         pkt = inject()
         pkt = save_state(pkt)
@@ -353,7 +362,7 @@ def spec():
 
         # Set request
         pkt = get_item_spec(pkt_hash_set)
-        pkt = hash_put(pkt)
+        pkt = hash_put_spec(pkt)
         set_response = prepare_set_response(pkt)
         print_msg(probe_set(set_response))
 

@@ -33,10 +33,10 @@ int main() {
   //ialloc_init_slave();
 
   // spec
-//  hasht_init();
-//  spec_run_threads();
-//  usleep(500000);
-//  spec_kill_threads();
+  hasht_init();
+  spec_run_threads();
+  usleep(500000);
+  spec_kill_threads();
 
   // impl
   printf("------------------ impl --------------------\n");

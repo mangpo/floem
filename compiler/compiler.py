@@ -1100,14 +1100,14 @@ def compile_and_run(name, depend):
     if depend:
         for f in depend:
             extra += '%s.o ' % f
-            cmd = 'gcc -O0 -g -msse4.1 -I %s -c %s.c -lrt' % (common.dpdk_include, f)
+            cmd = 'gcc -O3 -msse4.1 -I %s -c %s.c -lrt' % (common.dpdk_include, f)
             #cmd = 'gcc -O3 -msse4.1 -I %s -c %s.c' % (common.dpdk_include, f)
             status = os.system(cmd)
             if not status == 0:
                 raise Exception("Compile error: " + cmd)
 
     if isinstance(name, str):
-        cmd = 'gcc -O0 -g -msse4.1 -I %s -pthread %s.c %s -o %s -lrt' % (common.dpdk_include, name, extra, name)
+        cmd = 'gcc -O3 -msse4.1 -I %s -pthread %s.c %s -o %s -lrt' % (common.dpdk_include, name, extra, name)
         #cmd = 'gcc -O3 -msse4.1 -I %s -pthread %s.c %s -o %s' % (common.dpdk_include, name, extra, name)
         print cmd
         status = os.system(cmd)
@@ -1121,7 +1121,7 @@ def compile_and_run(name, depend):
 
     elif isinstance(name, list):
         for f in name:
-            cmd = 'gcc -O0 -g -msse4.1 -I %s -pthread %s.c %s -o %s -lrt' % (common.dpdk_include, f, extra, f)
+            cmd = 'gcc -O3 -msse4.1 -I %s -pthread %s.c %s -o %s -lrt' % (common.dpdk_include, f, extra, f)
             #cmd = 'gcc -O3 -msse4.1 -I %s -pthread %s.c %s -o %s' % (common.dpdk_include, f, extra, f)
             print cmd
             status = os.system(cmd)

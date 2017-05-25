@@ -554,7 +554,20 @@ def compile_smart_queue(g, q, src2fields):
     src_cases = ""
     for i in range(q.n_cases):
         src_cases += "    case (type == %d): out%d(%s);\n" % (i + 1, i, deq_args_out)
+    src_release = "    case (type == 0): release(e);\n"
     classify_ele = Element(q.deq.name + "_classify",
+                           [Port("in", deq_types)],
+                           [Port("out" + str(i), deq_types) for i in range(q.n_cases)]
+                           + [Port("release", ["q_entry*"])],
+                           r'''
+        %s
+        int type = -1;
+        if (e != NULL) type = (e->flags & TYPE_MASK) >> TYPE_SHIFT;
+        output switch {
+            %s
+        }''' % (deq_src_in, src_cases + src_release))
+
+    scan_classify_ele = Element(q.deq.name + "_scan_classify",
                            [Port("in", deq_types)],
                            [Port("out" + str(i), deq_types) for i in range(q.n_cases)],
                            r'''
@@ -575,8 +588,9 @@ def compile_smart_queue(g, q, src2fields):
     new_instances = [deq_get_inst, deq_release_inst, classify_inst]
 
     if scan:
+        g.addElement(scan_classify_ele)
         scan_inst = scan(q.enq.name + "_scan")
-        scan_classify_inst = ElementInstance(classify_ele.name, classify_ele.name + "_scan_inst")
+        scan_classify_inst = ElementInstance(scan_classify_ele.name, scan_classify_ele.name + "_scan_inst")
         new_instances.append(scan_inst)
         new_instances.append(scan_classify_inst)
 
@@ -586,8 +600,9 @@ def compile_smart_queue(g, q, src2fields):
         instance.liveness = set()
         instance.uses = set()
 
-    # Connect deq_get -> classify
+    # Connect deq_get -> classify, classify -> release
     g.connect(deq_get_inst.name, classify_inst.name)
+    g.connect(classify_inst.name, deq_release_inst.name, "release")
     if scan:
         g.connect(scan_inst.name, scan_classify_inst.name)
 

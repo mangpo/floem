@@ -48,7 +48,7 @@ q_entry *enqueue_alloc(circular_queue* q, size_t len) {
         __sync_synchronize();
         if ((*flags & FLAG_OWN) != 0) {
             q->offset = eqe_off;
-            //printf("enq_alloc (NULL): queue = %ld, entry = %ld, flag = %ld\n", q->queue, eqe, *flags);
+            printf("enq_alloc (NULL): queue = %ld, entry = %ld, flag = %ld\n", q->queue, eqe, *flags);
             return NULL;
         }
         elen = flags[1];
