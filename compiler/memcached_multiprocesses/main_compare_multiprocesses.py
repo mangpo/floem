@@ -624,8 +624,8 @@ def run_compare():
 
 
 #run_spec()
-#run_impl()
-run_compare()
+run_impl()
+#run_compare()
 
 # TODO: opague #
 

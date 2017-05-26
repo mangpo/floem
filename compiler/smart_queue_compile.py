@@ -365,6 +365,7 @@ def order_smart_queues(name, vis, order, g):
 
 
 def compile_smart_queues(g, src2fields):
+    original_pipeline_states = copy.copy(g.pipeline_states)
     order = []
     vis = set()
     for instance in g.instances.values():
@@ -374,3 +375,24 @@ def compile_smart_queues(g, src2fields):
 
     for q in order:
         compile_smart_queue(g, q, src2fields)
+
+    # compress_original pipeline states
+    compress_id = 0
+    for inst_name in original_pipeline_states:
+        state = g.pipeline_states[inst_name]
+        instance = g.instances[inst_name]
+        new_state = state + "_compressed" + str(compress_id)
+        compress_id += 1
+
+        content = ""
+        mapping = g.state_mapping[state]
+        for var in g.state_mapping[state]:
+            for use in instance.uses:
+                m = re.match(var, use)
+                if m:
+                    content += "%s %s;\n" % (mapping[var][0], var)
+                    break
+
+        state_pipeline = State(new_state, content)
+        g.addState(state_pipeline)
+        g.pipeline_states[inst_name] = new_state

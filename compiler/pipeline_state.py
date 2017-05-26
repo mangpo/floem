@@ -485,7 +485,7 @@ def compile_pipeline_states(g):
         # Never use per-packet states. No modification needed.
         return
 
-    graphviz = False
+    graphviz = True
 
     if graphviz:
         g.print_graphviz()
