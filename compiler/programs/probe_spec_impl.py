@@ -48,11 +48,11 @@ void cmp_func(int spec_n, int *spec_data, int impl_n, int *impl_data) {
 '''
 c.testing = r'''
 spec_run_threads();
-usleep(1000);
+usleep(10000);
 spec_kill_threads();
 
 impl_run_threads();
-usleep(1000);
+usleep(10000);
 impl_kill_threads();
 '''
 c.desugar_mode = "compare"

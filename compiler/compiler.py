@@ -704,8 +704,8 @@ def generate_graph(program, resource=True, remove_unused=False, default_process=
     gen.graph.state_mapping = state_mapping
     pipeline_state_pass(gen)
     join_and_resource_annotation_pass(gen, resource, remove_unused)
-    print "-------------------- graph ----------------------"
-    gen.graph.print_graphviz()
+    # print "-------------------- graph ----------------------"
+    # gen.graph.print_graphviz()
 
     return gen.graph
 

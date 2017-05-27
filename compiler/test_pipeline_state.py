@@ -1,7 +1,9 @@
 from compiler import *
+from dsl import *
 from pipeline_state import find_all_fields, analyze_pipeline_states
 import unittest
 import queue_ast
+import queue_smart
 
 
 class TestPipelineState(unittest.TestCase):
@@ -725,4 +727,56 @@ class TestPipelineState(unittest.TestCase):
         else:
             self.fail('Exception is not raised.')
 
+    def test_compress_pipeline_state(self):
+        reset()
+
+        choose = create_element_instance("choose",
+                                         [Port("in", ["int"])],
+                                         [Port("out0", []), Port("out1", [])],
+                                         r'''int x = in(); state.a = x; state.core = 0; output switch { case (x % 2 == 0): out0(); else: out1(); }''')
+        defA = create_element_instance("defA",
+                                       [Port("in", [])],
+                                       [Port("out", [])],
+                                       r'''output { out(); }''')
+        defB = create_element_instance("defB",
+                                       [Port("in", [])],
+                                       [Port("out", [])],
+                                       r'''state.b = state.a; output { out(); }''')
+        useA = create_element_instance("useA",
+                                       [Port("in", [])],
+                                       [Port("out", [])],
+                                       r'''state.c = state.a; output { out(); }''')
+        useB = create_element_instance("useB",
+                                       [Port("in", [])],
+                                       [Port("out", [])],
+                                       r'''state.c = state.b; output { out(); }''')
+        f = create_element_instance("f",
+                                    [Port("in", [])],
+                                    [],
+                                    r'''state.core = 0;''')
+        enq1, deq1 = queue_smart.smart_circular_queue_variablesize_one2many_instances("queue1", 256, 1, 2)
+
+        state = create_state("mystate", "int core; int a; int b; int c;")
+
+        pipeline_state(choose, "mystate")
+
+        @API("run1")
+        def run1(x):
+            x1, x2 = choose(x)
+            y1 = defA(x1)
+            y2 = defB(x2)
+            enq1(y1, y2)
+
+        @API("run2")
+        def run2(core):
+            x1, x2 = deq1(core)
+            y1 = useA(x1)
+            y2 = useB(x2)
+            f(y1)
+            f(y2)
+
+        c = Compiler()
+        g = c.generate_graph()
+        choose = g.instances["choose"]
+        self.assertEqual(choose.uses, set(['a','b','core']))
 
