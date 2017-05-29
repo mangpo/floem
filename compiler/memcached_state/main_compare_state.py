@@ -1,6 +1,5 @@
-from dsl import *
 from elements_library import *
-import queue, queue_smart
+import queue_smart
 
 n_cores = 4
 

@@ -1,5 +1,3 @@
-// gcc -O -I /home/mangpo/lib/dpdk-16.11/build/include -c jenkins_hash.c
-
 /* -*- Mode: C; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
 /*
  * Hash table
@@ -11,7 +9,9 @@
  *       or commercial.  It's free."
  *
  */
-#include "iokvs.h"
+//#include "memcached.h"
+#include <stdint.h>
+#include <stddef.h>
 
 #define ENDIAN_LITTLE 1
 
@@ -126,15 +126,16 @@ and these came close:
 }
 
 #if HASH_LITTLE_ENDIAN == 1
-uint32_t jenkins_hash(
+uint32_t hash(
   const void *key,       /* the key to hash */
-  size_t      length)    /* length of the key */
+  size_t      length,    /* length of the key */
+  const uint32_t    initval)   /* initval */
 {
   uint32_t a,b,c;                                          /* internal state */
   union { const void *ptr; size_t i; } u;     /* needed for Mac Powerbook G4 */
 
   /* Set up the internal state */
-  a = b = c = 0xdeadbeef + ((uint32_t)length) + 0;
+  a = b = c = 0xdeadbeef + ((uint32_t)length) + initval;
 
   u.ptr = key;
   if (HASH_LITTLE_ENDIAN && ((u.i & 0x3) == 0)) {
@@ -162,7 +163,7 @@ uint32_t jenkins_hash(
      * rest of the string.  Every machine with memory protection I've seen
      * does it on word boundaries, so is OK with this.  But VALGRIND will
      * still catch it and complain.  The masking trick does make the hash
-     * noticeably faster for short strings (like English words).
+     * noticably faster for short strings (like English words).
      */
 #ifndef VALGRIND
 
@@ -306,13 +307,13 @@ uint32_t jenkins_hash(
  * from hashlittle() on all machines.  hashbig() takes advantage of
  * big-endian byte ordering.
  */
-uint32_t jenkins_hash( const void *key, size_t length)
+uint32_t hash( const void *key, size_t length, const uint32_t initval)
 {
   uint32_t a,b,c;
   union { const void *ptr; size_t i; } u; /* to cast key to (size_t) happily */
 
   /* Set up the internal state */
-  a = b = c = 0xdeadbeef + ((uint32_t)length) + 0;
+  a = b = c = 0xdeadbeef + ((uint32_t)length) + initval;
 
   u.ptr = key;
   if (HASH_BIG_ENDIAN && ((u.i & 0x3) == 0)) {
@@ -340,7 +341,7 @@ uint32_t jenkins_hash( const void *key, size_t length)
      * rest of the string.  Every machine with memory protection I've seen
      * does it on word boundaries, so is OK with this.  But VALGRIND will
      * still catch it and complain.  The masking trick does make the hash
-     * noticeably faster for short strings (like English words).
+     * noticably faster for short strings (like English words).
      */
 #ifndef VALGRIND
 

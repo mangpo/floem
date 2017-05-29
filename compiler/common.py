@@ -79,7 +79,7 @@ def get_type_var(type_var):
     # index = max(index1, index2)
     # return sanitize_type(type_var[:index + 1]), strip_all(type_var[index+1:])
 
-    m = re.match('[ \n]*((struct[ ]+)?[a-zA-Z0-9_]+[ ]*[\*]?)[ ]*([a-zA-Z0-9_]+(\[[a-zA-Z_0-9]*\])*)', type_var)
+    m = re.match('[ \n]*((struct[ ]+)?[a-zA-Z0-9_]+[ ]*[\*]*)[ ]*([a-zA-Z0-9_]+(\[[a-zA-Z_0-9]*\])*)', type_var)
     t = sanitize_type(m.group(1))
     var = m.group(3)
     m2 = re.match('[ ]*@shared\((.*)', type_var[m.end(3):])

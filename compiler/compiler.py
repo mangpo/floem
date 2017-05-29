@@ -963,9 +963,6 @@ def generate_code(graph, ext, testing=None, include=None):
     Display C code to stdout
     :param graph: data-flow graph
     """
-    for process in graph.processes:
-        name = process + ext
-        os.system("rm " + name)
 
     generate_header(testing, graph.processes, ext)
     generate_include(include, graph.processes, ext)
@@ -1023,13 +1020,36 @@ def convert_type(result, expect):
         return result
 
 
+def define_header(graph):
+    for process in graph.processes:
+        with open(process + '.h', 'a') as f, redirect_stdout(f):
+            print "#ifndef %s_H" % process.upper()
+            print "#define %s_H" % process.upper()
+
+
+def end_header(graph):
+    for process in graph.processes:
+        with open(process + '.h', 'a') as f, redirect_stdout(f):
+            print "#endif"
+
+
+def remove_files(graph, ext):
+    for process in graph.processes:
+        name = process + ext
+        os.system("rm " + name)
+
+
 def generate_code_as_header(graph, testing, mode, include=None):
+    remove_files(graph, ".h")
+    define_header(graph)
     generate_code(graph, ".h", testing, include)
     generate_inject_probe_code(graph, ".h")
     generate_internal_triggers(graph, ".h", mode)
+    end_header(graph)
 
 
 def generate_code_and_compile(graph, testing, mode, include=None, depend=None):
+    remove_files(graph, ".c")
     generate_code(graph, ".c", testing, include)
     generate_inject_probe_code(graph, ".c")
     generate_internal_triggers(graph, ".c", mode)
@@ -1104,6 +1124,7 @@ def compile_and_run(name, depend):
             extra += '%s.o ' % f
             cmd = 'gcc -O3 -msse4.1 -I %s -c %s.c -lrt' % (common.dpdk_include, f)
             #cmd = 'gcc -O3 -msse4.1 -I %s -c %s.c' % (common.dpdk_include, f)
+            print cmd
             status = os.system(cmd)
             if not status == 0:
                 raise Exception("Compile error: " + cmd)
