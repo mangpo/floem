@@ -1,7 +1,7 @@
 from elements_library import *
 import queue_smart
 
-Inject = create_inject("inject", "struct tuple*", 1000, "random_tuple")
+Inject = create_inject("inject", "struct tuple*", 1000, "random_tuple", 1000000)
 inject = Inject()
 
 task_master = create_state("task_master", "struct executor **task2executor;")
@@ -41,6 +41,7 @@ print_tuple_creator = create_element("print_tuple_creator",
 
     printf("TUPLE[0] -- task = %d, fromtask = %d, str = %s, integer = %d\n", t->task, t->fromtask, t->v[0].str, t->v[0].integer);
     //printf("TUPLE[1] -- task = %d, fromtask = %d, str = %s, integer = %d\n", t->task, t->fromtask, t->v[1].str, t->v[1].integer);
+    fflush(stdout);
                                       ''')
 print_tuple = print_tuple_creator()
 
@@ -66,9 +67,9 @@ c.include = r'''
 #include "worker.h"
 #include "storm.h"
 '''
-c.depend = ['list', 'hash', 'hash_table', 'spout', 'count', 'rank', 'worker']
-c.generate_code_as_header()
-c.compile_and_run(["test_simple"])
+c.depend = ['list', 'hash', 'hash_table', 'spout', 'count', 'rank', 'worker', 'simple']
+c.generate_code_as_header("simple")
+c.compile_and_run([("test_simple", 2)])
 
 # TODO:
 # 1. control inject interval

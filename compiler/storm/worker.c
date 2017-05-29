@@ -16,7 +16,7 @@ struct executor **get_task2executor() {
 
 struct tuple* random_tuple(size_t i) {
   struct tuple* t = (struct tuple*) malloc(sizeof(struct tuple));
-  t->task = 30;
+  t->task = 20;
   if(i%4==0) {
     t->v[0].integer = 1;
     strcpy(t->v[0].str, "mangpo");

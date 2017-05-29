@@ -87,13 +87,14 @@ class StorageState:
 
 
 class PopulateState(StorageState):
-    def __init__(self, name, state_instance, state, type, size, func):
+    def __init__(self, name, state_instance, state, type, size, func, interval):
         StorageState.__init__(self, name, state_instance, state, type, size, func)
         self.spec_ele_instances = []
         self.impl_ele_instances = []
+        self.interval = interval
 
     def clone(self):
-        return PopulateState(self.name, self.state_instance, self.state, self.type, self.size, self.func)
+        return PopulateState(self.name, self.state_instance, self.state, self.type, self.size, self.func, self.interval)
 
     def add_element_instance(self, instance):
         m = re.match('_spec_(.+)', instance)

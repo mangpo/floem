@@ -337,11 +337,11 @@ def generate_memory_regions(graph, ext):
     slave_src = ""
 
     for region in graph.memory_regions:
-        master_src += 'void *%s;\n' % region.name
-        slave_src += 'void *%s;\n' % region.name
+        master_src += 'static void *%s;\n' % region.name
+        slave_src += 'static void *%s;\n' % region.name
 
-    master_src += "void init_memory_regions() {\n"
-    slave_src += "void init_memory_regions() {\n"
+    master_src += "static void init_memory_regions() {\n"
+    slave_src += "static void init_memory_regions() {\n"
 
     for region in graph.memory_regions:
         master_src += '  %s = util_create_shmsiszed("%s", %d);\n' % (region.name, region.name, region.size)
@@ -350,8 +350,8 @@ def generate_memory_regions(graph, ext):
     master_src += "}\n"
     slave_src += "}\n"
 
-    master_src += "void finalize_memory_regions() {\n"
-    slave_src += "void finalize_memory_regions() {\n"
+    master_src += "static void finalize_memory_regions() {\n"
+    slave_src += "static void finalize_memory_regions() {\n"
 
     for region in graph.memory_regions:
         master_src += '  shm_unlink("%s");\n' % region.name
@@ -614,12 +614,17 @@ def generate_API_function(api, ext):
     if api.return_port:
         src += "%s %s(%s) { " % (api.return_type, api.name, ", ".join(types_args))
         src += "return %s(%s); }\n" % (api.call_instance, ", ".join(args))
+        header_src = "%s %s(%s);\n" % (api.return_type, api.name, ", ".join(types_args))
     else:
         src += "void %s(%s) { " % (api.name, ", ".join(types_args))
         src += "%s(%s); }\n" % (api.call_instance, ", ".join(args))
+        header_src = "void %s(%s);\n" % (api.name, ", ".join(types_args))
 
-    name = api.process + ext
-    with open(name, 'a') as f, redirect_stdout(f):
+    if ext == '.h':
+        with open(api.process + '.h', 'a') as f, redirect_stdout(f):
+            print header_src
+
+    with open(api.process + '.c', 'a') as f, redirect_stdout(f):
         print src
 
 
@@ -732,18 +737,19 @@ def generate_include(include, processes, ext):
                 print include
 
 n_threads = 0
-def thread_func_create_cancel(func, size=None):
+def thread_func_create_cancel(func, size=None, interval=None):
     thread = "pthread_t _thread_%s;\n" % func
     if size:
         func_src = r'''
-            void *_run_%s(void *threadid) {
-                usleep(1000);
-                for(int i=0; i<%d; i++) {
-                    //printf("inject = %s\n", i);
-                    %s();
-                    usleep(50); }
-                pthread_exit(NULL);
-            }''' % (func, size, '%d', func)
+    void *_run_%s(void *threadid) {
+        usleep(1000);
+        for(int i=0; i<%d; i++) {
+            //printf("inject = %s\n", i);
+            %s();
+            usleep(%d);
+        }
+        pthread_exit(NULL);
+    }''' % (func, size, '%d', func, interval)
     else:
         func_src = "void *_run_%s(void *threadid) { while(true) { %s(); /* usleep(1000); */ } }\n" % (func, func)
     create = "  pthread_create(&_thread_%s, NULL, _run_%s, NULL);\n" % (func, func)
@@ -767,8 +773,8 @@ def inject_thread_code(injects):
     run_src = ""
     kill_src = ""
 
-    for (func, size) in injects:
-        (thread, func_src, create, cancel) = thread_func_create_cancel(func, size)
+    for (func, size, interval) in injects:
+        (thread, func_src, create, cancel) = thread_func_create_cancel(func, size, interval)
         global_src += thread
         global_src += func_src
         run_src += create
@@ -810,8 +816,10 @@ def generate_internal_triggers_with_process(graph, process, ext, mode):
     for state_instance in injects:
         #if process in graph.state_instances[state_instance].processes:
         inject = injects[state_instance]
-        spec_injects += [(x, inject.size) for x in inject.spec_ele_instances if process == graph.instances[x].process]
-        impl_injects += [(x, inject.size) for x in inject.impl_ele_instances if process == graph.instances[x].process]
+        spec_injects += [(x, inject.size, inject.interval)
+                         for x in inject.spec_ele_instances if process == graph.instances[x].process]
+        impl_injects += [(x, inject.size, inject.interval)
+                         for x in inject.impl_ele_instances if process == graph.instances[x].process]
         all_injects += [x for x in inject.spec_ele_instances if process == graph.instances[x].process]
         all_injects += [x for x in inject.impl_ele_instances if process == graph.instances[x].process]
 
@@ -833,12 +841,15 @@ def generate_internal_triggers_with_process(graph, process, ext, mode):
                     % (t, t, inst)
                 )
 
+    header_src = ""
     if not mode == "compare":
         g1, r1, k1 = inject_thread_code(spec_injects + impl_injects)
         g2, r2, k2 = internal_thread_code(forever, graph)
         global_src = g1 + g2
         run_src = "void run_threads() {\n" + r1 + r2 + "}\n"
         kill_src = "void kill_threads() {\n" + k1 + k2 + "}\n"
+        header_src += "void run_threads();\n"
+        header_src += "void kill_threads();\n"
 
     else:
         run_src = "void run_threads() { }\n"
@@ -856,8 +867,18 @@ def generate_internal_triggers_with_process(graph, process, ext, mode):
         run_src += "void impl_run_threads() {\n" + r1 + r2 + "}\n"
         kill_src += "void impl_kill_threads() {\n" + k1 + k2 + "}\n"
 
-    name = process + ext
-    with open(name, 'a') as f, redirect_stdout(f):
+        header_src += "void run_threads();\n"
+        header_src += "void kill_threads();\n"
+        header_src += "void spec_run_threads();\n"
+        header_src += "void spec_kill_threads();\n"
+        header_src += "void impl_run_threads();\n"
+        header_src += "void impl_kill_threads();\n"
+
+    if ext == '.h':
+        with open(process + '.h', 'a') as f, redirect_stdout(f):
+            print header_src
+
+    with open(process + '.c', 'a') as f, redirect_stdout(f):
         print global_src + run_src + kill_src
 
 
@@ -908,8 +929,11 @@ def generate_inject_probe_code_with_process(graph, process, ext):
         src += "  finalize_state_instances();\n"
         src += "}\n"
 
-    name = process + ext
-    with open(name, 'a') as f, redirect_stdout(f):
+    if ext == '.h':
+        with open(process + '.h', 'a') as f, redirect_stdout(f):
+            print "void init();\n"
+
+    with open(process + '.c', 'a') as f, redirect_stdout(f):
         print src
 
 
@@ -964,8 +988,10 @@ def generate_code(graph, ext, testing=None, include=None):
     :param graph: data-flow graph
     """
 
-    generate_header(testing, graph.processes, ext)
-    generate_include(include, graph.processes, ext)
+    generate_header(testing, graph.processes, '.c')
+    generate_include(include, graph.processes, '.c')
+    if ext == '.h':
+        generate_include(include, graph.processes, '.h')
 
     # Generate memory regions.
     generate_memory_regions(graph, ext)
@@ -975,27 +1001,27 @@ def generate_code(graph, ext, testing=None, include=None):
         generate_state(graph.states[state_name], graph, ext)
 
     # Generate state instances.
-    generate_state_instances(graph, ext)
+    generate_state_instances(graph, '.c')
     # for name in graph.state_instance_order:
     #     generate_state_instance(name, graph.state_instances[name], ext)
 
     # Generate functions to save join buffers.
     for instance in graph.instances.values():
         if instance.join_ports_same_thread:
-            generate_join_save_function(instance.name, instance.join_ports_same_thread, instance, ext)
+            generate_join_save_function(instance.name, instance.join_ports_same_thread, instance, '.c')
 
     # Generate functions to produce API return state
     return_funcs = []
     for api in graph.threads_API:
         if api.return_type and api.return_type not in return_funcs:
             return_funcs.append(api.return_type)
-            generate_API_identity_macro(api, ext)
+            generate_API_identity_macro(api, '.c')
 
     # Generate signatures.
     for name in graph.instances:
         instance = graph.instances[name]
         e = instance.element
-        generate_signature(instance, name, e.inports, ext)
+        generate_signature(instance, name, e.inports, '.c')
 
     # Generate functions.
     for name in graph.instances:
@@ -1004,7 +1030,7 @@ def generate_code(graph, ext, testing=None, include=None):
         state_rename = []
         for i in range(len(instance.state_args)):
             state_rename.append((e.state_params[i][1],instance.state_args[i]))
-        element_to_function(instance, state_rename, graph, ext)
+        element_to_function(instance, state_rename, graph, '.c')
 
     # Generate API functions.
     for api in graph.threads_API:
@@ -1026,6 +1052,9 @@ def define_header(graph):
             print "#ifndef %s_H" % process.upper()
             print "#define %s_H" % process.upper()
 
+        with open(process + '.c', 'a') as f, redirect_stdout(f):
+            print '#include "%s.h"' % process
+
 
 def end_header(graph):
     for process in graph.processes:
@@ -1041,6 +1070,7 @@ def remove_files(graph, ext):
 
 def generate_code_as_header(graph, testing, mode, include=None):
     remove_files(graph, ".h")
+    remove_files(graph, ".c")
     define_header(graph)
     generate_code(graph, ".h", testing, include)
     generate_inject_probe_code(graph, ".h")
@@ -1122,7 +1152,7 @@ def compile_and_run(name, depend):
     if depend:
         for f in depend:
             extra += '%s.o ' % f
-            cmd = 'gcc -O3 -msse4.1 -I %s -c %s.c -lrt' % (common.dpdk_include, f)
+            cmd = 'gcc -O0 -g -msse4.1 -I %s -c %s.c -lrt' % (common.dpdk_include, f)
             #cmd = 'gcc -O3 -msse4.1 -I %s -c %s.c' % (common.dpdk_include, f)
             print cmd
             status = os.system(cmd)
@@ -1130,7 +1160,7 @@ def compile_and_run(name, depend):
                 raise Exception("Compile error: " + cmd)
 
     if isinstance(name, str):
-        cmd = 'gcc -O3 -msse4.1 -I %s -pthread %s.c %s -o %s -lrt' % (common.dpdk_include, name, extra, name)
+        cmd = 'gcc -O0 -g -msse4.1 -I %s -pthread %s.c %s -o %s -lrt' % (common.dpdk_include, name, extra, name)
         #cmd = 'gcc -O3 -msse4.1 -I %s -pthread %s.c %s -o %s' % (common.dpdk_include, name, extra, name)
         print cmd
         status = os.system(cmd)
@@ -1144,7 +1174,9 @@ def compile_and_run(name, depend):
 
     elif isinstance(name, list):
         for f in name:
-            cmd = 'gcc -O3 -msse4.1 -I %s -pthread %s.c %s -o %s -lrt' % (common.dpdk_include, f, extra, f)
+            if isinstance(f, tuple):
+                f = f[0]
+            cmd = 'gcc -O0 -g -msse4.1 -I %s -pthread %s.c %s -o %s -lrt' % (common.dpdk_include, f, extra, f)
             #cmd = 'gcc -O3 -msse4.1 -I %s -pthread %s.c %s -o %s' % (common.dpdk_include, f, extra, f)
             print cmd
             status = os.system(cmd)
@@ -1153,10 +1185,13 @@ def compile_and_run(name, depend):
 
         ps = []
         for f in name:
-            p = subprocess.Popen(['./' + f])
+            cmd = [str(x) for x in f]
+            cmd[0] = './' + cmd[0]
+            print cmd
+            p = subprocess.Popen(cmd)
             ps.append(p)
 
-        time.sleep(3)
+        time.sleep(5)
         for p in ps:
             p.kill()
 

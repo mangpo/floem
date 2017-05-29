@@ -1015,7 +1015,7 @@ def create_state_instance_from(st_name, inst_name, init=None):
     return inst_name
 
 
-def populte_state(name, st_inst_name, st_name, type, size, func):
+def populte_state(name, st_inst_name, st_name, type, size, func, interval):
     """
     Initialize inject state.
     :param name: inject element name
@@ -1027,7 +1027,7 @@ def populte_state(name, st_inst_name, st_name, type, size, func):
     The function should take an integer argument indicating the ID of iteration.
     It should return a generated value.
     """
-    scope[-1].insert(0, PopulateState(name, st_inst_name, st_name, type, size, func))
+    scope[-1].insert(0, PopulateState(name, st_inst_name, st_name, type, size, func, interval))
 
 
 def compare_state(name, st_inst_name, st_name, type, size, func):

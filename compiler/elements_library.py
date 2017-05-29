@@ -94,7 +94,7 @@ def create_table_instances(put_name, get_name, index_type, val_type, size):
     return put(put_name), get(get_name)
 
 
-def create_inject(name, type, size, func):
+def create_inject(name, type, size, func, interval=50):
     st_name = name + "_state"
     st_inst_name = name + "_state_inst"
     state = create_state(st_name, "%s data[%d]; int p;" % (type, size), [[0],0])
@@ -105,7 +105,7 @@ def create_inject(name, type, size, func):
         this->p++;''' % size
     src += "output { out(this->data[temp]); }"
     element = create_element(name, [], [Port("out", [type])], src, None, [(st_name, "this")])
-    populte_state(name, st_inst_name, st_name, type, size, func)
+    populte_state(name, st_inst_name, st_name, type, size, func, interval)
     fresh_id = [0]
 
     def create(inst_name=None):
