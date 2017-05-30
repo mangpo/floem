@@ -53,6 +53,11 @@ class Thread:
             scope[-1].append(ResourceOrder(instances[i].name, instances[i+1].name))
 
 
+def run_order(*instances):
+    for i in range(len(instances) - 1):
+        scope[-1].append(ResourceOrder(instances[i].name, instances[i + 1].name))
+
+
 class API_thread(Thread):
     def __init__(self, name, call_types, return_types, default_val=None):
         Thread.__init__(self, name)

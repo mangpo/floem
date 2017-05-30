@@ -603,29 +603,32 @@ c.include = r'''
 #include "../queue.h"
 #include "../shm.h"
 '''
-c.depend = ['jenkins_hash', 'hashtable', 'ialloc']
 c.triggers = True
 c.I = '/home/mangpo/lib/dpdk-16.11/build/include'
 
 def run_spec():
     c.desugar_mode = "spec"
     c.generate_code_as_header("test_spec")
+    c.depend = ['jenkins_hash', 'hashtable', 'ialloc']
     c.compile_and_run("test_spec")
 
 def run_impl():
     c.desugar_mode = "impl"
     c.generate_code_as_header("test_impl")
+    c.depend = ['jenkins_hash', 'hashtable', 'ialloc']
     c.compile_and_run("test_impl")
 
 def run_compare():
     c.desugar_mode = "compare"
     c.generate_code_as_header()
+    c.depend = {"test_compare_app": ['jenkins_hash', 'hashtable', 'ialloc', 'app'],
+                "test_compare_nic": ['jenkins_hash', 'hashtable', 'ialloc', 'nic']}
     c.compile_and_run(["test_compare_app", "test_compare_nic"])
 
 
 #run_spec()
-run_impl()
-#run_compare()
+#run_impl()
+run_compare()
 
 # TODO: opague #
 

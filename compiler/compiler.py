@@ -278,7 +278,7 @@ def element_to_function(instance, state_rename, graph, ext):
         if m is None:
             raise Exception("Element '%s' never send data from output port '%s'." % (funcname, o))
         p = m.start(0)
-        call = "ret = _get_%s(" % (instance.API_return.replace('*','$'))
+        call = "ret = _get_%s(" % (instance.API_return.replace('*','$').replace(' ', '_'))
         out_src = out_src[:p] + call + out_src[m.end(0):]
 
     # Replace old state name with new state name
@@ -337,8 +337,8 @@ def generate_memory_regions(graph, ext):
     slave_src = ""
 
     for region in graph.memory_regions:
-        master_src += 'static void *%s;\n' % region.name
-        slave_src += 'static void *%s;\n' % region.name
+        master_src += 'void *%s;\n' % region.name
+        slave_src += 'void *%s;\n' % region.name
 
     master_src += "static void init_memory_regions() {\n"
     slave_src += "static void init_memory_regions() {\n"
@@ -577,25 +577,8 @@ def generate_join_save_function(name, join_ports_same_thread, instance, ext):
         print src
 
 
-# def generate_API_return_state(api, g):
-#     types_args = []
-#     args = []
-#     for port in g.instances[api.return_instance].element.outports:
-#         if port.name == api.return_port:
-#             l_types_args, l_args = common.types_args_one_port(port, common.standard_arg_format)
-#             types_args += l_types_args
-#             args += l_args
-#
-#     src = ""
-#     src += "%s _get_%s(%s) {\n" % (api.state_name, api.state_name.replace('*','$'), ", ".join(types_args))
-#     src += "  %s ret = {%s};\n" % (api.state_name, ", ".join(args))
-#     src += "  return ret; }\n"
-#     print src
-#     return src
-
-
 def generate_API_identity_macro(api, ext):
-    src = "#define _get_%s(X) X" % api.return_type.replace('*', '$')
+    src = "#define _get_%s(X) X" % api.return_type.replace('*', '$').replace(' ', '_')
     name = api.process + ext
     with open(name, 'a') as f, redirect_stdout(f):
         print src
@@ -931,7 +914,8 @@ def generate_inject_probe_code_with_process(graph, process, ext):
 
     if ext == '.h':
         with open(process + '.h', 'a') as f, redirect_stdout(f):
-            print "void init();\n"
+            print "void init();"
+            print "void finalize_and_check();"
 
     with open(process + '.c', 'a') as f, redirect_stdout(f):
         print src
@@ -1147,21 +1131,28 @@ def generate_code_and_run(graph, testing, mode, expect=None, include=None, depen
     print "PASSED!"
 
 
+def compile_object_file(f):
+    if isinstance(f, str):
+        cmd = 'gcc -O0 -g -msse4.1 -I %s -c %s.c -lrt' % (common.dpdk_include, f)
+        print cmd
+        status = os.system(cmd)
+        if not status == 0:
+            raise Exception("Compile error: " + cmd)
+    elif isinstance(f, list):
+        for fi in f:
+            compile_object_file(fi)
+    elif isinstance(f, dict):
+        s = set()
+        for l in f.values():
+            s = s.union(set(l))
+        compile_object_file([si for si in s])
+
 def compile_and_run(name, depend):
-    extra = ""
-    if depend:
-        for f in depend:
-            extra += '%s.o ' % f
-            cmd = 'gcc -O0 -g -msse4.1 -I %s -c %s.c -lrt' % (common.dpdk_include, f)
-            #cmd = 'gcc -O3 -msse4.1 -I %s -c %s.c' % (common.dpdk_include, f)
-            print cmd
-            status = os.system(cmd)
-            if not status == 0:
-                raise Exception("Compile error: " + cmd)
+    compile_object_file(depend)
 
     if isinstance(name, str):
-        cmd = 'gcc -O0 -g -msse4.1 -I %s -pthread %s.c %s -o %s -lrt' % (common.dpdk_include, name, extra, name)
-        #cmd = 'gcc -O3 -msse4.1 -I %s -pthread %s.c %s -o %s' % (common.dpdk_include, name, extra, name)
+        cmd = 'gcc -O0 -g -msse4.1 -I %s -pthread %s.c %s -o %s -lrt' % \
+              (common.dpdk_include, name, ' '.join([d + '.o' for d in depend]), name)
         print cmd
         status = os.system(cmd)
         if not status == 0:
@@ -1176,8 +1167,8 @@ def compile_and_run(name, depend):
         for f in name:
             if isinstance(f, tuple):
                 f = f[0]
-            cmd = 'gcc -O0 -g -msse4.1 -I %s -pthread %s.c %s -o %s -lrt' % (common.dpdk_include, f, extra, f)
-            #cmd = 'gcc -O3 -msse4.1 -I %s -pthread %s.c %s -o %s' % (common.dpdk_include, f, extra, f)
+            cmd = 'gcc -O0 -g -msse4.1 -I %s -pthread %s.c %s -o %s -lrt' % \
+                  (common.dpdk_include, f, ' '.join([d + '.o' for d in depend[f]]), f)
             print cmd
             status = os.system(cmd)
             if not status == 0:
@@ -1185,8 +1176,11 @@ def compile_and_run(name, depend):
 
         ps = []
         for f in name:
-            cmd = [str(x) for x in f]
-            cmd[0] = './' + cmd[0]
+            if isinstance(f, str):
+                cmd = ['./' + f]
+            else:
+                cmd = [str(x) for x in f]
+                cmd[0] = './' + cmd[0]
             print cmd
             p = subprocess.Popen(cmd)
             ps.append(p)

@@ -39,6 +39,8 @@ class TestDSL(unittest.TestCase):
                  "circular_queue_multicore2.py",
                  "circular_queue_multicore3.py",
                  "circular_queue_multicore4.py",
+                 "copy_queue1.py",
+                 "copy_queue2.py",
                  "composite_at1.py",
                  "composite_at2.py",
                  "composite_at3.py",

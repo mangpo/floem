@@ -13,7 +13,7 @@
 #include <errno.h>
 
 /* create and map a shared memory region, returns address */
-void *util_create_shmsiszed(const char *name, size_t size)
+static void *util_create_shmsiszed(const char *name, size_t size)
 {
   int fd;
   void *p;
@@ -47,7 +47,7 @@ error_out:
 }
 
 /* map a shared memory region, returns address */
-void *util_map_shm(const char *name, size_t size)
+static void *util_map_shm(const char *name, size_t size)
 {
   int fd;
   void *p;

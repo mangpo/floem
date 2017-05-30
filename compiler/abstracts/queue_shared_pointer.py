@@ -10,7 +10,7 @@ save = create_element_instance("save", [Port("in", ["int"])], [Port("out", [])],
 enq, deq = queue_smart.smart_circular_queue_variablesize_one2many_instances("queue", 256, 4, 1)
 
 display = create_element_instance("display", [Port("in", [])], [],
-                               r'''printf("%d\n", state.p[state.index]);''')
+                               r'''printf("%d\n", state.p[state.index]); fflush(stdout);''')
 
 pipeline_state(save, "mystate")
 
@@ -36,4 +36,6 @@ c.include = r'''
 '''
 
 c.generate_code_as_header()
-c.compile_and_run(["queue_shared_p1", "queue_shared_p2"])
+c.depend = {"queue_shared_p1_main": ['queue_shared_p1'],
+            "queue_shared_p2_main": ['queue_shared_p2']}
+c.compile_and_run(["queue_shared_p1_main", "queue_shared_p2_main"])

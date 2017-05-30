@@ -90,7 +90,6 @@ def create_circular_queue_instances(name, type, size, blocking=False):
     deq = Dequeue(prefix + "dequeue", [queue])
     return enq, deq
 
-
 def create_circular_queue_one2many_instances(name, type, size, n_cores):
     prefix = "_%s_" % name
     one_name = prefix + "queue"
@@ -202,6 +201,142 @@ def create_circular_queue_many2one_instances(name, type, size, n_cores):
     enqs = [Enqueue(prefix + "enqueue" + str(i), [ones[i]]) for i in range(n_cores)]
     deq = Dequeue(prefix + "dequeue", [all])
     return enqs, deq
+
+############################ Fixed-size copy queue ##############################
+
+def create_copy_queue_many2many_inc_instances(name, type, size, n_cores, blocking=False):
+    type_star = type + "*"
+    prefix = "_%s_" % name
+    one_name = prefix + "queue"
+    all_name = prefix + "queues"
+    one_instance_name = one_name + "_inst"
+    all_instance_name = all_name + "_inst"
+
+    One = create_state(one_name, "int head; int tail; int size; %s data[%d];" % (type, size), [0,0,size,[0]])
+    ones = [One(one_instance_name + str(i)) for i in range(n_cores)]
+
+    All = create_state(all_name, "%s* cores[%d];" % (one_name, n_cores))
+    all = All(all_instance_name, [[ones[i] for i in range(n_cores)]])
+
+    Enqueue = create_element(prefix + "enqueue_ele",
+                             [Port("in", [type_star, "size_t"])], [],
+                             r'''
+           (%s x, size_t c) = in();
+           %s* p = this->cores[c];
+           __sync_synchronize();
+           int next = p->tail + 1;
+           if(next >= p->size) next = 0;
+           if(next == p->head) {
+             printf("Circular queue '%s' is full. A packet is dropped.\n");
+           } else {
+             rte_memcpy(&p->data[p->tail], x, sizeof(%s));
+             p->tail = next;
+           }
+           __sync_synchronize();
+           ''' % (type_star, one_name, name, type), None, [(all_name, "this")])
+
+    if blocking:
+        src = r'''
+        (size_t c) = in();
+        %s* p = this->cores[c];
+        while(p->head == p->tail) { __sync_synchronize(); }
+        %s x = &p->data[p->head];
+        output { out(x); }
+            ''' % (one_name, type_star)
+    else:
+        src = r'''
+        (size_t c) = in();
+        %s* p = this->cores[c];
+        %s x = NULL;
+        bool avail = false;
+        if(p->head == p->tail) {
+            //printf("Dequeue an empty circular queue '%s'. Default value is returned (for API call).\n");
+            //exit(-1);
+        } else {
+            avail = true;
+            x = &p->data[p->head];
+        }
+        output { out(x); }
+        ''' % (one_name, type_star, name)
+
+    Dequeue = create_element(prefix + "dequeue_ele",
+                             [Port("in", ["size_t"])], [Port("out", [type_star])],
+                             src, None, [(all_name, "this")])
+
+    Advance = create_element(prefix + "dequeue_advance",
+                             [Port("in", ["size_t"])], [],
+                             r'''
+        (size_t c) = in();
+        %s* p = this->cores[c];
+        p->head = (p->head + 1) %s p->size;
+           ''' % (one_name, '%'), None, [(all_name, "this")])
+
+    enq = Enqueue(prefix + "enqueue", [all])
+    deq = Dequeue(prefix + "dequeue", [all])
+    adv = Advance(prefix + "advance", [all])
+    return enq, deq, adv
+
+
+def create_copy_queue_many2many_batch_instances(name, type, size, n_cores):
+    type_star = type + "*"
+    prefix = "_%s_" % name
+    one_name = prefix + "queue"
+    all_name = prefix + "queues"
+    one_instance_name = one_name + "_inst"
+    all_instance_name = all_name + "_inst"
+
+    One = create_state(one_name, "int head; int tail; int size; %s data[%d];" % (type, size), [0,0,size,[0]])
+    ones = [One(one_instance_name + str(i)) for i in range(n_cores)]
+
+    All = create_state(all_name, "%s* cores[%d];" % (one_name, n_cores))
+    all = All(all_instance_name, [[ones[i] for i in range(n_cores)]])
+
+    Enqueue = create_element(prefix + "enqueue_ele",
+                             [Port("in", [type_star, "size_t"])], [],
+                             r'''
+           (%s x, size_t c) = in();
+           %s* p = this->cores[c];
+           __sync_synchronize();
+           int next = p->tail + 1;
+           if(next >= p->size) next = 0;
+           if(next == p->head) {
+             printf("Circular queue '%s' is full. A packet is dropped.\n");
+           } else {
+             rte_memcpy(&p->data[p->tail], x, sizeof(%s));
+             p->tail = next;
+           }
+           __sync_synchronize();
+           ''' % (type_star, one_name, name, type), None, [(all_name, "this")])
+
+    Dequeue = create_element(prefix + "dequeue_ele",
+                             [Port("in", ["size_t", "size_t"])], [Port("out", [type_star])],
+                             r'''
+        (size_t c, size_t peak) = in();
+        %s* p = this->cores[c];
+           %s x = NULL;
+           bool avail = false;
+           if(p->head + peak == p->tail) {
+             //printf("Dequeue an empty circular queue '%s'. Default value is returned (for API call).\n");
+             //exit(-1);
+           } else {
+               avail = true;
+               x = &p->data[p->head + peak];
+           }
+           output { out(x); }
+           ''' % (one_name, type_star, name), None, [(all_name, "this")])
+
+    Advance = create_element(prefix + "dequeue_advance",
+                             [Port("in", ["size_t", "size_t"])], [],
+                             r'''
+        (size_t c, size_t skip) = in();
+        %s* p = this->cores[c];
+        p->head = (p->head + skip) %s p->size;
+           ''' % (one_name, '%'), None, [(all_name, "this")])
+
+    enq = Enqueue(prefix + "enqueue", [all])
+    deq = Dequeue(prefix + "dequeue", [all])
+    adv = Advance(prefix + "advance", [all])
+    return enq, deq, adv
 
 ############################ Variable-size queue ##############################
 

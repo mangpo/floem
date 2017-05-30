@@ -29,7 +29,7 @@ typedef struct {
     uint16_t len;
 } __attribute__((packed)) q_entry;
 
-q_entry *enqueue_alloc(circular_queue* q, size_t len) {
+static q_entry *enqueue_alloc(circular_queue* q, size_t len) {
     //printf("enq: queue = %ld\n", q->queue);
     volatile uint16_t *flags;
     q_entry *eqe, *dummy;
@@ -89,7 +89,7 @@ q_entry *enqueue_alloc(circular_queue* q, size_t len) {
     return eqe;
 }
 
-void enqueue_submit(q_entry *e)
+static void enqueue_submit(q_entry *e)
 {
     e->flags |= FLAG_OWN;
     //printf("enq_submit: entry = %ld, len = %d\n", e, e->len);
@@ -97,7 +97,7 @@ void enqueue_submit(q_entry *e)
     __sync_synchronize();
 }
 
-q_entry *dequeue_get(circular_queue* q) {
+static q_entry *dequeue_get(circular_queue* q) {
     q_entry* eqe = q->queue + q->offset;
     __sync_synchronize();
     if(eqe->flags & FLAG_OWN) {
@@ -110,7 +110,7 @@ q_entry *dequeue_get(circular_queue* q) {
         return NULL;
 }
 
-void dequeue_release(q_entry *e)
+static void dequeue_release(q_entry *e)
 {
     e->flags &= ~FLAG_OWN;
     //printf("release: entry=%ld\n", e);
