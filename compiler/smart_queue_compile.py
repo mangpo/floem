@@ -377,6 +377,9 @@ def compile_smart_queues(g, src2fields):
         compile_smart_queue(g, q, src2fields)
 
     # compress_original pipeline states
+    if g.state_mapping is None:
+        return
+
     compress_id = 0
     for inst_name in original_pipeline_states:
         state = g.pipeline_states[inst_name]

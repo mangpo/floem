@@ -32,7 +32,7 @@ class Thread:
     def run(self, *instances):
         for i in range(len(instances)):
             instance = instances[i]
-            if isinstance(instance, ElementInstance):
+            if isinstance(instance, ElementInst):
                 scope[-1].append(ResourceMap(self.name, instance.name))
             elif isinstance(instance, CompositeInstance):
                 if instance.impl_instances_names:
@@ -99,7 +99,7 @@ def master_process(p):
         scope[-1].append(MasterProcess(p))
 
 
-class ElementInstance:
+class ElementInst:
     def __init__(self, name, instance, connect):
         self.name = name
         self.instance = instance
@@ -319,7 +319,7 @@ def create_element(ele_name, inports, outports, code, local_state=None, state_pa
             else:
                 return tuple([OutputPortCollect(inst_name, port.name, port.argtypes) for port in e.outports])
         # end connect
-        return ElementInstance(inst_name, instance, connect)
+        return ElementInst(inst_name, instance, connect)
     # end create_instance
     return create_instance
 
