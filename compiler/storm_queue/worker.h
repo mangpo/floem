@@ -329,4 +329,8 @@ struct tuple* random_rank(size_t i);
 
 #define PROC_FREQ_MHZ	(uint64_t)(PROC_FREQ / 1000)
 
+#define BATCH_SIZE	64			// in tuples
+#define BATCH_DELAY	(2 * PROC_FREQ)		// (2 * PROC_FREQ) in cycles
+#define LINK_RTT	(130)			// in us
+
 #endif

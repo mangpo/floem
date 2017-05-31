@@ -1,7 +1,7 @@
 from elements_library import *
 import queue
 
-test = "rank"
+test = "count"
 inject_func = "random_" + test
 workerid = {"spout": 0, "count": 1, "rank": 2}
 
@@ -40,34 +40,78 @@ print_tuple_creator = create_element("print_tuple_creator",
                                       ''')
 print_tuple = print_tuple_creator()
 
-queue_state = create_state("queue_state", "int core;")
-my_queue_state = queue_state("my_queue_state", [0])
 
-queue_schedule_creator = create_element("queue_schedule_creator",
+
+
+
+#######################################
+# queue_state = create_state("queue_state", "int core;")
+# my_queue_state = queue_state("my_queue_state", [0])
+#
+# queue_schedule_simple = create_element("queue_schedule_simple",
+#                               [],
+#                               [Port("out", ["size_t"])],
+#                               r'''
+#     int core = this->core;
+#     this->core = (this->core + 1) %s %d;
+#     output { out(core); }
+#                               ''' % ('%', n_cores),
+#                               None, [("queue_state", "this")])
+#
+# queue_schedule = queue_schedule_simple("queue_schedule", [my_queue_state])
+#
+# adv = create_element_instance("adv",
+#                               [Port("in_val", ["struct tuple*"]), Port("in_core", ["size_t"])],
+#                               [Port("out", ["size_t"])],
+#                               r'''
+#     (struct tuple* t) = in_val();
+#     (size_t core) = in_core();
+#     if(t != NULL) { printf("tx_deq: core = %d\n", core); fflush(stdout); }
+#     output switch { case (t != NULL): out(core); }
+#                               ''')
+
+#######################################
+
+queue_state = create_state("queue_batch", "int core; int batch_size; uint64_t start;")
+my_queue_state = queue_state("my_queue_batch", [0, 0, 0, 0])
+
+queue_schedule_batch = create_element("queue_schedule_batch",
                               [],
-                              [Port("out", ["size_t"])],
+                              [Port("out", ["size_t", "size_t"])],
                               r'''
-    int core = this->core;
-    this->core = (this->core + 1) %s %d;
-    output { out(core); }
-                              ''' % ('%', n_cores),
-                              None, [("queue_state", "this")])
+    output { out(this->core, this->batch_size); }
+                              ''',
+                              None, [("queue_batch", "this")])
 
-queue_schedule = queue_schedule_creator("queue_schedule", [my_queue_state])
+queue_schedule = queue_schedule_batch("queue_schedule", [my_queue_state])
 
-adv = create_element_instance("adv",
-                              [Port("in_val", ["struct tuple*"]), Port("in_core", ["size_t"])],
-                              [Port("out", ["size_t"])],
+adv_creator = create_element("adv_creator",
+                              [Port("in", ["struct tuple*"])],
+                              [Port("out", ["size_t", "size_t"])],
                               r'''
-    (struct tuple* t) = in_val();
-    (size_t core) = in_core();
-    //if(t != NULL) { printf("tx_deq: core = %d\n", core); fflush(stdout); }
-    output switch { case (t != NULL): out(core); }
-                              ''')
+    (struct tuple* t) = in();
+    size_t core = 0;
+    size_t skip = 0;
+    if(t != NULL) this->batch_size++;
+    if(this->batch_size >= BATCH_SIZE || rdtsc() - this->start >= BATCH_DELAY) {
+        core = this->core;
+        skip = this->batch_size;
+        this->core = (this->core + 1) %s %d;
+        this->batch_size = 0;
+        if(skip>0) printf("advance: core = %s, skip = %s, %s >= %s\n", core, skip, rdtsc() - this->start, BATCH_DELAY);
+        this->start = rdtsc();
+    }
+
+    output switch { case (skip>0): out(core, skip); }
+                              ''' % ('%', n_cores, '%ld', '%ld', '%.2ld', '%lf'),
+                              None, [("queue_batch", "this")])
+
+adv = adv_creator("adv", [my_queue_state])
 
 MAX_ELEMS = (4 * 1024)
 rx_enq, rx_deq, rx_adv = queue.create_copy_queue_many2many_inc_instances("rx_queue", "struct tuple", MAX_ELEMS, n_cores, blocking=True)
-tx_enq, tx_deq, tx_adv = queue.create_copy_queue_many2many_inc_instances("tx_queue", "struct tuple", MAX_ELEMS, n_cores, blocking=False)
+#tx_enq, tx_deq, tx_adv = queue.create_copy_queue_many2many_inc_instances("tx_queue", "struct tuple", MAX_ELEMS, n_cores, blocking=False)
+tx_enq, tx_deq, tx_adv = queue.create_copy_queue_many2many_batch_instances("tx_queue", "struct tuple", MAX_ELEMS, n_cores)
 
 
 @internal_trigger("nic_rx", process="flexstorm")
@@ -92,15 +136,25 @@ def outqueue_put(t):
     tx_enq(t)
 
 
+# @internal_trigger("nic_tx", process="flexstorm")
+# def nic_tx():
+#     core = queue_schedule()
+#     t = tx_deq(core)
+#     t = print_tuple(t)
+#     core = adv(t, core)
+#     tx_adv(core)
+#
+#     run_order(print_tuple, tx_adv)
+
 @internal_trigger("nic_tx", process="flexstorm")
 def nic_tx():
-    core = queue_schedule()
-    t = tx_deq(core)
+    core_i = queue_schedule()
+    t = tx_deq(core_i)
     t = print_tuple(t)
-    core = adv(t, core)
-    tx_adv(core)
+    core_i = adv(t)
+    tx_adv(core_i)
 
-    run_order(print_tuple, tx_adv)
+run_order(print_tuple, tx_adv)
 
 
 c = Compiler()

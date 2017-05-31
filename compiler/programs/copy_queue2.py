@@ -10,12 +10,12 @@ def enqueue(input):
     enq(input)
 
 @API("peak", default_return="NULL")
-def peak(core):
-    return deq(core)
+def peak(core_i):
+    return deq(core_i)
 
 @API("advance")
-def advance(core):
-    adv(core)
+def advance(core_i):
+    adv(core_i)
 
 c = Compiler()
 c.include = r'''

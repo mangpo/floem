@@ -315,15 +315,16 @@ def create_copy_queue_many2many_batch_instances(name, type, size, n_cores):
         %s* p = this->cores[c];
            %s x = NULL;
            bool avail = false;
-           if(p->head + peak == p->tail) {
+           size_t index = (p->head + peak) %s p->size;
+           if(index == p->tail) {
              //printf("Dequeue an empty circular queue '%s'. Default value is returned (for API call).\n");
              //exit(-1);
            } else {
                avail = true;
-               x = &p->data[p->head + peak];
+               x = &p->data[index];
            }
            output { out(x); }
-           ''' % (one_name, type_star, name), None, [(all_name, "this")])
+           ''' % (one_name, type_star, '%', name), None, [(all_name, "this")])
 
     Advance = create_element(prefix + "dequeue_advance",
                              [Port("in", ["size_t", "size_t"])], [],
