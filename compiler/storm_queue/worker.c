@@ -16,7 +16,29 @@ int *get_task2executorid() {
   return task2executorid;
 }
 
-struct tuple* random_tuple(size_t i) {
+struct tuple* random_spout(size_t i) {
+  return NULL;
+}
+
+struct tuple* random_count(size_t i) {
+  struct tuple* t = (struct tuple*) malloc(sizeof(struct tuple));
+  t->task = 20;
+  if(i%4==0) {
+    strcpy(t->v[0].str, "mangpo");
+  }
+  else if(i%4==1) {
+    strcpy(t->v[0].str, "maprang");
+  }
+  else if(i%4==2) {
+    strcpy(t->v[0].str, "hua");
+  }
+  else {
+    strcpy(t->v[0].str, "pom");
+  }
+  return t;
+}
+
+struct tuple* random_rank(size_t i) {
   struct tuple* t = (struct tuple*) malloc(sizeof(struct tuple));
   t->task = 20;
   if(i%4==0) {

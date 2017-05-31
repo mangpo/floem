@@ -56,17 +56,17 @@ void spout_execute(const struct tuple *t, struct executor *self)
 
   assert(t == NULL);
 
-  if(!send) {
+  //if(!send) {
     usleep(WAIT_TIME * 1000000);
-    send = true;
-  }
+  //  send = true;
+  //}
 
   /* usleep(100000); */
   /* sleep(1); */
 
   memset(&myt, 0, sizeof(struct tuple));
   strcpy(myt.v[0].str, st->words[i]);
-  /* printf("%d: Spout emitting '%s'.\n", self->taskid, st->words[i]); */
+  printf("%d: Spout emitting '%s'.\n", self->taskid, st->words[i]);
   tuple_send(&myt, self);
 
 #ifdef TWITTER_FEED

@@ -16,14 +16,14 @@ void executor_thread(void *arg) {
       //if(t != NULL) {
         uint64_t starttime = rdtsc();
         self->execute(t, self);
-        printf("Tuple %d done\n", t->task);
+        //printf("Tuple %d done\n", t->task);
         uint64_t now = rdtsc();
         inqueue_advance(tid);
         self->execute_time += now - starttime;
         self->numexecutes++;
       //}
     } else {
-      printf("spout\n");
+      //printf("spout\n");
       uint64_t starttime = rdtsc();
       self->execute(NULL, self);
       uint64_t now = rdtsc();

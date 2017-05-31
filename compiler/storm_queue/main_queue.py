@@ -1,9 +1,13 @@
 from elements_library import *
 import queue
 
+test = "rank"
+inject_func = "random_" + test
+workerid = {"spout": 0, "count": 1, "rank": 2}
+
 n_cores = 4
 
-Inject = create_inject("inject", "struct tuple*", 1000, "random_tuple", 1000000)
+Inject = create_inject("inject", "struct tuple*", 1000, inject_func, 1000000)
 inject = Inject()
 
 task_master = create_state("task_master", "int *task2executorid;")
@@ -14,8 +18,9 @@ get_core_creator = create_element("get_core_creator",
                               [Port("out", ["struct tuple*", "size_t"])],
                               r'''
     struct tuple* t = in();
-    size_t id = this->task2executorid[t->task];
-    output { out(t, id); }
+    size_t id = 0;
+    if(t != NULL) id = this->task2executorid[t->task];
+    output switch { case (t != NULL): out(t, id); }
                               ''',
                               None, [("task_master", "this")])
 
@@ -43,7 +48,7 @@ queue_schedule_creator = create_element("queue_schedule_creator",
                               [Port("out", ["size_t"])],
                               r'''
     int core = this->core;
-    this->core = this->core %s %d;
+    this->core = (this->core + 1) %s %d;
     output { out(core); }
                               ''' % ('%', n_cores),
                               None, [("queue_state", "this")])
@@ -56,6 +61,7 @@ adv = create_element_instance("adv",
                               r'''
     (struct tuple* t) = in_val();
     (size_t core) = in_core();
+    //if(t != NULL) { printf("tx_deq: core = %d\n", core); fflush(stdout); }
     output switch { case (t != NULL): out(core); }
                               ''')
 
@@ -103,6 +109,6 @@ c.include = r'''
 #include "worker.h"
 #include "storm.h"
 '''
-c.depend = ['list', 'hash', 'hash_table', 'spout', 'count', 'rank', 'worker', 'flexstorm']
+c.depend = {"test_storm": ['list', 'hash', 'hash_table', 'spout', 'count', 'rank', 'worker', 'flexstorm']}
 c.generate_code_as_header("flexstorm")
-c.compile_and_run([("test_storm", 2)])
+c.compile_and_run([("test_storm", workerid[test])])
