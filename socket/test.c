@@ -26,9 +26,6 @@ void server() {
   int listener = 0;
   struct sockaddr_in serv_addr; 
 
-  char sendBuff[1025];
-  time_t ticks;
-
   printf("server starts...\n");
 
   listener = socket(AF_INET, SOCK_STREAM, 0);
@@ -73,18 +70,18 @@ void server() {
   
   size_t rest = 0;
   struct tuple data[N];
-  while(rest < N) {
+  while(rest == 0) {
     //printf("wait...\n");
     if(FD_ISSET(channel, &readfds)) {
       char *bufp = ((char *) &data) + rest;
       ssize_t ret = recv(channel, bufp, N * sizeof(struct tuple), 0);
       assert(ret != -1);
       rest += ret;
-      printf("recv %ld bytes\n", ret);
-      }
+      printf("recv %ld bytes\n", rest);
+    }
   }
 
-  for(int i=0; i<N; i++) {
+  for(int i=0; i<rest/sizeof(struct tuple); i++) {
     printf("tuple[%d]: v[0].str = %s, v[0].integer = %d\n", i, data[i].v[0].str, data[i].v[0].integer);
   }
 
