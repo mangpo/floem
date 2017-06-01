@@ -903,9 +903,13 @@ def get_state_mapping(content):
                 fixed_len[name] = (t + '*')
                 fixed_len_order.append(name)
             except ValueError:
-                assert l in fixed_len, ("The size of field '%s' should refer to previously defined field." % var)
-                variable_len[name] = (t, l)
-                variable_len_order.append(name)
+                #assert l in fixed_len, ("The size of field '%s' should refer to previously defined field." % var)
+                if l in fixed_len:
+                    variable_len[name] = (t, l)
+                    variable_len_order.append(name)
+                else:
+                    fixed_len[name] = (t + '*')
+                    fixed_len_order.append(name)
         else:
             extras[var] = (special_t, extra)
             fixed_len[var] = t

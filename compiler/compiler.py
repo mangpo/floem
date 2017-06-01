@@ -408,6 +408,10 @@ def declare_state(name, state_instance, ext):
 def init_value(val):
     if isinstance(val, AddressOf):
         return '&' + val.of
+    elif val is True:
+        return "true"
+    elif val is False:
+        return "false"
     else:
         return val
 
