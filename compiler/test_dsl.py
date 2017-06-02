@@ -56,6 +56,7 @@ class TestDSL(unittest.TestCase):
                  "forkjoin.py",
                  "double_connection.py",  # TODO: Is this the semantics we want?
                  "classify_return2.py",
+                 "batch_simple.py",
                  ]
 
         tests2 = ["join.py",

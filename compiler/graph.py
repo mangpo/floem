@@ -179,10 +179,11 @@ class Element:
                     self.output_code = {}
 
         # Check that it doesn't fire output port in program area.
-        occurrence_program = self.count_ports_occurrence(program_code)
-        for name, count in occurrence_program:
-            if count > 0:
-                raise Exception("Element '%s' fires port '%s' outside output { ... } block." % (self.name, name))
+        if not self.output_fire == "multi":
+            occurrence_program = self.count_ports_occurrence(program_code)
+            for name, count in occurrence_program:
+                if count > 0:
+                    raise Exception("Element '%s' fires port '%s' outside output { ... } block." % (self.name, name))
 
         self.code = program_code
 

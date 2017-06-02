@@ -4,11 +4,13 @@ from smart_queue_compile import compile_smart_queues
 
 
 def allocate_pipeline_state(element, state):
+    assert not element.output_fire == "multi", "Batch element '%s' cannot allocate pipeline state." % element.name
     add = "  {0} *_state = ({0} *) malloc(sizeof({0}));\n".format(state)
     element.code = add + element.code
 
 
 def insert_pipeline_state(element, state, start, instance, g):
+    assert not element.output_fire == "multi", "Cannot insert pipeline state for batch element '%s'." % element.name
     no_state = True
     if not start:
         for port in element.inports:

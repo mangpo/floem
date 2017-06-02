@@ -29,6 +29,9 @@ def mark_return(g, api, cover_map, target, node_name, visit):
         if instance.element.output_fire == "zero_or_one":
             visit[node_name] = False
             return False
+        elif instance.element.output_fire == "multi":
+            raise Exception("API '%s', which returns value, should not contain element '%s', which fires its output port multiple times." %
+                            (api.name, instance.name))
         else:
             visit[node_name] = True
             return True

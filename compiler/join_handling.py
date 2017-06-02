@@ -264,10 +264,14 @@ def dfs_cover(g, node_name, port_name, target, num_ports, answer):
             cover = cover.union(l_cover)
         elif element.output_fire == "one":
             if len(cover_map) > 0 and not cover == l_cover:  # TODO: check
-                raise Exception("When element instance '%s' fire only one port. All its output ports must fire the same input ports of the join instance '%s'."
+                raise Exception("When element instance '%s' fires only one port. All its output ports must fire the same input ports of the join instance '%s'."
                                 % (node_name, target))
             cover_map[out_port] = l_cover
             cover = l_cover
+        elif element.output_fire == "multi":
+            if not l_cover.empty():
+                raise Exception("When element instance '%s' may fire its output port multiple times.\n" %node_name +
+                                "Its output port must trigger all ports of the join instance '%s'." % target)
         else:
             if not l_cover.full() and not l_cover.empty():
                 raise Exception("When element instance '%s' fire zero or one port. Each of its output ports must fire none or all input ports of the join instance '%s'."

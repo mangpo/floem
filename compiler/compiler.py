@@ -143,6 +143,7 @@ def rename_state(rename, src):
                 index = index + match.start(1) + len(old)
     return src
 
+
 def element_to_function(instance, state_rename, graph, ext):
     """
     Turn an element into a function.
@@ -238,45 +239,47 @@ def element_to_function(instance, state_rename, graph, ext):
                 last_port[f] = name
 
     # Replace output ports with function calls
-    for o in output2func:
-        m = re.search('(' + o + '[ ]*\()[^;]*;', out_src)
-        if m is None:
-            raise Exception("Element instance '%s' never send data from output port '%s'." % (funcname,o))
-        (f, fport) = output2func[o]
-        if o in instance.join_output2save:
-            if isinstance(fport, list):
-                raise Exception(
-                    "Join element instance '%s' has multiple input ports from one single port of an element instance '%s."
-                    % (f, funcname))
-            # Save output to join buffer instead of calling the next function
-            join = instance.join_output2save[o]
-            call = get_join_buffer_name(join) + "_" + fport + "_save(_p_" + join
-            if not out_src[m.end(1)] == ")":
-                call += ", "
-
-            # Insert join_call right after saving the buffer for it.
-            # This is to preserve the right order of function calls.
-            if f in join_call_map and last_port[f] == o:
-                out_src = out_src[:m.start(1)] + call + out_src[m.end(1):m.end(0)] + \
-                          join_call_map[f] + out_src[m.end(0):]
-            else:
-                out_src = out_src[:m.start(1)] + call + out_src[m.end(1):m.end(0)] + out_src[m.end(0):]
-        else:
-            call = ""
-            if f in instance.API_return_from:
-                call += "ret = "
-            call += f + "("
-            for join in graph.instances[f].join_func_params:
-                call += "_p_%s, " % join
-            out_src = out_src[:m.start(1)] + call + out_src[m.end(1):]
-            
     if element.output_fire == "multi":
+        # Batch element: replace inside main src
         for o in output2func:
             (f, fport) = output2func[o]
             m = re.search('[^a-zA-Z_0-9](' + o + ')[ ]*\([^;]*;', src)
             while m:
                 src = src[:m.start(1)] + f + src[m.end(1):]
                 m = re.search('[^a-zA-Z_0-9](' + o + ')[ ]*\([^;]*;', src)
+    else:
+        # Non-batch element: replace in out_src
+        for o in output2func:
+            m = re.search('(' + o + '[ ]*\()[^;]*;', out_src)
+            if m is None:
+                raise Exception("Element instance '%s' never send data from output port '%s'." % (funcname, o))
+            (f, fport) = output2func[o]
+            if o in instance.join_output2save:
+                if isinstance(fport, list):
+                    raise Exception(
+                        "Join element instance '%s' has multiple input ports from one single port of an element instance '%s."
+                        % (f, funcname))
+                # Save output to join buffer instead of calling the next function
+                join = instance.join_output2save[o]
+                call = get_join_buffer_name(join) + "_" + fport + "_save(_p_" + join
+                if not out_src[m.end(1)] == ")":
+                    call += ", "
+
+                # Insert join_call right after saving the buffer for it.
+                # This is to preserve the right order of function calls.
+                if f in join_call_map and last_port[f] == o:
+                    out_src = out_src[:m.start(1)] + call + out_src[m.end(1):m.end(0)] + \
+                              join_call_map[f] + out_src[m.end(0):]
+                else:
+                    out_src = out_src[:m.start(1)] + call + out_src[m.end(1):m.end(0)] + out_src[m.end(0):]
+            else:
+                call = ""
+                if f in instance.API_return_from:
+                    call += "ret = "
+                call += f + "("
+                for join in graph.instances[f].join_func_params:
+                    call += "_p_%s, " % join
+                out_src = out_src[:m.start(1)] + call + out_src[m.end(1):]
 
 
     # Replace API output port with function to create return state
