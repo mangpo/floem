@@ -624,6 +624,56 @@ class TestDSL(unittest.TestCase):
         else:
             self.fail('Exception is not raised.')
 
+    def test_batch_error(self):
+        reset()
+        gen = create_element_instance("gen", [], [Port("out", ["int"])],
+                                      r'''
+            for(int i=0; i<10; i++)
+                out(i);
+            output multiple;
+                                      ''')
+
+        @API("batch_run")
+        def batch_run():
+            return gen()
+
+        c = Compiler()
+        try:
+            c.generate_code_and_run()
+        except Exception as e:
+            self.assertNotEqual(e.message.find("API 'batch_run', which returns value, should not contain element 'gen'"), -1)
+        else:
+            self.fail('Exception is not raised.')
+
+    def test_batch_join_error(self):
+        reset()
+        fork = create_fork_instance("myfork", 2, "int")
+        Forward = create_identity("Forward", "int")
+        nop = Forward()
+        gen = create_element_instance("gen", [Port("in", ["int"])], [Port("out", ["int"])],
+                                      r'''
+            in();
+            for(int i=0; i<10; i++)
+                out(i);
+            output multiple;
+                                      ''')
+        Join = create_add("Join", "int")
+        join = Join("join")
+
+        x1, x2 = fork()
+        join(gen(x1), nop(x2))
+
+        try:
+            c = Compiler()
+            c.resource = False
+            c.remove_unused = False
+            c.generate_code_and_run()
+        except Exception as e:
+            self.assertNotEqual(e.message.find("When element instance 'gen' may fire its output port multiple times."), -1)
+            self.assertNotEqual(e.message.find("Its output port must trigger all ports of the join instance 'join'."), -1)
+        else:
+            self.fail('Exception is not raised.')
+
 
 if __name__ == '__main__':
     unittest.main()
