@@ -162,12 +162,21 @@ class Element:
 
                 self.output_code = cases_exprs
             else:
-                # no output area
-                if len(self.outports) > 0:
-                    raise Exception("Element '%s' does not have output { ... } block." % self.name)
-                program_code = self.code
-                self.output_fire = "all"
-                self.output_code = {}
+                m = re.search('output[ ]+multiple[ ]*;', self.code)
+                if m:
+                    program_code = self.code[:m.start()]
+                    self.output_fire = "multi"
+                    self.output_code = {}
+                    assert len(self.outports) == 1, \
+                        ("Element '%s' must have only one output port because it may fire the output port more than once."
+                         % self.name)
+                else:
+                    # no output area
+                    if len(self.outports) > 0:
+                        raise Exception("Element '%s' does not have output { ... } block." % self.name)
+                    program_code = self.code
+                    self.output_fire = "all"
+                    self.output_code = {}
 
         # Check that it doesn't fire output port in program area.
         occurrence_program = self.count_ports_occurrence(program_code)
@@ -183,6 +192,8 @@ class Element:
             if self.output_code:
                 raise Exception("Element's output_fire is None, but its output_code is not None.")
             return src
+        elif self.output_fire == "multi":
+            return ""
 
         elif self.output_fire == "all":
             if len(order) == 0:

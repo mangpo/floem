@@ -269,6 +269,15 @@ def element_to_function(instance, state_rename, graph, ext):
             for join in graph.instances[f].join_func_params:
                 call += "_p_%s, " % join
             out_src = out_src[:m.start(1)] + call + out_src[m.end(1):]
+            
+    if element.output_fire == "multi":
+        for o in output2func:
+            (f, fport) = output2func[o]
+            m = re.search('[^a-zA-Z_0-9](' + o + ')[ ]*\([^;]*;', src)
+            while m:
+                src = src[:m.start(1)] + f + src[m.end(1):]
+                m = re.search('[^a-zA-Z_0-9](' + o + ')[ ]*\([^;]*;', src)
+
 
     # Replace API output port with function to create return state
     if instance.API_return_final:
