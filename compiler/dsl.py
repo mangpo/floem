@@ -6,6 +6,7 @@ import inspect
 # Global variables for constructing a program.
 scope = [[]]
 stack = []
+inst_collection = []
 state_mapping = {}
 fresh_id = 0
 
@@ -14,6 +15,7 @@ def reset():
     global scope, stack, state_mapping, fresh_id
     scope = [[]]
     stack = []
+    inst_collection = [InstancesCollection()]
     state_mapping = {}
     fresh_id = 0
 
@@ -23,6 +25,24 @@ def get_node_name(name):
         return "_".join(stack) + "_" + name
     else:
         return name
+
+
+class InstancesCollection:
+    def __init__(self):
+        spec = set()
+        impl = set()
+
+    def add(self):
+        pass
+
+    def union(self, other):
+        pass
+
+    def union_spec(self, other):
+        pass
+
+    def union_impl(self, other):
+        pass
 
 
 class Thread:
@@ -264,6 +284,7 @@ def create_element(ele_name, inports, outports, code, local_state=None, state_pa
     scope[-1].append(e)
 
     def create_instance(inst_name=None, args=[]):
+        inst_collection[-1].add(inst_name)
         global fresh_id
         if inst_name is None:
             inst_name = ele_name + str(fresh_id)
@@ -280,6 +301,7 @@ def create_element(ele_name, inports, outports, code, local_state=None, state_pa
             :param ports: a list of (element_instance, out_port)
             :return:
             """
+            inst_collection[-1].add(inst_name)
             # assert len(ports) == len(e.inports), ("Instance of element '%s' requires %d inputs, %d inputs are given."
             #                                       % (ele_name, len(e.inports), len(ports)))
             for i in range(len(ports)):
@@ -466,27 +488,37 @@ def create_composite(composite_name, program):
                 "Name of element instance should be string. '%s' is given." % str(inst_name)
 
         fake_ports = [InputPortCollect() for i in range(n_args)]
-        global stack, scope
+        global stack, scope, inst_collection
         scope.append([])
         stack.append(inst_name)
+        inst_collection.append(InputPortCollect())
         outs = program(*fake_ports)
         stack = stack[:-1]
         my_scope = scope[-1]
         scope = scope[:-1]
         scope[-1] = scope[-1] + my_scope
+        my_collection = inst_collection[-1]
+        inst_collection = inst_collection[:-1]
 
         check_composite_outputs(inst_name, outs)
         check_composite_inputs(inst_name, fake_ports)
-        spec_impl = has_spec_impl(my_scope)
-        if spec_impl:
-            spec_instances_names = extract_instances_names(my_scope, fake_ports, outs, spec=True)
-            impl_instances_names = extract_instances_names(my_scope, fake_ports, outs, spec=False)
-        else:
-            spec_instances_names = extract_instances_names(my_scope, fake_ports, outs)
-            impl_instances_names = None
+        # spec_impl = has_spec_impl(my_scope)
+        # if spec_impl:
+        #     spec_instances_names = extract_instances_names(my_scope, fake_ports, outs, spec=True)
+        #     impl_instances_names = extract_instances_names(my_scope, fake_ports, outs, spec=False)
+        # else:
+        #     spec_instances_names = extract_instances_names(my_scope, fake_ports, outs)
+        #     impl_instances_names = None
+
         roots = extract_roots(my_scope, fake_ports, outs)
 
+        inst_collection[-1].union(my_collection)
+        spec_instances_names = my_collection.get_spec()
+        impl_instances_names = my_collection.get_impl()
+
         def connect(*ports):
+            inst_collection[-1].union(my_collection)
+
             for i in range(len(ports)):
                 from_port = ports[i]
                 to_port = fake_ports[i]
@@ -735,27 +767,38 @@ def create_spec_impl(name, spec_func, impl_func):
         stack = stack[:-1]
         return outs
 
-    global scope
+    global scope, inst_collection
     spec_fake_inports = [InputPortCollect() for i in range(n_args)]
     scope.append([])
+    inst_collection.append(InstancesCollection())
     spec_outs = create_instance(name, spec_func, spec_fake_inports)
     spec_scope = scope[-1]
     scope = scope[:-1]
     scope[-1].append(Spec(spec_scope))
+    spec_collection = inst_collection[-1]
+    inst_collection = inst_collection[:-1]
 
     impl_fake_inports = [InputPortCollect() for i in range(n_args)]
     scope.append([])
+    inst_collection.append(InstancesCollection())
     impl_outs = create_instance(name, impl_func, impl_fake_inports)
     impl_scope = scope[-1]
     scope = scope[:-1]
     scope[-1].append(Impl(impl_scope))
+    impl_collection = inst_collection[-1]
+    inst_collection = inst_collection[:-1]
 
     check_composite_inputs(name, spec_fake_inports)
     check_composite_inputs(name, impl_fake_inports)
     check_composite_outputs(name, spec_outs)
     check_composite_outputs(name, impl_outs)
-    spec_instances_names = extract_instances_names(spec_scope, spec_fake_inports, spec_outs)
-    impl_instances_names = extract_instances_names(impl_scope, impl_fake_inports, impl_outs)
+    # spec_instances_names = extract_instances_names(spec_scope, spec_fake_inports, spec_outs)
+    # impl_instances_names = extract_instances_names(impl_scope, impl_fake_inports, impl_outs)
+
+    spec_instances_names = spec_collection.get_spec()
+    impl_instances_names = impl_collection.get_impl()
+    inst_collection[-1].union_spec(spec_collection)
+    inst_collection[-1].union_impl(impl_instances_names)
 
     outs = None
     if isinstance(spec_outs, tuple):
@@ -786,6 +829,9 @@ def create_spec_impl(name, spec_func, impl_func):
         outs = None
 
     def connect(*ports):
+        inst_collection[-1].union_spec(spec_collection)
+        inst_collection[-1].union_impl(impl_instances_names)
+
         for i in range(len(ports)):
             from_port = ports[i]
             spec_to_port = spec_fake_inports[i]
