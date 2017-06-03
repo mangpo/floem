@@ -55,16 +55,24 @@ FROM_NET_SAVE = create_element("FROM_NET_SAVE", [], [Port("out", [])],
             None, [("stream", "this")])
 from_net_save = FROM_NET_SAVE("from_net_save", [s])
 
-FROM_NET_READ = create_element("FROM_NET_READ", [Port("in", [])], [],
+FROM_NET_READ = create_element("FROM_NET_READ", [Port("in", [])], [Port("out", ["item*"])],
             r'''
     int i = this->active;
     for(int k = 0; k < this->rest[i] / sizeof(item); k++) {
         item *t = &this->inbuf[i][k];
-        printf("item %d %d\n", t->x, t->y);
+        out(t);
+        //printf("item %d %d\n", t->x, t->y);
     }
+    output multiple;
             ''',
             None, [("stream", "this")])
 from_net_read = FROM_NET_READ("from_net_read", [s])
+
+display = create_element_instance("display", [Port("in", ["item*"])], [],
+                                  r'''
+    (item* t) = in();
+    printf("item %d %d\n", t->x, t->y);
+                                  ''')
 
 ##########################
 Sock = create_state("Sock", r'''
@@ -92,7 +100,7 @@ to_net_send = TO_NET_SEND("to_net_send", [sock])
 
 @internal_trigger("print_item")
 def print_item():
-    from_net_read(from_net_save())
+    display(from_net_read(from_net_save()))
 
 @API("send_item")
 def send_item(t):
