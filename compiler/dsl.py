@@ -3,16 +3,51 @@ import compiler
 import desugaring
 import inspect
 
+
+class InstancesCollection:
+    def __init__(self):
+        self.spec = set()
+        self.impl = None
+
+    def add(self, x):
+        self.spec.add(x)
+        if self.impl:
+            self.impl.add(x)
+
+    def union(self, other):
+        self.spec = self.spec.union(other.spec)
+        if self.impl and other.impl:
+            self.impl = self.impl.union(other.impl)
+        elif self.impl:
+            self.impl = self.impl.union(other.spec)
+        elif other.impl:
+            self.impl = other.impl
+
+    def union_spec(self, other):
+        self.spec = self.spec.union(other.spec)
+
+    def union_impl(self, other):
+        if self.impl:
+            self.impl = self.impl.union(other.spec)
+        else:
+            self.impl = other.spec
+
+    def get_spec(self):
+        return self.spec
+
+    def get_impl(self):
+        return self.impl
+
+
 # Global variables for constructing a program.
 scope = [[]]
 stack = []
-inst_collection = []
+inst_collection = [InstancesCollection()]
 state_mapping = {}
 fresh_id = 0
 
-
 def reset():
-    global scope, stack, state_mapping, fresh_id
+    global scope, stack, state_mapping, fresh_id, inst_collection
     scope = [[]]
     stack = []
     inst_collection = [InstancesCollection()]
@@ -26,23 +61,6 @@ def get_node_name(name):
     else:
         return name
 
-
-class InstancesCollection:
-    def __init__(self):
-        spec = set()
-        impl = set()
-
-    def add(self):
-        pass
-
-    def union(self, other):
-        pass
-
-    def union_spec(self, other):
-        pass
-
-    def union_impl(self, other):
-        pass
 
 
 class Thread:
@@ -284,7 +302,6 @@ def create_element(ele_name, inports, outports, code, local_state=None, state_pa
     scope[-1].append(e)
 
     def create_instance(inst_name=None, args=[]):
-        inst_collection[-1].add(inst_name)
         global fresh_id
         if inst_name is None:
             inst_name = ele_name + str(fresh_id)
@@ -295,6 +312,7 @@ def create_element(ele_name, inports, outports, code, local_state=None, state_pa
         inst_name = get_node_name(inst_name)
         instance = compiler.ElementInstance(ele_name, inst_name, args)
         scope[-1].append(instance)
+        inst_collection[-1].add(inst_name)
 
         def connect(*ports):
             """
@@ -356,67 +374,6 @@ def check_no_spec_impl(name, my_scope):
     for e in my_scope:
         if isinstance(e, Spec) or isinstance(e, Impl):
             raise Exception("API or internal trigger '%s' cannot wrap around spec and impl." % name)
-
-
-def has_spec_impl(my_scope):
-    for e in my_scope:
-        if isinstance(e, Spec):
-            return True
-        elif isinstance(e, Impl):
-            return True
-    return False
-
-
-def extract_instances_names(my_scope, inputs, outputs, spec=True):
-    names = set()
-    for e in my_scope:
-        if isinstance(e, compiler.ElementInstance):
-            names.add(e.name)
-        elif isinstance(e, compiler.Connect):
-            names.add(e.ele1)
-            names.add(e.ele2)
-        elif isinstance(e, Spec) and spec:
-            additional = extract_instances_names(e.statements, [], None, spec)
-            names = names.union(additional)
-        elif isinstance(e, Impl) and not spec:
-            additional = extract_instances_names(e.statements, [], None, spec)
-            names = names.union(additional)
-
-    for input in inputs:
-        if spec:
-            for instance in input.instance:
-                names.add(instance)
-        else:
-            for instance in input.impl_instance:
-                names.add(instance)
-
-    if isinstance(outputs, tuple):
-        for output in outputs:
-            if isinstance(output, OutputPortCollect):
-                if spec:
-                    names.add(output.instance)
-                else:
-                    names.add(output.impl_instance)
-            elif isinstance(output, InputPortCollect):
-                if spec:
-                    for inst in output.instance:
-                        names.add(inst)
-                else:
-                    for inst in output.impl_instance:
-                        names.add(inst)
-    elif isinstance(outputs, OutputPortCollect):
-        if spec:
-            names.add(outputs.instance)
-        else:
-            names.add(outputs.impl_instance)
-    elif isinstance(outputs, InputPortCollect):
-        if spec:
-            for inst in outputs.instance:
-                names.add(inst)
-        else:
-            for inst in outputs.impl_instance:
-                names.add(inst)
-    return names
 
 
 def extract_roots(my_scope, inputs, outputs):
@@ -491,7 +448,7 @@ def create_composite(composite_name, program):
         global stack, scope, inst_collection
         scope.append([])
         stack.append(inst_name)
-        inst_collection.append(InputPortCollect())
+        inst_collection.append(InstancesCollection())
         outs = program(*fake_ports)
         stack = stack[:-1]
         my_scope = scope[-1]
@@ -502,14 +459,6 @@ def create_composite(composite_name, program):
 
         check_composite_outputs(inst_name, outs)
         check_composite_inputs(inst_name, fake_ports)
-        # spec_impl = has_spec_impl(my_scope)
-        # if spec_impl:
-        #     spec_instances_names = extract_instances_names(my_scope, fake_ports, outs, spec=True)
-        #     impl_instances_names = extract_instances_names(my_scope, fake_ports, outs, spec=False)
-        # else:
-        #     spec_instances_names = extract_instances_names(my_scope, fake_ports, outs)
-        #     impl_instances_names = None
-
         roots = extract_roots(my_scope, fake_ports, outs)
 
         inst_collection[-1].union(my_collection)
@@ -792,13 +741,11 @@ def create_spec_impl(name, spec_func, impl_func):
     check_composite_inputs(name, impl_fake_inports)
     check_composite_outputs(name, spec_outs)
     check_composite_outputs(name, impl_outs)
-    # spec_instances_names = extract_instances_names(spec_scope, spec_fake_inports, spec_outs)
-    # impl_instances_names = extract_instances_names(impl_scope, impl_fake_inports, impl_outs)
 
-    spec_instances_names = spec_collection.get_spec()
-    impl_instances_names = impl_collection.get_impl()
     inst_collection[-1].union_spec(spec_collection)
-    inst_collection[-1].union_impl(impl_instances_names)
+    inst_collection[-1].union_impl(impl_collection)
+    spec_instances_names = spec_collection.get_spec()
+    impl_instances_names = impl_collection.get_spec()
 
     outs = None
     if isinstance(spec_outs, tuple):
@@ -830,7 +777,7 @@ def create_spec_impl(name, spec_func, impl_func):
 
     def connect(*ports):
         inst_collection[-1].union_spec(spec_collection)
-        inst_collection[-1].union_impl(impl_instances_names)
+        inst_collection[-1].union_impl(impl_collection)
 
         for i in range(len(ports)):
             from_port = ports[i]

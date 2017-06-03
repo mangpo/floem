@@ -223,13 +223,13 @@ class GraphGenerator:
         try:
             return self.lookup(name)[0]
         except TypeError:
-            raise "%s is undefined." % name
+            raise Exception("%s is undefined." % name)
 
     def get_instance_type(self, name):
         try:
             return self.lookup(name)[1]
         except TypeError:
-            raise "%s is undefined." % name
+            raise Exception("%s is undefined." % name)
 
     def put_resource(self, local_name, global_name):
         if local_name in self.env:

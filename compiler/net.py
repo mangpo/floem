@@ -45,7 +45,7 @@ def create_from_net_fixed_size(name, type, max_channels, max_inbuf, port):
                 this->rest[i] = newrest;
             }
             char *bufp = ((char *) this->inbuf[i]) + this->rest[i];
-            ssize_t ret = recv(channel, bufp, MAX_INBUF * size - this->rest[i], 0);
+            ssize_t ret = recv(channel, bufp, %d * size - this->rest[i], 0);
             assert(ret != -1);
             this->rest[i] += ret;
             this->active = i;
@@ -55,7 +55,7 @@ def create_from_net_fixed_size(name, type, max_channels, max_inbuf, port):
     }
 
     output { out(); }
-            ''' % ('%', type, '%', '%d', '%ld'),
+            ''' % ('%', type, '%', max_inbuf, '%d', '%ld'),
             None, [(strem_type, "this")])
 
     FROM_NET_READ = create_element("FROM_NET_READ_" + name, [Port("in", [])], [Port("out", [type + "*"])],
