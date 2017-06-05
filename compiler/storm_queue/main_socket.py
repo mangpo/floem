@@ -1,14 +1,17 @@
 from elements_library import *
 import queue
+import net
 
-test = "count"
+test = "spout"
 inject_func = "random_" + test
 workerid = {"spout": 0, "count": 1, "rank": 2}
 
 n_cores = 4
 
-Inject = create_inject("inject", "struct tuple*", 1000, inject_func, 1000000)
-inject = Inject()
+# Inject = create_inject("inject", "struct tuple*", 1000, inject_func, 1000000)
+# inject = Inject()
+from_net = net.create_from_net_fixed_size("tuple", "struct tuple", 4, 8192, 7001)  # workers[workerid].port, pass argv to init_instances
+to_net = net.create_to_net_fixed_size("tuple", "struct tuple", "127.0.0.1", 7001)  # workers[i].hostname, workers[i].port, array of to_net
 
 task_master = create_state("task_master", "int *task2executorid;")
 task_master_inst = task_master("my_task_master", ["get_task2executorid()"])
@@ -18,9 +21,12 @@ get_core_creator = create_element("get_core_creator",
                               [Port("out", ["struct tuple*", "size_t"])],
                               r'''
     struct tuple* t = in();
-    size_t id = 0;
-    if(t != NULL) id = this->task2executorid[t->task];
-    output switch { case (t != NULL): out(t, id); }
+    int id = -1;
+    if(t != NULL) {
+        id = this->task2executorid[t->task];
+        printf("receive: task %d, id %d\n", t->task, id);
+    }
+    output switch { case (id >= 0): out(t, id); }
                               ''',
                               None, [("task_master", "this")])
 
@@ -39,7 +45,6 @@ print_tuple_creator = create_element("print_tuple_creator",
     output { out(t); }
                                       ''')
 print_tuple = print_tuple_creator()
-
 
 
 #######################################
@@ -106,7 +111,7 @@ adv_creator = create_element("adv_creator",
 
 adv = adv_creator("adv", [my_queue_state])
 
-MAX_ELEMS = (4 * 1024)
+MAX_ELEMS = 8 #(4 * 1024)
 rx_enq, rx_deq, rx_adv = queue.create_copy_queue_many2many_inc_instances("rx_queue", "struct tuple", MAX_ELEMS, n_cores, blocking=True)
 #tx_enq, tx_deq, tx_adv = queue.create_copy_queue_many2many_inc_instances("tx_queue", "struct tuple", MAX_ELEMS, n_cores, blocking=False)
 tx_enq, tx_deq, tx_adv = queue.create_copy_queue_many2many_batch_instances("tx_queue", "struct tuple", MAX_ELEMS, n_cores)
@@ -114,7 +119,7 @@ tx_enq, tx_deq, tx_adv = queue.create_copy_queue_many2many_batch_instances("tx_q
 
 @internal_trigger("nic_rx", process="flexstorm")
 def nic_rx():
-    t = inject()
+    t = from_net()
     t = get_core(t)
     rx_enq(t)
 
@@ -149,6 +154,7 @@ def nic_tx():
     core_i = queue_schedule()
     t = tx_deq(core_i)
     t = print_tuple(t)
+    to_net(t)
     core_i = adv(t)
     tx_adv(core_i)
 
@@ -160,6 +166,7 @@ c.include = r'''
 #include <rte_memcpy.h>
 #include "worker.h"
 #include "storm.h"
+#include "../net.h"
 '''
 c.depend = {"test_storm": ['list', 'hash', 'hash_table', 'spout', 'count', 'rank', 'worker', 'flexstorm']}
 c.generate_code_as_header("flexstorm")

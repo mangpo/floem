@@ -4,6 +4,9 @@ struct executor *task2executor[MAX_TASKS];
 int task2executorid[MAX_TASKS];
 
 void init_task2executor(struct executor *executor) {
+  for(int i = 0; i < MAX_TASKS; i++) {
+    task2executorid[i] = -1;
+  }
   for(int i = 0; i < MAX_EXECUTORS && executor[i].execute != NULL; i++) {
     printf("init: executor[%d] = %u, taskid = %d\n", i, &executor[i], executor[i].taskid);
     assert(task2executor[executor[i].taskid] == NULL);

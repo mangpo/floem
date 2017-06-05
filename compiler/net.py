@@ -2,8 +2,8 @@ from dsl import *
 
 
 def create_from_net_fixed_size(name, type, max_channels, max_inbuf, port):
-    strem_type = "stream_" + name
-    Stream = create_state(strem_type, r'''
+    stream_type = "stream_" + name
+    Stream = create_state(stream_type, r'''
         int listener;
         int channel[{1}];
         {0} inbuf[{1}][{2}];
@@ -56,7 +56,7 @@ def create_from_net_fixed_size(name, type, max_channels, max_inbuf, port):
 
     output { out(); }
             ''' % ('%', type, '%', max_inbuf, '%d', '%ld'),
-            None, [(strem_type, "this")])
+            None, [(stream_type, "this")])
 
     FROM_NET_READ = create_element("FROM_NET_READ_" + name, [Port("in", [])], [Port("out", [type + "*"])],
             r'''
@@ -66,7 +66,7 @@ def create_from_net_fixed_size(name, type, max_channels, max_inbuf, port):
     }
     output multiple;
             ''' % type,
-            None, [(strem_type, "this")])
+            None, [(stream_type, "this")])
 
     def compo():
         s = Stream(init=["create_server_socket({0})".format(port), 0, [0], 0, 0, 0])
@@ -75,7 +75,7 @@ def create_from_net_fixed_size(name, type, max_channels, max_inbuf, port):
 
         return from_net_read(from_net_save())
 
-    return create_composite_instance("from_net_" + type, compo)
+    return create_composite_instance("from_net_" + name, compo)
 
 
 def create_to_net_fixed_size(name, type, hostname, port):
@@ -96,8 +96,7 @@ def create_to_net_fixed_size(name, type, hostname, port):
                              this->connected = true;
                          }
                          send(this->sock, t, sizeof(%s), 0);
-                         printf("send %s\n", t->x);
-                                 ''' % (type, type, '%d'),
+                                 ''' % (type, type),
                                  None, [("Sock", "this")])
     to_net_send = TO_NET_SEND("to_net_send_" + name, [sock])
 
