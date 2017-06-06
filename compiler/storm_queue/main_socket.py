@@ -62,7 +62,7 @@ steer_worker_creator = create_element("steer_worker_creator",
     (struct tuple* t) = in();
     int id = -1;
     if(t != NULL) {
-        this->task2worker[t->task];
+        id = this->task2worker[t->task];
         printf("send to worker %d\n", id);
     }
     output switch { ''' + src + " else: out_nop(); }", None, [("task_master", "this")])
@@ -121,7 +121,7 @@ adv_creator = create_element("adv_creator",
     size_t core = 0;
     size_t skip = 0;
     if(t != NULL) this->batch_size++;
-    printf("batch_size = %s\n", this->batch_size);
+    //printf("batch_size = %s\n", this->batch_size);
     if(this->batch_size >= BATCH_SIZE || rdtsc() - this->start >= BATCH_DELAY) {
         core = this->core;
         skip = this->batch_size;

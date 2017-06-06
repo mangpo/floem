@@ -56,6 +56,12 @@ class Element:
         e.special = self.special
         return e
 
+    def number_of_args(self):
+        n = 0
+        for port in self.inports:
+            n += len(port.argtypes)
+        return n
+
     def check_ports(self, ports):
         names = []
         for port in ports:

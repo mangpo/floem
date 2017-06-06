@@ -184,6 +184,8 @@ def element_to_function(instance, state_rename, graph, ext):
         join_call += ");\n"
         join_call_map[join] = join_call
 
+    if funcname == "adv":
+        print
     src += '\n'
     # A dictionary to collect function arguments.
     port2args = {}
@@ -191,36 +193,30 @@ def element_to_function(instance, state_rename, graph, ext):
     for portinfo in inports:
         port = portinfo.name
         argtypes = portinfo.argtypes
-        match = False
-        index = 0
-        while not(match):
-            m = re.search(port + '[ ]*\(([^\)]*)\)',src[index:])
-            if m == None:
-                if len(argtypes) > 0:
-                    raise Exception("Element '%s' never gets data from input port '%s'." % (funcname,port))
-                else:
-                    break
-
-            p = m.start(0)
-            if p == 0 or re.search('[^a-zA-Z0-9_]',src[p-1]):
-                check_no_args(m.group(1))
-                c1, p1 = last_non_space(src,p)
-                c2, p2 = first_non_space(src,m.end(0))
-                c0, p0 = last_non_space(src,p1-1)
-
-                if c0 == ')' and c1 == '=' and c2 == ';':
-                    src = remove_asgn_stmt(funcname, src,port2args,port,p1,p2+1,argtypes)
-                elif (c1 == ';' or c1 is None) and c2 == ';':
-                    src = remove_nonasgn_stmt(funcname, src,port2args,port,p1+1,p2+1,argtypes)
-                else:
-                    src = remove_expr(funcname, src,port2args,port,p,m.end(0),argtypes)
-
-                match = True
+        m = re.search('[^a-zA-Z0-9_](' + port + '[ ]*\(([^\)]*)\))', src)
+        if m is None:
+            m = re.search('(' + port + '[ ]*\(([^\)]*)\))', src)
+        if m is None:
+            if len(argtypes) > 0:
+                raise Exception("Element '%s' never gets data from input port '%s'." % (funcname, port))
             else:
-                index = p+1
+                break
+
+        p = m.start(1)
+        check_no_args(m.group(2))
+        c1, p1 = last_non_space(src, p)
+        c2, p2 = first_non_space(src, m.end(1))
+        c0, p0 = last_non_space(src, p1 - 1)
+
+        if c0 == ')' and c1 == '=' and c2 == ';':
+            src = remove_asgn_stmt(funcname, src, port2args, port, p1, p2 + 1, argtypes)
+        elif (c1 == ';' or c1 is None) and c2 == ';':
+            src = remove_nonasgn_stmt(funcname, src, port2args, port, p1 + 1, p2 + 1, argtypes)
+        else:
+            src = remove_expr(funcname, src, port2args, port, p, m.end(1), argtypes)
                 
-        m = re.search(port + '[ ]*\(([^\)]*)\)',src[index:])
-        if m and re.search('[^a-zA-Z0-9_]',src[m.start(0)-1]):
+        m = re.search('[^a-zA-Z0-9_]' + port + '[ ]*\(([^\)]*)\)', src)
+        if m:
             raise Exception("Cannot get data from input port '%s' more than one time in element '%s'."
                             % (port, funcname))
 
@@ -273,12 +269,15 @@ def element_to_function(instance, state_rename, graph, ext):
                 else:
                     out_src = out_src[:m.start(1)] + call + out_src[m.end(1):m.end(0)] + out_src[m.end(0):]
             else:
+                out_inst = graph.instances[f]
                 call = ""
                 if f in instance.API_return_from:
                     call += "ret = "
-                call += f + "("
-                for join in graph.instances[f].join_func_params:
-                    call += "_p_%s, " % join
+                call += f + "(" + ','.join(["_p_%s" % j for j in out_inst.join_func_params])
+                # for join in graph.instances[f].join_func_params:
+                #     call += "_p_%s, " % join
+                if len(out_inst.join_func_params) > 0 and out_inst.element.number_of_args() > 0:
+                    call += ','
                 out_src = out_src[:m.start(1)] + call + out_src[m.end(1):]
 
 
