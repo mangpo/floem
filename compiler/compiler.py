@@ -504,7 +504,7 @@ def generate_state_instances(graph, ext):
 
     src = "size_t shm_size = 0;\n"
     src += "void *shm;\n"
-    src += "void init_state_instances() {\n"
+    src += "void init_state_instances(char *argv[]) {\n"
     for process in graph.processes:
         name = process + ext
         with open(name, 'a') as f, redirect_stdout(f):
@@ -907,9 +907,9 @@ def generate_inject_probe_code_with_process(graph, process, ext):
                 if process in graph.state_instances[spec_instance].processes:
                     probe_src += generate_compare_state(probe, key)
 
-        src += "void init() {\n"
+        src += "void init(char *argv[]) {\n"
         src += "  init_memory_regions();\n"
-        src += "  init_state_instances();\n"
+        src += "  init_state_instances(argv);\n"
         src += inject_src
         src += "}\n\n"
 
@@ -919,9 +919,9 @@ def generate_inject_probe_code_with_process(graph, process, ext):
         src += "  finalize_state_instances();\n"
         src += "}\n\n"
     else:
-        src += "void init() {\n"
+        src += "void init(char *argv[]) {\n"
         src += "  init_memory_regions();\n"
-        src += "  init_state_instances();\n"
+        src += "  init_state_instances(argv);\n"
         src += "}\n"
         src += "void finalize_and_check() {\n"
         src += "  finalize_memory_regions();\n"
@@ -930,7 +930,7 @@ def generate_inject_probe_code_with_process(graph, process, ext):
 
     if ext == '.h':
         with open(process + '.h', 'a') as f, redirect_stdout(f):
-            print "void init();"
+            print "void init(char *argv[]);"
             print "void finalize_and_check();"
 
     with open(process + '.c', 'a') as f, redirect_stdout(f):

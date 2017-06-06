@@ -1,7 +1,7 @@
 from elements_library import *
 import queue
 
-test = "count"
+test = "rank"
 inject_func = "random_" + test
 workerid = {"spout": 0, "count": 1, "rank": 2}
 

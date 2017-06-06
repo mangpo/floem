@@ -304,9 +304,10 @@ def create_copy_queue_many2many_batch_instances(name, type, size, n_cores):
            } else {
              rte_memcpy(&p->data[p->tail], x, sizeof(%s));
              p->tail = next;
+             printf("enq: tail = %s\n", p->tail);
            }
            __sync_synchronize();
-           ''' % (type_star, one_name, name, type), None, [(all_name, "this")])
+           ''' % (type_star, one_name, name, type, '%ld'), None, [(all_name, "this")])
 
     Dequeue = create_element(prefix + "dequeue_ele",
                              [Port("in", ["size_t", "size_t"])], [Port("out", [type_star])],
@@ -315,16 +316,19 @@ def create_copy_queue_many2many_batch_instances(name, type, size, n_cores):
         %s* p = this->cores[c];
            %s x = NULL;
            bool avail = false;
+           __sync_synchronize();
            size_t index = (p->head + peak) %s p->size;
+                //printf("deq: tail = %s\n", p->tail);
            if(index == p->tail) {
              //printf("Dequeue an empty circular queue '%s'. Default value is returned (for API call).\n");
              //exit(-1);
            } else {
+                printf("What???\n");
                avail = true;
                x = &p->data[index];
            }
            output { out(x); }
-           ''' % (one_name, type_star, '%', name), None, [(all_name, "this")])
+           ''' % (one_name, type_star, '%', '%ld', name), None, [(all_name, "this")])
 
     Advance = create_element(prefix + "dequeue_advance",
                              [Port("in", ["size_t", "size_t"])], [],
@@ -332,6 +336,7 @@ def create_copy_queue_many2many_batch_instances(name, type, size, n_cores):
         (size_t c, size_t skip) = in();
         %s* p = this->cores[c];
         p->head = (p->head + skip) %s p->size;
+           __sync_synchronize();
            ''' % (one_name, '%'), None, [(all_name, "this")])
 
     enq = Enqueue(prefix + "enqueue", [all])

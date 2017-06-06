@@ -40,6 +40,7 @@ void tuple_send(struct tuple *t, struct executor *self)
   t->task = self->grouper(t, self);
   t->starttime = rdtsc();
 
+
   // Drop?
   if(t->task == 0) {
     return;
@@ -48,6 +49,7 @@ void tuple_send(struct tuple *t, struct executor *self)
   /* __sync_fetch_and_add(&target[t->task], 1); */
 
   // Put to outqueue
+  printf("tuple_send: task = %d, exe_id = %d\n", t->task, self->exe_id);
   outqueue_put(t, self->exe_id);
 
   self->emitted++;
@@ -59,7 +61,7 @@ int main(int argc, char *argv[]) {
     executor = workers[workerid].executors;
     init_task2executor(executor);
 
-    init();
+    init(argv);
     printf("main: workerid = %d\n", workerid);
 
     pthread_t threads[MAX_EXECUTORS];

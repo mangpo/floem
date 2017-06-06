@@ -305,7 +305,6 @@ class ThreadAllocator:
             new_instance.thread = instance.thread
         return ele_name
 
-
     def insert_ports(self, inst_name, extra_in, extra_out):
         """
         Insert empty input and output ports to an instance, and insert connection accordingly.
@@ -339,6 +338,22 @@ class ThreadAllocator:
         self.graph.addElement(new_element)
         instance.element = new_element
 
+    def merge_as_no_join(self, froms, to):
+        for f in froms:
+            instance = self.graph.instances[f]
+            new_element = instance.element.clone(instance.element.name + "_clone_o")
+            new_element.add_empty_outports(["_out"])
+            instance.output2ele["_out"] = (to, "_in")
+            self.graph.addElement(new_element)
+            instance.element = new_element
+
+        instance = self.graph.instances[to]
+        new_element = instance.element.clone(instance.element.name + "_clone_i")
+        new_element.add_empty_inports(["_in"])
+        instance.input2ele["_in"] = [(f, "_out") for f in froms]
+        self.graph.addElement(new_element)
+        instance.element = new_element
+
     def insert_resource_order(self):
         """
         Insert input and output ports to impose the resource scheduling constraints.
@@ -347,6 +362,8 @@ class ThreadAllocator:
         """
         bPointsTo = {}
         for a, b in self.graph.threads_order:
+            if isinstance(a, list):
+                continue
             if a not in bPointsTo:
                 bPointsTo[a] = self.graph.find_subgraph(a, set())
             if b not in bPointsTo:
@@ -356,6 +373,8 @@ class ThreadAllocator:
         extra_out = {}
         extra_in = {}
         for a, b in self.graph.threads_order:
+            if isinstance(a, list):
+                continue
             if a in bPointsTo[b]:  # b points to a, illegal
                 raise Exception("Cannot order '{0}' before '{1}' because '{1}' points to '{0}'.".format(a, b))
             if b in bPointsTo[a]:
@@ -380,4 +399,9 @@ class ThreadAllocator:
             if inst in extra_out:
                 my_extra_out = extra_out[inst]
             self.insert_ports(inst, my_extra_in, my_extra_out)
+        print
 
+        for a, b in self.graph.threads_order:
+            if isinstance(a, list):
+                self.merge_as_no_join(a, b)
+        print

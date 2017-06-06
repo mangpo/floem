@@ -1,4 +1,5 @@
 from dsl import *
+import re
 
 
 def create_from_net_fixed_size(name, type, max_channels, max_inbuf, port):
@@ -83,7 +84,10 @@ def create_to_net_fixed_size(name, type, hostname, port):
         int sock;
         struct sockaddr_in saddr;
         bool connected;''')
-    sock = Sock(init=['create_client_socket()', 'create_sockaddr("%s", %d)' % (hostname, port), False])
+    m = re.match('[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+', hostname)
+    if m:
+        hostname = '"%s"' % hostname
+    sock = Sock(init=['create_client_socket()', 'create_sockaddr({0}, {1})'.format(hostname,port), False])
 
     TO_NET_SEND = create_element("TO_NET_SEND", [Port("in", [type + "*"])], [],
                                  r'''

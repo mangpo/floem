@@ -56,7 +56,11 @@ def insert_fork_other(x, connect_map, element_map, instance_map, resource_map, r
     elif isinstance(x, ResourceMap):
         resource_map[x.instance] = x.resource
     elif isinstance(x, ResourceOrder):
-        resource_order[x.a] = x
+        if isinstance(x.a, list):
+            for a in x.a:
+                resource_order[a] = x
+        else:
+            resource_order[x.a] = x
     return False
 
 fork_id = 0
@@ -98,7 +102,12 @@ def insert_fork_program(x):
 
                 # Adjust ResourceOrder
                 if inst_name in resource_order:
-                    resource_order[inst_name].a = fork_inst.name
+                    x = resource_order[inst_name]
+                    if isinstance(x.a, str):
+                        x.a = fork_inst.name
+                    else:
+                        i = x.a.index(inst_name)
+                        x.a[i] = fork_inst.name
 
                 # Mutate Connect to connect to fork
                 for i in range(len(connects)):

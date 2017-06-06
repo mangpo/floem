@@ -317,6 +317,7 @@ static struct worker workers[MAX_WORKERS] = {
 
 void init_task2executor(struct executor *executor);
 int *get_task2executorid();
+int *get_task2worker();
 struct tuple* random_spout(size_t i);
 struct tuple* random_count(size_t i);
 struct tuple* random_rank(size_t i);

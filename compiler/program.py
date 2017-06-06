@@ -340,7 +340,12 @@ class GraphGenerator:
             instance.thread = resource_name
 
         elif isinstance(x, ResourceOrder):
-            a_name = get_node_name(self.get_instance_stack(x.a), x.a)
+            if isinstance(x.a, str):
+                a_name = get_node_name(self.get_instance_stack(x.a), x.a)
+            elif isinstance(x.a, list):
+                a_name = []
+                for a in x.a:
+                    a_name.append(get_node_name(self.get_instance_stack(a), a))
             b_name = get_node_name(self.get_instance_stack(x.b), x.b)
             self.graph.threads_order.append((a_name, b_name))
 

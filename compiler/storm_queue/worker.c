@@ -2,10 +2,12 @@
 
 struct executor *task2executor[MAX_TASKS];
 int task2executorid[MAX_TASKS];
+int task2worker[MAX_TASKS];
 
 void init_task2executor(struct executor *executor) {
   for(int i = 0; i < MAX_TASKS; i++) {
     task2executorid[i] = -1;
+    task2worker[i] = -1;
   }
   for(int i = 0; i < MAX_EXECUTORS && executor[i].execute != NULL; i++) {
     printf("init: executor[%d] = %u, taskid = %d\n", i, &executor[i], executor[i].taskid);
@@ -13,10 +15,19 @@ void init_task2executor(struct executor *executor) {
     task2executor[executor[i].taskid] = &executor[i];
     task2executorid[executor[i].taskid] = i;
   }
+  for(int i = 0; i < MAX_WORKERS && workers[i].hostname != NULL; i++) {
+    for(int j = 0; j < MAX_EXECUTORS && workers[i].executors[j].execute != NULL; j++) {
+      task2worker[workers[i].executors[j].taskid] = i;
+    }
+  }
 }
 
 int *get_task2executorid() {
   return task2executorid;
+}
+
+int *get_task2worker() {
+  return task2worker;
 }
 
 struct tuple* random_spout(size_t i) {

@@ -93,7 +93,10 @@ class Thread:
 
 def run_order(*instances):
     for i in range(len(instances) - 1):
-        scope[-1].append(ResourceOrder(instances[i].name, instances[i + 1].name))
+        if isinstance(instances[i], list):
+            scope[-1].append(ResourceOrder([x.name for x in instances[i]], instances[i + 1].name))
+        else:
+            scope[-1].append(ResourceOrder(instances[i].name, instances[i + 1].name))
 
 
 class API_thread(Thread):

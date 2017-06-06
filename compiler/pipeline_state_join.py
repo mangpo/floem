@@ -100,6 +100,13 @@ def live_leaf_nodes(name, g, lives, ans, prefix):
 
 
 def get_node_before_release(name, g, lives, prefix):
+    """
+    :param name: root instance
+    :param g: graph
+    :param lives: live variables at root
+    :param prefix:
+    :return: node that will connect to deq_release node
+    """
     ans = {}
     ret = live_leaf_nodes(name, g, lives, ans, prefix)
     if len(ret) == 0:

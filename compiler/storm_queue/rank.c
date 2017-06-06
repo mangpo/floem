@@ -53,6 +53,7 @@ void rank_execute(const struct tuple *t, struct executor *self)
   int r = gettimeofday(&tv, NULL);
   assert(r == 0);
 
+  printf("time: %ld > = %ld\n", tv.tv_sec, lasttime, DEFAULT_EMIT_FREQUENCY_IN_SECONDS, lasttime + DEFAULT_EMIT_FREQUENCY_IN_SECONDS);
   if(tv.tv_sec >= lasttime + DEFAULT_EMIT_FREQUENCY_IN_SECONDS) {
     lasttime = tv.tv_sec;
 
@@ -61,8 +62,8 @@ void rank_execute(const struct tuple *t, struct executor *self)
     for(int i = 0; i < TOP_N; i++) {
       strcpy(out.v[i].str, rankings[i].v[0].str);
       out.v[i].integer = rankings[i].v[0].integer;
-      /* printf("Rank %d, '%s', count %d\n", i, rankings[i].v[0].str, */
-      /* 	     rankings[i].v[0].integer); */
+      printf("Rank %d, '%s', count %d\n", i, rankings[i].v[0].str,
+           rankings[i].v[0].integer);
     }
 
     tuple_send(&out, self);
