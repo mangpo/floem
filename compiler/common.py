@@ -4,6 +4,20 @@ standard_arg_format = "{0}_arg{1}"
 header_files = ["stdio.h", "stdlib.h", "string.h", "stddef.h", "stdint.h", "stdbool.h"]
 header_files_triggers = ["unistd.h", "pthread.h"]
 dpdk_include = "/home/mangpo/lib/dpdk-16.11/build/include/"
+pipeline_include = r'''
+typedef struct {
+    int refcount;
+} pipeline_state;
+
+inline void pipeline_unref(pipeline_state* s) {
+    s->refcount--;
+    if(s->refcount == 0) free(s);
+}
+
+inline void pipeline_ref(pipeline_state* s) {
+    s->refcount++;
+}
+'''
 
 def types_args_one_port(port, formatter):
     """

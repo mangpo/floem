@@ -9,6 +9,16 @@ def allocate_pipeline_state(element, state):
     element.code = add + element.code
 
 
+def insert_reference_count(st_name, g):
+    for st_inst in g.state_instances.values():
+        assert not st_inst.state.name == st_name, \
+            ("Pipeline state type '%s' shouldn't be used as the type of non-pipeline state '%s'." %
+             (st_name, st_inst.name))
+
+    state = g.states[st_name]
+    state.content = "int refcount; " + state.content
+
+
 state_extra = 0
 def insert_pipeline_at_port(instance, best_port, g, state):
     global state_extra
@@ -277,14 +287,21 @@ def insert_pipeline_states(g):
             ele2inst[instance.element.name] = []
         ele2inst[instance.element.name].append(instance)
 
+    vis_states = []
     for start_name in g.pipeline_states:
         state = g.pipeline_states[start_name]
         subgraph = set()
         g.find_subgraph(start_name, subgraph)
 
+        # Insert refcount field
+        if state not in vis_states:
+            insert_reference_count(state, g)
+            vis_states.append(state)
+
         # Allocate state
         instance = g.instances[start_name]
         element = instance.element
+
         if len(ele2inst[element.name]) == 1:
             allocate_pipeline_state(element, state)
         else:

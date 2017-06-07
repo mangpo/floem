@@ -708,6 +708,8 @@ def generate_header(testing, processes, ext):
     for file in common.header_files + common.header_files_triggers:
         src += "#include <%s>\n" % file
 
+    src += common.pipeline_include
+
     if testing:
         src += "void out(int x) { printf(\"%d\\n\", x); }"
 
