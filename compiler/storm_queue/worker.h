@@ -75,7 +75,7 @@ static int shuffle_grouping(const struct tuple *t, struct executor *self)
   return self->outtasks[random() % numtasks];
 }
 
-#define LOCAL
+#define SWINGOUT_LOCAL
 
 static struct worker workers[MAX_WORKERS] = {
 #if defined(LOCAL)
@@ -111,6 +111,35 @@ static struct worker workers[MAX_WORKERS] = {
     .executors = {
       { .execute = rank_execute, .taskid = 30, .outtasks = { 0 }, .grouper = global_grouping },
       /* { .execute = print_execute, .taskid = 40 }, */
+    }
+  },
+#elif defined(SWINGOUT_LOCAL)
+  {
+    .hostname = "127.0.0.1", .port = 7001,	// swingout1
+    .executors = {
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 3, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
+      { .execute = count_execute, .init = count_init, .taskid = 12, .outtasks = { 20, 21, 22, 23 }, .grouper = fields_grouping },
+      { .execute = rank_execute, .taskid = 20, .outtasks = { 30 }, .grouper = global_grouping },
+      { .execute = rank_execute, .taskid = 23, .outtasks = { 30 }, .grouper = global_grouping },
+    }
+  },
+  {
+    .hostname = "127.0.0.1", .port = 7002,	// swingout4
+    .executors = {
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 1, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 4, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
+      { .execute = count_execute, .init = count_init, .taskid = 11, .outtasks = { 20, 21, 22, 23 }, .grouper = fields_grouping },
+      { .execute = count_execute, .init = count_init, .taskid = 13, .outtasks = { 20, 21, 22, 23 }, .grouper = fields_grouping },
+      { .execute = rank_execute, .taskid = 21, .outtasks = { 30 }, .grouper = global_grouping },
+    }
+  },
+  {
+    .hostname = "127.0.0.1", .port = 7003,	// swingout3
+    .executors = {
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 2, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
+      { .execute = count_execute, .init = count_init, .taskid = 10, .outtasks = { 20, 21, 22, 23 }, .grouper = fields_grouping },
+      { .execute = rank_execute, .taskid = 22, .outtasks = { 30 }, .grouper = global_grouping },
+      { .execute = rank_execute, .taskid = 30, .outtasks = { 0 }, .grouper = global_grouping },
     }
   },
 #elif defined(BIGFISH)

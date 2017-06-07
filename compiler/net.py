@@ -95,7 +95,10 @@ def create_to_net_fixed_size(name, type, hostname, port):
                          if(!this->connected) {
                              printf("client try to connect.\n");
                              int r = connect(this->sock, (void *)&this->saddr, sizeof(struct sockaddr_in));
-                             assert(r == 0);
+                             while(r != 0) {
+                                sleep(1);
+                                r = connect(this->sock, (void *)&this->saddr, sizeof(struct sockaddr_in));
+                             }
                              printf("client connects.\n");
                              this->connected = true;
                          }

@@ -50,8 +50,10 @@ static struct sockaddr_in create_sockaddr(const char* hostname, uint16_t port) {
     .sin_port = htons(port),
   };
 
-  int r = inet_pton(AF_INET, hostname, &saddr.sin_addr);
-  assert(r == 1);
+  if(hostname != NULL) {
+    int r = inet_pton(AF_INET, hostname, &saddr.sin_addr);
+    assert(r == 1);
+  }
 
   return saddr;
 }
