@@ -9,12 +9,38 @@ def allocate_pipeline_state(element, state):
     element.code = add + element.code
 
 
-def insert_pipeline_state(element, state, start, instance, g):
+state_extra = 0
+def insert_pipeline_at_port(instance, best_port, g, state):
+    global state_extra
+    l = []
+    for prev_name, prev_port in instance.input2ele[best_port]:
+        prev = g.instances[prev_name]
+        prev_element = prev.element
+
+        port = Port("_out_state" + str(state_extra), [state + "*"])
+        prev_element.outports.append(port)
+        prev_element.output_code[port.name] = '%s(_state)' % port.name
+        prev.output2ele[port.name] = (instance.name, "_in_state")
+        l.append((prev_name, "_out_state" + str(state_extra)))
+    state_extra += 1
+
+    port = Port("_in_state", [state + "*"])
+    element = instance.element
+    element.inports.append(port)
+    add = '  %s *_state = %s();\n' % (state, port.name)
+    element.code = add + element.code
+    instance.input2ele[port.name] = l
+
+
+def insert_pipeline_state(instance, state, start, g):
+    element = instance.element
     assert not element.output_fire == "multi", "Cannot insert pipeline state for batch element '%s'." % element.name
     no_state = True
     if not start:
+        inserted = False
         for port in element.inports:
             if len(port.argtypes) == 0:
+                inserted = True
                 port.argtypes.append(state + "*")
                 if no_state:
                     m = re.search('[^a-zA-Z0-9_](' + port.name + ')\(', element.code)
@@ -25,8 +51,27 @@ def insert_pipeline_state(element, state, start, instance, g):
                         add = '  %s *_state = %s();\n' % (state, port.name)
                         element.code = add + element.code
                     no_state = False
-                    if element.name == "_impl_prepare_get_response_release_version":
-                        print element
+
+        # if not inserted:
+        #     best_port = None
+        #     n_insts = 1000
+        #     for port in element.inports:
+        #         if port.name in instance.input2ele:
+        #             l = instance.input2ele[port.name]
+        #             all = True
+        #             for prev_name, prev_port in l:
+        #                 prev = g.instances[prev_name]
+        #                 if len(prev.uses) == 0 or not prev.element.output_fire == "all":
+        #                     all = False
+        #                     break
+        #             if all and len(l) < n_insts:
+        #                 n_insts = len(l)
+        #                 best_port = port.name
+        #
+        #     if best_port:
+        #         insert_pipeline_at_port(instance, best_port, g, state)
+        #     else:
+        #         raise Exception("No easy way to insert pipeline state for instance '%s'." % instance.name)
 
     for port in element.outports:
         if len(port.argtypes) == 0:
@@ -147,9 +192,9 @@ def rename_entry_references(g, src2fields):
                     replace_states(element, instance.liveness, instance.extras, instance.special_fields, src2fields)
                 else:
                     new_element = element.clone(inst_name + "_with_state_at_" + instance.name)
+                    child.element = new_element
                     replace_states(new_element, instance.liveness, instance.extras, instance.special_fields, src2fields)
                     g.addElement(new_element)
-                    child.element = new_element
 
 
 def code_change(instance):
@@ -259,14 +304,14 @@ def insert_pipeline_states(g):
                 vis.add(element.name)
                 if len(ele2inst[element.name]) == 1:
                     # TODO: modify element: empty port -> send state*
-                    insert_pipeline_state(element, state, inst_name == start_name, child, g)
+                    insert_pipeline_state(child, state, inst_name == start_name, g)
                 else:
                     # TODO: create new element: empty port -> send state*
                     new_element = element.clone(inst_name + "_with_state")
-                    vis.add(new_element.name)
-                    insert_pipeline_state(new_element, state, inst_name == start_name, child, g)
-                    g.addElement(new_element)
                     child.element = new_element
+                    insert_pipeline_state(child, state, inst_name == start_name, g)
+                    g.addElement(new_element)
+                    vis.add(new_element.name)
 
 
 def find_all_fields(code):

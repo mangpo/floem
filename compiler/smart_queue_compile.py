@@ -281,19 +281,21 @@ def compile_smart_queue(g, q, src2fields):
             size_core = ElementInstance(size_core_ele.name, prefix + size_core_ele.name + "_from_" + in_inst)
             fill_inst = ElementInstance(fill_ele.name, prefix + fill_ele.name + "_from_" + in_inst)
             fork_inst = ElementInstance(fork.name, prefix + fork.name + "_from_" + in_inst)
-            new_instances = [enq_alloc_inst, size_core, fill_inst, fork_inst]
-            for inst in new_instances:
+            new_instances_live = [enq_alloc_inst, size_core, fill_inst, fork_inst]
+            for inst in new_instances_live:
                 g.newElementInstance(inst.element, inst.name, inst.args)
                 g.set_thread(inst.name, in_thread)
                 instance = g.instances[inst.name]
                 instance.liveness = live
                 instance.uses = uses
 
-            g.newElementInstance(enq_submit_inst.element, enq_submit_inst.name, enq_submit_inst.args)
-            g.set_thread(enq_submit_inst.name, in_thread)
-            instance = g.instances[enq_submit_inst.name]
-            instance.liveness = set()
-            instance.uses = set()
+            new_instances_nolive = [enq_submit_inst]
+            for inst in new_instances_nolive:
+                g.newElementInstance(inst.element, inst.name, inst.args)
+                g.set_thread(inst.name, in_thread)
+                instance = g.instances[inst.name]
+                instance.liveness = set()
+                instance.uses = set()
 
             # Enqueue connection
             g.connect(in_inst, fork_inst.name, in_port)
