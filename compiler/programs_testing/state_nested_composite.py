@@ -2,16 +2,9 @@ from dsl import *
 from elements_library import *
 
 Count = create_state("Count", "int count;", [0])
-Forward = create_element("Identity",
-            [Port("in", ["int"])],
-            [Port("out", ["int"])],
-            r'''this->count++; int x = in(); output { out(this->count); }''',
-            None,
-            [("Count", "this")])
-Print = create_element("Print",
-            [Port("in", ["int"])],
-            [],
-            r'''printf("%d\n", in());''')
+Forward = create_element("Identity", [Port("in", ["int"])], [Port("out", ["int"])],
+                         r'''this->count++; int x = in(); output { out(this->count); }''', [("Count", "this")])
+Print = create_element("Print", [Port("in", ["int"])], [], r'''printf("%d\n", in());''')
 
 count = Count()
 

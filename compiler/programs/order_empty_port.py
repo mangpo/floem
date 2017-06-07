@@ -1,24 +1,12 @@
 from dsl import *
 
-A = create_element("A",
-                   [],
-                   [Port("out", [])],
-                   r'''printf("1\n"); output { out(); }''')
+A = create_element("A", [], [Port("out", [])], r'''printf("1\n"); output { out(); }''')
 
-B = create_element("B",
-                   [Port("in", [])],
-                   [],
-                   r'''in(); printf("2\n");''')
+B = create_element("B", [Port("in", [])], [], r'''in(); printf("2\n");''')
 
-C = create_element("C",
-                   [],
-                   [Port("out", [])],
-                   r'''printf("3\n"); output { out(); }''')
+C = create_element("C", [], [Port("out", [])], r'''printf("3\n"); output { out(); }''')
 
-D = create_element("D",
-                   [Port("in", [])],
-                   [],
-                   r'''in(); printf("4\n");''')
+D = create_element("D", [Port("in", [])], [], r'''in(); printf("4\n");''')
 a = A()
 b = B()
 c = C()

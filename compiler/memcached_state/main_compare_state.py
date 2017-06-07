@@ -153,10 +153,7 @@ filter_full = create_element_instance("filter_full",
 output switch { case state.segfull: out(); }
                ''')
 
-new_segment_creator = create_element("create_new_segment_creator",
-              [Port("in", [])],
-              [Port("out", [])],
-               r'''
+new_segment_creator = create_element("create_new_segment_creator", [Port("in", [])], [Port("out", [])], r'''
 struct segment_header* segment = new_segment(this->ia[state.core], false);
 if(segment == NULL) {
     printf("Fail to allocate new segment.\n");
@@ -166,20 +163,18 @@ state.segbase = get_pointer_offset(segment->data);
 state.seglen = segment->size;
 ialloc_nicsegment_full(state.segfull);
 output { out(); }
-''', None, [("item_allocators", "this")])
+''', [("item_allocators", "this")])
 new_segment = new_segment_creator("create_new_segment", [item_allocators])
 
-first_segment_creator = create_element("first_segment_creator",
-              [Port("in", ["size_t", "struct item_allocator*"])],
-              [Port("out", [])],
-               r'''
+first_segment_creator = create_element("first_segment_creator", [Port("in", ["size_t", "struct item_allocator*"])],
+                                       [Port("out", [])], r'''
 (size_t core, struct item_allocator* ia) = in();
 this->ia[core] = ia;
 state.core = core;
 state.segbase = get_pointer_offset(ia->cur->data);
 state.seglen = ia->cur->size;
 output { out(); }
-''', None, [("item_allocators", "this")])
+''', [("item_allocators", "this")])
 first_segment = first_segment_creator("first_segment", [item_allocators])
 
 Segments = create_state("segments_holder",
@@ -192,9 +187,7 @@ Last_segment = create_state("last_segment",
                         [0])
 last_segment = Last_segment()
 
-add_logseg_creator = create_element("add_logseg_creator",
-                   [Port("in", [])], [],
-                   r'''
+add_logseg_creator = create_element("add_logseg_creator", [Port("in", [])], [], r'''
     if(last->holder != NULL) {
         //printf("this (before): %u, base = %u\n", this, this->segbase);
         struct _segments_holder* holder = (struct _segments_holder*) malloc(sizeof(struct _segments_holder));
@@ -220,15 +213,12 @@ add_logseg_creator = create_element("add_logseg_creator",
     }
     printf("addlog: new->segbase = %ld, cur->segbase = %ld\n", state.segbase, this->segbase);
     printf("logseg count = %d\n", count);
-    ''', None, [("segments_holder", "this"), ("last_segment", "last")])
+    ''', [("segments_holder", "this"), ("last_segment", "last")])
 add_logseg = add_logseg_creator("add_logseg", [segments, last_segment])
 
 
 ######################## item ########################
-get_item_creator = create_element("get_item_creator",
-                   [Port("in", [])],
-                   [Port("out", [])],
-                   r'''
+get_item_creator = create_element("get_item_creator", [Port("in", [])], [Port("out", [])], r'''
     size_t totlen = state.pkt->mcr.request.bodylen - state.pkt->mcr.request.extlen;
 
     uint64_t full = 0;
@@ -257,7 +247,7 @@ get_item_creator = create_element("get_item_creator",
     state.segfull = full;
 
     output { out(); }
-   ''', None, [("segments_holder", "this")])
+   ''', [("segments_holder", "this")])
 get_item = get_item_creator("get_item", [segments])
 
 get_item_spec = create_element_instance("get_item_spec",

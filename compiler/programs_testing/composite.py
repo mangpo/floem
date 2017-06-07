@@ -1,17 +1,10 @@
 from dsl import *
 
 Count = create_state("Count", "int count;", [0])
-Forward = create_element("Identity",
-            [Port("in", ["int"])],
-            [Port("out", ["int"])],
-            r'''local->count++; global->count++; int x = in(); printf("%d %d\n", local->count, global->count); output { out(x); }''',
-            None,
-            [("Count", "local"), ("Count", "global")]
-            )
-Print = create_element("Print",
-            [Port("in", ["int"])],
-            [],
-            r'''printf("%d\n", in());''')
+Forward = create_element("Identity", [Port("in", ["int"])], [Port("out", ["int"])],
+                         r'''local->count++; global->count++; int x = in(); printf("%d %d\n", local->count, global->count); output { out(x); }''',
+                         [("Count", "local"), ("Count", "global")])
+Print = create_element("Print", [Port("in", ["int"])], [], r'''printf("%d\n", in());''')
 
 c_global = Count()
 def unit(x0):

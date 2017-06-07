@@ -3,10 +3,8 @@ from elements_library import *
 
 Forward = create_identity("Forward", "int")
 Drop = create_drop("Drop", "int")
-Choice = create_element("Choice",
-            [Port("in", ["int"])],
-            [Port("out1", ["int"]), Port("out2", ["int"])],
-            r'''(int x) = in(); output switch { case (x % 2 == 0): out1(x); else: out2(x); }''')
+Choice = create_element("Choice", [Port("in", ["int"])], [Port("out1", ["int"]), Port("out2", ["int"])],
+                        r'''(int x) = in(); output switch { case (x % 2 == 0): out1(x); else: out2(x); }''')
 Add = create_add("Add", "int")
 
 

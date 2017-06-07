@@ -7,16 +7,12 @@ inject = Inject()
 task_master = create_state("task_master", "struct executor **task2executor;")
 task_master_inst = task_master("my_task_master", ["get_task2executor()"])
 
-exe_creator = create_element("exe_creator",
-                              [Port("in", ["struct tuple*"])],
-                              [],
-                              r'''
+exe_creator = create_element("exe_creator", [Port("in", ["struct tuple*"])], [], r'''
     struct tuple* t = in();
     struct executor *exec = this->task2executor[t->task];
     assert(exec != NULL);
     exec->execute(t, exec);
-                              ''',
-                              None, [("task_master", "this")])
+                              ''', [("task_master", "this")])
 
 exe = exe_creator("exe", [task_master_inst])
 
@@ -30,9 +26,7 @@ spout_exe = create_element_instance("spout_exe",
                                     '''
                                      )
 
-print_tuple_creator = create_element("print_tuple_creator",
-                                      [Port("in", ["struct tuple*", "struct executor*"])], [],
-                                      r'''
+print_tuple_creator = create_element("print_tuple_creator", [Port("in", ["struct tuple*", "struct executor*"])], [], r'''
     (struct tuple* t, struct executor* exe) = in();
 
   t->fromtask = exe->taskid;

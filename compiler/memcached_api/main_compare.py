@@ -21,11 +21,9 @@ output switch{
 }
 ''')
 
-extract_pkt_hash = create_element("extract_pkt_hash",
-              [Port("in", ["iokvs_message*", "void*", "size_t", "uint32_t"])],
-              [Port("out_pkt", ["iokvs_message*"]),
-               Port("out_hash", ["void*", "size_t", "uint32_t"])],
-               r'''
+extract_pkt_hash = create_element("extract_pkt_hash", [Port("in", ["iokvs_message*", "void*", "size_t", "uint32_t"])],
+                                  [Port("out_pkt", ["iokvs_message*"]),
+                                   Port("out_hash", ["void*", "size_t", "uint32_t"])], r'''
 (iokvs_message* m, void* key, size_t len, uint32_t hash) = in();
 
 output {
@@ -291,10 +289,8 @@ print_msg = create_element_instance("print_msg",
         printf("SET -- id: %d, len: %d\n", m->mcr.request.magic, m->mcr.request.bodylen);
    ''')
 
-get_core = create_element("get_core",
-                                       [Port("in", ["iokvs_message*", "void*", "size_t", "uint32_t"])],
-                                       [Port("out", ["size_t"])],
-                                       r'''
+get_core = create_element("get_core", [Port("in", ["iokvs_message*", "void*", "size_t", "uint32_t"])],
+                          [Port("out", ["size_t"])], r'''
     (iokvs_message* m, void* key, size_t keylen, uint32_t hash) = in();
     output { out(hash %s %d); }''' % ('%', n_cores))
 get_core_get = get_core("get_core_get")
@@ -320,10 +316,8 @@ Last_segment = create_state("last_segment",
                         [0])
 last_segment = Last_segment()
 
-get_item_creator = create_element("get_item_creator",
-                   [Port("in", ["iokvs_message*", "void*", "size_t", "uint32_t"])],
-                   [Port("out_item", ["item*", "uint64_t"]), Port("out_full", ["uint64_t"])],
-                   r'''
+get_item_creator = create_element("get_item_creator", [Port("in", ["iokvs_message*", "void*", "size_t", "uint32_t"])],
+                                  [Port("out_item", ["item*", "uint64_t"]), Port("out_full", ["uint64_t"])], r'''
     (iokvs_message* m, void* key, size_t keylen, uint32_t hash) = in();
     size_t totlen = m->mcr.request.bodylen - m->mcr.request.extlen;
 
@@ -348,7 +342,7 @@ get_item_creator = create_element("get_item_creator",
     rte_memcpy(item_key(it), key, totlen);
 
     output { out_item(it, m->mcr.request.magic); out_full(full); }
-   ''', None, [("segments_holder", "this")])
+   ''', [("segments_holder", "this")])
 get_item = get_item_creator("get_item", [segments])
 
 get_item_spec = create_element_instance("get_item_spec",
@@ -371,9 +365,8 @@ get_item_spec = create_element_instance("get_item_spec",
     output { out(it); }
    ''')
 
-add_logseg_creator = create_element("add_logseg_creator",
-                   [Port("in", ["cqe_add_logseg*"])], [Port("out", ["q_entry*"])],
-                   r'''
+add_logseg_creator = create_element("add_logseg_creator", [Port("in", ["cqe_add_logseg*"])],
+                                    [Port("out", ["q_entry*"])], r'''
     (cqe_add_logseg* e) = in();
     if(this->segbase) {
         struct _segments_holder* holder = (struct _segments_holder*) malloc(sizeof(struct _segments_holder));
@@ -398,7 +391,7 @@ add_logseg_creator = create_element("add_logseg_creator",
     }
     printf("logseg count = %d\n", count);
     output { out((q_entry*) e); }
-    ''', None, [("segments_holder", "this"), ("last_segment", "last")])
+    ''', [("segments_holder", "this"), ("last_segment", "last")])
 add_logseg = add_logseg_creator("add_logseg", [segments, last_segment])
 
 

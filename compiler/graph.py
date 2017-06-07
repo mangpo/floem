@@ -29,12 +29,11 @@ def remove_comment(code):
 
 class Element:
 
-    def __init__(self, name, inports, outports, code, local_state=None, state_params=[], analyze=True):
+    def __init__(self, name, inports, outports, code, state_params=[], analyze=True):
         self.name = name
         self.inports = inports
         self.outports = outports
         self.code = '  ' + remove_comment(code)
-        self.local_state = local_state
         self.state_params = state_params
 
         self.output_fire = None
@@ -49,8 +48,8 @@ class Element:
             self.analyze_output_type()
 
     def clone(self, new_name):
-        e = Element(new_name, [x.clone() for x in self.inports], [x.clone() for x in self.outports],
-                    self.code, self.local_state, self.state_params, False)
+        e = Element(new_name, [x.clone() for x in self.inports], [x.clone() for x in self.outports], self.code,
+                    self.state_params, False)
         e.output_fire = self.output_fire
         e.output_code = copy.copy(self.output_code)
         e.special = self.special
@@ -86,7 +85,7 @@ class Element:
     def __eq__(self, other):
         return (self.__class__ == other.__class__ and self.name == other.name and
                 self.inports == other.inports and self.outports == other.outports and self.code == other.code and
-                self.local_state == other.local_state and self.state_params == other.state_params)
+                self.state_params == other.state_params)
 
     def count_ports_occurrence(self, code):
         occurrence = []
@@ -669,10 +668,7 @@ class Graph:
 
         src = "(%s) = in(); output { out(%s); }\n" % (", ".join(types_args), ", ".join(args))
 
-        e = Element(name,
-                    [Port("in", argtypes)],
-                    [Port("out", argtypes)],
-                    src)
+        e = Element(name, [Port("in", argtypes)], [Port("out", argtypes)], src)
 
         self.identity[name] = e
         return e

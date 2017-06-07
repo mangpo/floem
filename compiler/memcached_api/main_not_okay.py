@@ -105,10 +105,7 @@ get_opaque = create_element_instance("GetOpaque",
 output { out(m->mcr.request.magic); }
                     ''')
 
-GetCore = create_element("GetCore",
-                 [Port("in", ["eq_entry*"])],
-                 [Port("out", ["size_t"])],
-                 r'''
+GetCore = create_element("GetCore", [Port("in", ["eq_entry*"])], [Port("out", ["size_t"])], r'''
 (eq_entry* entry) = in();
 output { out(entry->hash % 4); }  // reta[entry->key_hash & 0xff];
                  ''')
@@ -136,10 +133,8 @@ Segments = create_state("segments_holder",
                        [[0],0,n_segments-1,n_segments])
 
 segments = Segments()
-get_item_creator = create_element("GetItem",
-                   [Port("in", ["size_t"])],
-                   [Port("out_item", ["item*"]), Port("out_full", ["bool"])],
-                   r'''
+get_item_creator = create_element("GetItem", [Port("in", ["size_t"])],
+                                  [Port("out_item", ["item*"]), Port("out_full", ["bool"])], r'''
     (size_t totlen) = in();
     bool full = false;
     item *it = segment_item_alloc(this.segments[this.head], totlen);
@@ -154,7 +149,7 @@ get_item_creator = create_element("GetItem",
         out_item(it);
         out_full(full);
     }
-    ''' % ("%", n_segments), None, [("segments_holder", "this")])
+    ''' % ("%", n_segments), [("segments_holder", "this")])
 get_item = get_item_creator("get_item", [segments])
 
 fill_item = create_element_instance("fill_item",

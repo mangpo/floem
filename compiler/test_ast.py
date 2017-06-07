@@ -70,10 +70,7 @@ class TestAST(unittest.TestCase):
             APIFunction("producer", ["int"], None),
             InternalTrigger("consumer"),
             Forward,
-            Element("Comsumer",
-                    [Port("in", ["int"])],
-                    [],
-                    r'''printf("%d\n", in());'''),
+            Element("Comsumer", [Port("in", ["int"])], [], r'''printf("%d\n", in());'''),
             ElementInstance("Forward", "Forwarder"),
             ElementInstance("Comsumer", "Comsumer"),
             Connect("Forwarder", "Comsumer"),
@@ -100,11 +97,7 @@ class TestAST(unittest.TestCase):
     def test_shared_state(self):
         p = Program(
             State("Shared", "int sum;", "100"),
-            Element("Sum",
-                    [Port("in", ["int"])],
-                    [],
-                    r'''this.sum += in(); printf("%d\n", this.sum);''',
-                    None,
+            Element("Sum", [Port("in", ["int"])], [], r'''this.sum += in(); printf("%d\n", this.sum);''',
                     [("Shared", "this")]),
             StateInstance("Shared", "s"),
             ElementInstance("Sum", "sum1", ["s"]),
@@ -172,14 +165,8 @@ class TestAST(unittest.TestCase):
 
     def test_API_basic_no_output(self):
         p = Program(
-            Element("Inc",
-                    [Port("in", ["int"])],
-                    [Port("out", ["int"])],
-                    r'''int x = in() + 1; output { out(x); }'''),
-            Element("Print",
-                    [Port("in", ["int"])],
-                    [],
-                    r'''printf("%d\n", in());'''),
+            Element("Inc", [Port("in", ["int"])], [Port("out", ["int"])], r'''int x = in() + 1; output { out(x); }'''),
+            Element("Print", [Port("in", ["int"])], [], r'''printf("%d\n", in());'''),
             APIFunction("add_and_print", ["int"], None),
             ElementInstance("Inc", "inc1"),
             ElementInstance("Print", "print"),
@@ -283,9 +270,7 @@ class TestAST(unittest.TestCase):
 
     def test_API_not_always_return(self):
         p = Program(
-            Element("Filter",
-                    [Port("in", ["int"])],
-                    [Port("out", ["int"])],
+            Element("Filter", [Port("in", ["int"])], [Port("out", ["int"])],
                     r'''int x = in(); output switch { case (x>0): out(x); }'''),
             ElementInstance("Filter", "filter"),
             APIFunction("func", ["int"], "int"),
@@ -300,9 +285,7 @@ class TestAST(unittest.TestCase):
 
     def test_API_not_always_return_but_okay(self):
         p = Program(
-            Element("Filter",
-                    [Port("in", ["int"])],
-                    [Port("out", ["int"])],
+            Element("Filter", [Port("in", ["int"])], [Port("out", ["int"])],
                     r'''int x = in(); output switch { case (x>0): out(x); }'''),
             ElementInstance("Filter", "filter"),
             APIFunction("func", ["int"], "int", "-1"),

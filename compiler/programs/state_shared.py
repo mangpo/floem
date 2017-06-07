@@ -1,12 +1,8 @@
 from dsl import *
 
 Storage = create_state("Storage", "int sum;", [0])
-Sum = create_element("Sum",
-            [Port("in", ["int"])],
-            [],
-            r'''this->sum += in(); printf("%d\n", this->sum);''',
-            None,
-            [("Storage", "this")])
+Sum = create_element("Sum", [Port("in", ["int"])], [], r'''this->sum += in(); printf("%d\n", this->sum);''',
+                     [("Storage", "this")])
 s = Storage(init=[50])
 sum1 = Sum("_sum1", [s])
 sum2 = Sum("_sum2", [s])

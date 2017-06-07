@@ -49,10 +49,8 @@ def circular_queue_variablesize_one2many(name, size, n_cores):
     states = [Dummy, circular, All]
     state_insts = dummies + enq_ones + deq_ones + [enq_all, deq_all]
 
-    Enqueue_alloc = Element(prefix + "enqueue_alloc_ele",
-                                   [Port("in", ["size_t", "size_t"])],
-                                   [Port("out", ["q_entry*"])],
-                             r'''
+    Enqueue_alloc = Element(prefix + "enqueue_alloc_ele", [Port("in", ["size_t", "size_t"])],
+                            [Port("out", ["q_entry*"])], r'''
            (size_t len, size_t c) = in();
            circular_queue *q = this->cores[c];
            //printf("ENQ core=%ld, queue=%p, eq=%d\n", c, q->queue, this->cores[1]==this->cores[3]);
@@ -60,28 +58,22 @@ def circular_queue_variablesize_one2many(name, size, n_cores):
            //if(entry == NULL) { printf("queue %d is full.\n", c); }
            //printf("ENQ' core=%ld, queue=%ld, entry=%ld\n", c, q->queue, entry);
            output { out(entry); }
-           ''', None, [(all_name, "this")])
+           ''', [(all_name, "this")])
 
-    Enqueue_submit = Element(prefix + "enqueue_submit_ele",
-                                    [Port("in", ["q_entry*"])], [],
-                             r'''
+    Enqueue_submit = Element(prefix + "enqueue_submit_ele", [Port("in", ["q_entry*"])], [], r'''
            (q_entry* eqe) = in();
            enqueue_submit(eqe);
            ''')
 
-    Dequeue_get = Element(prefix + "dequeue_get_ele",
-                             [Port("in", ["size_t"])], [Port("out", ["q_entry*", "size_t"])],
-                             r'''
+    Dequeue_get = Element(prefix + "dequeue_get_ele", [Port("in", ["size_t"])], [Port("out", ["q_entry*", "size_t"])], r'''
         (size_t c) = in();
         circular_queue *q = this->cores[c];
         q_entry* x = dequeue_get(q);
         //if(c == 3) printf("DEQ core=%ld, queue=%p, entry=%ld\n", c, q->queue, x);
         output { out(x, c); }
-           ''', None, [(all_name, "this")])
+           ''', [(all_name, "this")])
 
-    Dequeue_release = Element(prefix + "dequeue_release_ele",
-                             [Port("in", ["q_entry*"])], [],
-                             r'''
+    Dequeue_release = Element(prefix + "dequeue_release_ele", [Port("in", ["q_entry*"])], [], r'''
         (q_entry* eqe) = in();
         dequeue_release(eqe);
            ''')
@@ -167,26 +159,20 @@ def circular_queue_variablesize_many2one(name, size, n_cores, scan=None):
     states = [Dummy, circular, circular_scan, All, All_scan]
     state_insts = dummies + enq_ones + deq_ones + [enq_all, deq_all]
 
-    Enqueue_alloc = Element(prefix + "enqueue_alloc_ele",
-                                   [Port("in", ["size_t", "size_t"])],
-                                   [Port("out", ["q_entry*"])],
-                                   r'''
+    Enqueue_alloc = Element(prefix + "enqueue_alloc_ele", [Port("in", ["size_t", "size_t"])],
+                            [Port("out", ["q_entry*"])], r'''
         (size_t len, size_t c) = in();
         circular_queue *q = this->cores[c];
         q_entry* entry = (q_entry*) enqueue_alloc(q, len);
         output { out(entry); }
-        ''', None, [(all_name_enq, "this")])
+        ''', [(all_name_enq, "this")])
 
-    Enqueue_submit = Element(prefix + "enqueue_submit_ele",
-                                    [Port("in", ["q_entry*"])], [],
-                                    r'''
+    Enqueue_submit = Element(prefix + "enqueue_submit_ele", [Port("in", ["q_entry*"])], [], r'''
                   (q_entry* eqe) = in();
                   enqueue_submit(eqe);
                   ''')
 
-    Dequeue_get = Element(prefix + "dequeue_get_ele",
-                                 [], [Port("out", ["q_entry*"])],
-                                 r'''
+    Dequeue_get = Element(prefix + "dequeue_get_ele", [], [Port("out", ["q_entry*"])], r'''
             static int c = 0;  // round robin schedule
             int n = %d;
             q_entry* x = NULL;
@@ -200,20 +186,15 @@ def circular_queue_variablesize_many2one(name, size, n_cores, scan=None):
                 }
             }
             output { out(x); }
-               ''' % (n_cores, "%", "%"), None, [(all_name_deq, "this")])
+               ''' % (n_cores, "%", "%"), [(all_name_deq, "this")])
 
-    Dequeue_release = Element(prefix + "dequeue_release_ele",
-                                     [Port("in", ["q_entry*"])], [],
-                                     r'''
+    Dequeue_release = Element(prefix + "dequeue_release_ele", [Port("in", ["q_entry*"])], [], r'''
                 (q_entry* eqe) = in();
                 dequeue_release(eqe);
                    ''')
 
     if scan:
-        Scan = Element(prefix + "scan_ele",
-                              [Port("in_core", ["size_t"])],
-                              [Port("out", ["q_entry*"])],
-                              r'''
+        Scan = Element(prefix + "scan_ele", [Port("in_core", ["size_t"])], [Port("out", ["q_entry*"])], r'''
     (size_t c) = in_core();
     circular_queue_scan *q = this->cores[c];
     size_t off = q->offset;
@@ -231,7 +212,7 @@ def circular_queue_variablesize_many2one(name, size, n_cores, scan=None):
         }
     }
     output { out(entry); }
-            ''', None, [(all_name_scan, "this")])
+            ''', [(all_name_scan, "this")])
     else:
         Scan = None
 

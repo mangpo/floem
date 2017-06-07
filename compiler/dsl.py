@@ -299,8 +299,8 @@ class OutputPortCollect:
         return out
 
 
-def create_element(ele_name, inports, outports, code, local_state=None, state_params=[], special=None):
-    e = Element(ele_name, inports, outports, sanitize_variable_length(code), local_state, state_params)
+def create_element(ele_name, inports, outports, code, state_params=[], special=None):
+    e = Element(ele_name, inports, outports, sanitize_variable_length(code), state_params)
     e.special = special
     scope[-1].append(e)
 
@@ -369,7 +369,7 @@ def create_element(ele_name, inports, outports, code, local_state=None, state_pa
 
 def create_element_instance(inst_name, inports, outports, code, local_state=None, state_params=[]):
     ele_name = "_element_" + inst_name
-    ele = create_element(ele_name, inports, outports, code, local_state, state_params)
+    ele = create_element(ele_name, inports, outports, code, state_params)
     return ele(inst_name)
 
 
@@ -625,10 +625,8 @@ def create_identity_multiports(ports_types):
     src += "}\n"
     name = "identiy%d" % fresh_id
     fresh_id += 1
-    e = create_element(name,
-                       [Port("in%d" % i, ports_types[i]) for i in range(len(ports_types))],
-                       [Port("out%d" % i, ports_types[i]) for i in range(len(ports_types))],
-                       src)
+    e = create_element(name, [Port("in%d" % i, ports_types[i]) for i in range(len(ports_types))],
+                       [Port("out%d" % i, ports_types[i]) for i in range(len(ports_types))], src)
     return e
 
 

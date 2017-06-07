@@ -12,8 +12,7 @@ def create_from_net_fixed_size(name, type, max_channels, max_inbuf, port):
         int nchannels;
         int active;'''.format(type, max_channels, max_inbuf))
 
-    FROM_NET_SAVE = create_element("FROM_NET_SAVE_" + name, [], [Port("out", [])],
-            r'''
+    FROM_NET_SAVE = create_element("FROM_NET_SAVE_" + name, [], [Port("out", [])], r'''
     fd_set readfds;
     int nfds = this->listener;
     FD_ZERO(&readfds);
@@ -56,18 +55,15 @@ def create_from_net_fixed_size(name, type, max_channels, max_inbuf, port):
     }
 
     output { out(); }
-            ''' % ('%', type, '%', max_inbuf, '%d', '%ld'),
-            None, [(stream_type, "this")])
+            ''' % ('%', type, '%', max_inbuf, '%d', '%ld'), [(stream_type, "this")])
 
-    FROM_NET_READ = create_element("FROM_NET_READ_" + name, [Port("in", [])], [Port("out", [type + "*"])],
-            r'''
+    FROM_NET_READ = create_element("FROM_NET_READ_" + name, [Port("in", [])], [Port("out", [type + "*"])], r'''
     int i = this->active;
     for(int k = 0; k < this->rest[i] / sizeof(%s); k++) {
         out(&this->inbuf[i][k]);
     }
     output multiple;
-            ''' % type,
-            None, [(stream_type, "this")])
+            ''' % type, [(stream_type, "this")])
 
     def compo():
         s = Stream(init=["create_server_socket({0})".format(port), 0, [0], 0, 0, 0])
@@ -89,8 +85,7 @@ def create_to_net_fixed_size(name, type, hostname, port):
         hostname = '"%s"' % hostname
     sock = Sock(init=['create_client_socket()', 'create_sockaddr({0}, {1})'.format(hostname,port), False])
 
-    TO_NET_SEND = create_element("TO_NET_SEND", [Port("in", [type + "*"])], [],
-                                 r'''
+    TO_NET_SEND = create_element("TO_NET_SEND", [Port("in", [type + "*"])], [], r'''
                          (%s* t) = in();
                          if(!this->connected) {
                              printf("client try to connect.\n");
@@ -103,8 +98,7 @@ def create_to_net_fixed_size(name, type, hostname, port):
                              this->connected = true;
                          }
                          send(this->sock, t, sizeof(%s), 0);
-                                 ''' % (type, type),
-                                 None, [("Sock", "this")])
+                                 ''' % (type, type), [("Sock", "this")])
     to_net_send = TO_NET_SEND("to_net_send_" + name, [sock])
 
     return to_net_send

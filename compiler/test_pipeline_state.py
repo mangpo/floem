@@ -51,14 +51,8 @@ class TestPipelineState(unittest.TestCase):
 
     def test_simple_fail(self):
         p = Program(
-            Element("E1",
-                    [Port("in", ["int"])],
-                    [Port("out", [])],
-                    r'''state.a = in() output { out(); }'''),
-            Element("E2",
-                    [Port("in", [])],
-                    [],
-                    r'''printf("%d %d\n", state.a, state.b);'''),
+            Element("E1", [Port("in", ["int"])], [Port("out", [])], r'''state.a = in() output { out(); }'''),
+            Element("E2", [Port("in", [])], [], r'''printf("%d %d\n", state.a, state.b);'''),
             ElementInstance("E1", "e1"),
             ElementInstance("E2", "e2"),
             Connect("e1", "e2"),
@@ -75,20 +69,11 @@ class TestPipelineState(unittest.TestCase):
 
     def test_simple_pass(self):
         p = Program(
-            Element("E0",
-                    [Port("in", ["int", "int"])],
-                    [Port("out", ["int"])],
-                    r'''
+            Element("E0", [Port("in", ["int", "int"])], [Port("out", ["int"])], r'''
                     (int a, int b) = in();
                     state.a = a; output { out(b); }'''),
-            Element("E1",
-                    [Port("in", ["int"])],
-                    [Port("out", [])],
-                    r'''state.b = in() output { out(); }'''),
-            Element("E2",
-                    [Port("in", [])],
-                    [],
-                    r'''printf("%d %d\n", state.a, state.b);'''),
+            Element("E1", [Port("in", ["int"])], [Port("out", [])], r'''state.b = in() output { out(); }'''),
+            Element("E2", [Port("in", [])], [], r'''printf("%d %d\n", state.a, state.b);'''),
             ElementInstance("E0", "e0"),
             ElementInstance("E1", "e1"),
             ElementInstance("E2", "e2"),
@@ -107,23 +92,11 @@ class TestPipelineState(unittest.TestCase):
 
     def test_still_live(self):
         p = Program(
-            Element("MyFork",
-                    [Port("in", [])],
-                    [Port("out1", []), Port("out2", [])],
-                    r'''
+            Element("MyFork", [Port("in", [])], [Port("out1", []), Port("out2", [])], r'''
                     output { out1(); out2() }'''),
-            Element("Def",
-                    [Port("in", [])],
-                    [Port("out", [])],
-                    r'''state.a = 99; output { out(); }'''),
-            Element("Join",
-                    [Port("in1", []), Port("in2", [])],
-                    [],
-                    r'''printf("%d\n", state.a);'''),
-            Element("Use",
-                    [Port("in", [])],
-                    [],
-                    r'''printf("%d\n", state.a);'''),
+            Element("Def", [Port("in", [])], [Port("out", [])], r'''state.a = 99; output { out(); }'''),
+            Element("Join", [Port("in1", []), Port("in2", [])], [], r'''printf("%d\n", state.a);'''),
+            Element("Use", [Port("in", [])], [], r'''printf("%d\n", state.a);'''),
             ElementInstance("MyFork", "fork1"),
             ElementInstance("MyFork", "fork2"),
             ElementInstance("Def", "def"),
@@ -147,24 +120,12 @@ class TestPipelineState(unittest.TestCase):
 
     def test_either(self):
         p = Program(
-            Element("Choice",
-                    [Port("in", ["int"])],
-                    [Port("out1", []), Port("out2", [])],
-                    r'''
+            Element("Choice", [Port("in", ["int"])], [Port("out1", []), Port("out2", [])], r'''
                     int c = in();
                     output switch { case c: out1(); else: out2(); }'''),
-            Element("Def",
-                    [Port("in", [])],
-                    [Port("out", [])],
-                    r'''state.a = 99; output { out(); }'''),
-            Element("Nop",
-                    [Port("in", [])],
-                    [Port("out", [])],
-                    r'''output { out(); }'''),
-            Element("Use",
-                    [Port("in", [])],
-                    [],
-                    r'''printf("%d\n", state.a);'''),
+            Element("Def", [Port("in", [])], [Port("out", [])], r'''state.a = 99; output { out(); }'''),
+            Element("Nop", [Port("in", [])], [Port("out", [])], r'''output { out(); }'''),
+            Element("Use", [Port("in", [])], [], r'''printf("%d\n", state.a);'''),
             ElementInstance("Choice", "choice"),
             ElementInstance("Def", "def"),
             ElementInstance("Use", "use"),
@@ -188,27 +149,12 @@ class TestPipelineState(unittest.TestCase):
 
     def test_both(self):
         p = Program(
-            Element("MyFork",
-                    [Port("in", [])],
-                    [Port("out1", []), Port("out2", [])],
-                    r'''
+            Element("MyFork", [Port("in", [])], [Port("out1", []), Port("out2", [])], r'''
                     output  { out1(); out2(); }'''),
-            Element("DefA",
-                    [Port("in", [])],
-                    [Port("out", [])],
-                    r'''state.a = 99; output { out(); }'''),
-            Element("DefB",
-                    [Port("in", [])],
-                    [Port("out", [])],
-                    r'''state.b = 99; output { out(); }'''),
-            Element("Join",
-                    [Port("in1", []), Port("in2", [])],
-                    [Port("out", [])],
-                    r'''output { out(); }'''),
-            Element("Use",
-                    [Port("in", [])],
-                    [],
-                    r'''printf("%d\n", state.a + state.b);'''),
+            Element("DefA", [Port("in", [])], [Port("out", [])], r'''state.a = 99; output { out(); }'''),
+            Element("DefB", [Port("in", [])], [Port("out", [])], r'''state.b = 99; output { out(); }'''),
+            Element("Join", [Port("in1", []), Port("in2", [])], [Port("out", [])], r'''output { out(); }'''),
+            Element("Use", [Port("in", [])], [], r'''printf("%d\n", state.a + state.b);'''),
             ElementInstance("MyFork", "fork"),
             ElementInstance("DefA", "defA"),
             ElementInstance("DefB", "defB"),
@@ -232,38 +178,20 @@ class TestPipelineState(unittest.TestCase):
 
     def test_complicated(self):
         p = Program(
-            Element("Choice",
-                    [Port("in", ["int"])],
-                    [Port("out1", []), Port("out2", [])],
-                    r'''
+            Element("Choice", [Port("in", ["int"])], [Port("out1", []), Port("out2", [])], r'''
                     int c = in();
                     output switch { case c: out1(); else: out2(); }'''),
-            Element("ForkB1",
-                    [Port("in", [])],
-                    [Port("out1", []), Port("out2", [])],
-                    r'''
+            Element("ForkB1", [Port("in", [])], [Port("out1", []), Port("out2", [])], r'''
                     state.b = 99;
                     output  { out1(); out2(); }'''),
-            Element("ForkB2",
-                    [Port("in", [])],
-                    [Port("out1", []), Port("out2", [])],
-                    r'''
+            Element("ForkB2", [Port("in", [])], [Port("out1", []), Port("out2", [])], r'''
                     output  { out1(); out2(); }'''),
-            Element("C1",
-                    [Port("in", [])],
-                    [Port("out", [])],
-                    r'''
+            Element("C1", [Port("in", [])], [Port("out", [])], r'''
                     state.a = 99;
                     output { out(); }'''),
-            Element("C2",
-                    [Port("in", [])],
-                    [Port("out", [])],
-                    r'''
+            Element("C2", [Port("in", [])], [Port("out", [])], r'''
                     output { out(); }'''),
-            Element("JoinUse",
-                    [Port("in1", []), Port("in2", [])],
-                    [],
-                    r'''
+            Element("JoinUse", [Port("in1", []), Port("in2", [])], [], r'''
                     printf("%d\n", state.a + state.b);'''),
             ElementInstance("Choice", "a"),
             ElementInstance("ForkB1", "b1"),
@@ -298,43 +226,22 @@ class TestPipelineState(unittest.TestCase):
 
     def test_complicated2(self):
         p = Program(
-            Element("Choice",
-                    [Port("in", ["int"])],
-                    [Port("out1", []), Port("out2", [])],
-                    r'''
+            Element("Choice", [Port("in", ["int"])], [Port("out1", []), Port("out2", [])], r'''
                     int c = in();
                     output switch { case c: out1(); else: out2(); }'''),
-            Element("ForkB1",
-                    [Port("in", [])],
-                    [Port("out1", []), Port("out2", [])],
-                    r'''
+            Element("ForkB1", [Port("in", [])], [Port("out1", []), Port("out2", [])], r'''
                     state.b = 99;
                     output  { out1(); out2(); }'''),
-            Element("ForkB2",
-                    [Port("in", [])],
-                    [Port("out1", []), Port("out2", [])],
-                    r'''
+            Element("ForkB2", [Port("in", [])], [Port("out1", []), Port("out2", [])], r'''
                     output  { out1(); out2(); }'''),
-            Element("C1",
-                    [Port("in", [])],
-                    [Port("out", [])],
-                    r'''
+            Element("C1", [Port("in", [])], [Port("out", [])], r'''
                     state.a = 99;
                     output { out(); }'''),
-            Element("C2",
-                    [Port("in", [])],
-                    [Port("out", []), Port("out1", [])],
-                    r'''
+            Element("C2", [Port("in", [])], [Port("out", []), Port("out1", [])], r'''
                     output { out(); out1(); }'''),
-            Element("JoinUse",
-                    [Port("in1", []), Port("in2", [])],
-                    [],
-                    r'''
+            Element("JoinUse", [Port("in1", []), Port("in2", [])], [], r'''
                     printf("%d\n", state.a + state.b);'''),
-            Element("Print",
-                    [Port("in", [])],
-                    [],
-                    r'''
+            Element("Print", [Port("in", [])], [], r'''
                     printf("%d\n", state.c);'''),
             ElementInstance("Choice", "a"),
             ElementInstance("ForkB1", "b1"),
@@ -372,12 +279,10 @@ class TestPipelineState(unittest.TestCase):
     def test_smart_queue(self):
         n_cases = 2
         queue = queue_ast.QueueVariableSizeOne2Many("smart_queue", 10, 4, 2)
-        Enq_ele = Element("smart_enq_ele",
-                               [Port("in" + str(i), []) for i in range(n_cases)],
-                               [Port("out", [])],"output { out(); }")
-        Deq_ele = Element("smart_deq_ele",
-                               [Port("in_core", ["int"]), Port("in", [])],
-                               [Port("out" + str(i), []) for i in range(n_cases)],"output { out0(); out1(); }")
+        Enq_ele = Element("smart_enq_ele", [Port("in" + str(i), []) for i in range(n_cases)], [Port("out", [])],
+                          "output { out(); }")
+        Deq_ele = Element("smart_deq_ele", [Port("in_core", ["int"]), Port("in", [])],
+                          [Port("out" + str(i), []) for i in range(n_cases)], "output { out0(); out1(); }")
         Enq_ele.special = queue
         Deq_ele.special = queue
         enq = ElementInstance("smart_enq_ele", "smart_enq")
@@ -386,15 +291,9 @@ class TestPipelineState(unittest.TestCase):
         queue.deq = deq
         p = Program(
             State("mystate", "int a; int a0; int b0; int post;"),
-            Element("Save",
-                    [Port("in", ["int"])],
-                    [Port("out", [])],
-                    r'''
+            Element("Save", [Port("in", ["int"])], [Port("out", [])], r'''
                     state.a = in(); output { out(); }'''),
-            Element("Classify",
-                    [Port("in", [])],
-                    [Port("out0", []), Port("out1", [])],
-                    r'''
+            Element("Classify", [Port("in", [])], [Port("out0", []), Port("out1", [])], r'''
                     output switch { case (state.a % 2) == 0: out0();
                                     else: out1(); }'''),
             Element("A0", [Port("in", [])], [Port("out", [])], r'''state.a0 = state.a + 100; output { out(); }'''),
@@ -454,12 +353,10 @@ class TestPipelineState(unittest.TestCase):
     def test_smart_queue2(self):
         n_cases = 2
         queue = queue_ast.QueueVariableSizeOne2Many("smart_queue", 10, 4, 2)
-        Enq_ele = Element("smart_enq_ele",
-                               [Port("in" + str(i), []) for i in range(n_cases)],
-                               [Port("out", [])],"output { out(); }")
-        Deq_ele = Element("smart_deq_ele",
-                               [Port("in_core", ["int"]), Port("in", [])],
-                               [Port("out" + str(i), []) for i in range(n_cases)],"output { out0(); out1(); }")
+        Enq_ele = Element("smart_enq_ele", [Port("in" + str(i), []) for i in range(n_cases)], [Port("out", [])],
+                          "output { out(); }")
+        Deq_ele = Element("smart_deq_ele", [Port("in_core", ["int"]), Port("in", [])],
+                          [Port("out" + str(i), []) for i in range(n_cases)], "output { out0(); out1(); }")
         Enq_ele.special = queue
         Deq_ele.special = queue
         enq = ElementInstance("smart_enq_ele", "smart_enq")
@@ -468,15 +365,9 @@ class TestPipelineState(unittest.TestCase):
         queue.deq = deq
         p = Program(
             State("mystate", "int a; int a0; int b0;"),
-            Element("Save",
-                    [Port("in", ["int"])],
-                    [Port("out", [])],
-                    r'''
+            Element("Save", [Port("in", ["int"])], [Port("out", [])], r'''
                     state.a = in(); output { out(); }'''),
-            Element("Classify",
-                    [Port("in", [])],
-                    [Port("out0", []), Port("out1", [])],
-                    r'''
+            Element("Classify", [Port("in", [])], [Port("out0", []), Port("out1", [])], r'''
                     output switch { case (state.a % 2) == 0: out0();
                                     else: out1(); }'''),
             Element("A0", [Port("in", [])], [Port("out", [])], r'''state.a0 = state.a + 100; output { out(); }'''),
@@ -559,10 +450,7 @@ class TestPipelineState(unittest.TestCase):
     def test_array_field(self):
         p = Program(
             State("mystate", "int keylen; uint8_t *key @copysize(state.keylen);"),
-            Element("Save",
-                    [Port("in", ["int", "uint8_t"])],
-                    [Port("out", [])],
-    r'''(int len, uint8_t data) = in();
+            Element("Save", [Port("in", ["int", "uint8_t"])], [Port("out", [])], r'''(int len, uint8_t data) = in();
     state.key = (uint8_t *) malloc(len);
     state.keylen = len;
     for(int i=0; i<len ; i++)
@@ -581,12 +469,10 @@ class TestPipelineState(unittest.TestCase):
     def test_queue_release(self):
         n_cases = 1
         queue = queue_ast.QueueVariableSizeOne2Many("smart_queue", 10, 4, n_cases)
-        Enq_ele = Element("smart_enq_ele",
-                               [Port("in" + str(i), []) for i in range(n_cases)],
-                               [Port("out", [])],"output { out(); }")
-        Deq_ele = Element("smart_deq_ele",
-                               [Port("in_core", ["int"]), Port("in", [])],
-                               [Port("out" + str(i), []) for i in range(n_cases)],"output { out0(); out1(); }")
+        Enq_ele = Element("smart_enq_ele", [Port("in" + str(i), []) for i in range(n_cases)], [Port("out", [])],
+                          "output { out(); }")
+        Deq_ele = Element("smart_deq_ele", [Port("in_core", ["int"]), Port("in", [])],
+                          [Port("out" + str(i), []) for i in range(n_cases)], "output { out0(); out1(); }")
         Enq_ele.special = queue
         Deq_ele.special = queue
         enq = ElementInstance("smart_enq_ele", "smart_enq")
@@ -595,31 +481,17 @@ class TestPipelineState(unittest.TestCase):
         queue.deq = deq
         p = Program(
             State("mystate", "int a;"),
-            Element("Save",
-                    [Port("in", ["int"])],
-                    [Port("out", [])],
-                    r'''
+            Element("Save", [Port("in", ["int"])], [Port("out", [])], r'''
                     state.a = in(); output { out(); }'''),
             Enq_ele,
             Deq_ele,
             enq,
             deq,
-            Element("Fork",
-                    [Port("in", [])],
-                    [Port("out0", []), Port("out1", [])],
-                    r'''output { out0(); out1(); }'''),
-            Element("Choose",
-                    [Port("in", [])],
-                    [Port("out0", []), Port("out1", [])],
+            Element("Fork", [Port("in", [])], [Port("out0", []), Port("out1", [])], r'''output { out0(); out1(); }'''),
+            Element("Choose", [Port("in", [])], [Port("out0", []), Port("out1", [])],
                     r'''output switch { case (state.a % 2 == 0): out0(); else: out1(); }'''),
-            Element("Print",
-                    [Port("in", [])],
-                    [],
-                    r'''printf("%d\n", state.a);'''),
-            Element("Hello",
-                    [Port("in", [])],
-                    [],
-                    r'''printf("hello\n");'''),
+            Element("Print", [Port("in", [])], [], r'''printf("%d\n", state.a);'''),
+            Element("Hello", [Port("in", [])], [], r'''printf("hello\n");'''),
             ElementInstance("Save", "save"),
             ElementInstance("Fork", "myfork"),
             ElementInstance("Choose", "choose"),
@@ -667,12 +539,10 @@ class TestPipelineState(unittest.TestCase):
     def test_queue_release2(self):
         n_cases = 1
         queue = queue_ast.QueueVariableSizeOne2Many("smart_queue", 10, 4, n_cases)
-        Enq_ele = Element("smart_enq_ele",
-                               [Port("in" + str(i), []) for i in range(n_cases)],
-                               [Port("out", [])],"output { out(); }")
-        Deq_ele = Element("smart_deq_ele",
-                               [Port("in_core", ["int"]), Port("in", [])],
-                               [Port("out" + str(i), []) for i in range(n_cases)],"output { out0(); out1(); }")
+        Enq_ele = Element("smart_enq_ele", [Port("in" + str(i), []) for i in range(n_cases)], [Port("out", [])],
+                          "output { out(); }")
+        Deq_ele = Element("smart_deq_ele", [Port("in_core", ["int"]), Port("in", [])],
+                          [Port("out" + str(i), []) for i in range(n_cases)], "output { out0(); out1(); }")
         Enq_ele.special = queue
         Deq_ele.special = queue
         enq = ElementInstance("smart_enq_ele", "smart_enq")
@@ -681,23 +551,15 @@ class TestPipelineState(unittest.TestCase):
         queue.deq = deq
         p = Program(
             State("mystate", "int a;"),
-            Element("Save",
-                    [Port("in", ["int"])],
-                    [Port("out", [])],
-                    r'''
+            Element("Save", [Port("in", ["int"])], [Port("out", [])], r'''
                     state.a = in(); output { out(); }'''),
             Enq_ele,
             Deq_ele,
             enq,
             deq,
-            Element("Choose",
-                    [Port("in", [])],
-                    [Port("out0", []), Port("out1", [])],
+            Element("Choose", [Port("in", [])], [Port("out0", []), Port("out1", [])],
                     r'''output switch { case (state.a % 2 == 0): out0(); case (state.a > 0): out1(); }'''),
-            Element("Print",
-                    [Port("in", [])],
-                    [],
-                    r'''printf("%d\n", state.a);'''),
+            Element("Print", [Port("in", [])], [], r'''printf("%d\n", state.a);'''),
             ElementInstance("Save", "save"),
             ElementInstance("Choose", "choose"),
             ElementInstance("Print", "p0"),

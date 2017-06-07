@@ -2,9 +2,7 @@ from dsl import *
 
 create_memory_region("region", 10)
 
-Test = create_element("Test",
-                       [], [],
-                       r'''
+Test = create_element("Test", [], [], r'''
 int* p = (int*) region;
 *p = 99;
 printf("%d\n", *p);

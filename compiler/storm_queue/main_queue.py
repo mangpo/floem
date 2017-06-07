@@ -13,22 +13,18 @@ inject = Inject()
 task_master = create_state("task_master", "int *task2executorid;")
 task_master_inst = task_master("my_task_master", ["get_task2executorid()"])
 
-get_core_creator = create_element("get_core_creator",
-                              [Port("in", ["struct tuple*"])],
-                              [Port("out", ["struct tuple*", "size_t"])],
-                              r'''
+get_core_creator = create_element("get_core_creator", [Port("in", ["struct tuple*"])],
+                                  [Port("out", ["struct tuple*", "size_t"])], r'''
     struct tuple* t = in();
     size_t id = 0;
     if(t != NULL) id = this->task2executorid[t->task];
     output switch { case (t != NULL): out(t, id); }
-                              ''',
-                              None, [("task_master", "this")])
+                              ''', [("task_master", "this")])
 
 get_core = get_core_creator("get_core", [task_master_inst])
 
-print_tuple_creator = create_element("print_tuple_creator",
-                                      [Port("in", ["struct tuple*"])], [Port("out", ["struct tuple*"])],
-                                      r'''
+print_tuple_creator = create_element("print_tuple_creator", [Port("in", ["struct tuple*"])],
+                                     [Port("out", ["struct tuple*"])], r'''
     (struct tuple* t) = in();
 
     if(t != NULL) {
@@ -73,20 +69,13 @@ print_tuple = print_tuple_creator()
 queue_state = create_state("queue_batch", "int core; int batch_size; uint64_t start;")
 my_queue_state = queue_state("my_queue_batch", [0, 0, 0, 0])
 
-queue_schedule_batch = create_element("queue_schedule_batch",
-                              [],
-                              [Port("out", ["size_t", "size_t"])],
-                              r'''
+queue_schedule_batch = create_element("queue_schedule_batch", [], [Port("out", ["size_t", "size_t"])], r'''
     output { out(this->core, this->batch_size); }
-                              ''',
-                              None, [("queue_batch", "this")])
+                              ''', [("queue_batch", "this")])
 
 queue_schedule = queue_schedule_batch("queue_schedule", [my_queue_state])
 
-adv_creator = create_element("adv_creator",
-                              [Port("in", ["struct tuple*"])],
-                              [Port("out", ["size_t", "size_t"])],
-                              r'''
+adv_creator = create_element("adv_creator", [Port("in", ["struct tuple*"])], [Port("out", ["size_t", "size_t"])], r'''
     (struct tuple* t) = in();
     size_t core = 0;
     size_t skip = 0;
@@ -101,8 +90,7 @@ adv_creator = create_element("adv_creator",
     }
 
     output switch { case (skip>0): out(core, skip); }
-                              ''' % ('%', n_cores, '%ld', '%ld', '%.2ld', '%lf'),
-                              None, [("queue_batch", "this")])
+                              ''' % ('%', n_cores, '%ld', '%ld', '%.2ld', '%lf'), [("queue_batch", "this")])
 
 adv = adv_creator("adv", [my_queue_state])
 

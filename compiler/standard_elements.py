@@ -34,18 +34,10 @@ def IdentityElement(name, type):
 Fork2 = Fork("Fork2", 2, "int")
 Fork3 = Fork("Fork3", 3, "int")
 Forward = IdentityElement("Forward", "int")
-Add = Element("Add",
-              [Port("in1", ["int"]), Port("in2", ["int"])],
-              [Port("out", ["int"])],
+Add = Element("Add", [Port("in1", ["int"]), Port("in2", ["int"])], [Port("out", ["int"])],
               r'''int x = in1() + in2(); output { out(x); }''')
 
-Inc = Element("Inc",
-              [Port("in", ["int"])],
-              [Port("out", ["int"])],
-              r'''int x = in() + 1; output { out(x); }''')
+Inc = Element("Inc", [Port("in", ["int"])], [Port("out", ["int"])], r'''int x = in() + 1; output { out(x); }''')
 
-Drop = Element("Drop",
-              [Port("in", ["int"])],
-              [],
-              r'''in();''')
+Drop = Element("Drop", [Port("in", ["int"])], [], r'''in();''')
 

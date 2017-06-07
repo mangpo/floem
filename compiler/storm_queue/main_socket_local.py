@@ -18,26 +18,21 @@ for i in range(n_workers):
 task_master = create_state("task_master", "int *task2executorid; int *task2worker;")
 task_master_inst = task_master("my_task_master", ["get_task2executorid()", "get_task2worker()"])
 
-get_core_creator = create_element("get_core_creator",
-                              [Port("in", ["struct tuple*"])],
-                              [Port("out", ["struct tuple*", "size_t"])],
-                              r'''
+get_core_creator = create_element("get_core_creator", [Port("in", ["struct tuple*"])],
+                                  [Port("out", ["struct tuple*", "size_t"])], r'''
     struct tuple* t = in();
     int id = this->task2executorid[t->task];
     printf("receive: task %d, id %d\n", t->task, id);
     output { out(t, id); }
-                              ''',
-                              None, [("task_master", "this")])
+                              ''', [("task_master", "this")])
 
 get_core = get_core_creator("get_core", [task_master_inst])
 get_core2 = get_core_creator("get_core2", [task_master_inst])
 
-choose_creator = create_element("choose_creator",
-                                 [Port("in", ["struct tuple*"])],
-                                 [Port("out_send", ["struct tuple*"]),
-                                  Port("out_local", ["struct tuple*"]),
-                                  Port("out_nop", [])],
-                                 r'''
+choose_creator = create_element("choose_creator", [Port("in", ["struct tuple*"])], [Port("out_send", ["struct tuple*"]),
+                                                                                    Port("out_local",
+                                                                                         ["struct tuple*"]),
+                                                                                    Port("out_nop", [])], r'''
     struct tuple* t = in();
     bool local;
     if(t != NULL) {
@@ -45,12 +40,11 @@ choose_creator = create_element("choose_creator",
         if(local) printf("send to myself!\n");
     }
     output switch { case (t && local): out_local(t); case (t && !local): out_send(t); else: out_nop(); }
-                                 ''', None, [("task_master", "this")])
+                                 ''', [("task_master", "this")])
 choose = choose_creator("choose", [task_master_inst])
 
-print_tuple_creator = create_element("print_tuple_creator",
-                                      [Port("in", ["struct tuple*"])], [Port("out", ["struct tuple*"])],
-                                      r'''
+print_tuple_creator = create_element("print_tuple_creator", [Port("in", ["struct tuple*"])],
+                                     [Port("out", ["struct tuple*"])], r'''
     (struct tuple* t) = in();
 
     //printf("TUPLE = null\n");
@@ -66,18 +60,16 @@ print_tuple = print_tuple_creator()
 src = ""
 for i in range(n_workers):
     src += "case (id == {0}): out{0}(t); ".format(i)
-steer_worker_creator = create_element("steer_worker_creator",
-                                      [Port("in", ["struct tuple*"])],
+steer_worker_creator = create_element("steer_worker_creator", [Port("in", ["struct tuple*"])],
                                       [Port("out" + str(i), ["struct tuple*"]) for i in range(n_workers)] +
-                                      [Port("out_nop", [])],
-                                      r'''
+                                      [Port("out_nop", [])], r'''
     (struct tuple* t) = in();
     int id = -1;
     if(t != NULL) {
         id = this->task2worker[t->task];
         printf("send to worker %d\n", id);
     }
-    output switch { ''' + src + " else: out_nop(); }", None, [("task_master", "this")])
+    output switch { ''' + src + " else: out_nop(); }", [("task_master", "this")])
 
 steer_worker = steer_worker_creator("steer_worker", [task_master_inst])
 
@@ -86,20 +78,13 @@ nop = create_element_instance("nop", [Port("in", [])], [], "")
 queue_state = create_state("queue_batch", "int core; int batch_size; uint64_t start;")
 my_queue_state = queue_state("my_queue_batch", [0, 0, 0, 0])
 
-queue_schedule_batch = create_element("queue_schedule_batch",
-                              [],
-                              [Port("out", ["size_t", "size_t"])],
-                              r'''
+queue_schedule_batch = create_element("queue_schedule_batch", [], [Port("out", ["size_t", "size_t"])], r'''
     output { out(this->core, this->batch_size); }
-                              ''',
-                              None, [("queue_batch", "this")])
+                              ''', [("queue_batch", "this")])
 
 queue_schedule = queue_schedule_batch("queue_schedule", [my_queue_state])
 
-adv_creator = create_element("adv_creator",
-                              [Port("in", ["struct tuple*"])],
-                              [Port("out", ["size_t", "size_t"])],
-                              r'''
+adv_creator = create_element("adv_creator", [Port("in", ["struct tuple*"])], [Port("out", ["size_t", "size_t"])], r'''
     (struct tuple* t) = in();
     size_t core = 0;
     size_t skip = 0;
@@ -115,8 +100,7 @@ adv_creator = create_element("adv_creator",
     }
 
     output switch { case (skip>0): out(core, skip); }
-                              ''' % ('%ld', '%', n_cores, '%ld', '%ld', '%.2ld', '%lf'),
-                              None, [("queue_batch", "this")])
+                              ''' % ('%ld', '%', n_cores, '%ld', '%ld', '%.2ld', '%lf'), [("queue_batch", "this")])
 
 adv = adv_creator("adv", [my_queue_state])
 

@@ -3,10 +3,8 @@ from elements_library import *
 
 fork = create_fork_instance("fork2", 2, "int")
 
-Chioce = create_element("Choice",
-            [Port("in", ["int"])],
-            [Port("out1", ["int"]), Port("out2", ["int"])],
-            r'''(int x) = in(); output switch { case (x % 2 == 0): out1(x); else: out2(x); }''')
+Chioce = create_element("Choice", [Port("in", ["int"])], [Port("out1", ["int"]), Port("out2", ["int"])],
+                        r'''(int x) = in(); output switch { case (x % 2 == 0): out1(x); else: out2(x); }''')
 choice1 = Chioce()
 choice2 = Chioce()
 

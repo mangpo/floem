@@ -10,8 +10,7 @@ Stream = create_state("stream", r'''
     int active;''')
 s = Stream(init=["create_server_socket(7001)", 0, [0], 0, 0, 0])
 
-FROM_NET_SAVE = create_element("FROM_NET_SAVE", [], [Port("out", [])],
-            r'''
+FROM_NET_SAVE = create_element("FROM_NET_SAVE", [], [Port("out", [])], r'''
     fd_set readfds;
     int nfds = this->listener;
     FD_ZERO(&readfds);
@@ -51,12 +50,10 @@ FROM_NET_SAVE = create_element("FROM_NET_SAVE", [], [Port("out", [])],
     }
 
     output { out(); }
-            ''',
-            None, [("stream", "this")])
+            ''', [("stream", "this")])
 from_net_save = FROM_NET_SAVE("from_net_save", [s])
 
-FROM_NET_READ = create_element("FROM_NET_READ", [Port("in", [])], [Port("out", ["item*"])],
-            r'''
+FROM_NET_READ = create_element("FROM_NET_READ", [Port("in", [])], [Port("out", ["item*"])], r'''
     int i = this->active;
     for(int k = 0; k < this->rest[i] / sizeof(item); k++) {
         item *t = &this->inbuf[i][k];
@@ -64,8 +61,7 @@ FROM_NET_READ = create_element("FROM_NET_READ", [Port("in", [])], [Port("out", [
         //printf("item %d %d\n", t->x, t->y);
     }
     output multiple;
-            ''',
-            None, [("stream", "this")])
+            ''', [("stream", "this")])
 from_net_read = FROM_NET_READ("from_net_read", [s])
 
 display = create_element_instance("display", [Port("in", ["item*"])], [],
@@ -81,8 +77,7 @@ Sock = create_state("Sock", r'''
     bool connected;''')
 sock = Sock(init=['create_client_socket()', 'create_sockaddr("127.0.0.1", 7001)', False])
 
-TO_NET_SEND = create_element("TO_NET_SEND", [Port("in", ["item*"])], [],
-            r'''
+TO_NET_SEND = create_element("TO_NET_SEND", [Port("in", ["item*"])], [], r'''
     (item* t) = in();
     if(!this->connected) {
         printf("client try to connect.\n");
@@ -93,8 +88,7 @@ TO_NET_SEND = create_element("TO_NET_SEND", [Port("in", ["item*"])], [],
     }
     send(this->sock, t, sizeof(item), 0);
     printf("send %d\n", t->x);
-            ''',
-            None, [("Sock", "this")])
+            ''', [("Sock", "this")])
 to_net_send = TO_NET_SEND("to_net_send", [sock])
 
 

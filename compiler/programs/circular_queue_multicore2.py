@@ -6,10 +6,7 @@ Gen = create_identity("gen", "int")
 gen = Gen()
 fork = create_fork_instance("myfork", 2, "int")
 
-GetCore = create_element("GetCore",
-                 [Port("in", ["int"])],
-                 [Port("out", ["size_t"])],
-                 r'''
+GetCore = create_element("GetCore", [Port("in", ["int"])], [Port("out", ["size_t"])], r'''
 (int x) = in();
 output { out(x % 2); }
                  ''')

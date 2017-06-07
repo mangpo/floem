@@ -1,15 +1,9 @@
 from dsl import *
 from elements_library import *
 
-Gen = create_element("Gen",
-            [],
-            [Port("out", ["int"])],
-            r'''output { out(3); }''')
+Gen = create_element("Gen", [], [Port("out", ["int"])], r'''output { out(3); }''')
 
-Print = create_element("Print",
-            [Port("in", ["int"])],
-            [],
-            r'''printf("%d\n",in());''')
+Print = create_element("Print", [Port("in", ["int"])], [], r'''printf("%d\n",in());''')
 
 gen = Gen()
 p = Print()

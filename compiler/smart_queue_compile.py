@@ -116,11 +116,9 @@ def compile_smart_queue(g, q, src2fields):
     for i in range(q.n_cases):
         src_cases += "    case (type == %d): out%d(%s);\n" % (i + 1, i, deq_args_out)
     src_release = "    case (type == 0): release(e);\n"
-    classify_ele = Element(q.deq.name + "_classify",
-                           [Port("in", deq_types)],
+    classify_ele = Element(q.deq.name + "_classify", [Port("in", deq_types)],
                            [Port("out" + str(i), deq_types) for i in range(q.n_cases)]
-                           + [Port("release", ["q_entry*"])],
-                           r'''
+                           + [Port("release", ["q_entry*"])], r'''
         %s
         int type = -1;
         if (e != NULL) type = (e->flags & TYPE_MASK) >> TYPE_SHIFT;
@@ -128,10 +126,8 @@ def compile_smart_queue(g, q, src2fields):
             %s
         }''' % (deq_src_in, src_cases + src_release))
 
-    scan_classify_ele = Element(q.deq.name + "_scan_classify",
-                           [Port("in", deq_types)],
-                           [Port("out" + str(i), deq_types) for i in range(q.n_cases)],
-                           r'''
+    scan_classify_ele = Element(q.deq.name + "_scan_classify", [Port("in", deq_types)],
+                                [Port("out" + str(i), deq_types) for i in range(q.n_cases)], r'''
         %s
         uint16_t type = 0;
         if (e != NULL) type = (e->flags & TYPE_MASK) >> TYPE_SHIFT;
@@ -253,12 +249,9 @@ def compile_smart_queue(g, q, src2fields):
                 fill_src += "e->%s = state.%s;\n" % (field, var)
         fill_src += "e->flags |= %d << TYPE_SHIFT;\n" % (i+1)
         fill_src += "output { out((q_entry*) e); }"
-        fill_ele = Element(q.name + "_fill" + str(i),
-                           [Port("in_entry", ["q_entry*"]), Port("in_pkt", [])],
+        fill_ele = Element(q.name + "_fill" + str(i), [Port("in_entry", ["q_entry*"]), Port("in_pkt", [])],
                            [Port("out", ["q_entry*"])], fill_src)  # TODO
-        fork = Element(q.name + "_fork" + str(i),
-                       [Port("in", [])],
-                       [Port("out_size_core", []), Port("out_fill", [])],
+        fork = Element(q.name + "_fork" + str(i), [Port("in", [])], [Port("out_size_core", []), Port("out_fill", [])],
                        r'''output { out_size_core(); out_fill(); }''')
 
         save_src = deq_src_in

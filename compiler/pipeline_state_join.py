@@ -19,10 +19,7 @@ def add_release_entry_port(g, instance):
 
 def merge_as_join(g, nodes, name, prefix):
     n = len(nodes)
-    join = Element("merge%d" % n,
-                         [Port("in" + str(i), []) for i in range(n)],
-                         [],
-                         r'''output { }''')
+    join = Element("merge%d" % n, [Port("in" + str(i), []) for i in range(n)], [], r'''output { }''')
     new_inst_name = name + "_merge%d" % n
     g.addElement(join)
     g.newElementInstance(join.name, prefix + new_inst_name, [])
@@ -42,10 +39,7 @@ def merge_as_join(g, nodes, name, prefix):
 
 def merge_as_no_join(g, nodes, name, prefix):
     n = len(nodes)
-    join = Element("merge",
-                   [Port("in", [])],
-                   [],
-                   r'''output { }''')
+    join = Element("merge", [Port("in", [])], [], r'''output { }''')
     new_inst_name = name + "_merge"
     g.addElement(join)
     g.newElementInstance(join.name, prefix + new_inst_name, [])

@@ -157,22 +157,14 @@ class TestJoinHandling(unittest.TestCase):
 
     def test_fork_join(self):
         p = Program(
-            Element("Fork",
-                    [Port("in", ["int", "int"])],
+            Element("Fork", [Port("in", ["int", "int"])],
                     [Port("to_add", ["int", "int"]), Port("to_sub", ["int", "int"])],
                     r'''(int x, int y) = in(); output { to_add(x,y); to_sub(x,y); }'''),
-            Element("Add",
-                    [Port("in", ["int", "int"])],
-                    [Port("out", ["int"])],
+            Element("Add", [Port("in", ["int", "int"])], [Port("out", ["int"])],
                     r'''(int x, int y) = in(); output { out(x+y); }'''),
-            Element("Sub",
-                    [Port("in", ["int", "int"])],
-                    [Port("out", ["int"])],
+            Element("Sub", [Port("in", ["int", "int"])], [Port("out", ["int"])],
                     r'''(int x, int y) = in(); output { out(x-y); }'''),
-            Element("Print",
-                    [Port("in1", ["int"]), Port("in2", ["int"])],
-                    [],
-                    r'''printf("%d %d\n",in1(), in2());'''),
+            Element("Print", [Port("in1", ["int"]), Port("in2", ["int"])], [], r'''printf("%d %d\n",in1(), in2());'''),
             ElementInstance("Fork", "Fork"),
             ElementInstance("Add", "Add"),
             ElementInstance("Sub", "Sub"),
@@ -206,22 +198,14 @@ class TestJoinHandling(unittest.TestCase):
 
     def test_fork_join_thread1(self):
         p = Program(
-            Element("Fork",
-                    [Port("in", ["int", "int"])],
+            Element("Fork", [Port("in", ["int", "int"])],
                     [Port("to_add", ["int", "int"]), Port("to_sub", ["int", "int"])],
                     r'''(int x, int y) = in(); output { to_add(x,y); to_sub(x,y); }'''),
-            Element("Add",
-                    [Port("in", ["int", "int"])],
-                    [Port("out", ["int"])],
+            Element("Add", [Port("in", ["int", "int"])], [Port("out", ["int"])],
                     r'''(int x, int y) = in(); output { out(x+y); }'''),
-            Element("Sub",
-                    [Port("in", ["int", "int"])],
-                    [Port("out", ["int"])],
+            Element("Sub", [Port("in", ["int", "int"])], [Port("out", ["int"])],
                     r'''(int x, int y) = in(); output { out(x-y); }'''),
-            Element("Print",
-                    [Port("in1", ["int"]), Port("in2", ["int"])],
-                    [],
-                    r'''printf("%d %d\n",in1(), in2());'''),
+            Element("Print", [Port("in1", ["int"]), Port("in2", ["int"])], [], r'''printf("%d %d\n",in1(), in2());'''),
             ElementInstance("Fork", "Fork"),
             ElementInstance("Add", "Add"),
             ElementInstance("Sub", "Sub"),
@@ -252,22 +236,14 @@ class TestJoinHandling(unittest.TestCase):
 
     def test_fork_join_thread2(self):
         p = Program(
-            Element("Fork",
-                    [Port("in", ["int", "int"])],
+            Element("Fork", [Port("in", ["int", "int"])],
                     [Port("to_add", ["int", "int"]), Port("to_sub", ["int", "int"])],
                     r'''(int x, int y) = in(); output { to_add(x,y); to_sub(x,y); }'''),
-            Element("Add",
-                    [Port("in", ["int", "int"])],
-                    [Port("out", ["int"])],
+            Element("Add", [Port("in", ["int", "int"])], [Port("out", ["int"])],
                     r'''(int x, int y) = in(); output { out(x+y); }'''),
-            Element("Sub",
-                    [Port("in", ["int", "int"])],
-                    [Port("out", ["int"])],
+            Element("Sub", [Port("in", ["int", "int"])], [Port("out", ["int"])],
                     r'''(int x, int y) = in(); output { out(x-y); }'''),
-            Element("Print",
-                    [Port("in1", ["int"]), Port("in2", ["int"])],
-                    [],
-                    r'''printf("%d %d\n",in1(), in2());'''),
+            Element("Print", [Port("in1", ["int"]), Port("in2", ["int"])], [], r'''printf("%d %d\n",in1(), in2());'''),
             ElementInstance("Fork", "Fork"),
             ElementInstance("Add", "Add"),
             ElementInstance("Sub", "Sub"),
@@ -296,14 +272,9 @@ class TestJoinHandling(unittest.TestCase):
 
     def test_fork_join_half(self):
         p = Program(
-            Element("Forwarder",
-                    [Port("in", ["int"])],
-                    [Port("out", ["int"])],
+            Element("Forwarder", [Port("in", ["int"])], [Port("out", ["int"])],
                     r'''int x = in(); output { out(x); }'''),
-            Element("Print",
-                    [Port("in1", ["int"]), Port("in2", ["int"])],
-                    [],
-                    r'''printf("%d %d\n",in1(), in2());'''),
+            Element("Print", [Port("in1", ["int"]), Port("in2", ["int"])], [], r'''printf("%d %d\n",in1(), in2());'''),
             ElementInstance("Forwarder", "f1"),
             ElementInstance("Forwarder", "f2"),
             ElementInstance("Print", "Print"),
@@ -331,10 +302,7 @@ class TestJoinHandling(unittest.TestCase):
 
     def test_join_only(self):
         p = Program(
-            Element("Print",
-                    [Port("in1", ["int"]), Port("in2", ["int"])],
-                    [],
-                    r'''printf("%d %d\n",in1(), in2());'''),
+            Element("Print", [Port("in1", ["int"]), Port("in2", ["int"])], [], r'''printf("%d %d\n",in1(), in2());'''),
             ElementInstance("Print", "Print")
         )
 
@@ -503,9 +471,7 @@ class TestJoinHandling(unittest.TestCase):
 
     def test_join_either_both(self):
         p = Program(
-            Element("Choice",
-                    [Port("in", ["int"])],
-                    [Port("out1", ["int"]), Port("out2", ["int"])],
+            Element("Choice", [Port("in", ["int"])], [Port("out1", ["int"]), Port("out2", ["int"])],
                     r'''output switch { case x < 0: out1(x); else: out2(x); }'''),
             Fork2, Forward, Add,
             ElementInstance("Choice", "a"),
@@ -541,9 +507,7 @@ class TestJoinHandling(unittest.TestCase):
 
     def test_join_both_either_error(self):
         p = Program(
-            Element("Choice",
-                    [Port("in", ["int"])],
-                    [Port("out1", ["int"]), Port("out2", ["int"])],
+            Element("Choice", [Port("in", ["int"])], [Port("out1", ["int"]), Port("out2", ["int"])],
                     r'''output switch { case x < 0: out1(x); else: out2(x); }'''),
             Fork2, Forward, Add,
             ElementInstance("Fork2", "a"),
@@ -573,8 +537,7 @@ class TestJoinHandling(unittest.TestCase):
     def test_join_both_both_order(self):
         p = Program(
             Fork2, Forward, Add,
-            Element("Fork4",
-                    [Port("in", ["int"])],
+            Element("Fork4", [Port("in", ["int"])],
                     [Port("out1", ["int"]), Port("out2", ["int"]), Port("out3", ["int"]), Port("out4", ["int"])],
                     r'''int x = in(); output { out1(x); out2(x); out3(x); out4(x); }'''),
             ElementInstance("Fork4", "a"),
@@ -637,9 +600,7 @@ class TestJoinHandling(unittest.TestCase):
     def test_join_order(self):
         p = Program(
             Fork2, Fork3, Forward, Add,
-            Element("Add3",
-                    [Port("in1", ["int"]), Port("in2", ["int"]), Port("in3", ["int"])],
-                    [],
+            Element("Add3", [Port("in1", ["int"]), Port("in2", ["int"]), Port("in3", ["int"])], [],
                     r'''int x = in1() + in2() + in3();'''),
             ElementInstance("Fork2", "fork2"),
             ElementInstance("Fork3", "fork3"),
@@ -670,13 +631,10 @@ class TestJoinHandling(unittest.TestCase):
     def test_nested_join_thread(self):
         p = Program(
             Forward, Add,
-            Element("Fork4",
-                    [Port("in", ["int"])],
+            Element("Fork4", [Port("in", ["int"])],
                     [Port("out1", ["int"]), Port("out2", ["int"]), Port("out3", ["int"]), Port("out4", ["int"])],
                     r'''int x = in(); output { out1(x); out2(x); out3(x); out4(x); }'''),
-            Element("Add3",
-                    [Port("in1", ["int"]), Port("in2", ["int"]), Port("in3", ["int"])],
-                    [Port("out", ["int"])],
+            Element("Add3", [Port("in1", ["int"]), Port("in2", ["int"]), Port("in3", ["int"])], [Port("out", ["int"])],
                     r'''int x = in1() + in2() + in3(); output { out(x); }'''),
             ElementInstance("Fork4", "fork4"),
             ElementInstance("Forward", "f1"),

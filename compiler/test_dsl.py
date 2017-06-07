@@ -149,12 +149,9 @@ class TestDSL(unittest.TestCase):
     def test_composite(self):
         reset()
         Count = create_state("Count", "int count;", [0])
-        Inc = create_element("Inc",
-                    [Port("in", ["int"])],
-                    [Port("out", ["int"])],
-                    r'''local.count++; global.count++; int x = in(); output { out(x); }''',
-                    None,
-                    [("Count", "local"), ("Count", "global")])
+        Inc = create_element("Inc", [Port("in", ["int"])], [Port("out", ["int"])],
+                             r'''local.count++; global.count++; int x = in(); output { out(x); }''',
+                             [("Count", "local"), ("Count", "global")])
 
         global_count = Count("count")
         def compo(x):
@@ -347,8 +344,7 @@ class TestDSL(unittest.TestCase):
 
     def test_api_default_val(self):
         reset()
-        Choice = create_element("Choice", [Port("in", ["int"])], [Port("out1", ["int"]), Port("out2", ["int"])],
-                                r'''
+        Choice = create_element("Choice", [Port("in", ["int"])], [Port("out1", ["int"]), Port("out2", ["int"])], r'''
                                 int x = in();
                                 output switch { case (x > 0): out1(x); else: out2(x); }
                                 ''')
@@ -373,8 +369,7 @@ class TestDSL(unittest.TestCase):
 
     def test_api_either(self):
         reset()
-        Choice = create_element("Choice", [Port("in", ["int"])], [Port("out1", ["int"]), Port("out2", ["int"])],
-                                r'''
+        Choice = create_element("Choice", [Port("in", ["int"])], [Port("out1", ["int"]), Port("out2", ["int"])], r'''
                                 int x = in();
                                 output switch { case (x % 2 == 0): out1(x); else: out2(x); }
                                 ''')
@@ -424,10 +419,8 @@ class TestDSL(unittest.TestCase):
         Fork2 = create_fork("Fork2", 2, "int")
         Fork3 = create_fork("Fork3", 3, "int")
         Add2 = create_add("Add2", "int")
-        Add3 = create_element("Add3",
-                          [Port("in1", ["int"]), Port("in2", ["int"]), Port("in3", ["int"])],
-                          [Port("out", ["int"])],
-                          r'''int x = in1() + in2() + in3(); output { out(x); }''')
+        Add3 = create_element("Add3", [Port("in1", ["int"]), Port("in2", ["int"]), Port("in3", ["int"])],
+                              [Port("out", ["int"])], r'''int x = in1() + in2() + in3(); output { out(x); }''')
         Forward = create_identity("Forward", "int")
 
 
@@ -457,10 +450,8 @@ class TestDSL(unittest.TestCase):
     def test_api_zero_or_one_join(self):
         reset()
         Fork = create_fork("Fork", 2, "int")
-        Filter = create_element("Filter",
-                          [Port("in", ["int"])],
-                          [Port("out", ["int"])],
-                          r'''int x = in(); output switch { case (x > 0): out(x); }''')
+        Filter = create_element("Filter", [Port("in", ["int"])], [Port("out", ["int"])],
+                                r'''int x = in(); output switch { case (x > 0): out(x); }''')
         Forward = create_identity("Forward", "int")
         Add = create_add("Add", "int")
 
@@ -482,8 +473,7 @@ class TestDSL(unittest.TestCase):
 
     def test_starting_element(self):
         reset()
-        Gen = create_element("Gen", [], [Port("out", ["int"])],
-                             "output { out(1); }")
+        Gen = create_element("Gen", [], [Port("out", ["int"])], "output { out(1); }")
         Forward = create_identity("Forward", "int")
         Drop = create_drop("Drop", "int")
 
@@ -502,8 +492,7 @@ class TestDSL(unittest.TestCase):
 
     def test_disconnection(self):
         reset()
-        Gen = create_element("Gen", [], [Port("out", ["int"])],
-                             "output { out(1); }")
+        Gen = create_element("Gen", [], [Port("out", ["int"])], "output { out(1); }")
         Forward = create_identity("Forward", "int")
         Drop = create_drop("Drop", "int")
 
@@ -535,9 +524,7 @@ class TestDSL(unittest.TestCase):
         reset()
         fork = create_fork_instance("fork2", 2, "int")
 
-        Chioce = create_element("Choice",
-                                [Port("in", ["int"])],
-                                [Port("out1", ["int"]), Port("out2", ["int"])],
+        Chioce = create_element("Choice", [Port("in", ["int"])], [Port("out1", ["int"]), Port("out2", ["int"])],
                                 r'''(int x) = in(); output switch { case (x % 2 == 0): out1(x); else: out2(x); }''')
         choice1 = Chioce("choice1")
         choice2 = Chioce("choice2")

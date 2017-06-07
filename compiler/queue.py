@@ -5,9 +5,7 @@ def declare_circular_queue(name, type, size, blocking=False):
     prefix = "_%s_" % name
     state_name = prefix + "queue"
 
-    Enqueue = create_element(prefix + "enqueue",
-                             [Port("in", [type])], [],
-                             r'''
+    Enqueue = create_element(prefix + "enqueue", [Port("in", [type])], [], r'''
            (%s x) = in();
            int next = this->tail + 1;
            if(next >= this->size) next = 0;
@@ -17,7 +15,7 @@ def declare_circular_queue(name, type, size, blocking=False):
              this->data[this->tail] = x;
              this->tail = next;
            }
-           ''' % (type, name), None, [(state_name, "this")])
+           ''' % (type, name), [(state_name, "this")])
 
     if blocking:
         src = r'''
@@ -49,8 +47,7 @@ def declare_circular_queue(name, type, size, blocking=False):
             output switch { case avail: out(x); }
             ''' % (type, name)
 
-    Dequeue = create_element(prefix + "dequeue", [], [Port("out", [type])],
-                             src, None, [(state_name, "this")])
+    Dequeue = create_element(prefix + "dequeue", [], [Port("out", [type])], src, [(state_name, "this")])
 
     Queue = create_state(state_name, "int head; int tail; int size; %s data[%d];" % (type, size),
                          [0, 0, size, [0]])
@@ -103,9 +100,7 @@ def create_circular_queue_one2many_instances(name, type, size, n_cores):
     All = create_state(all_name, "%s* cores[%d];" % (one_name, n_cores))
     all = All(all_instance_name, [[ones[i] for i in range(n_cores)]])
 
-    Enqueue = create_element(prefix + "enqueue_ele",
-                             [Port("in_entry", [type]), Port("in_core", ["size_t"])], [],
-                             r'''
+    Enqueue = create_element(prefix + "enqueue_ele", [Port("in_entry", [type]), Port("in_core", ["size_t"])], [], r'''
            (size_t c) = in_core();
            (%s x) = in_entry();
            %s* p = this->cores[c];
@@ -119,11 +114,9 @@ def create_circular_queue_one2many_instances(name, type, size, n_cores):
              p->tail = next;
            }
            __sync_synchronize();
-           ''' % (type, one_name, name), None, [(all_name, "this")])
+           ''' % (type, one_name, name), [(all_name, "this")])
 
-    Dequeue = create_element(prefix + "dequeue_ele",
-                             [], [Port("out", [type])],
-                             r'''
+    Dequeue = create_element(prefix + "dequeue_ele", [], [Port("out", [type])], r'''
            %s x;
            bool avail = false;
            if(this->head == this->tail) {
@@ -135,7 +128,7 @@ def create_circular_queue_one2many_instances(name, type, size, n_cores):
                this->head = (this->head + 1) %s this->size;
            }
            output switch { case avail: out(x); }
-           ''' % (type, name, '%'), None, [(one_name, "this")])
+           ''' % (type, name, '%'), [(one_name, "this")])
 
     enq = Enqueue(prefix + "enqueue", [all])
     deqs = [Dequeue(prefix + "dequeue" + str(i), [ones[i]]) for i in range(n_cores)]
@@ -154,9 +147,7 @@ def create_circular_queue_many2one_instances(name, type, size, n_cores):
     All = create_state(all_name, "%s* cores[%d];" % (one_name, n_cores))
     all = All(all_instance_name, [[ones[i] for i in range(n_cores)]])
 
-    Enqueue = create_element(prefix + "enqueue_ele",
-                             [Port("in", [type])], [],
-                             r'''
+    Enqueue = create_element(prefix + "enqueue_ele", [Port("in", [type])], [], r'''
            (%s x) = in();
            int next = this->tail + 1;
            if(next >= this->size) next = 0;
@@ -166,11 +157,9 @@ def create_circular_queue_many2one_instances(name, type, size, n_cores):
              this->data[this->tail] = x;
              this->tail = next;
            }
-           ''' % (type, name), None, [(one_name, "this")])
+           ''' % (type, name), [(one_name, "this")])
 
-    Dequeue = create_element(prefix + "dequeue_ele",
-                             [], [Port("out", [type])],
-                             r'''
+    Dequeue = create_element(prefix + "dequeue_ele", [], [Port("out", [type])], r'''
 
            static int c = 0;  // round robin schedule
            %s x;
@@ -196,7 +185,7 @@ def create_circular_queue_many2one_instances(name, type, size, n_cores):
              //printf("Dequeue: YES\n");
            }
            output switch { case avail: out(x); }
-           ''' % (type, n_cores, '%', one_name, '%', '%', name), None, [(all_name, "this")])
+           ''' % (type, n_cores, '%', one_name, '%', '%', name), [(all_name, "this")])
 
     enqs = [Enqueue(prefix + "enqueue" + str(i), [ones[i]]) for i in range(n_cores)]
     deq = Dequeue(prefix + "dequeue", [all])
@@ -218,9 +207,7 @@ def create_copy_queue_many2many_inc_atomic(name, type, size, n_cores, blocking=F
     All = create_state(all_name, "%s* cores[%d];" % (one_name, n_cores))
     all = All(all_instance_name, [[ones[i] for i in range(n_cores)]])
 
-    Enqueue = create_element(prefix + "enqueue_ele",
-                             [Port("in", [type_star, "size_t"])], [],
-                             r'''
+    Enqueue = create_element(prefix + "enqueue_ele", [Port("in", [type_star, "size_t"])], [], r'''
            (%s x, size_t c) = in();
            %s* p = this->cores[c];
            //__sync_synchronize();
@@ -234,7 +221,7 @@ def create_copy_queue_many2many_inc_atomic(name, type, size, n_cores, blocking=F
              if(next >= p->size) next = 0;
            }
            rte_memcpy(&p->data[old], x, sizeof(%s));
-           ''' % (type_star, one_name, type), None, [(all_name, "this")])
+           ''' % (type_star, one_name, type), [(all_name, "this")])
 
     if blocking:
         src = r'''
@@ -260,17 +247,14 @@ def create_copy_queue_many2many_inc_atomic(name, type, size, n_cores, blocking=F
         output { out(x); }
         ''' % (one_name, type_star, name)
 
-    Dequeue = create_element(prefix + "dequeue_ele",
-                             [Port("in", ["size_t"])], [Port("out", [type_star])],
-                             src, None, [(all_name, "this")])
+    Dequeue = create_element(prefix + "dequeue_ele", [Port("in", ["size_t"])], [Port("out", [type_star])], src,
+                             [(all_name, "this")])
 
-    Advance = create_element(prefix + "dequeue_advance",
-                             [Port("in", ["size_t"])], [],
-                             r'''
+    Advance = create_element(prefix + "dequeue_advance", [Port("in", ["size_t"])], [], r'''
         (size_t c) = in();
         %s* p = this->cores[c];
         p->head = (p->head + 1) %s p->size;
-           ''' % (one_name, '%'), None, [(all_name, "this")])
+           ''' % (one_name, '%'), [(all_name, "this")])
 
     def enq(name):
         return Enqueue(name, [all])
@@ -297,9 +281,7 @@ def create_copy_queue_many2many_inc_instances(name, type, size, n_cores, blockin
     All = create_state(all_name, "%s* cores[%d];" % (one_name, n_cores))
     all = All(all_instance_name, [[ones[i] for i in range(n_cores)]])
 
-    Enqueue = create_element(prefix + "enqueue_ele",
-                             [Port("in", [type_star, "size_t"])], [],
-                             r'''
+    Enqueue = create_element(prefix + "enqueue_ele", [Port("in", [type_star, "size_t"])], [], r'''
            (%s x, size_t c) = in();
            %s* p = this->cores[c];
            __sync_synchronize();
@@ -312,7 +294,7 @@ def create_copy_queue_many2many_inc_instances(name, type, size, n_cores, blockin
              p->tail = next;
            }
            __sync_synchronize();
-           ''' % (type_star, one_name, name, type), None, [(all_name, "this")])
+           ''' % (type_star, one_name, name, type), [(all_name, "this")])
 
     if blocking:
         src = r'''
@@ -338,17 +320,14 @@ def create_copy_queue_many2many_inc_instances(name, type, size, n_cores, blockin
         output { out(x); }
         ''' % (one_name, type_star, name)
 
-    Dequeue = create_element(prefix + "dequeue_ele",
-                             [Port("in", ["size_t"])], [Port("out", [type_star])],
-                             src, None, [(all_name, "this")])
+    Dequeue = create_element(prefix + "dequeue_ele", [Port("in", ["size_t"])], [Port("out", [type_star])], src,
+                             [(all_name, "this")])
 
-    Advance = create_element(prefix + "dequeue_advance",
-                             [Port("in", ["size_t"])], [],
-                             r'''
+    Advance = create_element(prefix + "dequeue_advance", [Port("in", ["size_t"])], [], r'''
         (size_t c) = in();
         %s* p = this->cores[c];
         p->head = (p->head + 1) %s p->size;
-           ''' % (one_name, '%'), None, [(all_name, "this")])
+           ''' % (one_name, '%'), [(all_name, "this")])
 
     enq = Enqueue(prefix + "enqueue", [all])
     deq = Dequeue(prefix + "dequeue", [all])
@@ -370,9 +349,7 @@ def create_copy_queue_many2many_batch_instances(name, type, size, n_cores):
     All = create_state(all_name, "%s* cores[%d];" % (one_name, n_cores))
     all = All(all_instance_name, [[ones[i] for i in range(n_cores)]])
 
-    Enqueue = create_element(prefix + "enqueue_ele",
-                             [Port("in", [type_star, "size_t"])], [],
-                             r'''
+    Enqueue = create_element(prefix + "enqueue_ele", [Port("in", [type_star, "size_t"])], [], r'''
            (%s x, size_t c) = in();
            %s* p = this->cores[c];
            __sync_synchronize();
@@ -386,11 +363,9 @@ def create_copy_queue_many2many_batch_instances(name, type, size, n_cores):
              //printf("enq: tail = %s\n", p->tail);
            }
            __sync_synchronize();
-           ''' % (type_star, one_name, name, type, '%ld'), None, [(all_name, "this")])
+           ''' % (type_star, one_name, name, type, '%ld'), [(all_name, "this")])
 
-    Dequeue = create_element(prefix + "dequeue_ele",
-                             [Port("in", ["size_t", "size_t"])], [Port("out", [type_star])],
-                             r'''
+    Dequeue = create_element(prefix + "dequeue_ele", [Port("in", ["size_t", "size_t"])], [Port("out", [type_star])], r'''
         (size_t c, size_t peak) = in();
         %s* p = this->cores[c];
            %s x = NULL;
@@ -406,16 +381,14 @@ def create_copy_queue_many2many_batch_instances(name, type, size, n_cores):
                x = &p->data[index];
            }
            output { out(x); }
-           ''' % (one_name, type_star, '%', '%ld', name), None, [(all_name, "this")])
+           ''' % (one_name, type_star, '%', '%ld', name), [(all_name, "this")])
 
-    Advance = create_element(prefix + "dequeue_advance",
-                             [Port("in", ["size_t", "size_t"])], [],
-                             r'''
+    Advance = create_element(prefix + "dequeue_advance", [Port("in", ["size_t", "size_t"])], [], r'''
         (size_t c, size_t skip) = in();
         %s* p = this->cores[c];
         p->head = (p->head + skip) %s p->size;
            __sync_synchronize();
-           ''' % (one_name, '%'), None, [(all_name, "this")])
+           ''' % (one_name, '%'), [(all_name, "this")])
 
     enq = Enqueue(prefix + "enqueue", [all])
     deq = Dequeue(prefix + "dequeue", [all])
@@ -447,8 +420,7 @@ def create_circular_queue_variablesize_one2many(name, size, n_cores):
 
     Enqueue_alloc = create_element(prefix + "enqueue_alloc_ele",
                                    [Port("in_len", ["size_t"]), Port("in_core", ["size_t"])],
-                                   [Port("out", ["q_entry*"])],
-                             r'''
+                                   [Port("out", ["q_entry*"])], r'''
            (size_t len) = in_len();
            (size_t c) = in_core();
            circular_queue *q = this->cores[c];
@@ -457,28 +429,22 @@ def create_circular_queue_variablesize_one2many(name, size, n_cores):
            //if(entry == NULL) { printf("queue %d is full.\n", c); }
            //printf("ENQ' core=%ld, queue=%ld, entry=%ld\n", c, q->queue, entry);
            output { out(entry); }
-           ''', None, [(all_name, "this")])
+           ''', [(all_name, "this")])
 
-    Enqueue_submit = create_element(prefix + "enqueue_submit_ele",
-                                    [Port("in", ["q_entry*"])], [],
-                             r'''
+    Enqueue_submit = create_element(prefix + "enqueue_submit_ele", [Port("in", ["q_entry*"])], [], r'''
            (q_entry* eqe) = in();
            enqueue_submit(eqe);
            ''')
 
-    Dequeue_get = create_element(prefix + "dequeue_get_ele",
-                             [Port("in", ["size_t"])], [Port("out", ["q_entry*"])],
-                             r'''
+    Dequeue_get = create_element(prefix + "dequeue_get_ele", [Port("in", ["size_t"])], [Port("out", ["q_entry*"])], r'''
         (size_t c) = in();
         circular_queue *q = this->cores[c];
         q_entry* x = dequeue_get(q);
         //if(c == 3) printf("DEQ core=%ld, queue=%p, entry=%ld\n", c, q->queue, x);
         output { out(x); }
-           ''', None, [(all_name, "this")])
+           ''', [(all_name, "this")])
 
-    Dequeue_release = create_element(prefix + "dequeue_release_ele",
-                             [Port("in", ["q_entry*"])], [],
-                             r'''
+    Dequeue_release = create_element(prefix + "dequeue_release_ele", [Port("in", ["q_entry*"])], [], r'''
         (q_entry* eqe) = in();
         dequeue_release(eqe);
            ''')
@@ -553,25 +519,20 @@ def create_circular_queue_variablesize_many2one(name, size, n_cores, scan=None):
 
     Enqueue_alloc = create_element(prefix + "enqueue_alloc_ele",
                                    [Port("in_core", ["size_t"]), Port("in_len", ["size_t"])],
-                                   [Port("out", ["q_entry*"])],
-                             r'''
+                                   [Port("out", ["q_entry*"])], r'''
            (size_t c) = in_core();
            (size_t len) = in_len();
            circular_queue *q = this->cores[c];
            q_entry* entry = (q_entry*) enqueue_alloc(q, len);
            output { out(entry); }
-           ''', None, [(all_name_enq, "this")])
+           ''', [(all_name_enq, "this")])
 
-    Enqueue_submit = create_element(prefix + "enqueue_submit_ele",
-                                    [Port("in", ["q_entry*"])], [],
-                             r'''
+    Enqueue_submit = create_element(prefix + "enqueue_submit_ele", [Port("in", ["q_entry*"])], [], r'''
            (q_entry* eqe) = in();
            enqueue_submit(eqe);
            ''')
 
-    Dequeue_get = create_element(prefix + "dequeue_get_ele",
-                             [], [Port("out", ["q_entry*"])],
-                             r'''
+    Dequeue_get = create_element(prefix + "dequeue_get_ele", [], [Port("out", ["q_entry*"])], r'''
         static int c = 0;  // round robin schedule
         int n = %d;
         q_entry* x = NULL;
@@ -585,20 +546,15 @@ def create_circular_queue_variablesize_many2one(name, size, n_cores, scan=None):
             }
         }
         output { out(x); }
-           ''' % (n_cores, "%", "%"), None, [(all_name_deq, "this")])
+           ''' % (n_cores, "%", "%"), [(all_name_deq, "this")])
 
-    Dequeue_release = create_element(prefix + "dequeue_release_ele",
-                             [Port("in", ["q_entry*"])], [],
-                             r'''
+    Dequeue_release = create_element(prefix + "dequeue_release_ele", [Port("in", ["q_entry*"])], [], r'''
         (q_entry* eqe) = in();
         dequeue_release(eqe);
            ''')
 
     if scan:
-        Scan = create_element(prefix + "scan_ele",
-                              [Port("in_core", ["size_t"])],
-                              [Port("out", ["q_entry*"])],
-                              r'''
+        Scan = create_element(prefix + "scan_ele", [Port("in_core", ["size_t"])], [Port("out", ["q_entry*"])], r'''
     (size_t c) = in_core();
     circular_queue_scan *q = this->cores[c];
     size_t off = q->offset;
@@ -616,7 +572,7 @@ def create_circular_queue_variablesize_many2one(name, size, n_cores, scan=None):
         }
     }
     output { out(entry); }
-            ''', None, [(all_name_scan, "this")])
+            ''', [(all_name_scan, "this")])
     else:
         Scan = None
 

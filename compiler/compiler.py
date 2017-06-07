@@ -159,7 +159,6 @@ def element_to_function(instance, state_rename, graph, ext):
     funcname = instance.name
     inports = element.inports
     output2func = instance.output2ele
-    local_state = element.local_state
 
     # Create join buffer
     join_create = ""
@@ -309,15 +308,6 @@ def element_to_function(instance, state_rename, graph, ext):
     if instance.API_return:
         api_return += "  return ret;\n"
 
-    # Local state
-    state_src = ""
-    if local_state:
-        state_src += "  struct Local { " + local_state.content + " };\n"
-        state_src += "  static struct Local " + local_state.name
-        if local_state.init:
-            state_src += " = {" + local_state.init + "}"
-        state_src += ";\n"
-
     # Construct function arguments from port2args.
     args = []
     # Join buffers
@@ -335,7 +325,7 @@ def element_to_function(instance, state_rename, graph, ext):
     else:
         return_type = "void"
     code = "%s %s(%s) {\n" % (return_type, funcname, ", ".join(args))
-    code += state_src + join_create + src + define_ret + out_src + api_return
+    code += join_create + src + define_ret + out_src + api_return
     code += "}\n"
 
     name = instance.process + ext

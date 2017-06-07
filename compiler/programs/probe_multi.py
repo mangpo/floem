@@ -5,10 +5,8 @@ Forward = create_identity("Forward", "int")
 Inject = create_inject("inject", "int", 10, "gen_func")
 Probe = create_probe("probe", "int", 10, "cmp_func")
 Drop = create_drop("Drop", "int")
-Chioce = create_element("Choice",
-            [Port("in", ["int"])],
-            [Port("out1", ["int"]), Port("out2", ["int"])],
-            r'''(int x) = in(); output switch { case (x % 2 == 0): out1(x); else: out2(x); }''')
+Chioce = create_element("Choice", [Port("in", ["int"])], [Port("out1", ["int"]), Port("out2", ["int"])],
+                        r'''(int x) = in(); output switch { case (x % 2 == 0): out1(x); else: out2(x); }''')
 
 inject = Inject()
 f1 = Forward("f1")

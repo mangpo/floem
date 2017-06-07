@@ -6,19 +6,14 @@ import queue_ast
 def smart_circular_queue_variablesize_one2many(name, size, n_cores, n_cases):
     prefix = "_%s_" % name
     queue = queue_ast.QueueVariableSizeOne2Many(name, size, n_cores, n_cases)
-    Smart_enq = dsl.create_element(prefix + "smart_enq_ele",
-                                   [graph.Port("in" + str(i), []) for i in range(n_cases)],
-                                   [graph.Port("out", [])],
-                                   "state.core; output { out(); }",
-                                   special=queue)
+    Smart_enq = dsl.create_element(prefix + "smart_enq_ele", [graph.Port("in" + str(i), []) for i in range(n_cases)],
+                                   [graph.Port("out", [])], "state.core; output { out(); }", special=queue)
 
     src = ""
     for i in range(n_cases):
         src += "out%d(); " % i
-    Smart_deq = dsl.create_element(prefix + "smart_deq_ele",
-                                   [graph.Port("in_core", ["size_t"]), graph.Port("in", [])],
-                                   [graph.Port("out" + str(i), []) for i in range(n_cases)],
-                                   "output { %s }" % src,
+    Smart_deq = dsl.create_element(prefix + "smart_deq_ele", [graph.Port("in_core", ["size_t"]), graph.Port("in", [])],
+                                   [graph.Port("out" + str(i), []) for i in range(n_cases)], "output { %s }" % src,
                                    special=queue)
 
     return Smart_enq, Smart_deq, queue
@@ -41,26 +36,19 @@ def smart_circular_queue_variablesize_one2many_instances(name, size, n_cores, n_
 def smart_circular_queue_variablesize_many2one(name, size, n_cores, n_cases):
     prefix = "_%s_" % name
     queue = queue_ast.QueueVariableSizeMany2One(name, size, n_cores, n_cases)
-    Smart_enq = dsl.create_element(prefix + "smart_enq_ele",
-                                   [graph.Port("in" + str(i), []) for i in range(n_cases)],
-                                   [graph.Port("out", [])],
-                                   "state.core; output { out(); }",
-                                   special=queue)
+    Smart_enq = dsl.create_element(prefix + "smart_enq_ele", [graph.Port("in" + str(i), []) for i in range(n_cases)],
+                                   [graph.Port("out", [])], "state.core; output { out(); }", special=queue)
 
     src = ""
     for i in range(n_cases):
         src += "out%d(); " % i
-    Smart_deq = dsl.create_element(prefix + "smart_deq_ele",
-                                   [graph.Port("in", [])],
-                                   [graph.Port("out" + str(i), []) for i in range(n_cases)],
-                                   "output { %s }" % src,
+    Smart_deq = dsl.create_element(prefix + "smart_deq_ele", [graph.Port("in", [])],
+                                   [graph.Port("out" + str(i), []) for i in range(n_cases)], "output { %s }" % src,
                                    special=queue)
 
-    Scan = dsl.create_element(prefix + "smart_scan_ele",
-                                   [graph.Port("in_core", ["size_t"])],
-                                   [graph.Port("out" + str(i), []) for i in range(n_cases)],
-                                   "output { %s }" % src,
-                                   special=queue)
+    Scan = dsl.create_element(prefix + "smart_scan_ele", [graph.Port("in_core", ["size_t"])],
+                              [graph.Port("out" + str(i), []) for i in range(n_cases)], "output { %s }" % src,
+                              special=queue)
 
     return Smart_enq, Smart_deq, Scan, queue
 

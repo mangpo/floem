@@ -24,51 +24,38 @@ def create_drop(name, type):
 
 
 def create_add(name, type):
-    return create_element(name,
-                          [Port("in1", [type]), Port("in2", [type])],
-                          [Port("out", [type])],
+    return create_element(name, [Port("in1", [type]), Port("in2", [type])], [Port("out", [type])],
                           r'''int x = in1() + in2(); output { out(x); }''')
 
 
 def create_add1(name, type):
     src = "%s x = in() + 1; output { out(x); }" % type
-    return create_element(name,
-                          [Port("in", [type])],
-                          [Port("out", [type])],
-                          src)
+    return create_element(name, [Port("in", [type])], [Port("out", [type])], src)
 
 
 def create_drop(name, type):
-    return create_element(name,
-                          [Port("in", [type])],
-                          [],
-                          r'''in();''')
+    return create_element(name, [Port("in", [type])], [], r'''in();''')
 
 def create_table(put_name, get_name, index_type, val_type, size):
     state_name = ("_table_%s_%d" % (val_type, size)).replace('*', '$')
     state_instance_name = "_table_%s" % put_name
     Table = create_state(state_name, "{0} data[{1}];".format(val_type, size), [[0]])
-    TablePut = create_element(put_name,
-                              [Port("in_index", [index_type]), Port("in_value", [val_type])], [],
-                              r'''
+    TablePut = create_element(put_name, [Port("in_index", [index_type]), Port("in_value", [val_type])], [], r'''
               (%s index) = in_index();
               (%s val) = in_value();
               uint32_t key = index %s %d;
               if(this->data[key] == NULL) this->data[key] = val;
               else { printf("Hash collision! Key = %s\n", key); exit(-1); }
-              ''' % (index_type, val_type, '%', size, '%d'),
-                              None, [(state_name, "this")])
+              ''' % (index_type, val_type, '%', size, '%d'), [(state_name, "this")])
 
-    TableGet = create_element(get_name,
-                              [Port("in", [index_type])], [Port("out", [val_type])],
-                              r'''
+    TableGet = create_element(get_name, [Port("in", [index_type])], [Port("out", [val_type])], r'''
               (%s index) = in();
               uint32_t key = index %s %d;
               %s val = this->data[key];
               if(val == NULL) { printf("No such entry in this table. Key = %s\n", key); exit(-1); }
               this->data[key] = NULL;
               output { out(val); }
-              ''' % (index_type, '%', size, val_type, '%d'), None, [(state_name, "this")])
+              ''' % (index_type, '%', size, val_type, '%d'), [(state_name, "this")])
 
     table = Table(state_instance_name)
 
@@ -104,7 +91,7 @@ def create_inject(name, type, size, func, interval=50):
         int temp = this->p;
         this->p++;''' % size
     src += "output { out(this->data[temp]); }"
-    element = create_element(name, [], [Port("out", [type])], src, None, [(st_name, "this")])
+    element = create_element(name, [], [Port("out", [type])], src, [(st_name, "this")])
     populte_state(name, st_inst_name, st_name, type, size, func, interval)
     fresh_id = [0]
 
@@ -132,7 +119,7 @@ def create_probe(name, type, size, func):
         this->data[this->p] = x;
         this->p++;''' % size
     src = "(%s x) = in(); %s output { out(x); }" % (type, append)
-    element = create_element(name, [Port("in", [type])], [Port("out", [type])], src, None, [(st_name, "this")])
+    element = create_element(name, [Port("in", [type])], [Port("out", [type])], src, [(st_name, "this")])
     compare_state(name, st_inst_name, st_name, type, size, func)
 
     def create(inst_name=None):

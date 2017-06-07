@@ -248,8 +248,7 @@ class ThreadAllocator:
         invoke += "  output { out(%s); }\n" % ",".join(all_args)
 
         # Create element
-        ele = Element(st_name+'_read', no_buffer, [Port("out", all_types)],
-                      invoke, None, [(st_name, "this")])
+        ele = Element(st_name + '_read', no_buffer, [Port("out", all_types)], invoke, [(st_name, "this")])
         self.graph.addElement(ele)
         new_instance = self.graph.newElementInstance(ele.name, ele.name, ['_' + st_name])
         new_instance.thread = instance.thread
@@ -298,7 +297,7 @@ class ThreadAllocator:
         # Create element
         st_name = "%s_buffer" % next_ele_name
         ele_name = st_name + '_' + next_port + "_write"
-        ele = Element(ele_name, [Port("in", port.argtypes)], [], src, None, [(st_name, "this")])
+        ele = Element(ele_name, [Port("in", port.argtypes)], [], src, [(st_name, "this")])
         define = self.graph.addElement(ele)
         if define:
             new_instance = self.graph.newElementInstance(ele.name, ele.name, ['_' + st_name])

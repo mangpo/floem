@@ -2,10 +2,8 @@ from dsl import *
 from elements_library import *
 
 Forward = create_identity("Forward", "int")
-Chioce = create_element("Choice",
-            [Port("in", ["int"])],
-            [Port("out1", ["int"]), Port("out2", ["int"])],
-            r'''(int x) = in(); output switch { case (x % 2 == 0): out1(x); else: out2(x); }''')
+Chioce = create_element("Choice", [Port("in", ["int"])], [Port("out1", ["int"]), Port("out2", ["int"])],
+                        r'''(int x) = in(); output switch { case (x % 2 == 0): out1(x); else: out2(x); }''')
 Add = create_add("Add", "int")
 Fork = create_fork("Fork", 2, "int")
 

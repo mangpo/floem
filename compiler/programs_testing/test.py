@@ -1,7 +1,6 @@
 from dsl import *
 
-Inc = create_element("Inc", [Port("in", ["int"])], [Port("out", ["int"])],
-  "int x = in() + 1; output { out(x); }")
+Inc = create_element("Inc", [Port("in", ["int"])], [Port("out", ["int"])], "int x = in() + 1; output { out(x); }")
 inc1 = Inc()
 inc2 = Inc()
 
