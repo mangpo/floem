@@ -26,8 +26,8 @@ void maintenance()
     }
 }
 
-int main() {
-  init();
+int main(int argc, char *argv[]) {
+  init(argv);
   settings_init();
   ialloc_init(data_region);
   //ialloc_init_slave();

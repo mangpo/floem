@@ -942,8 +942,8 @@ def generate_inject_probe_code(graph, ext):
 
 
 def generate_testing_code(graph, code, ext):
-    src = "int main() {\n"
-    src += "  init();\n"
+    src = "int main(int argc, char *argv[]) {\n"
+    src += "  init(argv);\n"
     src += "  run_threads();\n"
     if code:
         src += "  " + code

@@ -33,7 +33,7 @@ _queue_queues* _queue_queues_inst;
 
 size_t shm_size = 0;
 void *shm;
-void init_state_instances() {
+void init_state_instances(char *argv[]) {
 
 shm_size += sizeof(_queue_queue_dummy);
 shm_size += sizeof(_queue_queue_dummy);
@@ -135,7 +135,7 @@ void queue_fork0_from_save(mystate_compressed0* _x0) {
   _queue_fill0_from_save_join_buffer *_p_queue_fill0_from_save = malloc(sizeof(_queue_fill0_from_save_join_buffer));
   mystate_compressed0 *_state = _x0;
   
-  queue_size_core0_from_save(_p_queue_fill0_from_save, _state);
+  queue_size_core0_from_save(_p_queue_fill0_from_save,_state);
   _queue_fill0_from_save_join_buffer_in_pkt_save(_p_queue_fill0_from_save, _state);  queue_fill0_from_save(_p_queue_fill0_from_save->in_entry_arg0, _p_queue_fill0_from_save->in_pkt_arg0);
 
 }
@@ -153,7 +153,7 @@ e->flags |= 1 << TYPE_SHIFT;
 void queue_size_core0_from_save(_queue_fill0_from_save_join_buffer* _p_queue_fill0_from_save, mystate_compressed0* _x3) {
   mystate_compressed0 *_state = _x3;
   
-  queue_enq_alloc0_from_save(_p_queue_fill0_from_save, sizeof(entry_queue0), _state->core);
+  queue_enq_alloc0_from_save(_p_queue_fill0_from_save,sizeof(entry_queue0), _state->core);
 }
 
 void save(int _x4) {
@@ -164,9 +164,9 @@ void save(int _x4) {
 
 void push(int arg0) { save(arg0); }
 
-void init() {
+void init(char *argv[]) {
   init_memory_regions();
-  init_state_instances();
+  init_state_instances(argv);
 }
 void finalize_and_check() {
   finalize_memory_regions();

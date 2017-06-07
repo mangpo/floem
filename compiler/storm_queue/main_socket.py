@@ -194,7 +194,3 @@ c.include = r'''
 c.depend = {"test_storm": ['list', 'hash', 'hash_table', 'spout', 'count', 'rank', 'worker', 'flexstorm']}
 c.generate_code_as_header("flexstorm")
 c.compile_and_run([("test_storm", workerid[test])])
-
-# TODO
-# 2. batch sending
-# 3. bypass sending to itself?

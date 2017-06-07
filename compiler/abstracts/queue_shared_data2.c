@@ -33,7 +33,7 @@ _queue_queues* _queue_queues_deq_inst;
 
 size_t shm_size = 0;
 void *shm;
-void init_state_instances() {
+void init_state_instances(char *argv[]) {
 
 shm_size += sizeof(_queue_queue_dummy);
 shm_size += sizeof(_queue_queue_dummy);
@@ -141,9 +141,9 @@ void display(pipeline_queue0* _x4) {
 
 void pop(size_t arg0) { _queue_smart_deq_ele1_get(arg0); }
 
-void init() {
+void init(char *argv[]) {
   init_memory_regions();
-  init_state_instances();
+  init_state_instances(argv);
 }
 void finalize_and_check() {
   finalize_memory_regions();

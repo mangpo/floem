@@ -6,7 +6,7 @@ int main(int argc, char *argv[]) {
     struct executor *executor = workers[workerid].executors;
     init_task2executor(executor);
 
-    init();
+    init(argv);
     printf("main: workerid = %d\n", workerid);
 
     for(int i = 0; i < MAX_EXECUTORS && executor[i].execute != NULL; i++) {

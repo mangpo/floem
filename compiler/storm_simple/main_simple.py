@@ -67,6 +67,6 @@ c.include = r'''
 #include "worker.h"
 #include "storm.h"
 '''
-c.depend = ['list', 'hash', 'hash_table', 'spout', 'count', 'rank', 'worker', 'simple']
+c.depend = {"test_simple": ['list', 'hash', 'hash_table', 'spout', 'count', 'rank', 'worker', 'simple']}
 c.generate_code_as_header("simple")
 c.compile_and_run([("test_simple", 2)])
