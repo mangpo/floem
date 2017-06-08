@@ -36,7 +36,7 @@ struct tuple* random_spout(size_t i) {
 
 struct tuple* random_count(size_t i) {
   struct tuple* t = (struct tuple*) malloc(sizeof(struct tuple));
-  t->task = 20;
+  t->task = 10;
   if(i%4==0) {
     strcpy(t->v[0].str, "mangpo");
   }
