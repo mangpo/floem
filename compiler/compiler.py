@@ -165,10 +165,12 @@ def element_to_function(instance, state_rename, graph, ext):
 
     # Create join buffer
     join_create = ""
+    join_clean = ""
     for join in instance.join_state_create:
         join_buffer_name = get_join_buffer_name(join)
         join_create += "  %s *_p_%s = malloc(sizeof(%s));\n" % (join_buffer_name, join, join_buffer_name)
         # struct Vector *retVal = malloc (sizeof (struct Vector));
+        join_clean += "  free(_p_%s);\n" % join
 
     # Call join element
     join_call_map = {}
@@ -331,7 +333,7 @@ def element_to_function(instance, state_rename, graph, ext):
     else:
         return_type = "void"
     code = "%s %s(%s) {\n" % (return_type, funcname, ", ".join(args))
-    code += join_create + src + define_ret + out_src + element.cleanup + api_return
+    code += join_create + src + define_ret + out_src + join_clean + element.cleanup + api_return
     code += "}\n"
 
     name = instance.process + ext
