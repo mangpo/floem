@@ -76,9 +76,12 @@ def remove_asgn_stmt(funcname, src, port2args,port,p_eq, p_end, inport_types):
         p_start += 1
 
     decl = src[p_start:p_eq].lstrip().rstrip().lstrip("(").rstrip(")").lstrip().rstrip()
-    args = decl.split(",")
-    port2args[port] = args
-    argtypes = [common.get_type(x) for x in args]
+    if decl == '':
+        argtypes = []
+    else:
+        args = decl.split(",")
+        port2args[port] = args
+        argtypes = [common.get_type(x) for x in args]
 
     if not(argtypes == inport_types):
         raise Exception("At element instance '%s', types mismatch at an input port '%s'. Expect %s, but got %s."
@@ -196,10 +199,7 @@ def element_to_function(instance, state_rename, graph, ext):
         if m is None:
             m = re.search('(' + port + '[ ]*\(([^\)]*)\))', src)
         if m is None:
-            if len(argtypes) > 0:
-                raise Exception("Element '%s' never gets data from input port '%s'." % (funcname, port))
-            else:
-                break
+            break
 
         p = m.start(1)
         check_no_args(m.group(2))
@@ -315,9 +315,15 @@ def element_to_function(instance, state_rename, graph, ext):
         join = instance.join_func_params[i]
         args.append("%s* _p_%s" % (get_join_buffer_name(join), join))
     # Normal args
+    id = 0
     for port in inports:
         if port.name in port2args:
             args = args + port2args[port.name]
+        else:
+            for type in port.argtypes:
+                arg_type = "%s _unused%d" % (type, id)
+                id += 1
+                args.append(arg_type)
 
     # Code
     if instance.API_return:
@@ -325,7 +331,7 @@ def element_to_function(instance, state_rename, graph, ext):
     else:
         return_type = "void"
     code = "%s %s(%s) {\n" % (return_type, funcname, ", ".join(args))
-    code += join_create + src + define_ret + out_src + api_return
+    code += join_create + src + define_ret + out_src + element.cleanup + api_return
     code += "}\n"
 
     name = instance.process + ext
@@ -658,7 +664,6 @@ def pipeline_state_pass(gen):
 
 
 def join_and_resource_annotation_pass(gen, resource, remove_unused):
-    #gen.graph.print_graphviz()
     if resource:
         # Insert necessary elements for resource mapping.
         # Assign call_instance for each thread.
@@ -697,8 +702,8 @@ def generate_graph(program, resource=True, remove_unused=False, default_process=
     gen.graph.state_mapping = state_mapping
     pipeline_state_pass(gen)
     join_and_resource_annotation_pass(gen, resource, remove_unused)
-    # print "-------------------- graph ----------------------"
-    # gen.graph.print_graphviz()
+    print "-------------------- graph ----------------------"
+    gen.graph.print_graphviz()
 
     return gen.graph
 

@@ -34,6 +34,7 @@ class Element:
         self.inports = inports
         self.outports = outports
         self.code = '  ' + remove_comment(code)
+        self.cleanup = ''
         self.state_params = state_params
 
         self.output_fire = None
@@ -52,6 +53,7 @@ class Element:
                     self.state_params, False)
         e.output_fire = self.output_fire
         e.output_code = copy.copy(self.output_code)
+        e.cleanup = self.cleanup
         e.special = self.special
         return e
 
@@ -339,9 +341,10 @@ class ElementNode:
 
 
 class Port:
-    def __init__(self, name, argtypes):
+    def __init__(self, name, argtypes, pipeline=False):
         self.name = name
         self.argtypes = [common.sanitize_type(x) for x in argtypes]
+        self.pipeline = pipeline
 
     def __str__(self):
         return self.name
@@ -350,7 +353,7 @@ class Port:
         return self.__class__ == other.__class__ and self.name == other.name and self.argtypes == other.argtypes
 
     def clone(self):
-        return Port(self.name, self.argtypes[:])
+        return Port(self.name, self.argtypes[:], self.pipeline)
 
 
 class State:
@@ -694,8 +697,16 @@ class Graph:
         instance = self.instances[root]
         if instance.name not in subgraph:
             subgraph.add(instance.name)
-            for ele,port in instance.output2ele.values():
-                self.find_subgraph(ele, subgraph)
+            for inst,port in instance.output2ele.values():
+                self.find_subgraph(inst, subgraph)
+        return subgraph
+
+    def find_subgraph_same_thread(self, root, subgraph, thread):
+        instance = self.instances[root]
+        if instance.name not in subgraph and instance.thread == thread:
+            subgraph.add(instance.name)
+            for inst,port in instance.output2ele.values():
+                self.find_subgraph_same_thread(inst, subgraph, thread)
         return subgraph
 
     def remove_unused_elements(self, resource):

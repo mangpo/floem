@@ -75,7 +75,7 @@ static int shuffle_grouping(const struct tuple *t, struct executor *self)
   return self->outtasks[random() % numtasks];
 }
 
-#define SWINGOUT_LOCAL
+#define LOCAL
 
 static struct worker workers[MAX_WORKERS] = {
 #if defined(LOCAL)

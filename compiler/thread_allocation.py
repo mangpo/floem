@@ -231,6 +231,7 @@ class ThreadAllocator:
 
         # Read from input ports
         invoke = ""
+        cleanup = ""
         for port in no_buffer:
             types_args, args = common.types_args_one_port(port, common.standard_arg_format)
             invoke += "  (%s) = %s();\n" % (",".join(types_args), port.name)
@@ -239,16 +240,24 @@ class ThreadAllocator:
         all_avails = " && ".join(this_avails)
         invoke += "  while(!(%s)) { __sync_synchronize(); }\n" % all_avails
         for port in need_buffer:
+            last_buffer = None
             for i in range(len(port.argtypes)):
                 buffer = "%s_arg%d" % (port.name, i)
+                last_buffer = buffer
                 this_buffer = "this->" + buffer
                 invoke += "  %s %s = %s;\n" % (port.argtypes[i], buffer, this_buffer)
+
+            if port.pipeline:
+                cleanup += "  pipeline_unref((pipeline_state*) %s);\n" % last_buffer
+
+        invoke += "  __sync_synchronize();"
         invoke += clear
         invoke += "  __sync_synchronize();"
         invoke += "  output { out(%s); }\n" % ",".join(all_args)
 
         # Create element
         ele = Element(st_name + '_read', no_buffer, [Port("out", all_types)], invoke, [(st_name, "this")])
+        ele.cleanup = cleanup
         self.graph.addElement(ele)
         new_instance = self.graph.newElementInstance(ele.name, ele.name, ['_' + st_name])
         new_instance.thread = instance.thread
@@ -291,8 +300,14 @@ class ThreadAllocator:
         for i in range(len(port.argtypes)):
             buffer = buffers[i]
             src += "  this->%s = %s;\n" % (buffer, buffer)
+
+        # Increment refcount for pipeline state
+        if port.pipeline:
+            src += "  pipeline_ref((pipeline_state*) %s);\n" % buffer
+
+        src += "  __sync_synchronize();\n"
         src += "  %s = true;\n" % avail
-        src += "  __sync_synchronize();"
+        src += "  __sync_synchronize();\n"
 
         # Create element
         st_name = "%s_buffer" % next_ele_name
@@ -364,9 +379,9 @@ class ThreadAllocator:
             if isinstance(a, list):
                 continue
             if a not in bPointsTo:
-                bPointsTo[a] = self.graph.find_subgraph(a, set())
+                bPointsTo[a] = self.graph.find_subgraph_same_thread(a, set(), self.graph.instances[a].thread)
             if b not in bPointsTo:
-                bPointsTo[b] = self.graph.find_subgraph(b, set())
+                bPointsTo[b] = self.graph.find_subgraph_same_thread(b, set(), self.graph.instances[b].thread)
 
         # Collect extra input and output ports for every instance.
         extra_out = {}
@@ -398,9 +413,7 @@ class ThreadAllocator:
             if inst in extra_out:
                 my_extra_out = extra_out[inst]
             self.insert_ports(inst, my_extra_in, my_extra_out)
-        print
 
         for a, b in self.graph.threads_order:
             if isinstance(a, list):
                 self.merge_as_no_join(a, b)
-        print

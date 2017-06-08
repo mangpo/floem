@@ -6,7 +6,9 @@ from smart_queue_compile import compile_smart_queues
 def allocate_pipeline_state(element, state):
     assert not element.output_fire == "multi", "Batch element '%s' cannot allocate pipeline state." % element.name
     add = "  {0} *_state = ({0} *) malloc(sizeof({0}));\n".format(state)
+    add += "  _state->refcount = 1;\n"
     element.code = add + element.code
+    element.cleanup = "  pipeline_unref((pipeline_state*) _state);\n"
 
 
 def insert_reference_count(st_name, g):
@@ -51,6 +53,7 @@ def insert_pipeline_state(instance, state, start, g):
         for port in element.inports:
             if len(port.argtypes) == 0:
                 inserted = True
+                port.pipeline = True
                 port.argtypes.append(state + "*")
                 if no_state:
                     m = re.search('[^a-zA-Z0-9_](' + port.name + ')\(', element.code)
@@ -88,6 +91,7 @@ def insert_pipeline_state(instance, state, start, g):
             next_name, next_port = instance.output2ele[port.name]
             next_inst = g.instances[next_name]
             if len(next_inst.uses) > 0:
+                port.pipeline = True
                 port.argtypes.append(state + "*")
                 if element.output_fire == "all":
                     element.output_code[port.name] = '%s(_state)' % port.name
@@ -317,8 +321,8 @@ def insert_pipeline_states(g):
             child = g.instances[inst_name]
             element = child.element
             # If multiple instances can share the same element, make sure we don't modify an element more than once.
-            if element.name not in vis and code_change(child):
-                vis.add(element.name)
+            if child.name not in vis and code_change(child):
+                vis.add(child.name)
                 if len(ele2inst[element.name]) == 1:
                     # TODO: modify element: empty port -> send state*
                     insert_pipeline_state(child, state, inst_name == start_name, g)
@@ -549,7 +553,7 @@ def compile_pipeline_states(g):
         # Never use per-packet states. No modification needed.
         return
 
-    graphviz = True
+    graphviz = False
 
     if graphviz:
         g.print_graphviz()

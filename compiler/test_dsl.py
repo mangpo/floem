@@ -57,6 +57,7 @@ class TestDSL(unittest.TestCase):
                  "double_connection.py",  # TODO: Is this the semantics we want?
                  "classify_return2.py",
                  "batch_simple.py",
+                 "multiple_buffers.py",
                  ]
 
         tests2 = ["join.py",
@@ -84,6 +85,7 @@ class TestDSL(unittest.TestCase):
                   "smart_queue_entry2.py",
                   "smart_queue_many2one.py",]
 
+
         for test in tests:
             status = os.system("cd programs; python " + test + "; cd ..")
             self.assertEqual(status, 0, "Error at " + test)
@@ -93,6 +95,14 @@ class TestDSL(unittest.TestCase):
         for test in tests3:
             status = os.system("cd abstracts; python " + test + "; cd ..")
             self.assertEqual(status, 0, "Error at " + test)
+
+    # def test_free_pipeline(self):
+    #     test_free = ["multiple_buffers_pipeline.py",
+    #                  "free_zero_or_one.py",
+    #                  "free_alternate.py",]
+    #     for test in test_free:
+    #         status = os.system("cd abstracts; python " + test + "; cd ..")
+    #         self.assertEqual(status, 0, "Error at " + test)
 
     def test_conflict_input(self):
         reset()
