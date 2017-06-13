@@ -28,7 +28,6 @@ def get_node_name(name):
         return name
 
 
-
 class Thread:
     def __init__(self, name):
         self.name = name
