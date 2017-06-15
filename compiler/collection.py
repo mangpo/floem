@@ -17,6 +17,7 @@ class InstancesCollection:
         elif other.impl:
             self.impl = other.impl
 
+
     def union_spec(self, other):
         self.spec = self.spec.union(other.spec)
 

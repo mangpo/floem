@@ -180,6 +180,8 @@ class Connectable(object):
         self.outports = []
         for s in self.__dict__:
             o = self.__dict__[s]
+            if s in ['inports', 'outports']:
+                continue
             if isinstance(o, Port):
                 o.name = s
                 o.element = name
@@ -187,6 +189,15 @@ class Connectable(object):
                     self.inports.append(o)
                 else:
                     self.outports.append(o)
+            elif isinstance(o, list) and len(o) > 0 and isinstance(o[0], Port):
+                for i in range(len(o)):
+                    p = o[i]
+                    p.name = s + str(i)
+                    p.element = name
+                    if isinstance(p, Input) or isinstance(p, CompositeInput):
+                        self.inports.append(p)
+                    else:
+                        self.outports.append(p)
 
     def init(self, *params):
         pass
@@ -254,6 +265,7 @@ class Composite(Connectable):
         push_scope(self.name)
         self.implementation()
         self.collection = pop_scope()
+        print
 
         for p in self.inports + self.outports:
             p.disable_collect()
@@ -265,6 +277,7 @@ class Composite(Connectable):
 
 class API(Composite):
     def __init__(self, name, default_return=None, process=None):
+        print
         Composite.__init__(self, name)
 
         if len(self.inports) == 0:
@@ -294,6 +307,18 @@ class API(Composite):
         else:
             raise Exception("API '%s' has more than one output port: %s." % (self.name, self.outports))
 
+        # Insert an element for an API with multiple starting elements.
+        elements = set()
+        for x in self.inports:
+            for port in x.element_ports:
+                elements.add(port.element)
+        count = len(elements)
+        if count > 1:
+            push_scope(self.name)
+            self.create_api_start_node()
+            addition = pop_scope()
+            self.collection.union(addition)
+
         t = APIThread(name, [x for x in input], output, default_val=default_return)
         t.run(self)
 
@@ -303,6 +328,46 @@ class API(Composite):
 
     def args_order(self):
         raise Exception("This function needs to be overloaded.")
+
+    def create_api_start_node(self):
+        src_in = ""
+        src_out = ""
+        for i in range(len(self.inports)):
+            types = self.inports[i].element_ports[0].args
+            types_args = []
+            args = []
+            for j in range(len(types)):
+                arg = "x%d_%d" % (i, j)
+                types_args.append("%s %s" % (types[j], arg))
+                args.append(arg)
+            types_args = ','.join(types_args)
+            args = ','.join(args)
+            src_in += "(%s) = inp%d();\n" % (types_args, i)
+            src_out += "out%d(%s);\n" % (i, args)
+
+        src = src_in
+        src += "output {\n"
+        src += src_out
+        src += "}\n"
+
+        start_name = self.name + "_start"
+
+        inports = self.inports
+
+        class APIStart(Element):
+            def port(self):
+                self.inp = [Input(*x.element_ports[0].args) for x in inports]
+                self.out = [Output(*x.element_ports[0].args) for x in inports]
+
+            def run(self):
+                self.run_c(src)
+
+        start = APIStart(name=start_name, params=[self.name])
+        for i in range(len(self.inports)):
+            for port in self.inports[i].element_ports:
+                start.out[i] >> port
+
+            self.inports[i].element_ports = [start.inp[i]]
 
 
 class InternalLoop(Composite):

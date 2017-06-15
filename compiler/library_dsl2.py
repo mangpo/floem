@@ -44,3 +44,4 @@ class Add(Element):
         int x2 = inp2();
         output { out(x1 + x2); }
         ''')
+

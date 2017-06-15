@@ -9,7 +9,7 @@ class func(API):
     def args_order(self):
         return [self.inp, self.offset]
 
-    def implementation(self):  # TODO: automatically insert forking for self.inp & self.offset
+    def implementation(self):
         inc1 = Inc(name='inc1', params=[Int])
         inc2 = Inc(name='inc2', params=[Int])
         add1 = Add(name='add1', params=[Int])
