@@ -1,71 +1,9 @@
 from abc import ABCMeta, abstractmethod
-from collection import InstancesCollection
+
 import graph
 import program
-import desugaring
-import compiler
-
-######################## Scope ##########################
-scope = [[]]
-stack = []
-inst_collection = [InstancesCollection()]
-
-
-def reset():
-    global scope, stack, inst_collection
-    scope = [[]]
-    stack = []
-    inst_collection = [InstancesCollection()]
-
-
-def get_scope():
-    return scope
-
-
-def scope_append(x):
-    scope[-1].append(x)
-    if isinstance(x, program.ElementInstance):
-        inst_collection[-1].add(x.name)
-    elif isinstance(x, program.Connect):
-        inst_collection[-1].add(x.ele1)
-        inst_collection[-1].add(x.ele2)
-
-
-def scope_prepend(x):
-    scope[-1].insert(0, x)
-
-
-def push_scope(name):
-    scope.append([])
-    stack.append(name)
-    inst_collection.append(InstancesCollection())
-
-
-def pop_scope():
-    global scope, stack, inst_collection
-    stack = stack[:-1]
-    my_scope = scope[-1]
-    scope = scope[:-1]
-    scope[-1] = scope[-1] + my_scope
-    my_collection = inst_collection[-1]
-    inst_collection = inst_collection[:-1]
-    return my_collection
-
-
-def get_node_name(name):
-    if len(stack) > 0:
-        return "_".join(stack) + "_" + name
-    else:
-        return name
-
-####################### Data type ########################
-
-Int = 'int'
-Size = 'size_t'
-
-
-def Uint(bits):
-    return 'uint%d_t' % bits
+from state import *
+from workspace import scope_append, scope_prepend, push_scope, pop_scope, get_node_name, Compiler
 
 ###################### Port #######################
 
@@ -164,17 +102,18 @@ class CompositeOutput(CompositePort):
 ###################### Element, Composite #######################
 
 class Connectable(object):
+    id = 0
 
-    def __init__(self, name=None, params=[]):
+    def __init__(self, name=None, states=[], configure=[]):
         self.id = 0
         if name is None:
-            name = self.__class__.__name__ + str(self.id)
-            self.id += 1
+            name = self.__class__.__name__ + str(self.__class__.id)
+            self.__class__.id += 1
         name = get_node_name(name)
         self.name = name
 
-        self.init(*params)
-        self.port()
+        self.configure(*configure)
+        self.states(*states)
 
         self.inports = []
         self.outports = []
@@ -199,7 +138,10 @@ class Connectable(object):
                     else:
                         self.outports.append(p)
 
-    def init(self, *params):
+    def configure(self, *params):
+        pass
+
+    def states(self, *params):
         pass
 
     @abstractmethod
@@ -222,24 +164,28 @@ class Connectable(object):
 class Element(Connectable):
     defined = set()
 
-    def __init__(self, name=None, params=[]):
-        Connectable.__init__(self, name, params)
+    def __init__(self, name=None, states=[], configure=[]):
+        Connectable.__init__(self, name, states, configure)
         self.code = ''
-        self.run()
+        self.impl()
+        defs, states = self.collect_states()
 
-        unique = self.__class__.__name__ + "_".join([str(p) for p in params])
+        if len(configure) == 0:
+            unique = self.__class__.__name__
+        else:
+            unique = self.__class__.__name__ + "_" + "_".join([str(p) for p in configure])
         if unique not in Element.defined:
             Element.defined.add(unique)
             inports = [graph.Port(p.name, p.args) for p in self.inports]
             outports = [graph.Port(p.name, p.args) for p in self.outports]
-            e = graph.Element(unique, inports, outports, self.code)
+            e = graph.Element(unique, inports, outports, self.code, defs)
             scope_append(e)
 
-        inst = program.ElementInstance(unique, self.name)
+        inst = program.ElementInstance(unique, self.name, states)
         scope_append(inst)
 
     @abstractmethod
-    def run(self):
+    def impl(self):
         pass
 
     def run_c(self, code):
@@ -251,11 +197,33 @@ class Element(Connectable):
     def run_c_function(self, name):
         raise Exception("Unimplemented")
 
+    def __setattr__(self, key, value):
+        if key in self.__class__.__dict__:
+            o = self.__getattribute__(key)
+            if isinstance(o, Field):
+                assert isinstance(value, o.type), "%s.%s should be assign to a value of type %s." \
+                                                  % (self.name, key, o.type.__name__)
+                super(Connectable, self).__setattr__(key, Field(o.type, value))
+                return
+        super(Connectable, self).__setattr__(key, value)
+
+    def collect_states(self):
+        defs = []
+        states = []
+        for s in self.__dict__:
+            o = self.__dict__[s]
+            if isinstance(o, Field):
+                if o.value == 0:
+                    raise Exception("State %s.%s must be initialized." % (self.name, s))
+                defs.append((o.type.__name__, s))
+                states.append(o.value.name)
+        return defs, states
+
 
 class Composite(Connectable):
 
-    def __init__(self, name=None, params=[]):
-        Connectable.__init__(self, name, params)
+    def __init__(self, name=None, states=[], configure=[]):
+        Connectable.__init__(self, name, states, configure)
         self.inports = [CompositeInput(p) for p in self.inports]
         self.outports = [CompositeOutput(p) for p in self.outports]
 
@@ -263,21 +231,19 @@ class Composite(Connectable):
             self.__dict__[p.name] = p
 
         push_scope(self.name)
-        self.implementation()
+        self.impl()
         self.collection = pop_scope()
-        print
 
         for p in self.inports + self.outports:
             p.disable_collect()
 
     @abstractmethod
-    def implementation(self):
+    def impl(self):
         pass
 
 
 class API(Composite):
     def __init__(self, name, default_return=None, process=None):
-        print
         Composite.__init__(self, name)
 
         if len(self.inports) == 0:
@@ -323,7 +289,7 @@ class API(Composite):
         t.run(self)
 
     @abstractmethod
-    def implementation(self):
+    def impl(self):
         pass
 
     def args_order(self):
@@ -350,19 +316,19 @@ class API(Composite):
         src += src_out
         src += "}\n"
 
-        start_name = self.name + "_start"
+        start_name = "start"
 
         inports = self.inports
 
         class APIStart(Element):
-            def port(self):
+            def configure(self, parent_name):
                 self.inp = [Input(*x.element_ports[0].args) for x in inports]
                 self.out = [Output(*x.element_ports[0].args) for x in inports]
 
-            def run(self):
+            def impl(self):
                 self.run_c(src)
 
-        start = APIStart(name=start_name, params=[self.name])
+        start = APIStart(name=start_name, configure=[self.name])
         for i in range(len(self.inports)):
             for port in self.inports[i].element_ports:
                 start.out[i] >> port
@@ -378,7 +344,7 @@ class InternalLoop(Composite):
         t.run(self)
 
     @abstractmethod
-    def implementation(self):
+    def impl(self):
         pass
 
 
@@ -393,7 +359,7 @@ class Thread:
         for i in range(len(instances)):
             instance = instances[i]
             if isinstance(instance, Element):
-                scope[-1].append(program.ResourceMap(self.name, instance.name))
+                scope_append(program.ResourceMap(self.name, instance.name))
             elif isinstance(instance, Composite):
                 if instance.collection.impl:
                     scope_append(program.Spec([program.ResourceMap(self.name, x) for x in instance.collection.spec]))
@@ -433,43 +399,4 @@ class InternalThread(Thread):
         trigger = program.InternalTrigger(name)
         scope_prepend(trigger)
         Thread.__init__(self, name)
-
-####################### Compiler #########################
-class Compiler:
-    def __init__(self):
-        self.desugar_mode = "impl"
-        self.resource = True
-        self.remove_unused = True
-
-        # Extra code
-        self.include = None
-        self.testing = None
-        self.depend = None
-
-        # Compiler option
-        self.I = None
-
-    def generate_graph(self, filename="tmp"):
-        assert len(scope) == 1, "Compile error: there are multiple scopes remained."
-        p1 = program.Program(*scope[0])
-        p2 = desugaring.desugar(p1, self.desugar_mode)
-        dp = desugaring.insert_fork(p2)
-        g = compiler.generate_graph(dp, self.resource, self.remove_unused, filename, None)  # TODO: state_mapping
-        return g
-
-    def generate_code(self):
-        compiler.generate_code(self.generate_graph(), ".c", self.testing, self.include)
-
-    def generate_code_and_run(self, expect=None):
-        compiler.generate_code_and_run(self.generate_graph(), self.testing, self.desugar_mode, expect, self.include, self.depend)
-
-    def generate_code_and_compile(self):
-        compiler.generate_code_and_compile(self.generate_graph(), self.testing, self.desugar_mode, self.include, self.depend)
-
-    def generate_code_as_header(self, header='tmp'):
-        compiler.generate_code_as_header(self.generate_graph(header), self.testing, self.desugar_mode, self.include)
-
-    def compile_and_run(self, name):
-        compiler.compile_and_run(name, self.depend)
-
 

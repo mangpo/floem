@@ -1,11 +1,11 @@
 from library_dsl2 import *
 
 class add2(API):
-    def port(self):
+    def configure(self):
         self.inp = Input(Int)
         self.out = Output(Int)
 
-    def implementation(self):
+    def impl(self):
         inc1 = Inc('inc1')
         inc2 = Inc('inc2')
         self.inp >> inc1 >> inc2 >> self.out

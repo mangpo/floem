@@ -1,7 +1,7 @@
 from library_dsl2 import *
 
 class func(API):
-    def port(self):
+    def configure(self):
         self.inp = Input(Int)
         self.offset = Input(Int)
         self.out = Output(Int)
@@ -9,11 +9,11 @@ class func(API):
     def args_order(self):
         return [self.inp, self.offset]
 
-    def implementation(self):
-        inc1 = Inc(name='inc1', params=[Int])
-        inc2 = Inc(name='inc2', params=[Int])
-        add1 = Add(name='add1', params=[Int])
-        add2 = Add(name='add2', params=[Int])
+    def impl(self):
+        inc1 = Inc(name='inc1', configure=[Int])
+        inc2 = Inc(name='inc2', configure=[Int])
+        add1 = Add(name='add1', configure=[Int])
+        add2 = Add(name='add2', configure=[Int])
 
         self.inp >> inc1 >> add1.inp1
         self.inp >> inc2 >> add1.inp2
