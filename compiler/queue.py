@@ -193,6 +193,9 @@ def create_circular_queue_many2one_instances(name, type, size, n_cores):
 
 ############################ Fixed-size copy queue ##############################
 
+"""
+For multiple threads enqueuing to multiple queues.
+"""
 def create_copy_queue_many2many_inc_atomic(name, type, size, n_cores, blocking=False):
     type_star = type + "*"
     prefix = "_%s_" % name

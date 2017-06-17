@@ -1,5 +1,6 @@
 from dsl2 import *
 import unittest
+import os
 
 
 class Nop(Element):
@@ -35,7 +36,18 @@ class NopPipe(Composite):
         b = Nop('b')
         self.inp >> a >> b >> self.out
 
+
 class TestDSL2(unittest.TestCase):
+    def test_run(self):
+        tests = ["API_increment1.py",
+                 "API_increment2.py",
+                 "API_insert_start_element.py",
+                 "pipeline_state_simple.py",
+                 ]
+        for test in tests:
+            status = os.system("cd programs_dsl2; python " + test + "; cd ..")
+            self.assertEqual(status, 0, "Error at " + test)
+
     def test_connection(self):
         reset()
 
