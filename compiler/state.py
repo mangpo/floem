@@ -1,6 +1,7 @@
 import graph
 import program
-from workspace import scope_append
+from workspace import scope_append, push_scope, pop_scope, get_current_collection
+from abc import abstractmethod
 
 ####################### Data type ########################
 
@@ -13,22 +14,47 @@ def Uint(bits):
 
 ####################### State ########################
 
+
 class Field(object):
-    def __init__(self, type, value=0):
+    def __init__(self, type, value=0, copysize=None, shared=None):
         self.type = type
         self.value = value
+        self.copysize = copysize
+        self.shared = shared
+
+
+class Persistent(object):
+    def __init__(self, type, value=None):
+        self.type = type
+        self.value = value
+
+
+class PerPacket(object):
+    def __init__(self, type):
+        self.type = type
+
+    def __getattr__(self, item):
+        type = self.type
+        if item in type.__dict__:
+            return item
+        else:
+            raise Exception("Per-packet state '%s' doesn't have field '%s'." % (type.__name__, item))
 
 
 class State(object):
     id = 0
     defined = set()
 
-    def __init__(self, name=None, init=[], declare=True):
+    def __init__(self, name=None, init=[], declare=True, instance=True):
         self.init(*init)
+        content, fields, init_code, mapping = self.get_content()
 
         if self.__class__.__name__ not in State.defined:
-            content, init_code = self.get_content()
-            scope_append(graph.State(self.__class__.__name__, content, init_code, declare))
+            if instance:
+                class_init = None
+            else:
+                class_init = init_code
+            scope_append(graph.State(self.__class__.__name__, content, class_init, declare, fields, mapping))
             State.defined.add(self.__class__.__name__)
 
         if name is None:
@@ -36,7 +62,8 @@ class State(object):
             self.__class__.id += 1
         self.name = name
 
-        scope_append(program.StateInstance(self.__class__.__name__, name))
+        if instance:
+            scope_append(program.StateInstance(self.__class__.__name__, name, init_code))
 
     def init(self, *init):
         pass
@@ -51,10 +78,56 @@ class State(object):
 
     def get_content(self):
         content = ""
+        fields = []
         init = []
-        for s in self.__dict__:
-            o = self.__dict__[s]
+        mapping = {}
+        for s in self.__class__.__dict__:
+            o = object.__getattribute__(self, s)
             if isinstance(o, Field):
+                fields.append(s)
                 content += "%s %s;\n" % (o.type, s)
                 init.append(o.value)
-        return content, init
+
+                if isinstance(o.type, str):
+                    type = o.type
+                else:
+                    type = o.type.__name__
+
+                special = None
+                special_val = None
+                if o.copysize:
+                    special = 'copysize'
+                    special_val = o.copysize
+                elif o.shared:
+                    special = 'shared'
+                    special_val = o.shared
+
+                mapping[s] = [type, None, special, special_val]
+        return content, fields, init, mapping
+
+
+class Pipeline(object):
+    id = 0
+    state = None
+
+    def __init__(self, name=None):
+        if name is None:
+            name = self.__class__.__name__
+            if self.__class__.id > 0:
+                name += str(self.__class__.id)
+            self.__class__.id += 1
+        self.name = name
+
+        assert isinstance(self.state, PerPacket), \
+            "Per-packet state %s.state must be set to PerPacket(StateType), but %s is given." % (self.name, self.state)
+
+        push_scope('')
+        self.impl()  # TODO: add pipeline state
+        self.state = self.state.type(instance=False)
+        self.scope = pop_scope()
+
+    @abstractmethod
+    def impl(self):
+        pass
+
+

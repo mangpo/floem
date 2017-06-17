@@ -407,7 +407,7 @@ def impl():
         o = clean(full)
         return o
 
-    ######################## NIC Tx #######################
+    ####################### NIC Tx #######################
 
     @internal_trigger("nic_tx", process="nic")
     def tx_pipeline():
@@ -437,7 +437,7 @@ c.triggers = True
 c.I = '/home/mangpo/lib/dpdk-16.11/build/include'
 
 def run_compare():
-    c.desugar_mode = "compare"
+    c.desugar_mode = "impl"
     c.generate_code_as_header()
     c.depend = {"test_compare_app": ['jenkins_hash', 'hashtable', 'ialloc', 'app'],
                 "test_compare_nic": ['jenkins_hash', 'hashtable', 'ialloc', 'nic']}

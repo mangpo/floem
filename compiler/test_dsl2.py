@@ -3,22 +3,22 @@ import unittest
 
 
 class Nop(Element):
-    def port(self):
+    def configure(self):
         self.inp = Input(Int)
         self.out = Output(Int)
 
-    def run(self):
+    def impl(self):
         self.run_c(r'''
         int x = in();
         output { out(x); }
         ''')
 
 class NopFloat(Element):
-    def port(self):
+    def configure(self):
         self.inp = Input(Size)
         self.out = Output(Size)
 
-    def run(self):
+    def impl(self):
         self.run_c(r'''
         int x = in();
         output { out(x); }
@@ -26,16 +26,16 @@ class NopFloat(Element):
 
 class NopPipe(Composite):
 
-    def port(self):
+    def configure(self):
         self.inp = Input(Int)
         self.out = Output(Int)
 
-    def implementation(self):
+    def impl(self):
         a = Nop('a')
         b = Nop('b')
         self.inp >> a >> b >> self.out
 
-class TestDSL(unittest.TestCase):
+class TestDSL2(unittest.TestCase):
     def test_connection(self):
         reset()
 

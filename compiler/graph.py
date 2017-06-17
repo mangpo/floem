@@ -357,16 +357,17 @@ class Port:
 
 
 class State:
-    def __init__(self, name, content, init=None, declare= True):
+    def __init__(self, name, content, init=None, declare=True, fields=None, mapping=None):
         self.name = name
         self.content = content
         self.init = init
         self.processes = set()
         self.declare = declare
-        if True:
-            self.fields = self.extract_fields()
+        self.mapping = mapping
+        if fields:
+            self.fields = fields
         else:
-            self.fields = None
+            self.fields = self.extract_fields()
 
     def __str__(self):
         return self.name
@@ -400,16 +401,14 @@ class Graph:
         self.elements = {}
         self.instances = {}
         self.states = {}
-        self.state_order = []
         self.state_instances = {}
+        self.state_order = []
         self.state_instance_order = []
         self.memory_regions = []
         # for e in elements:
         #     self.elements[e.name] = e
         # for s in states:
         #     self.states[s.name] = s
-
-        self.identity = {}
 
         self.threads_internal = []
         self.threads_API = []
@@ -428,7 +427,43 @@ class Graph:
 
         # Per-packet state
         self.pipeline_states = {}
-        self.state_mapping = None
+
+    def merge(self, other):
+        assert self.default_process == other.default_process, \
+            "Graph merge failed -- mismatch default_process: %s vs %s." % (self.default_process, other.default_process)
+        assert self.master_process == other.master_process, \
+            "Graph merge failed -- mismatch master_process: %s vs %s." % (self.master_process, other.master_process)
+        self.merge_dict(self.elements, other.elements)
+        self.merge_dict(self.instances, other.instances)
+        self.merge_dict(self.states, other.states)
+        self.merge_dict(self.state_instances, other.state_instances)
+        self.merge_list(self.state_order, other.state_order)
+        self.merge_list(self.state_instance_order, other.state_instance_order)
+        self.merge_list(self.memory_regions, other.memory_regions)
+
+        self.merge_list(self.threads_internal, other.threads_internal)
+        self.merge_list(self.threads_API, other.threads_API)
+        self.merge_list(self.threads_order, other.threads_order)
+        self.threads_roots = self.merge_set(self.threads_roots, other.threads_roots)
+
+        self.merge_dict(self.inject_populates, other.inject_populates)
+        self.merge_dict(self.probe_compares, other.probe_compares)
+
+        self.processes = self.merge_set(self.processes, other.processes)
+        self.merge_dict(self.thread2process, other.thread2process)
+
+    @staticmethod
+    def merge_dict(this, other):
+        for key in other:
+            this[key] = other[key]
+
+    @staticmethod
+    def merge_list(this, other):
+        this += other
+
+    @staticmethod
+    def merge_set(this, other):
+        return this.union(other)
 
     def __str__(self):
         s = "Graph:\n"
@@ -655,26 +690,6 @@ class Graph:
             "Element instance '%s' was assigned to pipeline state '%s', but it is again assigned to '%s'." \
             % (inst_name, self.pipeline_states[inst_name], state_name)
         self.pipeline_states[inst_name] = state_name
-
-    def get_identity_element(self, argtypes):
-        name = "_identity_" + "_".join(argtypes)
-
-        if name in self.identity:
-            return self.identity[name]
-
-        args = []
-        types_args = []
-        for i in range(len(argtypes)):
-            arg = "arg%d" % i
-            args.append(arg)
-            types_args.append("%s %s" % (argtypes[i], arg))
-
-        src = "(%s) = in(); output { out(%s); }\n" % (", ".join(types_args), ", ".join(args))
-
-        e = Element(name, [Port("in", argtypes)], [Port("out", argtypes)], src)
-
-        self.identity[name] = e
-        return e
 
     def check_input_ports(self):
         for instance in self.instances.values():

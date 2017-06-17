@@ -8,7 +8,7 @@ class A(State):
 
 
 class Counter(Element):
-    a = Field(A)
+    a = Persistent(A)  # TODO: Persistent
 
     def configure(self):
         self.inp = Input(Int)

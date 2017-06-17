@@ -1,7 +1,7 @@
 from library_dsl2 import *
 
-inc1 = Inc('inc1')
-inc2 = Inc('inc2')
+inc1 = Inc('inc1', configure=[Int])
+inc2 = Inc('inc2', configure=[Int])
 inc1 >> inc2
 
 t = APIThread('add2', ["int"], "int")

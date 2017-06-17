@@ -2,7 +2,7 @@ from program import *
 from join_handling import get_join_buffer_name, annotate_join_info, clean_minimal_join_info
 from api_handling import annotate_api_info
 from process_handling import annotate_process_info
-from pipeline_state import compile_pipeline_states, check_pipeline_state_liveness
+from pipeline_state import compile_pipeline_states, check_pipeline_state_liveness, init_pointer
 import re, sys, os, subprocess, time
 from contextlib import contextmanager
 
@@ -414,17 +414,6 @@ def declare_state(name, state_instance, ext):
             print src
 
 
-def init_value(val):
-    if isinstance(val, AddressOf):
-        return '&' + val.of
-    elif val is True:
-        return "true"
-    elif val is False:
-        return "false"
-    else:
-        return val
-
-
 def map_shared_state(name, state_instance, ext):
     state = state_instance.state
     src = "{1} = ({0} *) shm_p;\n".format(state.name, name)
@@ -455,19 +444,7 @@ def init_state(name, state_instance, master, all_processes, ext):
             inits = state_instance.init
         else:
             inits = state.init
-        for i in range(len(state.fields)):
-            field = state.fields[i]
-            init = inits[i]
-            if isinstance(init, list):
-                if init == [0]:
-                    pass  # Default is all zeros
-                else:
-                    m = re.match('([a-zA-Z0-9_]+)\[[0-9]+\]', field)
-                    array = m.group(1)
-                    for i in range(len(init)):
-                        src += "{0}->{1}[{2}] = {3};\n".format(name, array, i, init_value(init[i]))
-            else:
-                src += "{0}->{1} = {2};\n".format(name, field, init_value(init))
+        src = init_pointer(state, inits, name)
 
     if len(state_instance.processes) <= 1:
         process = [x for x in state_instance.processes][0]
@@ -660,8 +637,8 @@ def program_to_graph_pass(program, default_process="tmp"):
     return gen
 
 
-def pipeline_state_pass(gen):
-    compile_pipeline_states(gen.graph)
+def pipeline_state_pass(gen, pktstate=None):
+    compile_pipeline_states(gen.graph, pktstate)
     clean_minimal_join_info(gen.graph)
 
 
@@ -693,7 +670,7 @@ def join_and_resource_annotation_pass(gen, resource, remove_unused):
     check_pipeline_state_liveness(gen.graph)
 
 
-def generate_graph(program, resource=True, remove_unused=False, default_process="tmp", state_mapping=None):
+def generate_graph(program, resource=True, remove_unused=False, default_process="tmp", pktstate=None):
     """
     Compile program to data-flow graph and insert necessary elements for resource mapping and join elements.
     :param program: program AST
@@ -701,11 +678,10 @@ def generate_graph(program, resource=True, remove_unused=False, default_process=
     :return: data-flow graph
     """
     gen = program_to_graph_pass(program, default_process)
-    gen.graph.state_mapping = state_mapping
-    pipeline_state_pass(gen)
+    pipeline_state_pass(gen, pktstate)
     join_and_resource_annotation_pass(gen, resource, remove_unused)
-    print "-------------------- graph ----------------------"
-    gen.graph.print_graphviz()
+    # print "-------------------- graph ----------------------"
+    # gen.graph.print_graphviz()
 
     return gen.graph
 

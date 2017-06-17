@@ -3,7 +3,7 @@ from program import *
 from pipeline_state_join import get_node_before_release
 
 
-def get_entry_content(vars, pipeline_state, state_mapping, src2fields):
+def get_entry_content(vars, pipeline_state, g, src2fields):
     content = " "
     end = ""
     special = {}
@@ -16,7 +16,7 @@ def get_entry_content(vars, pipeline_state, state_mapping, src2fields):
                 current_type = current_type.rstrip('*').rstrip()
 
             try:
-                mapping = state_mapping[current_type]
+                mapping = g.states[current_type].mapping
             except KeyError:
                 raise Exception("Undefined state type '%s'." % current_type)
             try:
@@ -42,7 +42,7 @@ def get_entry_content(vars, pipeline_state, state_mapping, src2fields):
     return content + end, special
 
 
-def get_state_content(vars, pipeline_state, state_mapping, src2fields, special):
+def get_state_content(vars, pipeline_state, g, src2fields, special):
     content = " "
     for var in vars:
         fields = src2fields[var]
@@ -50,7 +50,7 @@ def get_state_content(vars, pipeline_state, state_mapping, src2fields, special):
         for field in fields:
             if current_type[-1] == "*":
                 current_type.rstrip('*').rstip()
-            current_type = state_mapping[current_type][field]
+            current_type = g.states[current_type].mapping[field]
         content += "%s %s; " % (current_type[0], fields[-1])
 
     for var in special:
@@ -218,12 +218,12 @@ def compile_smart_queue(g, q, src2fields):
         out = out_map[i]
 
         # Create states
-        content, special = get_entry_content(live, pipeline_state, g.state_mapping, src2fields)
+        content, special = get_entry_content(live, pipeline_state, g, src2fields)
         state_entry = State("entry_" + q.name + str(i),
                             "uint16_t flags; uint16_t len; " + content)
         state_pipeline = State("pipeline_" + q.name + str(i),
                                state_entry.name + "* entry; " +
-                               get_state_content(extras, pipeline_state, g.state_mapping, src2fields, special))
+                               get_state_content(extras, pipeline_state, g, src2fields, special))
         g.addState(state_entry)
         g.addState(state_pipeline)
 
@@ -371,26 +371,40 @@ def compile_smart_queues(g, src2fields):
     for q in order:
         compile_smart_queue(g, q, src2fields)
 
-    # compress_original pipeline states
-    if g.state_mapping is None:
-        return
-
     compress_id = 0
     for inst_name in original_pipeline_states:
         state = g.pipeline_states[inst_name]
+        state_obj = g.states[state]
+        mapping = state_obj.mapping
+        if mapping is None:
+            continue
+
         instance = g.instances[inst_name]
         new_state = state + "_compressed" + str(compress_id)
         compress_id += 1
-
         content = ""
-        mapping = g.state_mapping[state]
-        for var in g.state_mapping[state]:
+
+        for i in range(len(state_obj.fields)):
+            var = state_obj.fields[i]
             for use in instance.uses:
                 m = re.match(var, use)
                 if m:
                     content += "%s %s;\n" % (mapping[var][0], var)
                     break
 
-        state_pipeline = State(new_state, content)
+        if state_obj.init:
+            inits = []
+            for i in range(len(state_obj.fields)):
+                var = state_obj.fields[i]
+                init = state_obj.init[i]
+                for use in instance.uses:
+                    m = re.match(var, use)
+                    if m:
+                        inits.append(init)
+                        break
+        else:
+            inits = None
+
+        state_pipeline = State(new_state, content, inits)
         g.addState(state_pipeline)
         g.pipeline_states[inst_name] = new_state

@@ -1,9 +1,5 @@
-from abc import ABCMeta, abstractmethod
-
-import graph
-import program
 from state import *
-from workspace import scope_append, scope_prepend, push_scope, pop_scope, get_node_name, Compiler
+from workspace import *
 
 ###################### Port #######################
 
@@ -144,10 +140,6 @@ class Connectable(object):
     def states(self, *params):
         pass
 
-    @abstractmethod
-    def port(self):
-        pass
-
     def __rshift__(self, other):
         assert len(self.outports) == 1, \
             "Attempt to connect '%s', which has zero or multiple output ports, to '%s'." % (self.name, other)
@@ -166,9 +158,11 @@ class Element(Connectable):
 
     def __init__(self, name=None, states=[], configure=[]):
         Connectable.__init__(self, name, states, configure)
+        self.def_fields = None
+        self.used_fields = None
         self.code = ''
         self.impl()
-        defs, states = self.collect_states()
+        states_decls, states = self.collect_states()
 
         if len(configure) == 0:
             unique = self.__class__.__name__
@@ -178,7 +172,7 @@ class Element(Connectable):
             Element.defined.add(unique)
             inports = [graph.Port(p.name, p.args) for p in self.inports]
             outports = [graph.Port(p.name, p.args) for p in self.outports]
-            e = graph.Element(unique, inports, outports, self.code, defs)
+            e = graph.Element(unique, inports, outports, self.code, states_decls)
             scope_append(e)
 
         inst = program.ElementInstance(unique, self.name, states)
@@ -200,11 +194,14 @@ class Element(Connectable):
     def __setattr__(self, key, value):
         if key in self.__class__.__dict__:
             o = self.__getattribute__(key)
-            if isinstance(o, Field):
+            if isinstance(o, Persistent):
                 assert isinstance(value, o.type), "%s.%s should be assign to a value of type %s." \
                                                   % (self.name, key, o.type.__name__)
-                super(Connectable, self).__setattr__(key, Field(o.type, value))
+                super(Connectable, self).__setattr__(key, Persistent(o.type, value))
                 return
+            elif isinstance(o, PerPacket):
+                raise Exception("Per-packet state %s.%s should not be initialized with a persistent state."
+                                % (self.name, key))
         super(Connectable, self).__setattr__(key, value)
 
     def collect_states(self):
@@ -212,12 +209,18 @@ class Element(Connectable):
         states = []
         for s in self.__dict__:
             o = self.__dict__[s]
-            if isinstance(o, Field):
-                if o.value == 0:
+            if isinstance(o, Persistent):
+                if not o.value:
                     raise Exception("State %s.%s must be initialized." % (self.name, s))
                 defs.append((o.type.__name__, s))
                 states.append(o.value.name)
         return defs, states
+
+    def defs(self, *fields):
+        self.def_fields = fields
+
+    def uses(self, *fields):
+        self.used_fields = fields
 
 
 class Composite(Connectable):
@@ -232,7 +235,7 @@ class Composite(Connectable):
 
         push_scope(self.name)
         self.impl()
-        self.collection = pop_scope()
+        self.collection = merge_scope()
 
         for p in self.inports + self.outports:
             p.disable_collect()
@@ -282,7 +285,7 @@ class API(Composite):
         if count > 1:
             push_scope(self.name)
             self.create_api_start_node()
-            addition = pop_scope()
+            addition = merge_scope()
             self.collection.union(addition)
 
         t = APIThread(name, [x for x in input], output, default_val=default_return)

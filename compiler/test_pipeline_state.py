@@ -519,7 +519,7 @@ class TestPipelineState(unittest.TestCase):
         )
 
         gen = program_to_graph_pass(p)
-        gen.graph.state_mapping = {'mystate': {'a': ('int', None, None, None)}}
+        gen.graph.states['mystate'].mapping = {'a': ('int', None, None, None)}
         pipeline_state_pass(gen)
         g = gen.graph
 
@@ -581,7 +581,7 @@ class TestPipelineState(unittest.TestCase):
         )
 
         gen = program_to_graph_pass(p)
-        gen.graph.state_mapping = {'mystate': {'a': ('int', None, None, None)}}
+        gen.graph.states['mystate'].mapping = {'a': ('int', None, None, None)}
         try:
             pipeline_state_pass(gen)
         except Exception as e:

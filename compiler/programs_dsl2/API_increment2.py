@@ -6,8 +6,8 @@ class add2(API):
         self.out = Output(Int)
 
     def impl(self):
-        inc1 = Inc('inc1')
-        inc2 = Inc('inc2')
+        inc1 = Inc('inc1', configure=[Int])
+        inc2 = Inc('inc2', configure=[Int])
         self.inp >> inc1 >> inc2 >> self.out
 
 add2('add2')

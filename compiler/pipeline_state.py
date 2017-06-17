@@ -3,11 +3,45 @@ from join_handling import annotate_join_info
 from smart_queue_compile import compile_smart_queues
 
 
-def allocate_pipeline_state(element, state):
+def init_value(val):
+    if isinstance(val, AddressOf):
+        return '&' + val.of
+    elif val is True:
+        return "true"
+    elif val is False:
+        return "false"
+    else:
+        return val
+
+
+def init_pointer(state, inits, name):
+    if inits is None:
+        return ""
+    src = ""
+    for i in range(len(state.fields)):
+        field = state.fields[i]
+        init = inits[i]
+        if isinstance(init, list):
+            if init == [0]:
+                pass  # Default is all zeros
+            else:
+                m = re.match('([a-zA-Z0-9_]+)\[[0-9]+\]', field)
+                array = m.group(1)
+                for i in range(len(init)):
+                    src += "  {0}->{1}[{2}] = {3};\n".format(name, array, i, init_value(init[i]))
+        else:
+            src += "  {0}->{1} = {2};\n".format(name, field, init_value(init))
+    return src
+
+
+def allocate_pipeline_state(g, element, state):
     assert not element.output_fire == "multi", "Batch element '%s' cannot allocate pipeline state." % element.name
+    state_obj = g.states[state]
     add = "  {0} *_state = ({0} *) malloc(sizeof({0}));\n".format(state)
     add += "  _state->refcount = 1;\n"
-    element.code = add + element.code
+    init = init_pointer(state_obj, state_obj.init, '_state')
+
+    element.code = add + init + element.code
     element.cleanup = "  pipeline_unref((pipeline_state*) _state);\n"
 
 
@@ -307,10 +341,10 @@ def insert_pipeline_states(g):
         element = instance.element
 
         if len(ele2inst[element.name]) == 1:
-            allocate_pipeline_state(element, state)
+            allocate_pipeline_state(g, element, state)
         else:
             new_element = element.clone(start_name + "_with_state_alloc")
-            allocate_pipeline_state(new_element, state)
+            allocate_pipeline_state(g, new_element, state)
             g.addElement(new_element)
             instance.element = new_element
             ele2inst[new_element.name] = [instance]
@@ -548,10 +582,36 @@ def analyze_pipeline_states(g):
     return src2fields
 
 
-def compile_pipeline_states(g):
-    if len(g.pipeline_states) == 0:
+def insert_starting_point(g, pktstate):
+    for instance in g.instances.values():
+        candidate = False
+        for port in instance.element.outports:
+            if len(port.argtypes) == 0:
+                candidate = True
+                break
+
+        if not candidate:
+            continue
+
+        for port in instance.element.inports:
+            if len(port.argtypes) == 0:
+                if port.name in instance.input2ele:
+                    candidate = False
+                    break
+
+        if not candidate:
+            continue
+
+        g.pipeline_states[instance.name] = pktstate.__class__.__name__
+
+
+def compile_pipeline_states(g, pktstate):
+    if len(g.pipeline_states) == 0 and pktstate is None:
         # Never use per-packet states. No modification needed.
         return
+
+    if pktstate:
+        insert_starting_point(g, pktstate)
 
     graphviz = False
 

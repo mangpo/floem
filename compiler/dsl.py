@@ -944,7 +944,7 @@ def create_state(st_name, content, init=None, declare=True):
     if reorder and init:
         raise Exception("Cannot initialize state '%s' when there are more than one variable-length field." % st_name)
 
-    s = State(st_name, content, init, declare)
+    s = State(st_name, content, init, declare, mapping=mapping)
     scope[-1].append(s)
 
     def create_instance(inst_name=None, init=None):
@@ -1042,7 +1042,7 @@ class Compiler:
         p1 = Program(*scope[0])
         p2 = desugaring.desugar(p1, self.desugar_mode)
         dp = desugaring.insert_fork(p2)
-        g = compiler.generate_graph(dp, self.resource, self.remove_unused, filename, state_mapping)
+        g = compiler.generate_graph(dp, self.resource, self.remove_unused, filename)
         return g
 
     def generate_code(self):
