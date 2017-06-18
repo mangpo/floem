@@ -7,7 +7,7 @@ class Port(object):
     def __init__(self, *args):
         self.name = None
         self.element = None
-        self.args = args
+        self.args = [string_type(x) for x in args]
 
     def __str__(self):
         return "port '%s' of element '%s'" % (self.name, self.element)

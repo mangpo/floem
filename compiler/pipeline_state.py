@@ -28,8 +28,9 @@ def init_pointer(state, inits, name):
                 m = re.match('([a-zA-Z0-9_]+)\[[0-9]+\]', field)
                 array = m.group(1)
                 for i in range(len(init)):
-                    src += "  {0}->{1}[{2}] = {3};\n".format(name, array, i, init_value(init[i]))
-        else:
+                    if init[i]:
+                        src += "  {0}->{1}[{2}] = {3};\n".format(name, array, i, init_value(init[i]))
+        elif init:
             src += "  {0}->{1} = {2};\n".format(name, field, init_value(init))
     return src
 

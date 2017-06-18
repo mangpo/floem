@@ -9,29 +9,43 @@ Int = 'int'
 Size = 'size_t'
 Void = 'void'
 
-
 def Uint(bits):
     return 'uint%d_t' % bits
 
 
 def Pointer(x):
-    return x + '*'
+    return string_type(x) + '*'
 
 
 class Array(object):
     def __init__(self, type, size=None):
-        self.type = type
+        define_state(type)
+        self.type = string_type(type)
         self.size = size
+
+def string_type(x):
+    if isinstance(x, str):
+        return x
+    elif isinstance(x, Array):
+        return x
+    else:
+        return x.__name__
 
 ####################### State ########################
 
+def define_state(x):
+    if isinstance(x, type) and x.__name__ not in State.defined:
+        x(instance=False)
+
 
 class Field(object):
-    def __init__(self, type, value=0, copysize=None, shared=None):
-        self.type = type
+    def __init__(self, t, value=None, copysize=None, shared=None):
         self.value = value
         self.copysize = copysize
         self.shared = shared
+
+        define_state(t)
+        self.type = string_type(t)
 
 
 class Persistent(object):
@@ -103,16 +117,14 @@ class State(object):
         for s in self.__class__.__dict__:
             o = object.__getattribute__(self, s)
             if isinstance(o, Field):
-                fields.append(s)
                 init.append(self.sanitize_init(o.value))
 
                 if isinstance(o.type, str):
                     type = o.type
-                    content += "%s %s;\n" % (type, s)
+                    mytype = type
+                    field = s
                 elif isinstance(o.type, Array):
                     mytype = o.type.type
-                    if not isinstance(mytype, str):
-                        mytype = mytype.__name__
                     type = mytype + '*'
                     if o.type.size is None:
                         size = '[]'
@@ -122,10 +134,10 @@ class State(object):
                         size = ''
                         for v in o.type.size:
                             size += '[%d]' % v
-                    content += "%s %s%s;\n" % (mytype, s, size)
-                else:
-                    type = o.type.__name__
-                    content += "%s %s;\n" % (type, s)
+                    field = "%s%s" % (s, size)
+
+                content += "%s %s;\n" % (mytype, field)
+                fields.append(field)
 
                 special = None
                 special_val = None

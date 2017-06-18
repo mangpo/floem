@@ -6,7 +6,7 @@ class QueueOffset(State):
     offset = Field(Size)
     queue = Field(Pointer(Void))
 
-    def init(self, len, offset, queue):
+    def init(self, len=0, offset=0, queue=0):
         #self.len = len
         self.offset = offset
         self.queue = queue
@@ -37,16 +37,14 @@ def get_field_name(state, field):
 
 def queue_custom_owner_bit(name, type, size, n_cores, owner, blocking=False, atomic=False):
     owner = get_field_name(type, owner)
-    type = get_type(type)
     prefix = "%s_" % name
-    type_star = type + "*"
 
     class Storage(State): data = Field(Array(type, size))
     Storage.__name__ = prefix + Storage.__name__
 
     class QueueCollection(State):
-        cores = Field(Array(QueueOffset, n_cores))
-        def init(self, cores):
+        cores = Field(Array(Pointer(QueueOffset), n_cores))
+        def init(self, cores=[0]):
             self.cores = cores
     QueueCollection.__name__ = prefix + QueueCollection.__name__
 
@@ -56,6 +54,9 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner, blocking=False, ato
     enq_all = QueueCollection(init=[enq_infos])
     deq_all = QueueCollection(init=[deq_infos])
 
+    type = get_type(type)
+    type_star = type + "*"
+
     atomic_src = r'''
     __sync_synchronize();
     size_t old = p->offset;
@@ -64,17 +65,17 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner, blocking=False, ato
         old = p->offset;
         new = (old + 1) %s %d;
     }
-    '''
+    ''' % ('%', size, '%', size)
 
     wait_then_copy = r'''
-    while(p->data[old].%s != 0) __sync_synchronize();
-    rte_memcpy(&p->data[old], x, sizeof(%s));
+    while(q->data[old].%s != 0) __sync_synchronize();
+    rte_memcpy(&q->data[old], x, sizeof(%s));
     __sync_synchronize();
     ''' % (owner, type)
 
     wait_then_get = r'''
-    while(p->data[old].%s == 0) __sync_synchronize();
-    %s x = &p->data[old];
+    while(q->data[old].%s == 0) __sync_synchronize();
+    %s x = &q->data[old];
     ''' % (owner, type_star)
 
     inc_offset = "p->offset = (p->offset + 1) %s %d;\n" % ('%', size)
@@ -89,8 +90,8 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner, blocking=False, ato
         def impl(self):
             noblock_noatom = r'''
                 __sync_synchronize();
-                if(p->data[p->offset].%s == 0) {
-                    rte_memcpy(&p->data[p->offset], x, sizeof(%s));
+                if(q->data[p->offset].%s == 0) {
+                    rte_memcpy(&q->data[p->offset], x, sizeof(%s));
                     p->offset = (p->offset + 1) %s %d;
                     __sync_synchronize();
                 }
@@ -111,7 +112,8 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner, blocking=False, ato
             self.run_c(r'''
             (%s x, size_t c) = inp();
             %s* p = this->cores[c];
-            ''' % (type_star, QueueOffset.__name__)
+            %s* q = p->queue;
+            ''' % (type_star, QueueOffset.__name__, Storage.__name__)
                        + src)
 
     class Dequeue(Element):
@@ -127,8 +129,8 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner, blocking=False, ato
             noblock_noatom = r'''
             %s x = NULL;
             __sync_synchronize();
-            if(p->data[p->offset].%s != 0) {
-                x = &p->data[p->offset];
+            if(q->data[p->offset].%s != 0) {
+                x = &q->data[p->offset];
                 p->offset = (p->offset + 1) %s %d;
             }
             ''' % (type_star, owner, '%', size)
@@ -145,10 +147,14 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner, blocking=False, ato
                 else:
                     src = noblock_noatom
 
+            debug = r'''printf("deq %ld\n", c);'''
+
             self.run_c(r'''
                         (size_t c) = inp();
                         %s* p = this->cores[c];
-                        ''' % (QueueOffset.__name__)
+                        %s* q = p->queue;
+                        ''' % (QueueOffset.__name__, Storage.__name__)
+                       #+ debug
                        + src
                        + "output { out(x); }\n")
 
@@ -159,7 +165,7 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner, blocking=False, ato
         def impl(self):
             self.run_c(r'''
             (%s x) = inp();
-            x.%s = 0;
+            x->%s = 0;
             ''' % (type_star, owner))
 
     Enqueue.__name__ = prefix + Enqueue.__name__
@@ -173,13 +179,3 @@ def queue_shared_head_tail(name, type, size, n_cores):
     pass
 
 
-class Tuple(State):
-    task = Field(Int)
-    val = Field(Int)
-
-Enq, Deq, Release = queue_custom_owner_bit('queue', Tuple, 16, 2, Tuple.task)
-Enq()
-Deq()
-Release()
-scope = pop_scope()
-print
