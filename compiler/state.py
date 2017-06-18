@@ -7,10 +7,21 @@ from abc import abstractmethod
 
 Int = 'int'
 Size = 'size_t'
+Void = 'void'
 
 
 def Uint(bits):
     return 'uint%d_t' % bits
+
+
+def Pointer(x):
+    return x + '*'
+
+
+class Array(object):
+    def __init__(self, type, size=None):
+        self.type = type
+        self.size = size
 
 ####################### State ########################
 
@@ -76,6 +87,14 @@ class State(object):
                 return
         super(State, self).__setattr__(key, value)
 
+    def sanitize_init(self, x):
+        if isinstance(x, State):
+            return x.name
+        elif isinstance(x, list):
+            return [self.sanitize_init(i) for i in x]
+        else:
+            return x
+
     def get_content(self):
         content = ""
         fields = []
@@ -85,13 +104,28 @@ class State(object):
             o = object.__getattribute__(self, s)
             if isinstance(o, Field):
                 fields.append(s)
-                content += "%s %s;\n" % (o.type, s)
-                init.append(o.value)
+                init.append(self.sanitize_init(o.value))
 
                 if isinstance(o.type, str):
                     type = o.type
+                    content += "%s %s;\n" % (type, s)
+                elif isinstance(o.type, Array):
+                    mytype = o.type.type
+                    if not isinstance(mytype, str):
+                        mytype = mytype.__name__
+                    type = mytype + '*'
+                    if o.type.size is None:
+                        size = '[]'
+                    elif isinstance(o.type.size, int):
+                        size = '[%d]' % o.type.size
+                    elif isinstance(o.type.size, list):
+                        size = ''
+                        for v in o.type.size:
+                            size += '[%d]' % v
+                    content += "%s %s%s;\n" % (mytype, s, size)
                 else:
                     type = o.type.__name__
+                    content += "%s %s;\n" % (type, s)
 
                 special = None
                 special_val = None

@@ -225,6 +225,7 @@ def create_copy_queue_many2many_inc_atomic(name, type, size, n_cores, blocking=F
            }
            rte_memcpy(&p->data[old], x, sizeof(%s));
            ''' % (type_star, one_name, type), [(all_name, "this")])
+    # TODO: buggy -- dequeuer may dequeue the one that is being copied in because we advance offset before copying.
 
     if blocking:
         src = r'''
@@ -239,12 +240,10 @@ def create_copy_queue_many2many_inc_atomic(name, type, size, n_cores, blocking=F
         (size_t c) = in();
         %s* p = this->cores[c];
         %s x = NULL;
-        bool avail = false;
         if(p->head == p->tail) {
             //printf("Dequeue an empty circular queue '%s'. Default value is returned (for API call).\n");
             //exit(-1);
         } else {
-            avail = true;
             x = &p->data[p->head];
         }
         output { out(x); }
