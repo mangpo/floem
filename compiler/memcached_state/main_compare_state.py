@@ -437,7 +437,7 @@ c.triggers = True
 c.I = '/home/mangpo/lib/dpdk-16.11/build/include'
 
 def run_compare():
-    c.desugar_mode = "impl"
+    c.desugar_mode = "compare"
     c.generate_code_as_header()
     c.depend = {"test_compare_app": ['jenkins_hash', 'hashtable', 'ialloc', 'app'],
                 "test_compare_nic": ['jenkins_hash', 'hashtable', 'ialloc', 'nic']}

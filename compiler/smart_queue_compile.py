@@ -255,7 +255,7 @@ def compile_smart_queue(g, q, src2fields):
                        r'''output { out_size_core(); out_fill(); }''')
 
         save_src = deq_src_in
-        if isinstance(q, queue_ast.QueueVariableSizeOne2Many) and 'core' in live:
+        if isinstance(q, queue_ast.QueueVariableSizeOne2Many) and 'core' in extras:
                 save_src += "state.core = core;\n"
         save_src += "state.entry = ({0} *) e;\n".format(state_entry.name)
         for var in special:

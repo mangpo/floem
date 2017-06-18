@@ -4,7 +4,7 @@ import queue_smart
 
 state = create_state("mystate", "int a; int a0; int b0; size_t core;")
 save = create_element_instance("save", [Port("in", ["int"])], [Port("out", [])],
-                               r'''state.a = in(); state.core = 0; output { out(); }''')
+                               r'''state.a = in(); state.core = 0;  output { out(); }''')
 classify = create_element_instance("classify",
                                    [Port("in", [])],
                                    [Port("out1", []), Port("out2", [])],

@@ -437,10 +437,12 @@ def kill_live(live, defs):
     for var in live:
         include = True
         for d in defs:
-            m = re.match(d, var)
-            if m:
-                include = False
-                break
+            m = re.match(d + '$', var)
+            if m: include = False; break
+            m = re.match(d + '\.', var)
+            if m: include = False; break
+            m = re.match(d + '->', var)
+            if m: include = False; break
         if include:
             ret.add(var)
     return ret

@@ -5,7 +5,7 @@ import queue_smart
 choose = create_element_instance("choose",
                     [Port("in", ["int"])],
                     [Port("out0", []), Port("out1", [])],
-                    r'''int x = in(); state.a = x; state.core = 0; output switch { case (x % 2 == 0): out0(); else: out1(); }''')
+                    r'''int x = in(); state.a = x; state.core = 1; output switch { case (x % 2 == 0): out0(); else: out1(); }''')
 defA = create_element_instance("defA",
                     [Port("in", [])],
                     [Port("out", [])],
@@ -25,13 +25,13 @@ useB = create_element_instance("useB",
 f = create_element_instance("f",
                     [Port("in", [])],
                     [Port("out", [])],
-                    r'''state.core = 0; output { out(); }''')
+                    r'''output { out(); }''')
 display = create_element_instance("display",
                     [Port("in", [])],
                     [],
                     r'''printf("%d\n", state.c);''')
-enq1, deq1 = queue_smart.smart_circular_queue_variablesize_one2many_instances("queue1", 256, 1, 2)
-enq2, deq2 = queue_smart.smart_circular_queue_variablesize_one2many_instances("queue2", 256, 1, 1)
+enq1, deq1 = queue_smart.smart_circular_queue_variablesize_one2many_instances("queue1", 256, 2, 2)
+enq2, deq2 = queue_smart.smart_circular_queue_variablesize_one2many_instances("queue2", 256, 2, 1)
 
 state = create_state("mystate", "int core; int a; int b; int c;")
 
@@ -63,5 +63,5 @@ c.include = r'''
 #include <rte_memcpy.h>
 #include "../queue.h"
 '''
-c.testing = "run1(123); run1(42); run2(0); run3(0); run2(0); run3(0);"
+c.testing = "run1(123); run1(42); run2(1); run3(1); run2(1); run3(1);"
 c.generate_code_and_run([123, 42])
