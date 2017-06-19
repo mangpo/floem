@@ -14,7 +14,7 @@ class Nop(Element):
         output { out(x); }
         ''')
 
-class NopFloat(Element):
+class NopSize(Element):
     def configure(self):
         self.inp = Input(Size)
         self.out = Output(Size)
@@ -99,9 +99,9 @@ class TestDSL2(unittest.TestCase):
             self.fail('Exception is not raised.')
 
         try:
-            c = NopFloat('c')
+            c = NopSize('c')
             a >> c
         except Exception as e:
-            self.assertNotEqual(e.message.find("Illegal to connect port 'out' of element 'a' of type ('int',)"), -1)
+            self.assertNotEqual(e.message.find("Illegal to connect port 'out' of element 'a' of type"), -1)
         else:
             self.fail('Exception is not raised.')

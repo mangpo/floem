@@ -118,7 +118,7 @@ def to_net_fixed_size_instance(name, type, hostname, port):
 
         def configure(self): self.inp = Input(type_star)
 
-        def states(self, *params): self.this = sock
+        def states(self): self.this = sock
 
         def impl(self):
             self.run_c(r'''
