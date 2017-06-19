@@ -5,6 +5,7 @@ from abc import abstractmethod
 
 ####################### Data type ########################
 
+Bool = 'bool'
 Int = 'int'
 Size = 'size_t'
 Void = 'void'
@@ -23,6 +24,7 @@ class Array(object):
         self.type = string_type(type)
         self.size = size
 
+
 def string_type(x):
     if isinstance(x, str):
         return x
@@ -30,6 +32,7 @@ def string_type(x):
         return x
     else:
         return x.__name__
+
 
 ####################### State ########################
 

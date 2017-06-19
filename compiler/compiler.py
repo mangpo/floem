@@ -188,8 +188,6 @@ def element_to_function(instance, state_rename, graph, ext):
         join_call += ");\n"
         join_call_map[join] = join_call
 
-    if funcname == "adv":
-        print
     src += '\n'
     # A dictionary to collect function arguments.
     port2args = {}

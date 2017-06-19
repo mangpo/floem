@@ -16,14 +16,6 @@ def queue_variable_size(name, size, n_cores):
     pass
 
 
-def get_type(x):
-    if isinstance(x, str):
-        return x
-    if isinstance(x, type):
-        return x.__name__
-    raise Exception("%s is not a data type." % x)
-
-
 def get_field_name(state, field):
     if isinstance(field, str):
         return field
@@ -54,7 +46,7 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner, blocking=False, ato
     enq_all = QueueCollection(init=[enq_infos])
     deq_all = QueueCollection(init=[deq_infos])
 
-    type = get_type(type)
+    type = string_type(type)
     type_star = type + "*"
 
     atomic_src = r'''
