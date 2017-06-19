@@ -248,6 +248,7 @@ class Composite(Connectable):
 class API(Composite):
     def __init__(self, name, default_return=None, process=None):
         self.process = process
+        self.default_return = default_return
         Composite.__init__(self, name)
 
         if len(self.inports) == 0:
@@ -289,7 +290,7 @@ class API(Composite):
             addition = merge_scope()
             self.collection.union(addition)
 
-        t = APIThread(name, [x for x in input], output, default_val=default_return)
+        t = APIThread(name, [x for x in input], output, default_val=self.default_return)
         t.run(self)
 
         if self.process:
