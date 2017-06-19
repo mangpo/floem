@@ -247,6 +247,7 @@ class Composite(Connectable):
 
 class API(Composite):
     def __init__(self, name, default_return=None, process=None):
+        self.process = process
         Composite.__init__(self, name)
 
         if len(self.inports) == 0:
@@ -290,6 +291,9 @@ class API(Composite):
 
         t = APIThread(name, [x for x in input], output, default_val=default_return)
         t.run(self)
+
+        if self.process:
+            scope_append(program.ProcessMap(self.process, name))
 
     @abstractmethod
     def impl(self):
@@ -341,10 +345,14 @@ class API(Composite):
 
 class InternalLoop(Composite):
     def __init__(self, name, process=None):
+        self.process = process
         Composite.__init__(self, name)
 
         t = InternalThread(name)
         t.run(self)
+
+        if self.process:
+            scope_append(program.ProcessMap(self.process, name))
 
     @abstractmethod
     def impl(self):

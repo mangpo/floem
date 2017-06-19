@@ -18,7 +18,7 @@ void executor_thread(void *arg) {
         self->execute(t, self);
         //printf("Tuple %d done\n", t->task);
         uint64_t now = rdtsc();
-        inqueue_advance(tid);
+        inqueue_advance(t); // signature change
         self->execute_time += now - starttime;
         self->numexecutes++;
       //}

@@ -157,7 +157,7 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner, blocking=False, ato
         def impl(self):
             self.run_c(r'''
             (%s x) = inp();
-            x->%s = 0;
+            if(x) x->%s = 0;
             ''' % (type_star, owner))
 
     Enqueue.__name__ = prefix + Enqueue.__name__
