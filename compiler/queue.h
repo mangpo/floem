@@ -15,7 +15,15 @@ typedef struct {
     size_t len;
     size_t offset;
     void* queue;
+    //pthread_mutex_t lock;
 } circular_queue;
+
+typedef struct {
+    size_t len;
+    size_t offset;
+    void* queue;
+    pthread_mutex_t lock;
+} circular_queue_lock;
 
 typedef struct {
     size_t len;
