@@ -62,7 +62,7 @@ void run_app(void *threadid) {
     process_eq(tid);
     clean_log(&ia, true);
     bool cleaning = true;
-    while(cleaning) { cleaning = clean_cq(tid); }
+    while(cleaning) { cleaning = clean_cq(tid); }  // TODO: clean before process_eq
   }
 }
 

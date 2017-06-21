@@ -33,6 +33,14 @@ typedef struct {
 } circular_queue_scan;
 
 typedef struct {
+    size_t len;
+    size_t offset;
+    void* queue;
+    pthread_mutex_t lock;
+    size_t clean;
+} circular_queue_lock_scan;
+
+typedef struct {
     uint16_t flags;
     uint16_t len;
 } __attribute__((packed)) q_entry;

@@ -24,6 +24,31 @@ class circular_queue_lock(State):
         self.queue = queue
         self.lock = lock
 
+class circular_queue_scan(State):
+    len = Field(Size)
+    offset = Field(Size)
+    queue = Field(Pointer(Void))
+    clean = Field(Size)
+
+    def init(self, len=0, offset=0, queue=0, clean=0):
+        self.len = len
+        self.offset = offset
+        self.queue = queue
+        self.clean = clean
+
+class circular_queue_lock_scan(State):
+    len = Field(Size)
+    offset = Field(Size)
+    queue = Field(Pointer(Void))
+    lock = Field('pthread_mutex_t')
+    clean = Field(Size)
+
+    def init(self, len=0, offset=0, queue=0, lock=None, clean=0):
+        self.len = len
+        self.offset = offset
+        self.queue = queue
+        self.clean = clean
+
 
 def get_field_name(state, field):
     if isinstance(field, str):
@@ -35,36 +60,52 @@ def get_field_name(state, field):
             if o == field:
                 return s
 
-def create_queue_states(name, type, size, n_cores, declare=True, lock=False):
+
+def create_queue_states(name, type, size, n_cores, declare=True, enq_lock=False, deq_lock=False, scan=False):
     prefix = "%s_" % name
 
     class Storage(State): data = Field(Array(type, size))
 
     Storage.__name__ = prefix + Storage.__name__
 
-    class QueueCollection(State):
-        cores = Field(Array(Pointer(circular_queue), n_cores))
-
-        def init(self, cores=[0]):
-            self.cores = cores
-
-    QueueCollection.__name__ = prefix + QueueCollection.__name__
-
     storages = [Storage() for i in range(n_cores)]
-    if not lock:
-        enq_infos = [circular_queue(init=[size, 0, storages[i]], declare=declare) for i in range(n_cores)]
-        deq_infos = [circular_queue(init=[size, 0, storages[i]], declare=declare) for i in range(n_cores)]
+
+    f = lambda (lock): 'pthread_mutex_init(&%s, NULL)' % lock
+    if enq_lock:
+        enq = circular_queue_lock_scan if scan else circular_queue_lock
+        enq_infos = [enq(init=[size, 0, storages[i], f], declare=declare) for i in range(n_cores)]
     else:
-        f = lambda(lock): 'pthread_mutex_init(&%s, NULL)' % lock
-        enq_infos = [circular_queue_lock(init=[size, 0, storages[i], f], declare=declare) for i in range(n_cores)]
-        deq_infos = [circular_queue_lock(init=[size, 0, storages[i], f], declare=declare) for i in range(n_cores)]
+        enq = circular_queue_scan if scan else circular_queue
+        enq_infos = [enq(init=[size, 0, storages[i]], declare=declare) for i in range(n_cores)]
+
+    if deq_lock:
+        deq = circular_queue_lock_scan if scan else circular_queue_lock
+        deq_infos = [deq(init=[size, 0, storages[i], f], declare=declare) for i in range(n_cores)]
+    else:
+        deq = circular_queue_scan if scan else circular_queue
+        deq_infos = [deq(init=[size, 0, storages[i]], declare=declare) for i in range(n_cores)]
+
+    class EnqueueCollection(State):
+        cores = Field(Array(Pointer(enq), n_cores))
+        def init(self, cores=[0]): self.cores = cores
+
+    EnqueueCollection.__name__ = prefix + EnqueueCollection.__name__
+
+    class DequeueCollection(State):
+        cores = Field(Array(Pointer(deq), n_cores))
+        def init(self, cores=[0]): self.cores = cores
+
+    DequeueCollection.__name__ = prefix + DequeueCollection.__name__
+
     # TODO: init pthread_mutex_init(&lock, NULL)
-    enq_all = QueueCollection(init=[enq_infos])
-    deq_all = QueueCollection(init=[deq_infos])
 
-    return enq_all, deq_all, Storage, QueueCollection
+    enq_all = EnqueueCollection(init=[enq_infos])
+    deq_all = DequeueCollection(init=[deq_infos])
 
-def queue_variable_size(name, size, n_cores, blocking=False, atomic=False):
+    return enq_all, deq_all, enq, deq, Storage
+
+
+def queue_variable_size(name, size, n_cores, blocking=False, enq_atomic=False, deq_atomic=False, scan=False):
     """
     :param name: queue name
     :param size: number of bytes
@@ -73,42 +114,39 @@ def queue_variable_size(name, size, n_cores, blocking=False, atomic=False):
     :param atomic:
     :return:
     """
-    prefix = "%s_" % name
 
-    enq_all, deq_all, Storage, QueueCollection = create_queue_states(name, Uint(8), size, n_cores, declare=False)
-    type = string_type(type)
-    type_star = type + "*"
+    enq_all, deq_all, EnqQueue, DeqQueue, Storage = \
+        create_queue_states(name, Uint(8), size, n_cores,
+                            declare=False, enq_lock=enq_atomic, deq_lock=deq_atomic, scan=scan)
 
     class EnqueueAlloc(Element):
-        this = Persistent(QueueCollection)
+        this = Persistent(enq_all.__class__)
+        def states(self): self.this = enq_all
 
         def configure(self):
             self.inp = Input(Size, Size)  # len, core
             self.out = Output('q_entry*')
 
         def impl(self):
-            noblock_noatom = "q_entry* entry = (q_entry*) enqueue_alloc(q, len);\n""
-
+            noblock_noatom = "q_entry* entry = (q_entry*) enqueue_alloc(q, len);\n"
             block_noatom = r'''
             q_entry* entry = NULL;
             do {
                 entry = (q_entry*) enqueue_alloc(q, len);
             } while(entry == NULL)
             '''
-
             noblock_atom = "pthread_mutex_lock(&q->lock);\n" + noblock_noatom + "pthread_mutex_unlock(&q->lock);\n"
-
             block_atom = "pthread_mutex_lock(&q->lock);\n" + block_noatom + "pthread_mutex_unlock(&q->lock);\n"
 
             if blocking:
-                src = block_atom if atomic else block_noatom
+                src = block_atom if enq_atomic else block_noatom
             else:
-                src = noblock_atom if atomic else noblock_noatom
+                src = noblock_atom if enq_atomic else noblock_noatom
 
             self.run_c(r'''
             (size_t len, size_t c) = inp();
             %s *q = this->cores[c];  // TODO
-            ''' % ('circular_queue_lock' if atomic else 'circular_queue')
+            ''' % EnqQueue.__name__
                        + src + r'''
             //if(entry == NULL) { printf("queue %d is full.\n", c); }
             //printf("ENQ' core=%ld, queue=%ld, entry=%ld\n", c, q->queue, entry);
@@ -125,9 +163,95 @@ def queue_variable_size(name, size, n_cores, blocking=False, atomic=False):
             enqueue_submit(eqe);
             ''')
 
+    class DequeueGet(Element):
+        this = Persistent(deq_all.__name__)
+        def states(self): self.this = deq_all
+
+        def configure(self):
+            self.inp = Input(Size)
+            self.out = Output('q_entry*')
+
+        def impl(self):
+            noblock_noatom = "q_entry* entry = dequeue_get(q);\n"
+            block_noatom = r'''
+                        q_entry* entry = NULL;
+                        do {
+                            entry = dequeue_get(q);
+                        } while(entry == NULL)
+                        '''
+            noblock_atom = "pthread_mutex_lock(&q->lock);\n" + noblock_noatom + "pthread_mutex_unlock(&q->lock);\n"
+            block_atom = "pthread_mutex_lock(&q->lock);\n" + block_noatom + "pthread_mutex_unlock(&q->lock);\n"
+
+            if blocking:
+                src = block_atom if deq_atomic else block_noatom
+            else:
+                src = noblock_atom if deq_atomic else noblock_noatom
+
+            self.run_c(r'''
+        (size_t c) = inp();
+        %s *q = this->cores[c];
+        ''' % DeqQueue.__name__
+                       + src + r'''
+        //if(c == 3) printf("DEQ core=%ld, queue=%p, entry=%ld\n", c, q->queue, x);
+        output { out(entry); }
+            ''')
+
+    class DequeueRelease(Element):
+        def configure(self):
+            self.inp = Input('q_entry*')
+
+        def impl(self):
+            self.run_c(r'''
+            (q_entry* eqe) = in();
+            dequeue_release(eqe);
+            ''')
+
+    class Scan(Element):
+        # For correctness, scan should be executed right before enqueue.
+        # Even then, something bad can happen if the queue is completely full, off = clean; the queue won't get cleaned.
+        this = Persistent(enq_all.__class__) if scan == 'enq' else Persistent(deq_all.__class__)
+
+        def states(self):
+            self.this = enq_all if scan == 'enq' else deq_all
+
+        def configure(self):
+            self.inp = Input(Size)
+            self.out = Output('q_entry*')
+
+        def impl(self):
+            self.run_c(r'''
+    (size_t c) = in_core();
+    %s *q = this->cores[c]; ''' % (EnqQueue.__name__ if scan == 'enq' else DeqQueue.__name__)
+                       + r'''
+    size_t off = q->offset;
+    size_t len = q->len;
+    size_t clean = q->clean;
+    void* base = q->queue;
+    //if(c==1 && cleaning.last != off) printf("SCAN: start, last = %ld, offset = %ld, clean = %ld\n", cleaning.last, off, clean);
+    q_entry *entry = NULL;
+    if (clean != off) {
+        entry = (q_entry *) ((uintptr_t) base + clean);
+        if ((entry->flags & FLAG_OWN) != 0) {
+            entry = NULL;
+        } else {
+            q->clean = (clean + entry->len) % len;
+        }
+    }
+    output { out(entry); }
+            ''')
+
+    prefix = name + "_"
+    EnqueueAlloc.__name__ = prefix + EnqueueAlloc.__name__
+    EnqueueSubmit.__name__ = prefix + EnqueueSubmit.__name__
+    DequeueGet.__name__ = prefix + DequeueGet.__name__
+    DequeueRelease.__name__ = prefix + DequeueRelease.__name__
+    Scan.__name__ = prefix + Scan.__name__
+
+    return EnqueueAlloc, EnqueueSubmit, DequeueGet, DequeueRelease, Scan
 
 
-def queue_custom_owner_bit(name, type, size, n_cores, owner, blocking=False, atomic=False):
+def queue_custom_owner_bit(name, type, size, n_cores, owner,
+                           blocking=False, enq_atomic=False, deq_atomic=False, scan=False):
     """
     :param name: queue name
     :param type: entry type
@@ -141,7 +265,10 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner, blocking=False, ato
     owner = get_field_name(type, owner)
     prefix = "%s_" % name
 
-    enq_all, deq_all, Storage, QueueCollection = create_queue_states(name, type, size, n_cores, declare=True)
+    enq_all, deq_all, EnqQueue, DeqQueue, Storage = \
+        create_queue_states(name, type, size, n_cores,
+                            declare=True, enq_lock=False, deq_lock=False, scan=scan)
+
     type = string_type(type)
     type_star = type + "*"
 
@@ -169,7 +296,7 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner, blocking=False, ato
     inc_offset = "p->offset = (p->offset + 1) %s %d;\n" % ('%', size)
 
     class Enqueue(Element):
-        this = Persistent(QueueCollection)
+        this = Persistent(enq_all.__class__)
 
         def states(self): self.this = enq_all
 
@@ -190,9 +317,9 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner, blocking=False, ato
             block_atom = atomic_src + wait_then_copy
 
             if blocking:
-                src = block_atom if atomic else block_noatom
+                src = block_atom if enq_atomic else block_noatom
             else:
-                if atomic:
+                if enq_atomic:
                     raise Exception("Unimplemented for non-blocking but atomic.")
                 else:
                     src = noblock_noatom
@@ -205,7 +332,7 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner, blocking=False, ato
                        + src)
 
     class Dequeue(Element):
-        this = Persistent(QueueCollection)
+        this = Persistent(deq_all.__class__)
 
         def states(self): self.this = deq_all
 
@@ -228,9 +355,9 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner, blocking=False, ato
             block_atom = atomic_src + wait_then_get
 
             if blocking:
-                src = block_atom if atomic else block_noatom
+                src = block_atom if deq_atomic else block_noatom
             else:
-                if atomic:
+                if deq_atomic:
                     raise Exception("Unimplemented for non-blocking but atomic.")
                 else:
                     src = noblock_noatom
@@ -256,11 +383,39 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner, blocking=False, ato
             if(x) x->%s = 0;
             ''' % (type_star, owner))
 
+    class Scan(Element):
+        this = Persistent(enq_all.__class__) if scan == 'enq' else Persistent(deq_all.__class__)
+
+        def states(self):
+            self.this = enq_all if scan == 'enq' else deq_all
+
+        def configure(self):
+            self.inp = Input(Size)
+            self.out = Output(type_star)
+
+        def impl(self):
+            self.run_c(r'''
+    (size_t c) = in_core();
+    circular_queue_scan *q = this->cores[c];
+    %s* p = q->queue;
+    %s* entry = NULL;
+    if (q->clean != q->offset) {
+        entry = &p->data[q->clean];
+        if ((entry->%s) != 0) {
+            entry = NULL;
+        } else {
+            q->clean = (q->clean + 1) %s q->len;
+        }
+    }
+    output { out(entry); }
+            ''' % (type_star, type_star, owner, '%'))
+
     Enqueue.__name__ = prefix + Enqueue.__name__
     Dequeue.__name__ = prefix + Dequeue.__name__
     Release.__name__ = prefix + Release.__name__
+    Scan.__name__ = prefix + Scan.__name__
 
-    return Enqueue, Dequeue, Release
+    return Enqueue, Dequeue, Release, Scan
 
 
 def queue_shared_head_tail(name, type, size, n_cores):

@@ -1,6 +1,7 @@
 from program import *
 from join_handling import annotate_join_info
 from smart_queue_compile import compile_smart_queues
+import types
 
 
 def init_value(val):
@@ -30,6 +31,8 @@ def init_pointer(state, inits, name):
                 for i in range(len(init)):
                     if init[i]:
                         src += "  {0}->{1}[{2}] = {3};\n".format(name, array, i, init_value(init[i]))
+        elif isinstance(init, types.LambdaType):
+            src += "  %s;\n" % init("{0}->{1}".format(name, field))
         elif init:
             src += "  {0}->{1} = {2};\n".format(name, field, init_value(init))
     return src
