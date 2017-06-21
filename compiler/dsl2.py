@@ -359,6 +359,72 @@ class InternalLoop(Composite):
     def impl(self):
         pass
 
+####################### Inject & Probe ######################
+def create_inject(name, type, size, func, interval=50):
+    prefix = name + '_'
+
+    class Data(State):
+        data = Field(Array(type, size))
+        p = Field(Int)
+
+        def init(self):
+            self.p = 0
+    Data.__name__ = prefix + Data.__name__
+    data = Data()
+
+    class Inject(Element):
+        this = Persistent(Data)
+
+        def configure(self, name):
+            self.out = Output(type)
+            self.this = data
+
+        def impl(self):
+            src = r'''
+                    if(this->p >= %d) { printf("Error: inject more than available entries.\n"); exit(-1); }
+                    int temp = this->p;
+                    this->p++;''' % size
+            src += "output { out(this->data[temp]); }"
+            self.run_c(src)
+
+    Inject.__name__ = prefix + Inject.__name__
+    scope_prepend(program.PopulateState(name, data.name, Data.__name__, type, size, func, interval))
+    return Inject
+
+
+def create_probe(name, type, size, func):
+    prefix = name + '_'
+
+    class Data(State):
+        data = Field(Array(type, size))
+        p = Field(Int)
+
+        def init(self):
+            self.p = 0
+
+    Data.__name__ = prefix + Data.__name__
+    data = Data()
+
+    class Probe(Element):
+        this = Persistent(Data)
+
+        def configure(self, name):
+            self.inp = Input(type)
+            self.out = Output(type)
+            self.this = data
+
+        def impl(self):
+            append = r'''
+                    if(this->p >= %d) { printf("Error: probe more than available entries.\n"); exit(-1); }
+                    this->data[this->p] = x;
+                    this->p++;''' % size
+            src = "(%s x) = inp(); %s output { out(x); }" % (type, append)
+            self.run_c(src)
+
+    Probe.__name__ = prefix + Probe.__name__
+    scope_prepend(program.CompareState(name, data.name, Data.__name__, type, size, func))
+    return Probe
+
 
 ####################### Thread ######################
 
