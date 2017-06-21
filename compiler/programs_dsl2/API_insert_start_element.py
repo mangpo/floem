@@ -1,4 +1,5 @@
 from library_dsl2 import *
+from compiler import Compiler
 
 class func(API):
     def configure(self):

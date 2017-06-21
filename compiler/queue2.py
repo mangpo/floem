@@ -7,23 +7,23 @@ class circular_queue(State):
     offset = Field(Size)
     queue = Field(Pointer(Void))
 
-    def init(self, len=0, offset=0, queue=0):
+    def init(self, len=0, queue=0):
         self.len = len
-        self.offset = offset
+        self.offset = 0
         self.queue = queue
-
 
 class circular_queue_lock(State):
     len = Field(Size)
     offset = Field(Size)
     queue = Field(Pointer(Void))
     lock = Field('pthread_mutex_t')
+    layout = [len, offset, queue, lock]
 
-    def init(self, len=0, offset=0, queue=0, lock=None):
+    def init(self, len=0, queue=0):
         self.len = len
-        self.offset = offset
+        self.offset = 0
         self.queue = queue
-        self.lock = lock
+        self.lock = lambda (x): 'pthread_mutex_init(&%s, NULL)' % x
 
 class circular_queue_scan(State):
     len = Field(Size)
@@ -31,11 +31,11 @@ class circular_queue_scan(State):
     queue = Field(Pointer(Void))
     clean = Field(Size)
 
-    def init(self, len=0, offset=0, queue=0, clean=0):
+    def init(self, len=0, queue=0):
         self.len = len
-        self.offset = offset
+        self.offset = 0
         self.queue = queue
-        self.clean = clean
+        self.clean = 0
 
 class circular_queue_lock_scan(State):
     len = Field(Size)
@@ -44,11 +44,12 @@ class circular_queue_lock_scan(State):
     lock = Field('pthread_mutex_t')
     clean = Field(Size)
 
-    def init(self, len=0, offset=0, queue=0, lock=None, clean=0):
+    def init(self, len=0, queue=0):
         self.len = len
-        self.offset = offset
+        self.offset = 0
         self.queue = queue
-        self.clean = clean
+        self.lock = lambda (x): 'pthread_mutex_init(&%s, NULL)' % x
+        self.clean = 0
 
 
 def get_field_name(state, field):
@@ -71,20 +72,18 @@ def create_queue_states(name, type, size, n_cores, declare=True, enq_lock=False,
 
     storages = [Storage() for i in range(n_cores)]
 
-    f = lambda (lock): 'pthread_mutex_init(&%s, NULL)' % lock
     if enq_lock:
         enq = circular_queue_lock_scan if scan else circular_queue_lock
-        enq_infos = [enq(init=[size, 0, storages[i], f], declare=declare) for i in range(n_cores)]
     else:
         enq = circular_queue_scan if scan else circular_queue
-        enq_infos = [enq(init=[size, 0, storages[i]], declare=declare) for i in range(n_cores)]
 
     if deq_lock:
         deq = circular_queue_lock_scan if scan else circular_queue_lock
-        deq_infos = [deq(init=[size, 0, storages[i], f], declare=declare) for i in range(n_cores)]
     else:
         deq = circular_queue_scan if scan else circular_queue
-        deq_infos = [deq(init=[size, 0, storages[i]], declare=declare) for i in range(n_cores)]
+
+    enq_infos = [enq(init=[size, storages[i]], declare=declare) for i in range(n_cores)]
+    deq_infos = [deq(init=[size, storages[i]], declare=declare) for i in range(n_cores)]
 
     class EnqueueCollection(State):
         cores = Field(Array(Pointer(enq), n_cores))

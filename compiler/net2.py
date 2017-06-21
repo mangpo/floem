@@ -18,6 +18,7 @@ def from_net_fixed_size_instance(name, type, max_channels, max_inbuf, port):
             self.active = 0
             self.nchannels = 0
             self.rest = [0 for i in range(max_channels)]
+            self.lock = lambda (x): "init_lock(&%s)" % x
 
     Stream.__name__ = prefix + Stream.__name__
     type = string_type(type)

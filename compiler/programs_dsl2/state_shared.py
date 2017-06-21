@@ -1,4 +1,5 @@
 from dsl2 import *
+from compiler import Compiler
 
 class A(State):
     count = Field(Int)

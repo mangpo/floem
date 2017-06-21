@@ -1,5 +1,6 @@
 from dsl2 import *
 import net2
+from compiler import Compiler
 
 class Item(State):
     x = Field(Int)

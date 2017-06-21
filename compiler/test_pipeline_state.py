@@ -1,4 +1,4 @@
-from compiler import *
+from codegen import *
 from dsl import *
 from pipeline_state import find_all_fields, analyze_pipeline_states
 import unittest

@@ -1,208 +1,7 @@
 from graph import State
-
-
-class InstancePart:
-    """
-    This class represents a subset of input ports of an element instance (part of instance).
-    """
-    def __init__(self, instance, ports, total):
-        self.instance = instance
-        self.ports = ports  # set
-        self.total = total  # number of input ports
-
-    def __eq__(self, other):
-        return self.__class__ == other.__class__ and self.instance == other.instance and self.ports == other.ports
-
-    def __str__(self):
-        return self.instance + ":" + str(self.ports)
-
-    def union(self, other):
-        if self.instance == other.instance:
-            ports = self.ports.union(other.ports)
-            if len(ports) == self.total:
-                return self.instance
-            else:
-                return InstancePart(self.instance, ports, self.total)
-        else:
-            return False
-
-    def intersection(self, other):
-        if self.instance == other.instance:
-            ports = self.ports.intersection(other.ports)
-            if len(ports) > 0:
-                return InstancePart(self.instance, ports, self.total)
-        return False
-
-
-class FlowCollection:
-    """
-    This class represents a piece of data required to fire a join node.
-    self.collection is a list of lists of InstancePart.
-    A list of InstancePart represents a piece of data to the join node
-    (an incomplete join nodes along a reversed path the join node -- we ignore complete join nodes).
-    For example, [InstancePart(A, set(0), 2), InstancePart(B, set(1), 2)]
-    represents a data from input port 1 of B to input port 0 of A.
-    All instances in InstancePart are join nodes.
-    FlowCollection with all data is a list of one entry [A].
-    """
-
-    def __init__(self, instance, total, port=None, is_port=True, goal=False):
-        if port is None:
-            self.collection = []
-        else:
-            if is_port:
-                self.collection = [[InstancePart(instance, set([port]), total)]]
-            else:
-                self.collection = port
-        self.target = instance
-        self.total = total
-        self.goal = goal  # True indicate if this FlowCollection ever reach the target instance whether complete or not
-
-    def __str__(self):
-        s = "["
-        for x in self.collection:
-            if isinstance(x, str):
-                s += x
-            else:
-                s += "[" + ", ".join([str(p) for p in x]) + "]"
-            s += ", "
-        s += "]"
-        return s
-
-    def __eq__(self, other):
-        return (self.__class__ == other.__class__ and self.collection == other.collection and
-                self.total == other.total and self.target == other.target)
-
-    def clone(self):
-        collection = []
-        for l in self.collection:
-            if isinstance(l, str):
-                collection.append(l)
-            else:
-                collection.append(l[:])
-        return FlowCollection(self.target, self.total, collection, False, self.goal)
-
-    def add(self, y):
-        """
-        Add a piece of data.
-        :param y: a piece of data, either a list of InstancePart, or a name of instance (all data)
-        :return: void
-        """
-        if isinstance(y, str):
-            # y is a name of instance, it represent all data. There can't be other data.
-            if len(self.collection) == 0:
-                self.collection.append(y)
-                return
-            else:
-                raise Exception("The join instance '%s' is fired more than once in one run."
-                                % self.target)
-
-        new_flow = False
-        for x in self.collection:
-            if x == y:
-                raise Exception("Port %s of the join instance '%s' is fired more than once in one run."
-                                % (x, self.target))
-            else:
-                prefix_x = x[:-1]
-                prefix_y = y[:-1]
-                if prefix_x == prefix_y:
-                    # When everything else is the same except the last InstancePart,
-                    # try to merge them into a bigger piece of data.
-                    intersect = x[-1].intersection(y[-1])
-                    if intersect:
-                        raise Exception("Port %s of the join instance '%s' is fired more than once in one run."
-                                        % (x, self.target))
-                    temp = x[-1].union(y[-1])
-                    if temp:
-                        if isinstance(temp, str):  # The last part is complete. Remove it from the list.
-                            if len(prefix_x) == 0:
-                                # If the prefix is empty, then the data is complete
-                                # (which represents with the name of the join instance).
-                                new_flow = self.target
-                            else:
-                                new_flow = prefix_x
-                        else:
-                            new_flow = prefix_x + [temp]
-                        self.collection.remove(x)
-                        break
-        if new_flow:
-            self.add(new_flow)
-        else:
-            self.collection.append(y)
-
-    def union(self, other):
-        """
-        Union data collections
-        :param other: FlowCollection
-        :return: FlowCollection, the result of the union
-        """
-        new_o = self.clone()
-        for x in other.collection:
-            new_o.add(x)
-        new_o.goal = self.goal or other.goal
-        return new_o
-
-    def intersection(self, other):
-        """
-        Intersect data collections
-        :param other: FlowCollection
-        :return: FlowCollection, the result of the intersection
-        """
-        collection = []
-        for lx in self.collection:
-            for ly in other.collection:
-                if lx == ly:
-                    collection.append(lx)
-                elif lx[:-1] == ly[:-1]:
-                    temp = lx[-1].intersection(ly[-1])
-                    if temp:
-                        collection.append(lx[:-1] + [temp])
-        return FlowCollection(self.target, self.total, collection, is_port=False, goal=(self.goal or other.goal))
-
-    def append(self, x):
-        """
-        Append InstancePart to the end of all pieces of data in the collection.
-        :param x: InstancePart
-        :return: void
-        """
-        for l in self.collection:
-            l.append(x)
-
-    def full(self):
-        return self.collection == [self.target]
-
-    def empty(self):
-        return len(self.collection) == 0
-
-    def happens_before(self, other):
-        """
-        Check if this FlowCollection should be ordered before the other one.
-        :param other: other FlowCollection
-        :return: True if it should be ordered before.
-        """
-        my_max_port = -1
-        for l in self.collection:
-            if isinstance(l[0], InstancePart):
-                temp = max(l[0].ports)
-                if temp > my_max_port:
-                    my_max_port = temp
-
-        other_max_port = -1
-        for l in other.collection:
-            if isinstance(l[0], InstancePart):
-                temp = max(l[0].ports)
-                if temp > other_max_port:
-                    other_max_port = temp
-
-        # self should be ordered before other, if the other contains the last call to the target.
-        if (other_max_port == self.total - 1) and (my_max_port >= 0):
-            return my_max_port < other_max_port
-
-        # self should be ordered before other, if self is involved in calling the target but already complete,
-        # and other is involved in calling the target but not yet complete.
-        # see test_join_both_both_order in test_join_handling.py
-        return (other_max_port >= 0) and self.goal and (my_max_port == -1)
-
+from thread_allocation import ThreadAllocator
+from process_handling import annotate_process_info
+from api_handling import *
 
 def wrap_port(cover, instance, target, num_ports, port_name):
     """
@@ -461,6 +260,43 @@ def annotate_join_info(g, detail):
             order_function_calls(instance)
 
 
+def check_pipeline_state_liveness(g):
+    for instance in g.instances.values():
+        if len(instance.input2ele) == 0 and instance.liveness:
+            assert len(instance.liveness) == 0, \
+                ("Fields %s of a pipeline state should not be live at the beginning at element instance '%s'." %
+                 (instance.liveness, instance.name))
+
+
 def clean_minimal_join_info(g):
     for instance in g.instances.values():
         instance.join_ports_same_thread = None
+
+
+def join_and_resource_annotation_pass(graph, resource, remove_unused):
+    if resource:
+        # Insert necessary elements for resource mapping.
+        # Assign call_instance for each thread.
+        # Check that one thread has one starting element.
+        # Impose control dependence order.
+        t = ThreadAllocator(graph)
+        t.transform()
+    else:
+        graph.clear_APIs()
+
+    if remove_unused:
+        graph.remove_unused_elements(resource)
+
+    # Annotate detailed join information
+    annotate_join_info(graph, True)
+
+    if resource:
+        # Annotate APIs information. APIs ony make sense with resource mapping.
+        annotate_api_info(graph)
+
+    annotate_process_info(graph)
+
+    if remove_unused:
+        graph.remove_unused_states()
+
+    check_pipeline_state_liveness(graph)

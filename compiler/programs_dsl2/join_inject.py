@@ -1,4 +1,5 @@
 from library_dsl2 import *
+from compiler import Compiler
 
 Inject1 = create_inject("inject1", "int", 10, "gen_func")
 Inject2 = create_inject("inject2", "int", 10, "gen_func")

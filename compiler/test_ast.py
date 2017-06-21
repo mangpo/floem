@@ -1,7 +1,7 @@
 import unittest
 from standard_elements import *
-from compiler import *
-from desugaring import desugar
+from codegen import *
+from desugaring import desugar_spec_impl
 
 
 class TestAST(unittest.TestCase):
@@ -277,7 +277,7 @@ class TestAST(unittest.TestCase):
             ResourceMap("func", "filter"),
         )
         try:
-            g = generate_graph(desugar(p))
+            g = generate_graph(desugar_spec_impl(p))
         except Exception as e:
             self.assertNotEqual(e.message.find("doesn't always return, and the default return value is not provided."), -1)
         else:
@@ -291,7 +291,7 @@ class TestAST(unittest.TestCase):
             APIFunction("func", ["int"], "int", "-1"),
             ResourceMap("func", "filter"),
         )
-        g = generate_graph(desugar(p), True, False)
+        g = generate_graph(desugar_spec_impl(p), True, False)
 
 
 if __name__ == '__main__':

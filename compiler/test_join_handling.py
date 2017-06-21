@@ -1,5 +1,5 @@
 from standard_elements import *
-from compiler import *
+from codegen import *
 from join_handling import InstancePart, FlowCollection
 import unittest
 

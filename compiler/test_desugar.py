@@ -1,5 +1,5 @@
-from desugaring import desugar
-from compiler import *
+from desugaring import desugar_spec_impl
+from codegen import *
 from standard_elements import *
 import unittest
 
@@ -27,7 +27,7 @@ class TestDesugar(unittest.TestCase):
             ResourceMap("identity[i]", "f[i]"),
             ResourceMap("identity[i]", "g[i]"),
         )
-        p = desugar(p)
+        p = desugar_spec_impl(p)
         g = generate_graph(p, True, False)
         self.assertEqual(8, len(g.instances))
         roots = self.find_roots(g)
@@ -48,7 +48,7 @@ class TestDesugar(unittest.TestCase):
             InternalTrigger("t[4]"),
             ResourceMap("t[i]", "d[i]"),
         )
-        p = desugar(p)
+        p = desugar_spec_impl(p)
         g = generate_graph(p, True, False)
         self.assertEqual(16, len(g.instances))
         roots = self.find_roots(g)
@@ -73,17 +73,17 @@ class TestDesugar(unittest.TestCase):
                 ResourceMap("get", "g"),
             ])
         )
-        dp = desugar(p, "spec")
+        dp = desugar_spec_impl(p, "spec")
         g = generate_graph(dp, True, False)
         self.assertEqual(2, len(g.instances))
         self.assertEqual(set(['f']), self.find_roots(g))
 
-        dp = desugar(p, "impl")
+        dp = desugar_spec_impl(p, "impl")
         g = generate_graph(dp, True, False)
         self.assertEqual(4, len(g.instances))
         self.assertEqual(set(['f', 'g_buffer_read']), self.find_roots(g))
 
-        dp = desugar(p, "compare")
+        dp = desugar_spec_impl(p, "compare")
         g = generate_graph(dp, True, False)
         self.assertEqual(6, len(g.instances))
         self.assertEqual(set(['_spec_f', '_impl_f', '_impl_g_buffer_read']), self.find_roots(g))
@@ -108,7 +108,7 @@ class TestDesugar(unittest.TestCase):
             StateInstance("One", "one[4]"),
             StateInstance("Multi", "all", [AddressOf("one[4]")])
         )
-        dp = desugar(p)
+        dp = desugar_spec_impl(p)
         g = generate_graph(dp, False)
         all = g.state_instances["all"]
         expect = [[AddressOf("one" + str(i)) for i in range(4)]]
@@ -121,7 +121,7 @@ class TestDesugar(unittest.TestCase):
             StateInstance("One", "one[4]"),
             StateInstance("Multi", "all[4]", [AddressOf("one[4]")])
         )
-        dp = desugar(p)
+        dp = desugar_spec_impl(p)
         g = generate_graph(dp, False)
         all = g.state_instances["all0"]
         self.assertEqual([AddressOf("one0")], all.init)

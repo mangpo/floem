@@ -1,6 +1,6 @@
 from program import *
 from collection import InstancesCollection
-import compiler
+import codegen
 import desugaring
 import inspect
 
@@ -278,7 +278,7 @@ def create_element(ele_name, inports, outports, code, state_params=[], special=N
             assert isinstance(inst_name, str), \
                 "Name of element instance should be string. '%s' is given." % str(inst_name)
         inst_name = get_node_name(inst_name)
-        instance = compiler.ElementInstance(ele_name, inst_name, args)
+        instance = codegen.ElementInstance(ele_name, inst_name, args)
         scope[-1].append(instance)
         inst_collection[-1].add(inst_name)
 
@@ -348,10 +348,10 @@ def extract_roots(my_scope, inputs, outputs):
     froms = set()
     tos = set()
     for e in my_scope:
-        if isinstance(e, compiler.Connect):
+        if isinstance(e, codegen.Connect):
             froms.add(e.ele1)
             tos.add(e.ele2)
-        elif isinstance(e, compiler.ElementInstance):
+        elif isinstance(e, codegen.ElementInstance):
             froms.add(e.name)
 
     for input in inputs:
@@ -1040,22 +1040,22 @@ class Compiler:
     def generate_graph(self, filename="tmp"):
         assert len(scope) == 1, "Compile error: there are multiple scopes remained."
         p1 = Program(*scope[0])
-        p2 = desugaring.desugar(p1, self.desugar_mode)
+        p2 = desugaring.desugar_spec_impl(p1, self.desugar_mode)
         dp = desugaring.insert_fork(p2)
-        g = compiler.generate_graph(dp, self.resource, self.remove_unused, filename)
+        g = codegen.generate_graph(dp, self.resource, self.remove_unused, filename)
         return g
 
     def generate_code(self):
-        compiler.generate_code(self.generate_graph(), ".c", self.testing, self.include)
+        codegen.generate_code(self.generate_graph(), ".c", self.testing, self.include)
 
     def generate_code_and_run(self, expect=None):
-        compiler.generate_code_and_run(self.generate_graph(), self.testing, self.desugar_mode, expect, self.include, self.depend)
+        codegen.generate_code_and_run(self.generate_graph(), self.testing, self.desugar_mode, expect, self.include, self.depend)
 
     def generate_code_and_compile(self):
-        compiler.generate_code_and_compile(self.generate_graph(), self.testing, self.desugar_mode, self.include, self.depend)
+        codegen.generate_code_and_compile(self.generate_graph(), self.testing, self.desugar_mode, self.include, self.depend)
 
     def generate_code_as_header(self, header='tmp'):
-        compiler.generate_code_as_header(self.generate_graph(header), self.testing, self.desugar_mode, self.include)
+        codegen.generate_code_as_header(self.generate_graph(header), self.testing, self.desugar_mode, self.include)
 
     def compile_and_run(self, name):
-        compiler.compile_and_run(name, self.depend)
+        codegen.compile_and_run(name, self.depend)

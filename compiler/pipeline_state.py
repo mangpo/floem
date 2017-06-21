@@ -1,41 +1,7 @@
 from program import *
-from join_handling import annotate_join_info
+from join_handling import annotate_join_info, clean_minimal_join_info
 from smart_queue_compile import compile_smart_queues
-import types
-
-
-def init_value(val):
-    if isinstance(val, AddressOf):
-        return '&' + val.of
-    elif val is True:
-        return "true"
-    elif val is False:
-        return "false"
-    else:
-        return val
-
-
-def init_pointer(state, inits, name):
-    if inits is None:
-        return ""
-    src = ""
-    for i in range(len(state.fields)):
-        field = state.fields[i]
-        init = inits[i]
-        if isinstance(init, list):
-            if init == [0]:
-                pass  # Default is all zeros
-            else:
-                m = re.match('([a-zA-Z0-9_]+)\[[0-9]+\]', field)
-                array = m.group(1)
-                for i in range(len(init)):
-                    if init[i]:
-                        src += "  {0}->{1}[{2}] = {3};\n".format(name, array, i, init_value(init[i]))
-        elif isinstance(init, types.LambdaType):
-            src += "  %s;\n" % init("{0}->{1}".format(name, field))
-        elif init:
-            src += "  {0}->{1} = {2};\n".format(name, field, init_value(init))
-    return src
+import codegen
 
 
 def allocate_pipeline_state(g, element, state):
@@ -43,7 +9,7 @@ def allocate_pipeline_state(g, element, state):
     state_obj = g.states[state]
     add = "  {0} *_state = ({0} *) malloc(sizeof({0}));\n".format(state)
     add += "  _state->refcount = 1;\n"
-    init = init_pointer(state_obj, state_obj.init, '_state')
+    init = codegen.init_pointer(state_obj, state_obj.init, '_state')
 
     element.code = add + init + element.code
     element.cleanup = "  pipeline_unref((pipeline_state*) _state);\n"
@@ -529,14 +495,6 @@ def analyze_fields_liveness(g):
             live, uses = analyze_fields_liveness_instance(g, instance.name, None)
 
 
-def check_pipeline_state_liveness(g):
-    for instance in g.instances.values():
-        if len(instance.input2ele) == 0 and instance.liveness:
-            assert len(instance.liveness) == 0, \
-                ("Fields %s of a pipeline state should not be live at the beginning at element instance '%s'." %
-                 (instance.liveness, instance.name))
-
-
 def join_collect_killset(g, inst_name, target, inst2kill, scope):
     if inst_name == target:
         return set()
@@ -637,3 +595,8 @@ def compile_pipeline_states(g, pktstate):
     if graphviz:
         print "-------------------- insert pipeline state ----------------------"
         g.print_graphviz()
+
+
+def pipeline_state_pass(g, pktstate=None):
+    compile_pipeline_states(g, pktstate)
+    clean_minimal_join_info(g)

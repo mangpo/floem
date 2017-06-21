@@ -118,7 +118,7 @@ def insert_fork_program(x):
 
 
 
-def desugar(x, mode="impl"):
+def desugar_spec_impl(x, mode="impl"):
     """
     :param x: program AST
     :param mode: "spec", "impl", "compare"
@@ -175,6 +175,12 @@ def need_desugar(x):
     elif isinstance(x, StateInstance):
         index = x.name.find("[")
         return index >= 0
+
+
+def desugar(p1, mode="impl"):
+    p2 = desugar_spec_impl(p1, mode)
+    p3 = insert_fork(p2)
+    return p3
 
 
 class Desugar:

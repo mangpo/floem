@@ -1,4 +1,5 @@
 from library_dsl2 import *
+from compiler import Compiler
 
 class add2(API):
     def configure(self):

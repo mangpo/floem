@@ -1,5 +1,6 @@
 import queue2
 from dsl2 import*
+from compiler import Compiler
 
 n_cores = 4
 

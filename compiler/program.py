@@ -433,3 +433,10 @@ class GraphGenerator:
         """
         t = ThreadAllocator(self.graph)
         t.transform()
+
+
+def program_to_graph_pass(program, default_process="tmp"):
+    # Generate data-flow graph.
+    gen = GraphGenerator(default_process)
+    gen.interpret(program)
+    return gen.graph

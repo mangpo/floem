@@ -1,5 +1,6 @@
 from dsl2 import *
 import queue2
+from compiler import Compiler
 
 n_cores = 2
 
@@ -21,7 +22,8 @@ class Display(Element):
         output switch { case t: out(t); }
         ''')
 
-Enq, Deq, Release = queue2.queue_custom_owner_bit('queue', Tuple, 4, n_cores, Tuple.task, blocking=False, atomic=False)
+Enq, Deq, Release, Scan = queue2.queue_custom_owner_bit('queue', Tuple, 4, n_cores, Tuple.task,
+                                                  blocking=False, enq_atomic=False)
 
 
 class RxWrite(API):

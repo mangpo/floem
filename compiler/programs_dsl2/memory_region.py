@@ -1,4 +1,5 @@
 from dsl2 import *
+from compiler import Compiler
 
 MemoryRegion("region", 10)
 

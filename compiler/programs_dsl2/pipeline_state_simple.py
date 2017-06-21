@@ -1,5 +1,5 @@
-from dsl2 import *
 from library_dsl2 import *
+from compiler import Compiler
 
 
 class MyState(State):
