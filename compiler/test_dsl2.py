@@ -45,6 +45,8 @@ class TestDSL2(unittest.TestCase):
                  "pipeline_state_simple.py",
                  "queue_owner_bit.py",
                  "queue_variable_size.py",
+                 "join_inject.py",
+                 "join_inject2.py",
                  ]
         for test in tests:
             status = os.system("cd programs_dsl2; python " + test + "; cd ..")

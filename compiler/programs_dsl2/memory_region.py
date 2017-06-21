@@ -1,14 +1,16 @@
-from dsl import *
+from dsl2 import *
 
-create_memory_region("region", 10)
+MemoryRegion("region", 10)
 
-Test = create_element("Test", [], [], r'''
+class Test(Element):
+    def impl(self):
+        self.run_c(r'''
 int* p = (int*) region;
 *p = 99;
 printf("%d\n", *p);
-''')
+        ''')
 
-test = Test("test")
+Test('test')
 
 c = Compiler()
 c.resource = False

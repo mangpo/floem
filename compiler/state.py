@@ -34,6 +34,15 @@ def string_type(x):
         return x.__name__
 
 
+####################### Memory Region ########################
+
+class MemoryRegion(object):
+    def __init__(self, name, size):
+        self.name = name
+        self.size = size
+
+        scope_append(program.MemoryRegion(name, size))
+
 ####################### State ########################
 
 def define_state(x):

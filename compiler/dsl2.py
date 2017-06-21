@@ -375,7 +375,7 @@ def create_inject(name, type, size, func, interval=50):
     class Inject(Element):
         this = Persistent(Data)
 
-        def configure(self, name):
+        def configure(self):
             self.out = Output(type)
             self.this = data
 
