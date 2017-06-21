@@ -1,5 +1,6 @@
 from dsl2 import *
 
+Qentry = 'q_entry'
 
 class circular_queue(State):
     len = Field(Size)
@@ -164,7 +165,7 @@ def queue_variable_size(name, size, n_cores, blocking=False, enq_atomic=False, d
             ''')
 
     class DequeueGet(Element):
-        this = Persistent(deq_all.__name__)
+        this = Persistent(deq_all.__class__)
         def states(self): self.this = deq_all
 
         def configure(self):
@@ -202,7 +203,7 @@ def queue_variable_size(name, size, n_cores, blocking=False, enq_atomic=False, d
 
         def impl(self):
             self.run_c(r'''
-            (q_entry* eqe) = in();
+            (q_entry* eqe) = inp();
             dequeue_release(eqe);
             ''')
 

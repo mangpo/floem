@@ -44,6 +44,7 @@ class TestDSL2(unittest.TestCase):
                  "API_insert_start_element.py",
                  "pipeline_state_simple.py",
                  "queue_owner_bit.py",
+                 "queue_variable_size.py",
                  ]
         for test in tests:
             status = os.system("cd programs_dsl2; python " + test + "; cd ..")

@@ -72,8 +72,15 @@ class PerPacket(object):
 class State(object):
     id = 0
     defined = set()
+    layout = None
 
     def __init__(self, name=None, init=[], declare=True, instance=True):
+        if name is None:
+            name = self.__class__.__name__ + str(self.__class__.id)
+            self.__class__.id += 1
+        self.name = name
+
+        self.compute_layout()
         self.init(*init)
         content, fields, init_code, mapping = self.get_content()
 
@@ -85,16 +92,28 @@ class State(object):
             scope_append(graph.State(self.__class__.__name__, content, class_init, declare, fields, mapping))
             State.defined.add(self.__class__.__name__)
 
-        if name is None:
-            name = self.__class__.__name__ + str(self.__class__.id)
-            self.__class__.id += 1
-        self.name = name
-
         if instance:
             scope_append(program.StateInstance(self.__class__.__name__, name, init_code))
 
     def init(self, *init):
         pass
+
+    def compute_layout(self):
+        layout = []
+        if self.layout:
+            for key in self.__class__.__dict__:
+                o = self.__getattribute__(key)
+                if isinstance(o, Field):
+                    assert o in self.layout, "Layout of state '%s' does not contain field '%s'." % (self.name, key)
+
+            for f in self.layout:
+                for key in self.__class__.__dict__:
+                    o = self.__getattribute__(key)
+                    if f == o:
+                        layout.append(key)
+                        break
+
+        self.layout = layout
 
     def __setattr__(self, key, value):
         if key in self.__class__.__dict__:
@@ -117,41 +136,49 @@ class State(object):
         fields = []
         init = []
         mapping = {}
-        for s in self.__class__.__dict__:
+        if self.layout:
+            layout = self.layout
+        else:
+            layout = []
+            for s in self.__class__.__dict__:
+                o = object.__getattribute__(self, s)
+                if isinstance(o, Field):
+                    layout.append(s)
+
+        for s in layout:
             o = object.__getattribute__(self, s)
-            if isinstance(o, Field):
-                init.append(self.sanitize_init(o.value))
+            init.append(self.sanitize_init(o.value))
 
-                if isinstance(o.type, str):
-                    type = o.type
-                    mytype = type
-                    field = s
-                elif isinstance(o.type, Array):
-                    mytype = o.type.type
-                    type = mytype + '*'
-                    if o.type.size is None:
-                        size = '[]'
-                    elif isinstance(o.type.size, int):
-                        size = '[%d]' % o.type.size
-                    elif isinstance(o.type.size, list):
-                        size = ''
-                        for v in o.type.size:
-                            size += '[%d]' % v
-                    field = "%s%s" % (s, size)
+            if isinstance(o.type, str):
+                type = o.type
+                mytype = type
+                field = s
+            elif isinstance(o.type, Array):
+                mytype = o.type.type
+                type = mytype + '*'
+                if o.type.size is None:
+                    size = '[]'
+                elif isinstance(o.type.size, int):
+                    size = '[%d]' % o.type.size
+                elif isinstance(o.type.size, list):
+                    size = ''
+                    for v in o.type.size:
+                        size += '[%d]' % v
+                field = "%s%s" % (s, size)
 
-                content += "%s %s;\n" % (mytype, field)
-                fields.append(field)
+            content += "%s %s;\n" % (mytype, field)
+            fields.append(field)
 
-                special = None
-                special_val = None
-                if o.copysize:
-                    special = 'copysize'
-                    special_val = o.copysize
-                elif o.shared:
-                    special = 'shared'
-                    special_val = o.shared
+            special = None
+            special_val = None
+            if o.copysize:
+                special = 'copysize'
+                special_val = o.copysize
+            elif o.shared:
+                special = 'shared'
+                special_val = o.shared
 
-                mapping[s] = [type, None, special, special_val]
+            mapping[s] = [type, None, special, special_val]
         return content, fields, init, mapping
 
 

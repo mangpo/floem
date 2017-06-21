@@ -411,10 +411,8 @@ def create_circular_queue_variablesize_one2many(name, size, n_cores):
     Dummy = create_state(one_name + "_dummy", "uint8_t queue[%d];" % size)
     circular = create_state("circular_queue", "size_t len; size_t offset; void* queue;", None, False)
     dummies = [Dummy(one_name + "_dummy" + str(i)) for i in range(n_cores)]
-    enq_ones = [circular(one_instance_name + str(i), [size, 0, dummies[i]])
-            for i in range(n_cores)]
-    deq_ones = [circular(one_deq_instance_name + str(i), [size, 0, dummies[i]])
-            for i in range(n_cores)]
+    enq_ones = [circular(one_instance_name + str(i), [size, 0, dummies[i]]) for i in range(n_cores)]
+    deq_ones = [circular(one_deq_instance_name + str(i), [size, 0, dummies[i]]) for i in range(n_cores)]
 
     All = create_state(all_name, "circular_queue* cores[%d];" % n_cores)
     enq_all = All(all_instance_name, [[enq_ones[i] for i in range(n_cores)]])
