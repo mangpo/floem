@@ -431,8 +431,7 @@ def allocate_state(name, state_instance, ext):
             print src
 
 
-def init_state(name, state_instance, master, ext):
-    state = state_instance.state
+def init_state(name, state_instance, state, master, ext):
     src = ""
     if state_instance.init or state.init:
         if state_instance.init:
@@ -543,7 +542,7 @@ def generate_state_instances(graph, ext):
             map_shared_state(name, inst, ext)
         else:
             allocate_state(name, inst, ext)
-        init_state(name, inst, graph.master_process, ext)
+        init_state(name, inst, graph.states[inst.state.name], graph.master_process, ext)
 
     src = "}\n"
     for process in graph.processes:
@@ -1036,15 +1035,15 @@ def generate_code_and_compile(graph, testing, mode, include=None, depend=None):
     if depend:
         for f in depend:
             extra += '%s.o ' % f
-            cmd = 'gcc -O3 -msse4.1 -I %s -c %s.c -lrt' % (common.dpdk_include, f)
-            #cmd = 'gcc -O3 -msse4.1 -I %s -c %s.c' % (common.dpdk_include, f)
+            #cmd = 'gcc -O3 -msse4.1 -I %s -c %s.c -lrt' % (common.dpdk_include, f)
+            cmd = 'gcc -O3 -msse4.1 -I %s -c %s.c' % (common.dpdk_include, f)
             status = os.system(cmd)
             if not status == 0:
                 raise Exception("Compile error: " + cmd)
 
     for process in graph.processes:
-        cmd = 'gcc -O3 -msse4.1 -I %s -pthread %s.c %s -o %s -lrt' % (common.dpdk_include, process, extra, process)
-        #cmd = 'gcc -O3 -msse4.1 -I %s -pthread %s.c %s -o %s' % (common.dpdk_include, process, extra, process)
+        #cmd = 'gcc -O3 -msse4.1 -I %s -pthread %s.c %s -o %s -lrt' % (common.dpdk_include, process, extra, process)
+        cmd = 'gcc -O3 -msse4.1 -I %s -pthread %s.c %s -o %s' % (common.dpdk_include, process, extra, process)
         status = os.system(cmd)
         if not status == 0:
             raise Exception("Compile error: " + cmd)

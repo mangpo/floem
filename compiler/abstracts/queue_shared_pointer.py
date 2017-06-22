@@ -7,7 +7,7 @@ state = create_state("mystate", "int core; int index; int *p @shared(data_region
 save = create_element_instance("save", [Port("in", ["int"])], [Port("out", [])],
                                r'''state.index = in(); state.p = data_region; state.core = 0; output { out(); }''')
 
-enq, deq = queue_smart.smart_circular_queue_variablesize_one2many_instances("queue", 256, 4, 1)
+enq, deq, scan = queue_smart.smart_circular_queue_variablesize_one2many_instances("queue", 256, 4, 1)
 
 display = create_element_instance("display", [Port("in", [])], [],
                                r'''printf("%d\n", state.p[state.index]); fflush(stdout);''')

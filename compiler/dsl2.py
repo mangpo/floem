@@ -1,6 +1,13 @@
 from state import *
 from workspace import *
 
+def reset():
+    Element.defined = set()
+    State.defined = set()
+    State.id = 0
+    Connectable.id = 0
+    workspace_reset()
+
 ###################### Port #######################
 
 class Port(object):

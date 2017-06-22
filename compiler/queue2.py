@@ -207,7 +207,7 @@ def queue_variable_size(name, size, n_cores, blocking=False, enq_atomic=False, d
             dequeue_release(eqe);
             ''')
 
-    class Scan(Element):
+    class ScanClean(Element):
         # For correctness, scan should be executed right before enqueue.
         # Even then, something bad can happen if the queue is completely full, off = clean; the queue won't get cleaned.
         this = Persistent(enq_all.__class__) if scan == 'enq' else Persistent(deq_all.__class__)
@@ -217,11 +217,11 @@ def queue_variable_size(name, size, n_cores, blocking=False, enq_atomic=False, d
 
         def configure(self):
             self.inp = Input(Size)
-            self.out = Output('q_entry*')
+            self.out = Output('q_entry*', Size) if core else Output('q_entry*')
 
         def impl(self):
             self.run_c(r'''
-    (size_t c) = in_core();
+    (size_t c) = inp();
     %s *q = this->cores[c]; ''' % (EnqQueue.__name__ if scan == 'enq' else DeqQueue.__name__)
                        + r'''
     size_t off = q->offset;
@@ -237,18 +237,16 @@ def queue_variable_size(name, size, n_cores, blocking=False, enq_atomic=False, d
         } else {
             q->clean = (clean + entry->len) % len;
         }
-    }
-    output { out(entry); }
-            ''')
+    }''' + r'''output { out(%s); }''' % ('entry, c' if core else 'entry'))
 
     prefix = name + "_"
     EnqueueAlloc.__name__ = prefix + EnqueueAlloc.__name__
     EnqueueSubmit.__name__ = prefix + EnqueueSubmit.__name__
     DequeueGet.__name__ = prefix + DequeueGet.__name__
     DequeueRelease.__name__ = prefix + DequeueRelease.__name__
-    Scan.__name__ = prefix + Scan.__name__
+    ScanClean.__name__ = prefix + ScanClean.__name__
 
-    return EnqueueAlloc, EnqueueSubmit, DequeueGet, DequeueRelease, Scan if scan else None
+    return EnqueueAlloc, EnqueueSubmit, DequeueGet, DequeueRelease, ScanClean if scan else None
 
 
 def queue_custom_owner_bit(name, type, size, n_cores, owner,

@@ -8,7 +8,7 @@ stack = []
 inst_collection = [InstancesCollection()]
 
 
-def reset():
+def workspace_reset():
     global scope, stack, inst_collection
     scope = [[]]
     stack = []

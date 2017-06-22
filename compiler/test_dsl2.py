@@ -38,6 +38,9 @@ class NopPipe(Composite):
 
 
 class TestDSL2(unittest.TestCase):
+    def setUp(self):
+        reset()
+
     def test_run(self):
         tests = ["API_increment1.py",
                  "API_increment2.py",
@@ -47,14 +50,13 @@ class TestDSL2(unittest.TestCase):
                  "queue_variable_size.py",
                  "join_inject.py",
                  "join_inject2.py",
+                 "smart_queue_entry.py",
                  ]
         for test in tests:
             status = os.system("cd programs_dsl2; python " + test + "; cd ..")
             self.assertEqual(status, 0, "Error at " + test)
 
     def test_connection(self):
-        reset()
-
         a = Nop(name="a")
         b = Nop(name="b")
         c = Nop(name="c")

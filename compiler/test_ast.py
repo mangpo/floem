@@ -1,7 +1,7 @@
 import unittest
 from standard_elements import *
 from codegen import *
-from desugaring import desugar_spec_impl
+from join_handling import join_and_resource_annotation_pass
 
 
 class TestAST(unittest.TestCase):
@@ -45,7 +45,7 @@ class TestAST(unittest.TestCase):
     def test_undefined_element(self):
         p = Program(ElementInstance("Node", "x"))
         try:
-            g = generate_graph(p)
+            g = program_to_graph_pass(p)
         except Exception as e:
             self.assertNotEqual(e.message.find("Element 'Node' is undefined."), -1, 'Expect undefined exception.')
         else:
@@ -58,7 +58,7 @@ class TestAST(unittest.TestCase):
             ElementInstance("Forward", "y"),
             Connect("x","y", "out..."))
         try:
-            g = generate_graph(p)
+            g = program_to_graph_pass(p)
         except Exception as e:
             self.assertNotEqual(e.message.find("Port 'out...' is undefined for element 'x'."), -1,
                                 'Expect port undefined exception.')
@@ -78,8 +78,9 @@ class TestAST(unittest.TestCase):
             ResourceMap("consumer", "Comsumer"),
         )
 
-        g1 = generate_graph(p, False, False)
-        g2 = generate_graph(p, True, False)
+        g1 = program_to_graph_pass(p)
+        g2 = program_to_graph_pass(p)
+        join_and_resource_annotation_pass(g2, True, False)
 
         self.assertEqual(2, len(g1.instances))
         self.assertEqual(4, len(g2.instances))
@@ -103,7 +104,8 @@ class TestAST(unittest.TestCase):
             ElementInstance("Sum", "sum1", ["s"]),
             ElementInstance("Sum", "sum2", ["s"])
         )
-        g = generate_graph(p, False, False)
+        g = program_to_graph_pass(p)
+        join_and_resource_annotation_pass(g, True, False)
         self.assertEqual(2, len(g.instances))
         roots = self.find_roots(g)
         self.assertEqual(set(['sum1', 'sum2']), roots)
@@ -118,7 +120,7 @@ class TestAST(unittest.TestCase):
             Connect("f1", "f3"),
             Connect("f2", "f3"),
         )
-        g = generate_graph(p, False, False)
+        g = program_to_graph_pass(p)
         self.assertEqual(3, len(g.instances))
         roots = self.find_roots(g)
         self.assertEqual(set(['f1', 'f2']), roots)
@@ -140,7 +142,8 @@ class TestAST(unittest.TestCase):
             ResourceMap("t2", "f2"),
         )
         try:
-            g = generate_graph(p, True, False)
+            g = program_to_graph_pass(p)
+            join_and_resource_annotation_pass(g, True, False)
         except Exception as e:
             self.assertNotEqual(e.message.find("Resource 't2' has more than one starting element instance."),
                                 -1, 'Expect undefined exception.')
@@ -157,7 +160,8 @@ class TestAST(unittest.TestCase):
             ResourceMap("t", "f1"),
         )
         try:
-            g = generate_graph(p, True, False)
+            g = program_to_graph_pass(p)
+            join_and_resource_annotation_pass(g, True, False)
         except Exception as e:
             self.assertNotEqual(e.message.find("Element instance 'f1' cannot be mapped to both 'api' and 't'."), -1)
         else:
@@ -174,7 +178,8 @@ class TestAST(unittest.TestCase):
             ResourceMap("add_and_print", "inc1"),
             ResourceMap("add_and_print", "print"),
         )
-        g = generate_graph(p, True, False)
+        g = program_to_graph_pass(p)
+        join_and_resource_annotation_pass(g, True, False)
         self.assertEqual(2, len(g.instances))
         self.assertEqual(0, len(g.states))
         roots = self.find_roots(g)
@@ -192,7 +197,8 @@ class TestAST(unittest.TestCase):
             APIFunction("read", [], "int"),
             ResourceMap("read", "f2"),
         )
-        g = generate_graph(p, True, False)
+        g = program_to_graph_pass(p)
+        join_and_resource_annotation_pass(g, True, False)
         self.assertEqual(4, len(g.instances))
         self.assertEqual(1, len(g.states))
         roots = self.find_roots(g)
@@ -215,7 +221,8 @@ class TestAST(unittest.TestCase):
             ResourceMap("func", "f2"),
         )
         try:
-            g = generate_graph(p, True, False)
+            g = program_to_graph_pass(p)
+            join_and_resource_annotation_pass(g, True, False)
         except Exception as e:
             self.assertNotEqual(e.message.find("API 'func' should have no return value"), -1)
         else:
@@ -230,7 +237,8 @@ class TestAST(unittest.TestCase):
             APIFunction("func", ["int"], None),
             ResourceMap("func", "f1"),
         )
-        g = generate_graph(p, True, False)
+        g = program_to_graph_pass(p)
+        join_and_resource_annotation_pass(g, True, False)
         self.assertEqual(4, len(g.instances))
         self.assertEqual(1, len(g.states))
         roots = self.find_roots(g)
@@ -256,7 +264,8 @@ class TestAST(unittest.TestCase):
             ResourceMap("t", "fwd"),
             ResourceMap("t", "drop"),
         )
-        g = generate_graph(p, True, False)
+        g = program_to_graph_pass(p)
+        join_and_resource_annotation_pass(g, True, False)
         self.assertEqual(5, len(g.instances))
         self.assertEqual(1, len(g.states))
         roots = self.find_roots(g)
@@ -277,7 +286,8 @@ class TestAST(unittest.TestCase):
             ResourceMap("func", "filter"),
         )
         try:
-            g = generate_graph(desugar_spec_impl(p))
+            g = program_to_graph_pass(p)
+            join_and_resource_annotation_pass(g, True, False)
         except Exception as e:
             self.assertNotEqual(e.message.find("doesn't always return, and the default return value is not provided."), -1)
         else:
@@ -291,7 +301,8 @@ class TestAST(unittest.TestCase):
             APIFunction("func", ["int"], "int", "-1"),
             ResourceMap("func", "filter"),
         )
-        g = generate_graph(desugar_spec_impl(p), True, False)
+        g = program_to_graph_pass(p)
+        join_and_resource_annotation_pass(g, True, False)
 
 
 if __name__ == '__main__':

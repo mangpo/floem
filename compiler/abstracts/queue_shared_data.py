@@ -11,7 +11,7 @@ save = create_element_instance("save", [Port("in", ["int", "uint8_t"])], [Port("
         state.key[i] = data;
     output { out(); }''')
 
-enq, deq = queue_smart.smart_circular_queue_variablesize_one2many_instances("queue", 256, 4, 1)
+enq, deq, scan = queue_smart.smart_circular_queue_variablesize_one2many_instances("queue", 256, 4, 1)
 
 display = create_element_instance("display", [Port("in", [])], [],
                                r'''printf("%d %d %d\n", state.keylen, state.key[0], state.key[state.keylen-1]); fflush(stdout);''')

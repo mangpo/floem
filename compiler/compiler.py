@@ -24,7 +24,7 @@ class Compiler:
 
     def generate_graph_from_scope(self, myscope, filename, pktstate=None):
         p = program.Program(*myscope)
-        dp = desugaring.desugar(p)
+        dp = desugaring.desugar(p, self.desugar_mode)
 
         g = program.program_to_graph_pass(dp, default_process=filename)
         pipeline_state.pipeline_state_pass(g, pktstate)
@@ -43,7 +43,7 @@ class Compiler:
 
         scope = workspace.get_last_scope()
         if len(scope) > 0:
-            g = self.generate_graph_from_scope(workspace.get_last_scope(), filename)
+            g = self.generate_graph_from_scope(scope, filename)
             if all:
                 all.merge(g)
             else:

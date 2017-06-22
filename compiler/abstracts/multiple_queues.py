@@ -30,8 +30,8 @@ display = create_element_instance("display",
                     [Port("in", [])],
                     [],
                     r'''printf("%d\n", state.c);''')
-enq1, deq1 = queue_smart.smart_circular_queue_variablesize_one2many_instances("queue1", 256, 2, 2)
-enq2, deq2 = queue_smart.smart_circular_queue_variablesize_one2many_instances("queue2", 256, 2, 1)
+enq1, deq1, scan1 = queue_smart.smart_circular_queue_variablesize_one2many_instances("queue1", 256, 2, 2)
+enq2, deq2, scan2 = queue_smart.smart_circular_queue_variablesize_one2many_instances("queue2", 256, 2, 1)
 
 state = create_state("mystate", "int core; int a; int b; int c;")
 

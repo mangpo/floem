@@ -16,7 +16,7 @@ classify = create_element_instance("classify",
 a0 = create_element_instance("a0", [Port("in", [])], [Port("out", [])], r'''state.a0 = state.a + 100; output { out(); }''')
 b0 = create_element_instance("b0", [Port("in", [])], [Port("out", [])], r'''state.b0 = state.a * 2; output { out(); }''')
 
-enq, deq, scan = queue_smart.smart_circular_queue_variablesize_many2one_instances("queue", 100, 4, 2, clean="enq")
+enq, deq, scan = queue_smart.smart_circular_queue_variablesize_one2many_instances("queue", 100, 4, 2, clean="enq")
 
 a1 = create_element_instance("a1", [Port("in", [])], [], r'''printf("a1 %d\n", state.a0);''')
 b1 = create_element_instance("b1", [Port("in", [])], [], r'''printf("b1 %d\n", state.b0);''')
@@ -34,8 +34,8 @@ def run1(x):
     enq(a0_out, b0_out)
 
 @API("run2")
-def run2():
-    a1_in, b1_in = deq()
+def run2(core):
+    a1_in, b1_in = deq(core)
     a1(a1_in)
     b1(b1_in)
 

@@ -3,6 +3,8 @@ from collection import InstancesCollection
 import codegen
 import desugaring
 import inspect
+import join_handling
+from pipeline_state import *
 
 
 # Global variables for constructing a program.
@@ -1039,10 +1041,12 @@ class Compiler:
 
     def generate_graph(self, filename="tmp"):
         assert len(scope) == 1, "Compile error: there are multiple scopes remained."
-        p1 = Program(*scope[0])
-        p2 = desugaring.desugar_spec_impl(p1, self.desugar_mode)
-        dp = desugaring.insert_fork(p2)
-        g = codegen.generate_graph(dp, self.resource, self.remove_unused, filename)
+        p = Program(*scope[0])
+        dp = desugaring.desugar(p, self.desugar_mode)
+
+        g = program_to_graph_pass(dp, default_process=filename)
+        pipeline_state_pass(g)
+        join_handling.join_and_resource_annotation_pass(g, self.resource, self.remove_unused)
         return g
 
     def generate_code(self):

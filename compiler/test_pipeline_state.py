@@ -2,11 +2,15 @@ from codegen import *
 from dsl import *
 from pipeline_state import find_all_fields, analyze_pipeline_states
 import unittest
-import queue_ast
+import queue_smart2
 import queue_smart
+import dsl2
 
 
 class TestPipelineState(unittest.TestCase):
+    def setUp(self):
+        dsl2.reset()
+
     def check_live_all(self, g, live_list):
         visit = []
         for name, live in live_list:
@@ -60,9 +64,8 @@ class TestPipelineState(unittest.TestCase):
             PipelineState("e1", "mystate"),
         )
 
-        gen = program_to_graph_pass(p)
-        pipeline_state_pass(gen)
-        g = gen.graph
+        g = program_to_graph_pass(p)
+        pipeline_state_pass(g)
 
         self.check_live_all(g, [("e1", ["b"]), ("e2", ["a", "b"])])
         self.check_uses_all(g, [("e1", ["a", "b"]), ("e2", ["a", "b"])])
@@ -83,9 +86,8 @@ class TestPipelineState(unittest.TestCase):
             PipelineState("e0", "mystate"),
         )
 
-        gen = program_to_graph_pass(p)
-        pipeline_state_pass(gen)
-        g = gen.graph
+        g = program_to_graph_pass(p)
+        pipeline_state_pass(g)
 
         self.check_live_all(g, [("e1", ["a"]), ("e2", ["a", "b"])])
         self.check_uses_all(g, [("e0", ["a", "b"]), ("e1", ["a", "b"]), ("e2", ["a", "b"])])
@@ -111,9 +113,8 @@ class TestPipelineState(unittest.TestCase):
             PipelineState("fork1", "mystate"),
         )
 
-        gen = program_to_graph_pass(p)
-        pipeline_state_pass(gen)
-        g = gen.graph
+        g = program_to_graph_pass(p)
+        pipeline_state_pass(g)
 
         self.check_live_all(g, [("fork1", ["a"]), ("fork2", ["a"]), ("join", ["a"]), ("use", ["a"]), ("def", [])])
         self.check_uses_all(g, [("fork1", ["a"]), ("fork2", ["a"]), ("join", ["a"]), ("use", ["a"]), ("def", ["a"])])
@@ -140,9 +141,8 @@ class TestPipelineState(unittest.TestCase):
             PipelineState("choice", "mystate"),
         )
 
-        gen = program_to_graph_pass(p)
-        pipeline_state_pass(gen)
-        g = gen.graph
+        g = program_to_graph_pass(p)
+        pipeline_state_pass(g)
 
         self.check_live_all(g, [("choice", ["a"]), ("nop1", ["a"]), ("nop2", ["a"]), ("use", ["a"]), ("def", [])])
         self.check_uses_all(g, [("choice", ["a"]), ("nop1", ["a"]), ("nop2", ["a"]), ("use", ["a"]), ("def", ["a"])])
@@ -169,9 +169,8 @@ class TestPipelineState(unittest.TestCase):
             PipelineState("fork", "mystate"),
         )
 
-        gen = program_to_graph_pass(p)
-        pipeline_state_pass(gen)
-        g = gen.graph
+        g = program_to_graph_pass(p)
+        pipeline_state_pass(g)
 
         self.check_live_all(g, [("fork", []), ("defA", []), ("defB", []), ("join", ["a", "b"]), ("use", ["a", "b"])])
         self.check_uses_all(g, [("fork", ["a", "b"]), ("defA", ["a", "b"]), ("defB", ["a", "b"]), ("join", ["a", "b"]), ("use", ["a", "b"])])
@@ -211,9 +210,8 @@ class TestPipelineState(unittest.TestCase):
             PipelineState("a", "mystate"),
         )
 
-        gen = program_to_graph_pass(p)
-        pipeline_state_pass(gen)
-        g = gen.graph
+        g = program_to_graph_pass(p)
+        pipeline_state_pass(g)
 
         self.check_live_all(g, [("a", ["b"]),
                                 ("b1", []), ("b2", ["b"]),
@@ -263,9 +261,8 @@ class TestPipelineState(unittest.TestCase):
             PipelineState("a", "mystate"),
         )
 
-        gen = program_to_graph_pass(p)
-        pipeline_state_pass(gen)
-        g = gen.graph
+        g = program_to_graph_pass(p)
+        pipeline_state_pass(g)
 
         self.check_live_all(g, [("a", ["b", "c"]),
                                 ("b1", ["c"]), ("b2", ["b", "c"]),
@@ -278,8 +275,8 @@ class TestPipelineState(unittest.TestCase):
 
     def test_smart_queue(self):
         n_cases = 2
-        queue = queue_ast.QueueVariableSizeOne2Many("smart_queue", 10, 4, 2)
-        Enq_ele = Element("smart_enq_ele", [Port("in" + str(i), []) for i in range(n_cases)], [Port("out", [])],
+        queue = queue_smart2.Queue("smart_queue", 10, 4, 2)
+        Enq_ele = Element("smart_enq_ele", [Port("inp" + str(i), []) for i in range(n_cases)], [Port("out", [])],
                           "output { out(); }")
         Deq_ele = Element("smart_deq_ele", [Port("in_core", ["int"]), Port("in", [])],
                           [Port("out" + str(i), []) for i in range(n_cases)], "output { out0(); out1(); }")
@@ -314,8 +311,8 @@ class TestPipelineState(unittest.TestCase):
             Connect("save", "classify"),
             Connect("classify", "a0", "out0"),
             Connect("classify", "b0", "out1"),
-            Connect("a0", "smart_enq", "out", "in0"),
-            Connect("b0", "smart_enq", "out", "in1"),
+            Connect("a0", "smart_enq", "out", "inp0"),
+            Connect("b0", "smart_enq", "out", "inp1"),
             Connect("smart_enq", "smart_deq", "out", "in"),
             Connect("smart_deq", "a1", "out0"),
             Connect("smart_deq", "b1", "out1"),
@@ -331,9 +328,8 @@ class TestPipelineState(unittest.TestCase):
             ResourceMap("tout", "b1"),
         )
 
-        gen = program_to_graph_pass(p)
-        analyze_pipeline_states(gen.graph)
-        g = gen.graph
+        g = program_to_graph_pass(p)
+        analyze_pipeline_states(g)
 
         self.check_live_all(g, [("save", []),
                                 ("classify", ["a"]),
@@ -352,8 +348,8 @@ class TestPipelineState(unittest.TestCase):
 
     def test_smart_queue2(self):
         n_cases = 2
-        queue = queue_ast.QueueVariableSizeOne2Many("smart_queue", 10, 4, 2)
-        Enq_ele = Element("smart_enq_ele", [Port("in" + str(i), []) for i in range(n_cases)], [Port("out", [])],
+        queue = queue_smart2.Queue("smart_queue", 10, 4, 2)
+        Enq_ele = Element("smart_enq_ele", [Port("inp" + str(i), []) for i in range(n_cases)], [Port("out", [])],
                           "output { out(); }")
         Deq_ele = Element("smart_deq_ele", [Port("in_core", ["int"]), Port("in", [])],
                           [Port("out" + str(i), []) for i in range(n_cases)], "output { out0(); out1(); }")
@@ -394,8 +390,8 @@ class TestPipelineState(unittest.TestCase):
             Connect("save", "classify"),
             Connect("classify", "a0", "out0"),
             Connect("classify", "b0", "out1"),
-            Connect("a0", "smart_enq", "out", "in0"),
-            Connect("b0", "smart_enq", "out", "in1"),
+            Connect("a0", "smart_enq", "out", "inp0"),
+            Connect("b0", "smart_enq", "out", "inp1"),
             Connect("smart_enq", "smart_deq", "out", "in"),
             #Connect("smart_deq", "a1", "out0"),
             Connect("smart_deq", "fork", "out0"),
@@ -420,9 +416,8 @@ class TestPipelineState(unittest.TestCase):
             ResourceMap("tout", "b1"),
         )
 
-        gen = program_to_graph_pass(p)
-        analyze_pipeline_states(gen.graph)
-        g = gen.graph
+        g = program_to_graph_pass(p)
+        analyze_pipeline_states(g)
 
         self.check_live_all(g, [("save", []),
                                 ("classify", ["a"]),
@@ -459,17 +454,16 @@ class TestPipelineState(unittest.TestCase):
             ElementInstance("Save", "save"),
             PipelineState("save", "mystate"))
 
-        gen = program_to_graph_pass(p)
-        analyze_pipeline_states(gen.graph)
-        g = gen.graph
+        g = program_to_graph_pass(p)
+        analyze_pipeline_states(g)
 
         self.check_live_all(g, [("save", [])])
         self.check_uses_all(g, [("save", ['keylen', 'key'])])
 
     def test_queue_release(self):
         n_cases = 1
-        queue = queue_ast.QueueVariableSizeOne2Many("smart_queue", 10, 4, n_cases)
-        Enq_ele = Element("smart_enq_ele", [Port("in" + str(i), []) for i in range(n_cases)], [Port("out", [])],
+        queue = queue_smart2.Queue("smart_queue", 10, 4, n_cases)
+        Enq_ele = Element("smart_enq_ele", [Port("inp" + str(i), []) for i in range(n_cases)], [Port("out", [])],
                           "output { out(); }")
         Deq_ele = Element("smart_deq_ele", [Port("in_core", ["int"]), Port("in", [])],
                           [Port("out" + str(i), []) for i in range(n_cases)], "output { out0(); out1(); }")
@@ -518,14 +512,13 @@ class TestPipelineState(unittest.TestCase):
             ResourceMap("tout", "p3"),
         )
 
-        gen = program_to_graph_pass(p)
-        gen.graph.states['mystate'].mapping = {'a': ('int', None, None, None)}
-        pipeline_state_pass(gen)
-        g = gen.graph
+        g = program_to_graph_pass(p)
+        g.states['mystate'].mapping = {'a': ('int', None, None, None)}
+        pipeline_state_pass(g)
 
         #g.print_graphviz()
         deq_release = g.instances["smart_deq_release"]
-        prevs = set([name for name, port in deq_release.input2ele["in"]])
+        prevs = set([name for name, port in deq_release.input2ele["inp"]])
         self.assertEqual(prevs, set(["smart_deq_classify_inst", "myfork_merge2"]))
 
         merges = set()
@@ -538,8 +531,8 @@ class TestPipelineState(unittest.TestCase):
 
     def test_queue_release2(self):
         n_cases = 1
-        queue = queue_ast.QueueVariableSizeOne2Many("smart_queue", 10, 4, n_cases)
-        Enq_ele = Element("smart_enq_ele", [Port("in" + str(i), []) for i in range(n_cases)], [Port("out", [])],
+        queue = queue_smart2.Queue("smart_queue", 10, 4, n_cases)
+        Enq_ele = Element("smart_enq_ele", [Port("inp" + str(i), []) for i in range(n_cases)], [Port("out", [])],
                           "output { out(); }")
         Deq_ele = Element("smart_deq_ele", [Port("in_core", ["int"]), Port("in", [])],
                           [Port("out" + str(i), []) for i in range(n_cases)], "output { out0(); out1(); }")
@@ -580,10 +573,10 @@ class TestPipelineState(unittest.TestCase):
             ResourceMap("tout", "p1"),
         )
 
-        gen = program_to_graph_pass(p)
-        gen.graph.states['mystate'].mapping = {'a': ('int', None, None, None)}
+        g = program_to_graph_pass(p)
+        g.states['mystate'].mapping = {'a': ('int', None, None, None)}
         try:
-            pipeline_state_pass(gen)
+            pipeline_state_pass(g)
         except Exception as e:
             self.assertNotEqual(e.message.find("Cannot insert dequeue release automatically"), -1)
         else:
@@ -616,7 +609,7 @@ class TestPipelineState(unittest.TestCase):
                                     [Port("in", [])],
                                     [],
                                     r'''state.core = 0;''')
-        enq1, deq1 = queue_smart.smart_circular_queue_variablesize_one2many_instances("queue1", 256, 1, 2)
+        enq1, deq1, scan = queue_smart.smart_circular_queue_variablesize_one2many_instances("queue1", 256, 1, 2)
 
         state = create_state("mystate", "int core; int a; int b; int c;")
 

@@ -366,8 +366,10 @@ class State:
         self.mapping = mapping
         if fields:
             self.fields = fields
-        else:
+        elif content:
             self.fields = self.extract_fields()
+        else:
+            self.fields = None
 
     def __str__(self):
         return self.name
@@ -455,7 +457,8 @@ class Graph:
     @staticmethod
     def merge_dict(this, other):
         for key in other:
-            this[key] = other[key]
+            if key not in this:
+                this[key] = other[key]
 
     @staticmethod
     def merge_list(this, other):

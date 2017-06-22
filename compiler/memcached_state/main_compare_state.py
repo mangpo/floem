@@ -360,7 +360,7 @@ def impl():
     create_memory_region("data_region", 4 * 1024 * 512)
 
     # Queue
-    rx_enq, rx_deq = queue_smart.smart_circular_queue_variablesize_one2many_instances(
+    rx_enq, rx_deq, rx_scan = queue_smart.smart_circular_queue_variablesize_one2many_instances(
         "rx_queue", 10000, n_cores, 3)
     tx_enq, tx_deq, tx_scan = queue_smart.smart_circular_queue_variablesize_many2one_instances(
         "tx_queue", 10000, n_cores, 3, clean="enq")

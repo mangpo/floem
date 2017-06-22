@@ -1,6 +1,6 @@
 from standard_elements import *
 from codegen import *
-from join_handling import InstancePart, FlowCollection
+from join_handling import *
 import unittest
 
 
@@ -176,7 +176,8 @@ class TestJoinHandling(unittest.TestCase):
             # , InternalThread("Sub")
         )
 
-        g = generate_graph(p, False)
+        g = program_to_graph_pass(p)
+        join_and_resource_annotation_pass(g, False, False)
         self.assertEqual(4, len(g.instances))
         roots = self.find_roots(g)
         self.assertEqual(set(["Fork"]), roots)
@@ -218,10 +219,12 @@ class TestJoinHandling(unittest.TestCase):
             ResourceMap("t", "Print"),
         )
 
-        g = generate_graph(p, False)
+        g = program_to_graph_pass(p)
+        join_and_resource_annotation_pass(g, False, False)
         self.assertEqual(4, len(g.instances))
 
-        g = generate_graph(p, True)
+        g = program_to_graph_pass(p)
+        join_and_resource_annotation_pass(g, True, False)
         self.assertEqual(7, len(g.instances))
         roots = self.find_roots(g)
         self.assertEqual(set(['Fork', 'Print_buffer_read']), roots)
@@ -256,10 +259,12 @@ class TestJoinHandling(unittest.TestCase):
             ResourceMap("t", "Sub"),
         )
 
-        g = generate_graph(p, False)
+        g = program_to_graph_pass(p)
+        join_and_resource_annotation_pass(g, False, False)
         self.assertEqual(4, len(g.instances))
 
-        g = generate_graph(p, True)
+        g = program_to_graph_pass(p)
+        join_and_resource_annotation_pass(g, True, False)
         self.assertEqual(8, len(g.instances))
         roots = self.find_roots(g)
         self.assertEqual(set(['Fork', 'Sub_buffer_read']), roots)
@@ -285,14 +290,16 @@ class TestJoinHandling(unittest.TestCase):
         )
 
         try:
-            g = generate_graph(p, False)
+            g = program_to_graph_pass(p)
+            join_and_resource_annotation_pass(g, False, False)
             generate_code(g)
         except Exception as e:
             self.assertNotEqual(e.message.find("There is no dominant element instance"), -1)
         else:
             self.fail('Exception is not raised.')
 
-        g = generate_graph(p, True)
+        g = program_to_graph_pass(p)
+        join_and_resource_annotation_pass(g, True, False)
         self.assertEqual(5, len(g.instances))
         roots = self.find_roots(g)
         self.assertEqual(set(["f1", "f2"]), roots)
@@ -306,7 +313,8 @@ class TestJoinHandling(unittest.TestCase):
             ElementInstance("Print", "Print")
         )
 
-        g = generate_graph(p, True)
+        g = program_to_graph_pass(p)
+        join_and_resource_annotation_pass(g, True, False)
         self.assertEqual(1, len(g.instances))
         roots = self.find_roots(g)
         self.assertEqual(set(["Print"]), roots)
@@ -330,7 +338,8 @@ class TestJoinHandling(unittest.TestCase):
             Connect("f2", "add2", "out", "in2")
         )
 
-        g = generate_graph(p, False)
+        g = program_to_graph_pass(p)
+        join_and_resource_annotation_pass(g, False, False)
         self.assertEqual(6, len(g.instances))
         roots = self.find_roots(g)
         self.assertEqual(set(["fork3"]), roots)
@@ -381,7 +390,8 @@ class TestJoinHandling(unittest.TestCase):
             Connect("f3", "add2", "out", "in2")
         )
 
-        g = generate_graph(p, False)
+        g = program_to_graph_pass(p)
+        join_and_resource_annotation_pass(g, False, False)
         self.assertEqual(7, len(g.instances))
         roots = self.find_roots(g)
         self.assertEqual(set(["fork1"]), roots)
@@ -428,7 +438,8 @@ class TestJoinHandling(unittest.TestCase):
             Connect("f3", "add1", "out", "in2")
         )
         try:
-            g = generate_graph(p, True)
+            g = program_to_graph_pass(p)
+            join_and_resource_annotation_pass(g, True, False)
         except Exception as e:
             self.assertNotEqual(e.message.find("Element instance 'fork2' fires port"), -1)
             self.assertNotEqual(e.message.find("of the join instance 'add1' more than once"), -1)
@@ -454,7 +465,8 @@ class TestJoinHandling(unittest.TestCase):
             Connect("c2", "d", "out", "in2"),
         )
 
-        g = generate_graph(p, False)
+        g = program_to_graph_pass(p)
+        join_and_resource_annotation_pass(g, False, False)
         self.assertEqual(6, len(g.instances))
         roots = self.find_roots(g)
         self.assertEqual(set(["a"]), roots)
@@ -490,7 +502,8 @@ class TestJoinHandling(unittest.TestCase):
             Connect("c2", "d", "out", "in2"),
         )
 
-        g = generate_graph(p, False)
+        g = program_to_graph_pass(p)
+        join_and_resource_annotation_pass(g, False, False)
         self.assertEqual(6, len(g.instances))
         roots = self.find_roots(g)
         self.assertEqual(set(["a"]), roots)
@@ -527,7 +540,8 @@ class TestJoinHandling(unittest.TestCase):
         )
 
         try:
-            g = generate_graph(p, False)
+            g = program_to_graph_pass(p)
+            join_and_resource_annotation_pass(g, False, False)
         except Exception as e:
             self.assertNotEqual(e.message.find("All its output ports must fire the same input ports of the join instance 'd'."),
                                 -1, 'Expect undefined exception.')
@@ -558,7 +572,8 @@ class TestJoinHandling(unittest.TestCase):
             Connect("a", "c2", "out4")
         )
 
-        g = generate_graph(p, False)
+        g = program_to_graph_pass(p)
+        join_and_resource_annotation_pass(g, False, False)
 
         self.check_join_ports_same_thread(g, [("d", ["in1", "in2"])])
         self.check_join_state_create(g, [("b1", ["d"]), ("b2", ["d"]),("a", ["d"])])
@@ -586,7 +601,8 @@ class TestJoinHandling(unittest.TestCase):
             Connect("fork2", "add2", "out2", "in2"),
         )
 
-        g = generate_graph(p, False)
+        g = program_to_graph_pass(p)
+        join_and_resource_annotation_pass(g, False, False)
 
         self.check_join_ports_same_thread(g, [("add1", ["in1", "in2"]), ("add2", ["in1", "in2"])])
         self.check_join_state_create(g, [("fork1", ["add1", "add2"])])
@@ -620,7 +636,8 @@ class TestJoinHandling(unittest.TestCase):
             Connect("fork3", "add3", "out1", "in3"),
         )
 
-        g = generate_graph(p, False)
+        g = program_to_graph_pass(p)
+        join_and_resource_annotation_pass(g, False, False)
 
         self.check_join_ports_same_thread(g, [("add2", ["in1", "in2"]), ("add3", ["in1", "in2", "in3"])])
         self.check_join_state_create(g, [("fork2", ["add3"]), ("fork3", ["add2"])])
@@ -654,7 +671,8 @@ class TestJoinHandling(unittest.TestCase):
             ResourceMap("t", "f3"),
         )
 
-        g = generate_graph(p, True)
+        g = program_to_graph_pass(p)
+        join_and_resource_annotation_pass(g, True, False)
         self.assertEqual(10, len(g.instances))
         roots = self.find_roots(g)
         self.assertEqual(set(['fork4', 'f3_buffer_read']), roots)
@@ -676,7 +694,8 @@ class TestJoinHandling(unittest.TestCase):
             Connect("add1", "add2", "out", "in1"),
         )
 
-        g = generate_graph(p, False)
+        g = program_to_graph_pass(p)
+        join_and_resource_annotation_pass(g, False, False)
         roots = self.find_roots(g)
         self.assertEqual(set(["fork"]), roots)
 
