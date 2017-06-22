@@ -15,6 +15,7 @@ def Uint(bits):
 
 
 def Pointer(x):
+    define_state(x)
     return string_type(x) + '*'
 
 
@@ -88,6 +89,7 @@ class State(object):
             name = self.__class__.__name__ + str(self.__class__.id)
             self.__class__.id += 1
         self.name = name
+        self.declare = declare
 
         self.compute_layout()
         self.init(*init)
@@ -98,7 +100,7 @@ class State(object):
                 class_init = None
             else:
                 class_init = init_code
-            scope_append(graph.State(self.__class__.__name__, content, class_init, declare, fields, mapping))
+            scope_append(graph.State(self.__class__.__name__, content, class_init, self.declare, fields, mapping))
             State.defined.add(self.__class__.__name__)
 
         if instance:

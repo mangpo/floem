@@ -12,7 +12,7 @@ def smart_circular_queue_variablesize_one2many(name, size, n_cores, n_cases):
     src = ""
     for i in range(n_cases):
         src += "out%d(); " % i
-    Smart_deq = dsl.create_element(prefix + "smart_deq_ele", [graph.Port("in_core", ["size_t"]), graph.Port("in", [])],
+    Smart_deq = dsl.create_element(prefix + "smart_deq_ele", [graph.Port("inp", ["size_t"]), graph.Port("in", [])],
                                    [graph.Port("out" + str(i), []) for i in range(n_cases)], "output { %s }" % src,
                                    special=queue)
 

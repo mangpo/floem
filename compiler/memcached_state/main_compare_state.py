@@ -85,6 +85,17 @@ output { out(); }
 
 ######################## responses ########################
 
+schedule_state = create_state("schedule_state", "size_t core;")
+my_schedule = schedule_state("my_schedule", [0])
+
+scheduler = create_element("scheduler", [], [Port("out", ["size_t"])],
+                                      r'''
+this->core = (this->core + 1) %s %s;
+output { out(this->core); }''' % ('%', n_cores)
+                                      , [("schedule_state", "this")])
+my_scheduler = scheduler('my_scheduler', [my_schedule])
+
+
 prepare_get_response = create_element_instance("prepare_get_response",
                           [Port("in", [])],
                           [Port("out", ["iokvs_message*"])],
@@ -362,7 +373,7 @@ def impl():
     # Queue
     rx_enq, rx_deq, rx_scan = queue_smart.smart_circular_queue_variablesize_one2many_instances(
         "rx_queue", 10000, n_cores, 3)
-    tx_enq, tx_deq, tx_scan = queue_smart.smart_circular_queue_variablesize_many2one_instances(
+    tx_enq, tx_deq, tx_scan = queue_smart.smart_circular_queue_variablesize_one2many_instances(
         "tx_queue", 10000, n_cores, 3, clean="enq")
 
     ######################## NIC Rx #######################
@@ -411,7 +422,8 @@ def impl():
 
     @internal_trigger("nic_tx", process="nic")
     def tx_pipeline():
-        cqe_get, cqe_set, cqe_logseg = tx_deq()  # TODO: else case
+        core = my_scheduler()
+        cqe_get, cqe_set, cqe_logseg = tx_deq(core)  # TODO: else case
         get_response = prepare_get_response(cqe_get)
         set_response = prepare_set_response(cqe_set)
         add_logseg(cqe_logseg)

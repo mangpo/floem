@@ -22,6 +22,9 @@ def get_last_scope():
     scope = [[]]
     return x
 
+def get_current_scope():
+    return scope[-1]
+
 
 def scope_append(x):
     scope[-1].append(x)

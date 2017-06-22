@@ -22,32 +22,26 @@ class Compiler:
         self.I = None
         self.pipelines = pipelines
 
-    def generate_graph_from_scope(self, myscope, filename, pktstate=None):
+    def generate_graph_from_scope(self, myscope, filename, pktstate=None, original=None):
         p = program.Program(*myscope)
         dp = desugaring.desugar(p, self.desugar_mode)
 
-        g = program.program_to_graph_pass(dp, default_process=filename)
+        g = program.program_to_graph_pass(dp, default_process=filename, original=original)
         pipeline_state.pipeline_state_pass(g, pktstate)
-        join_handling.join_and_resource_annotation_pass(g, self.resource, self.remove_unused)
+        #join_handling.join_and_resource_annotation_pass(g, self.resource, self.remove_unused)
         return g
 
     def generate_graph(self, filename="tmp"):
-        all = None
+        scope = workspace.get_last_scope()
+        all = self.generate_graph_from_scope(scope, filename)
+
         for pipeline in self.pipelines:
             p = pipeline()
-            g = self.generate_graph_from_scope(p.scope, filename, p.state)
-            if all:
-                all.merge(g)
-            else:
-                all = g
+            g = self.generate_graph_from_scope(p.scope, filename, p.state, all)
+            all.merge(g)
 
-        scope = workspace.get_last_scope()
-        if len(scope) > 0:
-            g = self.generate_graph_from_scope(scope, filename)
-            if all:
-                all.merge(g)
-            else:
-                all = g
+        join_handling.join_and_resource_annotation_pass(all, self.resource, self.remove_unused)
+
         return all
 
     def generate_code(self):

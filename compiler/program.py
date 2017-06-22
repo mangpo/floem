@@ -181,11 +181,16 @@ class PipelineState:
 
 
 class GraphGenerator:
-    def __init__(self, default_process):
-        self.graph = Graph(default_process)
+    def __init__(self, default_process, original=None):
+        self.graph = Graph(default_process, original)
         self.composites = {}
         self.elements = {}
         self.env = {}
+
+        if original:
+            for name in original.state_instances:
+                st_inst = original.state_instances[name]
+                self.put_state(name, st_inst.state, name)
 
     def check_composite_port(self, composite_name, port_name, port_value):
         if not len(port_value) == 2:
@@ -209,7 +214,10 @@ class GraphGenerator:
         self.env[used_name] = (type, real_name)
 
     def get_state_name(self, name):
-        return self.lookup(name)[1]
+        ret = self.lookup(name)
+        if ret is None:
+            print
+        return ret[1]
 
     def get_state_type(self, name):
         return self.lookup(name)[0]
@@ -435,8 +443,8 @@ class GraphGenerator:
         t.transform()
 
 
-def program_to_graph_pass(program, default_process="tmp"):
+def program_to_graph_pass(program, default_process="tmp", original=None):
     # Generate data-flow graph.
-    gen = GraphGenerator(default_process)
+    gen = GraphGenerator(default_process, original=original)
     gen.interpret(program)
     return gen.graph

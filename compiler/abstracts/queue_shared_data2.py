@@ -55,7 +55,8 @@ class main(Pipeline):
     def impl(self):
         main.push('push', process="queue_shared_data1")
         main.pop('pop', process="queue_shared_data2")
-        master_process("queue_shared_data1")
+
+master_process("queue_shared_data1")
 
 c = Compiler(main)
 c.include = r'''

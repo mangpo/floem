@@ -334,7 +334,10 @@ class ElementNode:
         print "}"
 
     def unused(self):
-        return len(self.element.inports) > 0 and len(self.input2ele) == 0
+        if len(self.element.inports) > 0:
+            return len(self.input2ele) == 0
+        else:
+            return len(self.element.outports) > 0 and len(self.output2ele) == 0
 
     def no_inport(self):
         return len(self.element.inports) == 0
@@ -399,18 +402,18 @@ class MemoryRegion:
 
 
 class Graph:
-    def __init__(self, default_process):  # , elements=[], states=[]
+    def __init__(self, default_process, original):
         self.elements = {}
         self.instances = {}
-        self.states = {}
-        self.state_instances = {}
+        if original:
+            self.states = copy.copy(original.states)
+            self.state_instances = copy.copy(original.state_instances)
+        else:
+            self.states = {}
+            self.state_instances = {}
         self.state_order = []
         self.state_instance_order = []
         self.memory_regions = []
-        # for e in elements:
-        #     self.elements[e.name] = e
-        # for s in states:
-        #     self.states[s.name] = s
 
         self.threads_internal = []
         self.threads_API = []
@@ -431,9 +434,9 @@ class Graph:
         self.pipeline_states = {}
 
     def merge(self, other):
-        assert other.default_process is None or self.default_process == other.default_process, \
+        assert other.default_process is 'tmp' or self.default_process == other.default_process, \
             "Graph merge failed -- mismatch default_process: %s vs %s." % (self.default_process, other.default_process)
-        assert other.master_process is None or self.master_process == other.master_process, \
+        assert other.master_process is 'tmp' or self.master_process == other.master_process, \
             "Graph merge failed -- mismatch master_process: %s vs %s." % (self.master_process, other.master_process)
         self.merge_dict(self.elements, other.elements)
         self.merge_dict(self.instances, other.instances)
@@ -732,6 +735,8 @@ class Graph:
         delete = []
         for name in self.instances:
             instance = self.instances[name]
+            if name == '_spec_my_scheduler':
+                print
             if instance.unused() and instance.name not in used:
                 # No connection
                 delete.append(name)

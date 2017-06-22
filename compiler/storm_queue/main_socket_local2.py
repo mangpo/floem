@@ -1,6 +1,7 @@
 import queue2
 import net2
 from dsl2 import *
+from compiler import Compiler
 
 test = "spout"
 inject_func = "random_" + test

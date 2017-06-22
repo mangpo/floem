@@ -443,6 +443,8 @@ def analyze_fields_liveness_instance(g, name, in_port):
             instance.uses[i] = ret_live.union(instance.element.uses)
 
         return instance.liveness[no], instance.uses[no]
+    elif q and q.deq == instance:
+        return set(), set()
 
     # Other elements
     if instance.uses:

@@ -234,6 +234,16 @@ class Element(Connectable):
         self.used_fields = fields
 
 
+class ElementOneInOut(Element):
+    def configure(self):
+        self.inp = Input()
+        self.out = Output()
+
+    @abstractmethod
+    def impl(self):
+        pass
+
+
 class Composite(Connectable):
 
     def __init__(self, name=None, states=[], configure=[]):
@@ -484,7 +494,6 @@ class APIThread(Thread):
 
 class InternalThread(Thread):
     def __init__(self, name):
-        name = get_node_name(name)
         trigger = program.InternalTrigger(name)
         scope_prepend(trigger)
         Thread.__init__(self, name)
