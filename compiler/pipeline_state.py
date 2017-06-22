@@ -424,7 +424,7 @@ def analyze_fields_liveness_instance(g, name, in_port):
     # Smart queue
     q = instance.element.special
     if q and q.enq == instance:
-        no = int(in_port[2:])
+        no = int(in_port[3:])
         if instance.liveness:
             return instance.liveness[no], instance.uses[no]
 
@@ -548,6 +548,9 @@ def analyze_pipeline_states(g):
 
 def insert_starting_point(g, pktstate):
     for instance in g.instances.values():
+        if instance.element.special:
+            continue
+
         candidate = False
         for port in instance.element.outports:
             if len(port.argtypes) == 0:

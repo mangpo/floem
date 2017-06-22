@@ -105,7 +105,7 @@ def create_queue_states(name, type, size, n_cores, declare=True, enq_lock=False,
     return enq_all, deq_all, enq, deq, Storage
 
 
-def queue_variable_size(name, size, n_cores, blocking=False, enq_atomic=False, deq_atomic=False, scan=False):
+def queue_variable_size(name, size, n_cores, blocking=False, enq_atomic=False, deq_atomic=False, scan=False, core=False):
     """
     :param name: queue name
     :param size: number of bytes
@@ -169,7 +169,7 @@ def queue_variable_size(name, size, n_cores, blocking=False, enq_atomic=False, d
 
         def configure(self):
             self.inp = Input(Size)
-            self.out = Output('q_entry*')
+            self.out = Output('q_entry*', Size) if core else Output('q_entry*')
 
         def impl(self):
             noblock_noatom = "q_entry* entry = dequeue_get(q);\n"
@@ -192,9 +192,10 @@ def queue_variable_size(name, size, n_cores, blocking=False, enq_atomic=False, d
         %s *q = this->cores[c];
         ''' % DeqQueue.__name__
                        + src + r'''
-        //if(c == 3) printf("DEQ core=%ld, queue=%p, entry=%ld\n", c, q->queue, x);
-        output { out(entry); }
-            ''')
+        //if(c == 3) printf("DEQ core=%ld, queue=%p, entry=%ld\n", c, q->queue, x); '''
+                       + r'''
+        output { out(%s); }
+            ''' % ('entry, c' if core else 'entry'))
 
     class DequeueRelease(Element):
         def configure(self):
@@ -247,7 +248,7 @@ def queue_variable_size(name, size, n_cores, blocking=False, enq_atomic=False, d
     DequeueRelease.__name__ = prefix + DequeueRelease.__name__
     Scan.__name__ = prefix + Scan.__name__
 
-    return EnqueueAlloc, EnqueueSubmit, DequeueGet, DequeueRelease, Scan
+    return EnqueueAlloc, EnqueueSubmit, DequeueGet, DequeueRelease, Scan if scan else None
 
 
 def queue_custom_owner_bit(name, type, size, n_cores, owner,
@@ -415,7 +416,7 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
     Release.__name__ = prefix + Release.__name__
     Scan.__name__ = prefix + Scan.__name__
 
-    return Enqueue, Dequeue, Release, Scan
+    return Enqueue, Dequeue, Release, Scan if scan else None
 
 
 def queue_shared_head_tail(name, type, size, n_cores):

@@ -429,9 +429,9 @@ class Graph:
         self.pipeline_states = {}
 
     def merge(self, other):
-        assert self.default_process == other.default_process, \
+        assert other.default_process is None or self.default_process == other.default_process, \
             "Graph merge failed -- mismatch default_process: %s vs %s." % (self.default_process, other.default_process)
-        assert self.master_process == other.master_process, \
+        assert other.master_process is None or self.master_process == other.master_process, \
             "Graph merge failed -- mismatch master_process: %s vs %s." % (self.master_process, other.master_process)
         self.merge_dict(self.elements, other.elements)
         self.merge_dict(self.instances, other.instances)

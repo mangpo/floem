@@ -1,10 +1,12 @@
-import queue_ast
+import queue2, workspace, desugaring
 from program import *
 from pipeline_state_join import get_node_before_release
 
 
 def get_entry_content(vars, pipeline_state, g, src2fields):
+    # content of struct
     content = " "
+    # ending content of struct (for variable-size fields)
     end = ""
     special = {}
     for var in vars:
@@ -74,10 +76,30 @@ def find_pipeline_state(g, instance):
             return state
 
 
+def create_queue(name, size, n_cores, blocking, enq_atomic, deq_atomic, scan, core):
+    workspace.push_scope(name)
+    EnqAlloc, EnqSubmit, DeqGet, DeqRelease, Scan = \
+        queue2.queue_variable_size(name, size, n_cores, blocking, enq_atomic, deq_atomic, scan, core)
+    EnqAlloc(create=False)
+    EnqSubmit(create=False)
+    DeqGet(create=False)
+    DeqRelease(create=False)
+    if scan:
+        Scan(create=False)
+
+    scope = workspace.pop_scope()
+    p = Program(*scope)
+    dp = desugaring.desugar(p)
+    g = program_to_graph_pass(dp, default_process=None)
+
+    return g, EnqAlloc, EnqSubmit, DeqGet, DeqRelease, Scan
+
+
 def compile_smart_queue(g, q, src2fields):
     pipeline_state = find_pipeline_state(g, q.enq)
-    enq_thread = g.get_thread_of(q.enq.name)
     deq_thread = g.get_thread_of(q.deq.name)
+    if q.scan:
+        scan_thread = g.get_thread_of(q.scan.name)
 
     if re.match("_impl", q.enq.name):
         prefix = "_impl_"
@@ -86,31 +108,23 @@ def compile_smart_queue(g, q, src2fields):
     else:
         prefix = ""
 
-    if isinstance(q, queue_ast.QueueVariableSizeOne2Many):
-        states, state_insts, elements, enq_alloc, enq_submit, deq_get, deq_release = \
-            queue_ast.circular_queue_variablesize_one2many(q.name, q.size, q.n_cores)
-        scan = None
-    elif isinstance(q, queue_ast.QueueVariableSizeMany2One):
-        states, state_insts, elements, enq_alloc, enq_submit, deq_get, deq_release, scan = \
-            queue_ast.circular_queue_variablesize_many2one(q.name, q.size, q.n_cores, q.scan_type)
-        scan_thread = g.get_thread_of(q.scan.name)
-    else:
-        raise Exception("Smart queue: unimplemented for %s." % q)
+    g_add, enq_alloc, enq_submit, deq_get, deq_release, scan = \
+        create_queue(q.name, q.size, q.n_cores,
+                     blocking=q.blocking, enq_atomic=q.enq_atomic, deq_atomic=q.deq_atomic, scan=q.scan_type, core=True)
+    g.merge(g_add)
 
-    for state in states:
-        g.addState(state)
+    # if isinstance(q, queue_ast.QueueVariableSizeOne2Many):
+    #     deq_types = ["q_entry*", "size_t"]
+    #     deq_src_in = "(q_entry* e, size_t core) = in();"
+    #     deq_args_out = "e,core"
+    # elif isinstance(q, queue_ast.QueueVariableSizeMany2One):
+    #     deq_types = ["q_entry*"]
+    #     deq_src_in = "(q_entry* e) = in();"
+    #     deq_args_out = "e"
 
-    for state_inst in state_insts:
-        g.newStateInstance(state_inst.state, state_inst.name, state_inst.init)
-
-    if isinstance(q, queue_ast.QueueVariableSizeOne2Many):
-        deq_types = ["q_entry*", "size_t"]
-        deq_src_in = "(q_entry* e, size_t core) = in();"
-        deq_args_out = "e,core"
-    elif isinstance(q, queue_ast.QueueVariableSizeMany2One):
-        deq_types = ["q_entry*"]
-        deq_src_in = "(q_entry* e) = in();"
-        deq_args_out = "e"
+    deq_types = ["q_entry*", "size_t"]
+    deq_src_in = "(q_entry* e, size_t core) = in();"
+    deq_args_out = "e,core"
 
     src_cases = ""
     for i in range(q.n_cases):
@@ -135,18 +149,15 @@ def compile_smart_queue(g, q, src2fields):
             %s
         }''' % (deq_src_in, src_cases))
 
-    elements.append(classify_ele)
-    for element in elements:
-        g.addElement(element)
-
-    deq_get_inst = deq_get(q.deq.name + "_get")
-    deq_release_inst = deq_release(q.deq.name + "_release")
+    g.addElement(classify_ele)
+    deq_get_inst = deq_get(q.deq.name + "_get", create=False).instance
+    deq_release_inst = deq_release(q.deq.name + "_release", create=False).instance
     classify_inst = ElementInstance(classify_ele.name, classify_ele.name + "_inst")
     new_instances = [deq_get_inst, deq_release_inst, classify_inst]
 
     if scan:
         g.addElement(scan_classify_ele)
-        scan_inst = scan(q.enq.name + "_scan")
+        scan_inst = scan(q.enq.name + "_scan", create=False).instance
         scan_classify_inst = ElementInstance(scan_classify_ele.name, scan_classify_ele.name + "_scan_inst")
         new_instances.append(scan_inst)
         new_instances.append(scan_classify_inst)
@@ -177,7 +188,7 @@ def compile_smart_queue(g, q, src2fields):
     scan_map = []
 
     for i in range(q.n_cases):
-        ins = q.enq.input2ele["in" + str(i)]
+        ins = q.enq.input2ele["inp" + str(i)]
         out = q.deq.output2ele["out" + str(i)]
         ins_map.append(ins)
         out_map.append(out)
@@ -210,7 +221,8 @@ def compile_smart_queue(g, q, src2fields):
         uses = q.deq.uses[i]
         extras = uses.difference(live)
 
-        if isinstance(q, queue_ast.QueueVariableSizeOne2Many) and 'core' in live:
+        #if isinstance(q, queue_ast.QueueVariableSizeOne2Many) and 'core' in live:
+        if 'core' in live:
             live = live.difference(set(['core']))
             extras.add('core')
 
@@ -255,7 +267,7 @@ def compile_smart_queue(g, q, src2fields):
                        r'''output { out_size_core(); out_fill(); }''')
 
         save_src = deq_src_in
-        if isinstance(q, queue_ast.QueueVariableSizeOne2Many) and 'core' in extras:
+        if 'core' in extras:
                 save_src += "state.core = core;\n"
         save_src += "state.entry = ({0} *) e;\n".format(state_entry.name)
         for var in special:
@@ -276,8 +288,8 @@ def compile_smart_queue(g, q, src2fields):
             in_thread = g.instances[in_inst].thread
 
             # Enqueue instances
-            enq_alloc_inst = enq_alloc(prefix + q.name + "_enq_alloc" + str(i) + "_from_" + in_inst)
-            enq_submit_inst = enq_submit(prefix + q.name + "_enq_submit" + str(i) + "_from_" + in_inst)
+            enq_alloc_inst = enq_alloc(prefix + q.name + "_enq_alloc" + str(i) + "_from_" + in_inst, create=False).instance
+            enq_submit_inst = enq_submit(prefix + q.name + "_enq_submit" + str(i) + "_from_" + in_inst, create=False).instance
             size_core = ElementInstance(size_core_ele.name, prefix + size_core_ele.name + "_from_" + in_inst)
             fill_inst = ElementInstance(fill_ele.name, prefix + fill_ele.name + "_from_" + in_inst)
             fork_inst = ElementInstance(fork.name, prefix + fork.name + "_from_" + in_inst)

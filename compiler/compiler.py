@@ -32,14 +32,22 @@ class Compiler:
         return g
 
     def generate_graph(self, filename="tmp"):
-        all = graph.Graph(filename)
+        all = None
         for pipeline in self.pipelines:
             p = pipeline()
             g = self.generate_graph_from_scope(p.scope, filename, p.state)
-            all.merge(g)
+            if all:
+                all.merge(g)
+            else:
+                all = g
 
-        g = self.generate_graph_from_scope(workspace.get_last_scope(), filename)
-        all.merge(g)
+        scope = workspace.get_last_scope()
+        if len(scope) > 0:
+            g = self.generate_graph_from_scope(workspace.get_last_scope(), filename)
+            if all:
+                all.merge(g)
+            else:
+                all = g
         return all
 
     def generate_code(self):

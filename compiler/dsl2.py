@@ -156,7 +156,8 @@ class Connectable(object):
 class Element(Connectable):
     defined = set()
 
-    def __init__(self, name=None, states=[], configure=[]):
+    def __init__(self, name=None, states=[], configure=[], create=True):
+        self.special = None
         Connectable.__init__(self, name, states, configure)
         self.def_fields = None
         self.used_fields = None
@@ -173,10 +174,13 @@ class Element(Connectable):
             inports = [graph.Port(p.name, p.args) for p in self.inports]
             outports = [graph.Port(p.name, p.args) for p in self.outports]
             e = graph.Element(unique, inports, outports, self.code, states_decls)
+            e.special = self.special
             scope_append(e)
 
         inst = program.ElementInstance(unique, self.name, states)
-        scope_append(inst)
+        self.instance = inst
+        if create:
+            scope_append(inst)
 
     @abstractmethod
     def impl(self):
@@ -478,3 +482,6 @@ class InternalThread(Thread):
         scope_prepend(trigger)
         Thread.__init__(self, name)
 
+
+def master_process(p):
+    scope_append(program.MasterProcess(p))
