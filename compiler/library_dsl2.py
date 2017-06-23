@@ -42,3 +42,11 @@ class Add(Element):
         output { out(x1 + x2); }
         ''' % (self.data_type, self.data_type))
 
+
+class Drop(Element):
+    def configure(self, data_type):
+        self.data_type = data_type
+        self.inp = Input(data_type)
+
+    def impl(self):
+        self.run_c("")

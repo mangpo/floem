@@ -1,4 +1,3 @@
-from dsl import *
 from elements_library import *
 
 Inc = create_add1("Inc", "int")

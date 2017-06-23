@@ -53,6 +53,8 @@ class TestDSL2(unittest.TestCase):
                  "smart_queue_entry.py",
                  "spec_impl.py",
                  "spec_impl_at.py",
+                 "probe_spec_impl.py",
+                 "probe_multi.py",
                  ]
         for test in tests:
             status = os.system("cd programs_dsl2; python " + test + "; cd ..")

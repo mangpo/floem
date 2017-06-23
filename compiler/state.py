@@ -1,6 +1,5 @@
 import graph
-import program
-from workspace import scope_append, push_scope, pop_scope, get_current_collection
+from workspace import scope_append, decl_append, push_scope, pop_scope
 from abc import abstractmethod
 
 ####################### Data type ########################
@@ -80,14 +79,16 @@ class PerPacket(object):
 
 
 class State(object):
-    id = 0
-    defined = set()
+    all_defined = set()
+    class_id = 0
+    defined = False
+    obj_id = 0
     layout = None
 
     def __init__(self, name=None, init=[], declare=True, instance=True):
         if name is None:
-            name = self.__class__.__name__ + str(self.__class__.id)
-            self.__class__.id += 1
+            name = self.__class__.__name__ + str(self.__class__.obj_id)
+            self.__class__.obj_id += 1
         self.name = name
         self.declare = declare
 
@@ -95,13 +96,19 @@ class State(object):
         self.init(*init)
         content, fields, init_code, mapping = self.get_content()
 
-        if self.__class__.__name__ not in State.defined:
+        if not self.__class__.defined:  # belong to subclass
+            self.__class__.defined = True
             if instance:
                 class_init = None
             else:
                 class_init = init_code
-            scope_append(graph.State(self.__class__.__name__, content, class_init, self.declare, fields, mapping))
-            State.defined.add(self.__class__.__name__)
+
+            # if the state has the same name as one declared before
+            if self.__class__.__name__ in State.all_defined:
+                self.__class__.__name__ += str(State.class_id)
+                State.class_id += 1
+            State.all_defined.add(self.__class__.__name__)
+            decl_append(graph.State(self.__class__.__name__, content, class_init, self.declare, fields, mapping))
 
         if instance:
             scope_append(program.StateInstance(self.__class__.__name__, name, init_code))

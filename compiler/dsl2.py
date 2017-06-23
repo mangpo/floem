@@ -154,7 +154,6 @@ class Connectable(object):
     id = 0
 
     def __init__(self, name=None, states=[], configure=[]):
-        self.id = 0
         if name is None:
             name = self.__class__.__name__ + str(self.__class__.id)
             self.__class__.id += 1
@@ -207,14 +206,26 @@ class Connectable(object):
 
 
 class Element(Connectable):
-    defined = set()
+    class_defined = set()
+    class_id = 0
+    all_defined = set()
+    defined = False
 
     def __init__(self, name=None, states=[], configure=[], create=True):
         self.special = None
-        Connectable.__init__(self, name, states, configure)
         self.def_fields = None
         self.used_fields = None
         self.code = ''
+
+        if not self.__class__.defined:  # subclass has not declared before
+            self.__class__.defined = True
+            if self.__class__.__name__ in Element.class_defined:
+                self.__class__.__name__ += str(Element.class_id)
+                Element.class_id += 1
+            Element.class_defined.add(self.__class__.__name__)
+
+        # this comes after self.__class__.__name__ but before collection_states
+        Connectable.__init__(self, name, states, configure)
         self.impl()
         states_decls, states = self.collect_states()
 
@@ -222,13 +233,13 @@ class Element(Connectable):
             unique = self.__class__.__name__
         else:
             unique = self.__class__.__name__ + "_" + "_".join([str(p) for p in configure])
-        if unique not in Element.defined:
-            Element.defined.add(unique)
+        if unique not in Element.all_defined:
+            Element.all_defined.add(unique)
             inports = [graph.Port(p.name, p.args) for p in self.inports]
             outports = [graph.Port(p.name, p.args) for p in self.outports]
             e = graph.Element(unique, inports, outports, self.code, states_decls)
             e.special = self.special
-            scope_append(e)
+            decl_append(e)
 
         inst = program.ElementInstance(unique, self.name, states)
         self.instance = inst
@@ -312,7 +323,7 @@ class Composite(Connectable):
         self.outports = [CompositeOutput(p, self.name) for p in self.outports]
         self.assign_ports(self.inports + self.outports)
 
-        push_scope(self.name)
+        push_scope(self.__class__.__name__)
         ret = self.spec()
         if ret == 'no spec':
             #push_scope(self.name)
@@ -332,7 +343,7 @@ class Composite(Connectable):
             self.outports = [CompositeOutput(p, self.name) for p in self.outports]
             self.assign_ports(self.inports + self.outports)
 
-            push_scope(self.name)
+            push_scope(self.__class__.__name__)
             self.impl()
             scope, collection = pop_scope()
             inports = self.inports
@@ -521,7 +532,7 @@ def create_probe(name, type, size, func):
     class Probe(Element):
         this = Persistent(Data)
 
-        def configure(self, name):
+        def configure(self):
             self.inp = Input(type)
             self.out = Output(type)
             self.this = data
