@@ -87,7 +87,7 @@ def create_queue(name, size, n_cores, blocking, enq_atomic, deq_atomic, scan, co
     if scan:
         Scan(create=False)
 
-    scope = workspace.pop_scope()
+    scope, collection = workspace.pop_scope()
     p = Program(*scope)
     dp = desugaring.desugar(p)
     g = program_to_graph_pass(dp, default_process='tmp')

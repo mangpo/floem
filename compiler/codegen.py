@@ -1035,15 +1035,15 @@ def generate_code_and_compile(graph, testing, mode, include=None, depend=None):
     if depend:
         for f in depend:
             extra += '%s.o ' % f
-            #cmd = 'gcc -O3 -msse4.1 -I %s -c %s.c -lrt' % (common.dpdk_include, f)
-            cmd = 'gcc -O3 -msse4.1 -I %s -c %s.c' % (common.dpdk_include, f)
+            cmd = 'gcc -O3 -msse4.1 -I %s -c %s.c -lrt' % (common.dpdk_include, f)
+            #cmd = 'gcc -O3 -msse4.1 -I %s -c %s.c' % (common.dpdk_include, f)
             status = os.system(cmd)
             if not status == 0:
                 raise Exception("Compile error: " + cmd)
 
     for process in graph.processes:
-        #cmd = 'gcc -O3 -msse4.1 -I %s -pthread %s.c %s -o %s -lrt' % (common.dpdk_include, process, extra, process)
-        cmd = 'gcc -O3 -msse4.1 -I %s -pthread %s.c %s -o %s' % (common.dpdk_include, process, extra, process)
+        cmd = 'gcc -O3 -msse4.1 -I %s -pthread %s.c %s -o %s -lrt' % (common.dpdk_include, process, extra, process)
+        #cmd = 'gcc -O3 -msse4.1 -I %s -pthread %s.c %s -o %s' % (common.dpdk_include, process, extra, process)
         status = os.system(cmd)
         if not status == 0:
             raise Exception("Compile error: " + cmd)

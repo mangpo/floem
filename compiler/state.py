@@ -211,7 +211,7 @@ class Pipeline(object):
         push_scope('')
         self.impl()  # TODO: add pipeline state
         self.state = self.state.type(instance=False)
-        self.scope = pop_scope()
+        self.scope, collection = pop_scope()
 
     @abstractmethod
     def impl(self):

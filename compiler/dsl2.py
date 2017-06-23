@@ -1,5 +1,6 @@
 from state import *
 from workspace import *
+import re
 
 def reset():
     Element.defined = set()
@@ -30,6 +31,8 @@ class Output(Port):
             other.rshift__reversed(self)
         elif isinstance(other, CompositePort):
             other.rshift__reversed(self)
+        elif isinstance(other, SpecImplPort):
+            other.rshift__reversed(self)
         elif isinstance(other, Input):
             assert self.args == other.args, "Illegal to connect %s of type %s to %s of type %s." \
                                             % (self, self.args, other, other.args)
@@ -43,9 +46,9 @@ class Output(Port):
 
 
 class CompositePort(object):
-    def __init__(self, port):
+    def __init__(self, port, composite):
         self.name = port.name
-        self.composite = port.element
+        self.composite = composite
         self.element_ports = []
         self.collecting = True
 
@@ -62,6 +65,8 @@ class CompositePort(object):
 class CompositeInput(CompositePort):
     def __rshift__(self, other):
         if isinstance(other, Connectable):
+            other.rshift__reversed(self)
+        elif isinstance(other, SpecImplPort):
             other.rshift__reversed(self)
         elif isinstance(other, Input):
             assert self.collecting, \
@@ -86,6 +91,8 @@ class CompositeOutput(CompositePort):
     def __rshift__(self, other):
         if isinstance(other, Connectable):
             other.rshift__reversed(self)
+        elif isinstance(other, SpecImplPort):
+            other.rshift__reversed(self)
         else:
             for port in self.element_ports:
                 port >> other
@@ -101,6 +108,45 @@ class CompositeOutput(CompositePort):
             raise Exception("Attempt to connect %s, which is not an output of an element, to output port '%s' of composite '%s'." %
                             (other, self.name, self.composite))
         return self
+
+
+def insert_spec_impl_scope(scope_spec, scope_impl, collection_spec, collection_impl):
+    scope_append(program.Spec(scope_spec))
+    scope_append(program.Impl(scope_impl))
+    collection_spec.impl = collection_impl.spec
+    get_current_collection().union(collection_spec)
+
+
+class SpecImplPort(object):
+    def __init__(self, spec, impl):
+        self.name = spec.name
+        self.spec = spec
+        self.impl = impl
+
+    def __rshift__(self, other):
+        push_scope(self.name)
+        self.spec >> other
+        scope_spec, collection_spec = pop_scope()
+        push_scope(self.name)
+        self.impl >> other
+        scope, collection = pop_scope()
+
+        insert_spec_impl_scope(scope_spec, scope, collection_spec, collection)
+        return other
+
+    def rshift__reversed(self, other):
+        push_scope(self.name)
+        other >> self.spec
+        scope_spec, collection_spec = pop_scope()
+        push_scope(self.name)
+        other >> self.impl
+        scope, collection = pop_scope()
+
+        insert_spec_impl_scope(scope_spec, scope, collection_spec, collection)
+        return self
+
+class SpecImplInput(SpecImplPort): pass
+class SpecImplOutput(SpecImplPort): pass
 
 ###################### Element, Composite #######################
 
@@ -246,24 +292,70 @@ class ElementOneInOut(Element):
 
 class Composite(Connectable):
 
+    def assign_ports(self, l):
+        for p in l:
+            if p.name in self.__dict__:
+                self.__dict__[p.name] = p
+            else:
+                for name in self.__dict__:
+                    o = self.__dict__[name]
+                    m = re.match(name, p.name)
+                    if m and isinstance(o, list):
+                        index = int(p.name[len(name):])
+                        if index < len(o) and isinstance(o[index], Port) or isinstance(o[index], CompositePort):
+                            o[index] = p
+                            break
+
     def __init__(self, name=None, states=[], configure=[]):
         Connectable.__init__(self, name, states, configure)
-        self.inports = [CompositeInput(p) for p in self.inports]
-        self.outports = [CompositeOutput(p) for p in self.outports]
-
-        for p in self.inports + self.outports:
-            self.__dict__[p.name] = p
+        self.inports = [CompositeInput(p, self.name) for p in self.inports]
+        self.outports = [CompositeOutput(p, self.name) for p in self.outports]
+        self.assign_ports(self.inports + self.outports)
 
         push_scope(self.name)
-        self.impl()
-        self.collection = merge_scope()
+        ret = self.spec()
+        if ret == 'no spec':
+            #push_scope(self.name)
+            self.impl()
+            self.collection = merge_scope()
+            self.collection_spec = None
 
-        for p in self.inports + self.outports:
-            p.disable_collect()
+            for p in self.inports + self.outports:
+                p.disable_collect()
+
+        else:
+            scope_spec, collection_spec = pop_scope()
+            inports_spec = self.inports
+            outports_spec = self.outports
+
+            self.inports = [CompositeInput(p, self.name) for p in self.inports]
+            self.outports = [CompositeOutput(p, self.name) for p in self.outports]
+            self.assign_ports(self.inports + self.outports)
+
+            push_scope(self.name)
+            self.impl()
+            scope, collection = pop_scope()
+            inports = self.inports
+            outports = self.outports
+
+            self.collection = collection_spec
+            insert_spec_impl_scope(scope_spec, scope, self.collection, collection)
+
+            self.inports = []
+            self.outports = []
+            for spec, impl in zip(inports_spec, inports):
+                self.inports.append(SpecImplInput(spec, impl))
+            for spec, impl in zip(outports_spec, outports):
+                self.outports.append(SpecImplOutput(spec, impl))
+
+            self.assign_ports(self.inports + self.outports)
 
     @abstractmethod
     def impl(self):
         pass
+
+    def spec(self):
+        return 'no spec'
 
 
 class API(Composite):

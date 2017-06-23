@@ -19,7 +19,6 @@ def get_last_scope():
     global scope
     assert len(scope) == 1, "Compile error: there are multiple scopes remained."
     x = scope[0]
-    scope = [[]]
     return x
 
 def get_current_scope():
@@ -53,6 +52,7 @@ def merge_scope():
     scope[-1] = scope[-1] + my_scope
     my_collection = inst_collection[-1]
     inst_collection = inst_collection[:-1]
+    inst_collection[-1].union(my_collection)
     return my_collection
 
 
@@ -60,9 +60,10 @@ def pop_scope():
     global scope, stack, inst_collection
     stack = stack[:-1]
     my_scope = scope[-1]
+    my_collection = inst_collection[-1]
     scope = scope[:-1]
     inst_collection = inst_collection[:-1]
-    return my_scope
+    return my_scope, my_collection
 
 
 def get_current_collection():
