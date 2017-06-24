@@ -118,14 +118,13 @@ def insert_fork_program(x):
 
 
 
-def desugar_spec_impl(x, mode="impl"):
+def desugar_spec_impl(x, mode="impl", force=False):
     """
     :param x: program AST
     :param mode: "spec", "impl", "compare"
     :return: desugared AST
     """
-    need = need_desugar(x)
-    if not need:
+    if not force and not need_desugar(x):
         return x
 
     if mode == "compare":
@@ -177,8 +176,8 @@ def need_desugar(x):
         return index >= 0
 
 
-def desugar(p1, mode="impl"):
-    p2 = desugar_spec_impl(p1, mode)
+def desugar(p1, mode="impl", force=False):
+    p2 = desugar_spec_impl(p1, mode, force)
     p3 = insert_fork(p2)
     return p3
 

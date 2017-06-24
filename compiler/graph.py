@@ -403,14 +403,23 @@ class MemoryRegion:
 
 class Graph:
     def __init__(self, default_process, original):
-        self.elements = {}
+
         self.instances = {}
         if original:
+            self.elements = copy.copy(original.elements)
             self.states = copy.copy(original.states)
             self.state_instances = copy.copy(original.state_instances)
+            # Inject and probe
+            self.inject_populates = copy.copy(original.inject_populates)
+            self.probe_compares = copy.copy(original.probe_compares)
         else:
+            self.elements = {}
             self.states = {}
             self.state_instances = {}
+            # Inject and probe
+            self.inject_populates = {}
+            self.probe_compares = {}
+
         self.state_order = []
         self.state_instance_order = []
         self.memory_regions = []
@@ -419,10 +428,6 @@ class Graph:
         self.threads_API = []
         self.threads_order = []
         self.threads_roots = set()
-
-        # Inject and probe
-        self.inject_populates = {}
-        self.probe_compares = {}
 
         # Process
         self.processes = set()

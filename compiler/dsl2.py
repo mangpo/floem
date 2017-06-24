@@ -64,11 +64,7 @@ class CompositePort(object):
 
 class CompositeInput(CompositePort):
     def __rshift__(self, other):
-        if isinstance(other, Connectable):
-            other.rshift__reversed(self)
-        elif isinstance(other, SpecImplPort):
-            other.rshift__reversed(self)
-        elif isinstance(other, Input):
+        if isinstance(other, Input):
             assert self.collecting, \
                 ("Illegal to connect input port '%s' of composite '%s' to %s, which is an input port, outside the composite implementation." %
                  (self.name, self.composite, other))
@@ -76,6 +72,13 @@ class CompositeInput(CompositePort):
         elif isinstance(other, CompositeInput):
             for p in other.element_ports:
                 self >> p
+        # elif isinstance(other, SpecImplInput):
+        #     for p in other.element_ports:
+        #         self >> p
+        elif isinstance(other, Connectable):
+            other.rshift__reversed(self)
+        elif isinstance(other, SpecImplPort):
+            other.rshift__reversed(self)
         else:
             raise Exception("Attempt to connect input port '%s' of composite '%s' to %s, which is not an element, a composite, or an input port." %
                             (self.name, self.composite, other))
@@ -118,6 +121,7 @@ def insert_spec_impl_scope(scope_spec, scope_impl, collection_spec, collection_i
 
 
 class SpecImplPort(object):
+
     def __init__(self, spec, impl):
         self.name = spec.name
         self.spec = spec
@@ -144,6 +148,10 @@ class SpecImplPort(object):
 
         insert_spec_impl_scope(scope_spec, scope, collection_spec, collection)
         return self
+
+    def disable_collect(self):
+        self.spec.disable_collect()
+        self.impl.disable_collect()
 
 class SpecImplInput(SpecImplPort): pass
 class SpecImplOutput(SpecImplPort): pass
@@ -331,9 +339,6 @@ class Composite(Connectable):
             self.collection = merge_scope()
             self.collection_spec = None
 
-            for p in self.inports + self.outports:
-                p.disable_collect()
-
         else:
             scope_spec, collection_spec = pop_scope()
             inports_spec = self.inports
@@ -360,6 +365,9 @@ class Composite(Connectable):
                 self.outports.append(SpecImplOutput(spec, impl))
 
             self.assign_ports(self.inports + self.outports)
+
+        for p in self.inports + self.outports:
+            p.disable_collect()
 
     @abstractmethod
     def impl(self):

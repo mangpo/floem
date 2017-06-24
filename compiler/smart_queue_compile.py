@@ -77,6 +77,7 @@ def find_pipeline_state(g, instance):
 
 
 def create_queue(name, size, n_cores, blocking, enq_atomic, deq_atomic, scan, core):
+    workspace.push_decl()
     workspace.push_scope(name)
     EnqAlloc, EnqSubmit, DeqGet, DeqRelease, Scan = \
         queue2.queue_variable_size(name, size, n_cores, blocking, enq_atomic, deq_atomic, scan, core)
@@ -87,8 +88,9 @@ def create_queue(name, size, n_cores, blocking, enq_atomic, deq_atomic, scan, co
     if scan:
         Scan(create=False)
 
+    decl = workspace.pop_decl()
     scope, collection = workspace.pop_scope()
-    p = Program(*scope)
+    p = Program(*(decl + scope))
     dp = desugaring.desugar(p)
     g = program_to_graph_pass(dp, default_process='tmp')
 

@@ -1,3 +1,6 @@
+import copy
+
+
 class InstancesCollection:
     def __init__(self):
         self.spec = set()
@@ -15,7 +18,7 @@ class InstancesCollection:
         elif self.impl:
             self.impl = self.impl.union(other.spec)
         elif other.impl:
-            self.impl = other.impl
+            self.impl = copy.copy(other.impl)
 
 
     def union_spec(self, other):
@@ -25,7 +28,7 @@ class InstancesCollection:
         if self.impl:
             self.impl = self.impl.union(other.spec)
         else:
-            self.impl = other.spec
+            self.impl = copy.copy(other.spec)
 
     def get_spec(self):
         return self.spec

@@ -1,5 +1,6 @@
 import graph
-from workspace import scope_append, decl_append, push_scope, pop_scope
+import program
+from workspace import scope_append, decl_append, push_scope, pop_scope, push_decl, pop_decl
 from abc import abstractmethod
 
 ####################### Data type ########################
@@ -46,7 +47,7 @@ class MemoryRegion(object):
 ####################### State ########################
 
 def define_state(x):
-    if isinstance(x, type) and x.__name__ not in State.defined:
+    if isinstance(x, type) and x.__name__ not in State.all_defined:
         x(instance=False)
 
 
@@ -215,13 +216,29 @@ class Pipeline(object):
         assert isinstance(self.state, PerPacket), \
             "Per-packet state %s.state must be set to PerPacket(StateType), but %s is given." % (self.name, self.state)
 
-        push_scope('')
-        self.impl()  # TODO: add pipeline state
-        self.state = self.state.type(instance=False)
-        self.scope, collection = pop_scope()
+        push_scope(self.__class__.__name__)
+        push_decl()
+        ret = self.spec()
+        if ret == 'no spec':
+            self.impl()  # TODO: add pipeline state
+            self.state = self.state.type(instance=False)
+            scope, collection = pop_scope()
+            decl = pop_decl()
+            self.scope = decl + scope
+
+        else:
+            scope_spec, collection_spec = pop_scope()
+            push_scope(self.__class__.__name__)
+            self.impl()  # TODO: add pipeline state
+            self.state = self.state.type(instance=False)
+            scope_impl, collection_impl = pop_scope()
+            decl = pop_decl()
+            self.scope = decl + [program.Spec(scope_spec), program.Impl(scope_impl)]
 
     @abstractmethod
     def impl(self):
         pass
 
+    def spec(self):
+        return 'no spec'
 

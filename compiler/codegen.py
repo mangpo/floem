@@ -807,7 +807,7 @@ def generate_internal_triggers_with_process(graph, process, ext, mode):
         kill_src += "void spec_kill_threads() {\n" + k1 + k2 + "}\n"
 
         g1, r1, k1 = inject_thread_code(impl_injects)
-        g2, r2, k2 = internal_thread_code([x for x in forever if re.match('_impl', x)], graph)
+        g2, r2, k2 = internal_thread_code([x for x in forever if not re.match('_spec', x)], graph)
         global_src += g1 + g2
         run_src += "void impl_run_threads() {\n" + r1 + r2 + "}\n"
         kill_src += "void impl_kill_threads() {\n" + k1 + k2 + "}\n"

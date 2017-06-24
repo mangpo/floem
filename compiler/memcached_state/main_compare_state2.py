@@ -358,15 +358,29 @@ output { out(); }
         def impl(self):
             self.run_c(r'''output { out(true); }''')
 
+    Inject = create_inject("inject", "iokvs_message*", 1000, "random_request")
+    # Inject = create_inject("inject", "iokvs_message*", 1000, "double_set_request")
+    Probe = create_probe("probe", "iokvs_message*", 1010, "cmp_func")
+
+
     ########################## program #########################
+    def spec(self):
+        class nic(InternalLoop):
+            def impl(self):
+                classifier = main.Classifer()
+                display = main.PrintMsg()
+
+                main.Inject() >> main.SaveState() >> main.GetKey() >> main.JenkinsHash() >> classifier
+                # get
+                classifier.out_get >> main.HashGet() >> main.PrepareGetResp() >> main.Probe() >> display
+                # set
+                classifier.out_set >> main.GetItemSpec() >> main.HashPut() >> main.PrepareSetResp() >> main.Probe() \
+                >> display
+
+        nic('nic', process='nic')
+
     def impl(self):
         MemoryRegion('data_region', 4 * 1024 * 512)
-
-        Inject = create_inject("inject", "iokvs_message*", 1000, "random_request")
-        # Inject = create_inject("inject", "iokvs_message*", 1000, "double_set_request")
-        #inject = Inject()
-
-        # TODO: spec/impl
 
         # Queue
         RxEnq, RxDeq, RxScan = queue_smart2.smart_queue("rx_queue", 10000, n_cores, 3)
@@ -381,7 +395,7 @@ output { out(); }
         class nic_rx(InternalLoop):
             def impl(self):
                 classifier = main.Classifer()
-                Inject() >> main.SaveState() >> main.GetKey() >> main.JenkinsHash() >> main.GetCore() >> classifier
+                main.Inject() >> main.SaveState() >> main.GetKey() >> main.JenkinsHash() >> main.GetCore() >> classifier
 
                 # get
                 classifier.out_get >> rx_enq.inp[0]
@@ -434,9 +448,9 @@ output { out(); }
                 display = main.PrintMsg()
                 main.Scheduler() >> tx_deq
                 # get
-                tx_deq.out[0] >> main.PrepareGetResp() >> display
+                tx_deq.out[0] >> main.PrepareGetResp() >> main.Probe() >> display
                 # set
-                tx_deq.out[1] >> main.PrepareSetResp() >> display
+                tx_deq.out[1] >> main.PrepareSetResp() >> main.Probe() >> display
                 # full
                 tx_deq.out[2] >> main.AddLogseg()
 
@@ -463,7 +477,7 @@ c.triggers = True
 c.I = '/home/mangpo/lib/dpdk-16.11/build/include'
 
 def run_compare():
-    c.desugar_mode = "impl"
+    c.desugar_mode = "compare"
     c.generate_code_as_header()
     c.depend = {"test_compare_app": ['jenkins_hash', 'hashtable', 'ialloc', 'app'],
                 "test_compare_nic": ['jenkins_hash', 'hashtable', 'ialloc', 'nic']}

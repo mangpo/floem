@@ -3,7 +3,7 @@ import program
 
 
 ######################## Scope ##########################
-decls = []
+decls = [[]]
 scope = [[]]
 stack = []
 inst_collection = [InstancesCollection()]
@@ -11,25 +11,40 @@ inst_collection = [InstancesCollection()]
 
 def workspace_reset():
     global decls, scope, stack, inst_collection
-    decls = []
+    decls = [[]]
     scope = [[]]
     stack = []
     inst_collection = [InstancesCollection()]
 
 
+def get_last_decl():
+    global decls
+    assert len(decls) == 1, "Compile error: there are multiple scopes remained."
+    return decls[0]
+
+
+def decl_append(x):
+    decls[-1].append(x)
+
+
+def push_decl():
+    decls.append([])
+
+
+def pop_decl():
+    global decls
+    decl = decls[-1]
+    decls = decls[:-1]
+    return decl
+
 def get_last_scope():
-    global decls, scope
+    global scope
     assert len(scope) == 1, "Compile error: there are multiple scopes remained."
-    x = scope[0]
-    return decls + x
+    return scope[0]
 
 
 def get_current_scope():
     return scope[-1]
-
-
-def decl_append(x):
-    decls.append(x)
 
 
 def scope_append(x):

@@ -22,27 +22,68 @@ class Compiler:
         self.I = None
         self.pipelines = pipelines
 
-    def generate_graph_from_scope(self, myscope, filename, pktstate=None, original=None):
+    def has_spec_impl(self, scopes):
+        for scope in scopes:
+            for x in scope:
+                if isinstance(x, program.Spec) or isinstance(x, program.Impl):
+                    return True
+        return False
+
+    def generate_graph_from_scope(self, myscope, filename, pktstate=None, spec_impl=False, original=None):
         p = program.Program(*myscope)
-        dp = desugaring.desugar(p, self.desugar_mode)
+        dp = desugaring.desugar(p, self.desugar_mode, force=spec_impl)
 
         g = program.program_to_graph_pass(dp, default_process=filename, original=original)
         pipeline_state.pipeline_state_pass(g, pktstate)
-        #join_handling.join_and_resource_annotation_pass(g, self.resource, self.remove_unused)
         return g
 
     def generate_graph(self, filename="tmp"):
+        # Retrieve all scopes first
         scope = workspace.get_last_scope()
-        all = self.generate_graph_from_scope(scope, filename)
+        decl = workspace.get_last_decl()
+        org_scope = decl + scope
 
+        other_scopes = []
         for pipeline in self.pipelines:
             p = pipeline()
-            g = self.generate_graph_from_scope(p.scope, filename, p.state, all)
-            all.merge(g)
+            other_scopes.append(p.scope)
 
-        join_handling.join_and_resource_annotation_pass(all, self.resource, self.remove_unused)
+        # Check if there is spec
+        has_spec_impl = self.has_spec_impl(other_scopes + [org_scope])
 
-        return all
+        # Generate graph
+        original = self.generate_graph_from_scope(decl + scope, filename, spec_impl=has_spec_impl)
+        all = []
+        for scope in other_scopes:
+            g = self.generate_graph_from_scope(scope, filename,
+                                               pktstate=p.state, spec_impl=has_spec_impl, original=original)
+            all.append(g)
+
+        for g in all:
+            original.merge(g)
+
+        join_handling.join_and_resource_annotation_pass(original, self.resource, self.remove_unused)
+
+        return original
+
+
+    # def generate_graph(self, filename="tmp"):
+    #     scope = workspace.get_last_scope()
+    #     decl = workspace.get_last_decl()
+    #     original = self.generate_graph_from_scope(decl + scope, filename)
+    #
+    #     all = []
+    #     for pipeline in self.pipelines:
+    #         p = pipeline()
+    #         g = self.generate_graph_from_scope(p.scope, filename, p.state, original)
+    #         all.append(g)
+    #
+    #     for g in all:
+    #         original.merge(g)
+    #
+    #     join_handling.join_and_resource_annotation_pass(original, self.resource, self.remove_unused)
+    #
+    #     return original
 
     def generate_code(self):
         codegen.generate_code(self.generate_graph(), ".c", self.testing, self.include)
