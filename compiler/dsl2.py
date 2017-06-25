@@ -541,7 +541,7 @@ class API(Composite):
         src_in = ""
         src_out = ""
         for i in range(len(inports)):
-            types = inports.element_ports[0].args
+            types = inports[i].element_ports[0].args
             types_args = []
             args = []
             for j in range(len(types)):

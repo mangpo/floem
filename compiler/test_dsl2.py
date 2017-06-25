@@ -56,6 +56,7 @@ class TestDSL2(unittest.TestCase):
                  "probe_spec_impl.py",
                  "probe_multi.py",
                  "nested_compo_in_impl.py",
+                 "nested_spec_impl_in_compo.py",
                  ]
         for test in tests:
             status = os.system("cd programs_dsl2; python " + test + "; cd ..")
