@@ -1,6 +1,7 @@
 from state import *
 from workspace import *
 import re
+import copy
 
 def reset():
     Element.defined = set()
@@ -46,8 +47,11 @@ class Output(Port):
 
 
 class CompositePort(object):
-    def __init__(self, port, composite):
-        self.name = port.name
+    def __init__(self, port=None, composite=None):
+        if port:
+            self.name = port.name
+        else:
+            self.name = None
         self.composite = composite
         self.element_ports = []
         self.collecting = True
@@ -63,6 +67,14 @@ class CompositePort(object):
 
 
 class CompositeInput(CompositePort):
+    def clone(self):
+        x = CompositeInput()
+        x.name = self.name
+        x.composite = self.composite
+        x.element_ports = copy.copy(self.element_ports)
+        x.collecting = True
+        return x
+
     def __rshift__(self, other):
         if isinstance(other, Input):
             assert self.collecting, \
@@ -72,12 +84,7 @@ class CompositeInput(CompositePort):
         elif isinstance(other, CompositeInput):
             for p in other.element_ports:
                 self >> p
-        # elif isinstance(other, SpecImplInput):
-        #     for p in other.element_ports:
-        #         self >> p
         elif isinstance(other, Connectable):
-            other.rshift__reversed(self)
-        elif isinstance(other, SpecImplPort):
             other.rshift__reversed(self)
         else:
             raise Exception("Attempt to connect input port '%s' of composite '%s' to %s, which is not an element, a composite, or an input port." %
@@ -91,10 +98,16 @@ class CompositeInput(CompositePort):
 
 
 class CompositeOutput(CompositePort):
+    def clone(self):
+        x = CompositeOutput()
+        x.name = self.name
+        x.composite = self.composite
+        x.element_ports = copy.copy(self.element_ports)
+        x.collecting = True
+        return x
+
     def __rshift__(self, other):
         if isinstance(other, Connectable):
-            other.rshift__reversed(self)
-        elif isinstance(other, SpecImplPort):
             other.rshift__reversed(self)
         else:
             for port in self.element_ports:
@@ -123,38 +136,92 @@ def insert_spec_impl_scope(scope_spec, scope_impl, collection_spec, collection_i
 class SpecImplPort(object):
 
     def __init__(self, spec, impl):
-        self.name = spec.name
-        self.spec = spec
-        self.impl = impl
+        if isinstance(spec, Input) or isinstance(spec, SpecImplInput):
+            self.spec = CompositeInput(spec, impl)
+            self.impl = None
+            self.name = self.spec.name
+        elif isinstance(spec, Output) or isinstance(spec, SpecImplOutput):
+            self.spec = CompositeOutput(spec, impl)
+            self.impl = None
+            self.name = self.spec.name
+        else:
+            self.name = spec.name
+            self.spec = spec
+            self.impl = impl
 
     def __rshift__(self, other):
-        push_scope(self.name)
-        self.spec >> other
-        scope_spec, collection_spec = pop_scope()
-        push_scope(self.name)
-        self.impl >> other
-        scope, collection = pop_scope()
+        if self.impl:
+            push_scope(self.name)
+            self.spec >> other
+            scope_spec, collection_spec = pop_scope()
+            push_scope(self.name)
+            self.impl >> other
+            scope, collection = pop_scope()
 
-        insert_spec_impl_scope(scope_spec, scope, collection_spec, collection)
+            insert_spec_impl_scope(scope_spec, scope, collection_spec, collection)
+        else:
+            self.spec >> other
         return other
 
     def rshift__reversed(self, other):
-        push_scope(self.name)
-        other >> self.spec
-        scope_spec, collection_spec = pop_scope()
-        push_scope(self.name)
-        other >> self.impl
-        scope, collection = pop_scope()
+        if self.impl:
+            push_scope(self.name)
+            other >> self.spec
+            scope_spec, collection_spec = pop_scope()
+            push_scope(self.name)
+            other >> self.impl
+            scope, collection = pop_scope()
 
-        insert_spec_impl_scope(scope_spec, scope, collection_spec, collection)
+            insert_spec_impl_scope(scope_spec, scope, collection_spec, collection)
+        else:
+            other >> self.spec
         return self
 
     def disable_collect(self):
         self.spec.disable_collect()
-        self.impl.disable_collect()
+        if self.impl:
+            self.impl.disable_collect()
 
-class SpecImplInput(SpecImplPort): pass
-class SpecImplOutput(SpecImplPort): pass
+    def get_args(self):
+        return self.spec.get_args()
+
+class SpecImplInput(SpecImplPort):
+    # for collecting
+    def __rshift__(self, other):
+        if isinstance(other, SpecImplInput):
+            self.spec >> other.spec
+            if other.impl:
+                if self.impl:
+                    self.impl >> other.impl
+                else:
+                    self.impl = other.impl.clone()
+        elif isinstance(other, Input):
+            self.spec >> other
+        elif isinstance(other, Connectable):
+            other.rshift__reversed(self)
+        else:
+            SpecImplPort.__rshift__(self, other)
+        return other
+
+
+class SpecImplOutput(SpecImplPort):
+    # for collecting
+    def __rshift__(self, other):
+        if isinstance(other, SpecImplOutput):
+            self.spec >> other.spec
+            if self.impl:
+                if other.impl:
+                    self.impl >> other.impl
+                else:
+                    other.impl = self.impl.clone()
+        elif isinstance(other, Output):
+            self.sepc >> other
+        elif isinstance(other, Connectable):
+            other.rshift__reversed(self)
+        else:
+            SpecImplPort.__rshift__(self, other)
+        return other
+
 
 ###################### Element, Composite #######################
 
@@ -321,31 +388,32 @@ class Composite(Connectable):
                     m = re.match(name, p.name)
                     if m and isinstance(o, list):
                         index = int(p.name[len(name):])
-                        if index < len(o) and isinstance(o[index], Port) or isinstance(o[index], CompositePort):
+                        if index < len(o) and isinstance(o[index], Port) or isinstance(o[index], SpecImplPort):
                             o[index] = p
                             break
 
     def __init__(self, name=None, states=[], configure=[]):
         Connectable.__init__(self, name, states, configure)
-        self.inports = [CompositeInput(p, self.name) for p in self.inports]
-        self.outports = [CompositeOutput(p, self.name) for p in self.outports]
+        self.inports = [SpecImplInput(p, self.name) for p in self.inports]
+        self.outports = [SpecImplOutput(p, self.name) for p in self.outports]
         self.assign_ports(self.inports + self.outports)
 
         push_scope(self.__class__.__name__)
         ret = self.spec()
         if ret == 'no spec':
+            self.spec_impl = False
             #push_scope(self.name)
             self.impl()
             self.collection = merge_scope()
             self.collection_spec = None
-
         else:
+            self.spec_impl = True
             scope_spec, collection_spec = pop_scope()
             inports_spec = self.inports
             outports_spec = self.outports
 
-            self.inports = [CompositeInput(p, self.name) for p in self.inports]
-            self.outports = [CompositeOutput(p, self.name) for p in self.outports]
+            self.inports = [SpecImplInput(p, self.name) for p in self.inports]
+            self.outports = [SpecImplOutput(p, self.name) for p in self.outports]
             self.assign_ports(self.inports + self.outports)
 
             push_scope(self.__class__.__name__)
@@ -359,12 +427,19 @@ class Composite(Connectable):
 
             self.inports = []
             self.outports = []
-            for spec, impl in zip(inports_spec, inports):
-                self.inports.append(SpecImplInput(spec, impl))
-            for spec, impl in zip(outports_spec, outports):
-                self.outports.append(SpecImplOutput(spec, impl))
+            for i in range(len(inports)):
+                spec = inports_spec[i]
+                impl = inports[i]
+                spec.impl = impl.spec
+                self.inports.append(spec)
+            for i in range(len(outports)):
+                spec = outports_spec[i]
+                impl = outports[i]
+                spec.impl = impl.spec
+                self.outports.append(spec)
 
             self.assign_ports(self.inports + self.outports)
+
 
         for p in self.inports + self.outports:
             p.disable_collect()
@@ -411,16 +486,7 @@ class API(Composite):
             raise Exception("API '%s' has more than one output port: %s." % (self.name, self.outports))
 
         # Insert an element for an API with multiple starting elements.
-        elements = set()
-        for x in self.inports:
-            for port in x.element_ports:
-                elements.add(port.element)
-        count = len(elements)
-        if count > 1:
-            push_scope(self.name)
-            self.create_api_start_node()
-            addition = merge_scope()
-            self.collection.union(addition)
+        self.check_api_start_node()
 
         t = APIThread(name, [x for x in input], output, default_val=self.default_return)
         t.run(self)
@@ -435,11 +501,47 @@ class API(Composite):
     def args_order(self):
         raise Exception("This function needs to be overloaded.")
 
-    def create_api_start_node(self):
+    def check_api_start_node(self):
+        spec_inports = [p.spec for p in self.inports]
+        if not self.spec_impl:
+            insert = self.need_insert(spec_inports)
+            if insert:
+                push_scope(self.name)
+                self.create_api_start_node(spec_inports)
+                addition = merge_scope()
+                self.collection.union_spec(addition)
+        else:
+            insert = self.need_insert(spec_inports)
+            if insert:
+                push_scope(self.name)
+                self.create_api_start_node(spec_inports)
+                scope, addition = pop_scope()
+                scope_append(program.Spec(scope))
+                self.collection.union_spec(addition)
+
+            impl_inports = [p.impl for p in self.inports]
+            insert = self.need_insert(impl_inports)
+            if insert:
+                push_scope(self.name)
+                self.create_api_start_node(impl_inports)
+                scope, addition = pop_scope()
+                scope_append(program.Impl(scope))
+                self.collection.union_impl(addition)
+
+    @staticmethod
+    def need_insert(inports):
+        elements = set()
+        for x in inports:
+            for port in x.element_ports:
+                elements.add(port.element)
+        count = len(elements)
+        return count > 1
+
+    def create_api_start_node(self, inports):
         src_in = ""
         src_out = ""
-        for i in range(len(self.inports)):
-            types = self.inports[i].element_ports[0].args
+        for i in range(len(inports)):
+            types = inports.element_ports[0].args
             types_args = []
             args = []
             for j in range(len(types)):
@@ -458,7 +560,7 @@ class API(Composite):
 
         start_name = "start"
 
-        inports = self.inports
+        # inports = self.inports
 
         class APIStart(Element):
             def configure(self, parent_name):
@@ -469,11 +571,11 @@ class API(Composite):
                 self.run_c(src)
 
         start = APIStart(name=start_name, configure=[self.name])
-        for i in range(len(self.inports)):
-            for port in self.inports[i].element_ports:
+        for i in range(len(inports)):
+            for port in inports[i].element_ports:
                 start.out[i] >> port
 
-            self.inports[i].element_ports = [start.inp[i]]
+            inports[i].element_ports = [start.inp[i]]
 
 
 class InternalLoop(Composite):

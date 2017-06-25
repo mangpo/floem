@@ -19,7 +19,8 @@ class Compo(Composite):
             def spec(self):
                 self.inp >> Inc(configure=[Int]) >> self.out
 
-        self.inp >> Inner() >> self.out
+        inner = Inner()
+        self.inp >> inner >> self.out
 
 
 test = Compo()
