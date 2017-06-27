@@ -1,5 +1,6 @@
 import queue2
 import net2
+import library_dsl2
 from dsl2 import *
 from compiler import Compiler
 
@@ -13,7 +14,8 @@ n_workers = 4
 from_net = net2.from_net_fixed_size_instance("tuple", "struct tuple", n_workers, 8192, "workers[atoi(argv[1])].port")
 to_nets = []
 for i in range(n_workers):
-    to_net = net2.to_net_fixed_size_instance("tuple" + str(i), "struct tuple", "workers[%d].hostname" % i, "workers[%d].port" % i)
+    to_net = net2.to_net_fixed_size_instance("tuple" + str(i), "struct tuple",
+                                             "workers[%d].hostname" % i, "workers[%d].port" % i, output=True)
     to_nets.append(to_net)
 
 
@@ -56,7 +58,7 @@ class Choose(Element):
         self.inp = Input("struct tuple*")
         self.out_send = Output("struct tuple*")
         self.out_local = Output("struct tuple*")
-        self.out_nop = Output()
+        #self.out_nop = Output()
 
     def impl(self):
         self.run_c(r'''
@@ -66,7 +68,7 @@ class Choose(Element):
         local = (this->task2worker[t->task] == this->task2worker[t->fromtask]);
         if(local) printf("send to myself!\n");
     }
-    output switch { case (t && local): out_local(t); case (t && !local): out_send(t); else: out_nop(); }
+    output switch { case (t && local): out_local(t); case (t && !local): out_send(t); } // else: out_nop(); }
         ''')
 
 choose = Choose(states=[task_master])
@@ -100,7 +102,7 @@ class SteerWorker(Element):
     def configure(self):
         self.inp = Input("struct tuple*")
         self.out = [Output("struct tuple*") for i in range(n_workers)]
-        self.out_nop = Output()
+        #self.out_nop = Output()
 
     def impl(self):
         src = ""
@@ -113,16 +115,16 @@ class SteerWorker(Element):
         id = this->task2worker[t->task];
         printf("send to worker %d\n", id);
     }
-    output switch { ''' + src + " else: out_nop(); }")
+    output switch { ''' + src + "}") # else: out_nop(); }")
 
 
 steer_worker = SteerWorker(states=[task_master])
 
-class Drop(Element):
-    def configure(self): self.inp = Input()
-    def impl(self): pass
-
-nop = Drop()
+# class Drop(Element):
+#     def configure(self): self.inp = Input()
+#     def impl(self): pass
+#
+# nop = Drop()
 
 class BatchInfo(State):
     core = Field(Int)
@@ -160,13 +162,13 @@ class BatchInc(Element):
 
     def configure(self):
         self.inp = Input("struct tuple*")
-        self.out = Output("struct tuple*")
+        #self.out = Output("struct tuple*")
 
     def impl(self):
         self.run_c(r'''
         (struct tuple* t) = inp();
         if(t) this->batch_size++;
-        output switch { case t: out(t); };
+        // output switch { case t: out(t); };
         ''')
 
 queue_schedule = BatchScheduler(states=[batch_info])
@@ -175,14 +177,15 @@ batch_inc = BatchInc(states=[batch_info])
 MAX_ELEMS = (4 * 1024)
 
 rx_enq_creator, rx_deq_creator, rx_release_creator, scan = \
-    queue2.queue_custom_owner_bit("rx_queue", "struct tuple", MAX_ELEMS, n_cores, "task", blocking=True)
+    queue2.queue_custom_owner_bit("rx_queue", "struct tuple", MAX_ELEMS, n_cores, "task", blocking=True,
+                                  enq_output=True)
 
 tx_enq_creator, tx_deq_creator, tx_release_creator, scan = \
     queue2.queue_custom_owner_bit("tx_queue", "struct tuple", MAX_ELEMS, n_cores, "task", blocking=False)
 
 class nic_rx(InternalLoop):
     def configure(self): self.process = 'flexstorm'
-    def impl(self): from_net >> get_core >> rx_enq_creator()
+    def impl(self): from_net >> get_core >> rx_enq_creator() >> library_dsl2.Drop(configure=["struct tuple*"])
 
 class inqueue_get(API):
     def configure(self):
@@ -210,41 +213,43 @@ class nic_tx(InternalLoop):  # TODO: ugly, sol: option to make to_net and enq re
     def configure(self):
         self.process = 'flexstorm'
 
-    def impl(self):
-        queue_schedule >> tx_deq_creator() >> print_tuple >> choose
-
-        # send
-        choose.out_send >> steer_worker
-        for i in range(n_workers):
-            steer_worker.out[i] >> to_nets[i]
-        steer_worker.out_nop >> nop
-
-        # local
-        rx_enq = rx_enq_creator()
-        choose.out_local >> get_core2 >> rx_enq
-
-        # nop
-        choose.out_nop >> nop
-
-        tx_release = tx_release_creator()
-        run_order(to_nets + [rx_enq, nop], batch_inc)
-        print_tuple >> batch_inc >> tx_release
-
+    # Ugly version
     # def impl(self):
-    #     tx_deq = tx_deq_creator()
-    #     tx_release = tx_release_creator()
-    #     rx_enq = rx_enq_creator()
-    #
-    #     queue_schedule >> tx_deq >> print_tuple >> choose
-    #     tx_deq >> batch_inc  # TODO: no output for batch_inc
+    #     queue_schedule >> tx_deq_creator() >> print_tuple >> choose
     #
     #     # send
     #     choose.out_send >> steer_worker
     #     for i in range(n_workers):
-    #         steer_worker.out[i] >> to_nets[i] >> tx_release  # TODO: to_net: output=True
+    #         steer_worker.out[i] >> to_nets[i]
+    #     steer_worker.out_nop >> nop
     #
     #     # local
-    #     choose.out_local >> get_core2 >> rx_enq >> tx_release  # TODO: rx_enq: output=True
+    #     rx_enq = rx_enq_creator()
+    #     choose.out_local >> get_core2 >> rx_enq
+    #
+    #     # nop
+    #     choose.out_nop >> nop
+    #
+    #     tx_release = tx_release_creator()
+    #     run_order(to_nets + [rx_enq, nop], batch_inc)
+    #     print_tuple >> batch_inc >> tx_release
+
+    # Cleaner version
+    def impl(self):
+        tx_deq = tx_deq_creator()
+        tx_release = tx_release_creator()
+        rx_enq = rx_enq_creator()
+
+        queue_schedule >> tx_deq >> print_tuple >> choose
+        tx_deq >> batch_inc
+
+        # send
+        choose.out_send >> steer_worker
+        for i in range(n_workers):
+            steer_worker.out[i] >> to_nets[i] >> tx_release
+
+        # local
+        choose.out_local >> get_core2 >> rx_enq >> tx_release
 
 
 nic_rx('nic_rx')
