@@ -230,6 +230,23 @@ class nic_tx(InternalLoop):  # TODO: ugly, sol: option to make to_net and enq re
         run_order(to_nets + [rx_enq, nop], batch_inc)
         print_tuple >> batch_inc >> tx_release
 
+    # def impl(self):
+    #     tx_deq = tx_deq_creator()
+    #     tx_release = tx_release_creator()
+    #     rx_enq = rx_enq_creator()
+    #
+    #     queue_schedule >> tx_deq >> print_tuple >> choose
+    #     tx_deq >> batch_inc  # TODO: no output for batch_inc
+    #
+    #     # send
+    #     choose.out_send >> steer_worker
+    #     for i in range(n_workers):
+    #         steer_worker.out[i] >> to_nets[i] >> tx_release  # TODO: to_net: output=True
+    #
+    #     # local
+    #     choose.out_local >> get_core2 >> rx_enq >> tx_release  # TODO: rx_enq: output=True
+
+
 nic_rx('nic_rx')
 inqueue_get('inqueue_get')
 inqueue_advance('inqueue_advance')  # TODO: signature change
