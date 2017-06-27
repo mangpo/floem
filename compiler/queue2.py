@@ -250,7 +250,7 @@ def queue_variable_size(name, size, n_cores, blocking=False, enq_atomic=False, d
 
 
 def queue_custom_owner_bit(name, type, size, n_cores, owner,
-                           blocking=False, enq_atomic=False, deq_atomic=False, scan=False):
+                           blocking=False, enq_atomic=False, deq_atomic=False, scan=False, enq_output=False):
     """
     :param name: queue name
     :param type: entry type
@@ -299,7 +299,10 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
 
         def states(self): self.this = enq_all
 
-        def configure(self): self.inp = Input(type_star, Size)
+        def configure(self):
+            self.inp = Input(type_star, Size)
+            if enq_output:
+                self.out = Output(type_star)
 
         def impl(self):
             noblock_noatom = r'''
@@ -323,12 +326,14 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
                 else:
                     src = noblock_noatom
 
+            out_src = "output { out(x); }\n" if enq_output else ''
+
             self.run_c(r'''
             (%s x, size_t c) = inp();
             circular_queue* p = this->cores[c];
             %s* q = p->queue;
             ''' % (type_star, Storage.__name__)
-                       + src)
+                       + src + out_src)
 
     class Dequeue(Element):
         this = Persistent(deq_all.__class__)

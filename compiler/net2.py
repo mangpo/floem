@@ -90,7 +90,7 @@ def from_net_fixed_size_instance(name, type, max_channels, max_inbuf, port):
 
     FromNet.__name__ = prefix + FromNet.__name__
 
-    return FromNet(prefix + "_from_net")
+    return FromNet(name + "_from_net")
 
 
 class Socket(State):
@@ -105,7 +105,7 @@ class Socket(State):
         self.connected = False
 
 
-def to_net_fixed_size_instance(name, type, hostname, port):
+def to_net_fixed_size_instance(name, type, hostname, port, output=False):
     m = re.match('[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+', hostname)
     if m:
         hostname = '"%s"' % hostname
@@ -117,11 +117,15 @@ def to_net_fixed_size_instance(name, type, hostname, port):
     class ToNet(Element):
         this = Persistent(Socket)
 
-        def configure(self): self.inp = Input(type_star)
+        def configure(self):
+            self.inp = Input(type_star)
+            if output:
+                self.out = Output(type_star)
 
         def states(self): self.this = sock
 
         def impl(self):
+            out_src = "output { out(t); }\n" if output else ''
             self.run_c(r'''
             (%s* t) = inp();
             if(!this->connected) {
@@ -135,6 +139,8 @@ def to_net_fixed_size_instance(name, type, hostname, port):
                 this->connected = true;
                 }
             send(this->sock, t, sizeof(%s), 0);
-            ''' % (type, type))
+            ''' % (type, type) + out_src)
+
+    ToNet.__name__ = name + "_" + ToNet.__name__
 
     return ToNet(name + "_to_net")
