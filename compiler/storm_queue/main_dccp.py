@@ -1,6 +1,5 @@
 import queue2
-import net2
-import library_dsl2
+from  library_dsl2 import Drop
 from dsl2 import *
 from compiler import Compiler
 
@@ -11,16 +10,40 @@ workerid = {"spout": 0, "count": 1, "rank": 2}
 n_cores = 5
 n_workers = 4
 
-# TODO: change this to DPDK
-# from_net = net2.from_net_fixed_size_instance("tuple", "struct tuple", n_workers, 8192, "workers[atoi(argv[1])].port")
-# to_nets = []
-# for i in range(n_workers):
-#     to_net = net2.to_net_fixed_size_instance("tuple" + str(i), "struct tuple",
-#                                              "workers[%d].hostname" % i, "workers[%d].port" % i, output=True)
-#     to_nets.append(to_net)
+class Classifier(Element):
+    def configure(self):
+        self.inp = Input("struct pkt_dccp_headers*", "struct rte_mbuf *")
+        self.pkt = Output("struct pkt_dccp_headers*")
+        self.ack = Output("struct pkt_dccp_headers*")
 
-from_net = dpdk.from_net("struct pkt_dccp_headers")
-to_net = dpdk.to_net()
+    def impl(self):
+        self.run_c(r'''
+        (struct pkt_dccp_headers* p, struct rte_mbuf *b) = inp();
+        int type = 0;
+        if (ntohs(p->eth.type) == ETHTYPE_IP && p->ip._proto == IP_PROTO_DCCP) {
+            if(((p->dccp.res_type_x >> 1) & 15) == DCCP_TYPE_ACK) type = 1;
+            else type = 2;
+            state.rx_pkt = p;
+            state.rx_buf = b;
+        }
+        output switch {
+            case type==1: ack(p);
+            case type==2: pkt(p);
+        }
+        ''')
+
+class Save(Element):
+    def configure(self):
+        self.inp = Input("struct pkt_dccp_headers*", "struct rte_mbuf *")
+        self.out = Output("struct pkt_dccp_headers*")
+
+    def impl(self):
+        self.run_c(r'''
+        (struct pkt_dccp_headers* p, struct rte_mbuf *b) = inp();
+        state.rx_pkt = p;
+        state.rx_buf = b;
+        output { out(p); }
+        ''')
 
 
 class TaskMaster(State):
@@ -36,7 +59,7 @@ task_master = TaskMaster('task_master')
 
 class GetCore(Element):
     this = Persistent(TaskMaster)
-    def states(self, task_master): self.this = task_master
+    def states(self): self.this = task_master
 
     def configure(self):
         self.inp = Input("struct tuple*")
@@ -50,32 +73,26 @@ class GetCore(Element):
     output { out(t, id); }
         ''')
 
-get_core = GetCore(states=[task_master])
-get_core2 = GetCore(states=[task_master])
 
-
-class Choose(Element):
+class LocalOrRemote(Element):
     this = Persistent(TaskMaster)
-    def states(self, task_master): self.this = task_master
+    def states(self): self.this = task_master
 
     def configure(self):
         self.inp = Input("struct tuple*")
         self.out_send = Output("struct tuple*")
         self.out_local = Output("struct tuple*")
-        #self.out_nop = Output()
 
     def impl(self):
         self.run_c(r'''
-    struct tuple* t = inp();
+    (struct tuple* t) = inp();
     bool local;
     if(t != NULL) {
-        local = (this->task2worker[t->task] == this->task2worker[t->fromtask]);
+        local = (state.worker == this->task2worker[t->fromtask]);
         if(local) printf("send to myself!\n");
     }
-    output switch { case (t && local): out_local(t); case (t && !local): out_send(t); } // else: out_nop(); }
+    output switch { case (t && local): out_local(t); case (t && !local): out_send(t, worker); }
         ''')
-
-choose = Choose(states=[task_master])
 
 
 class PrintTuple(Element):
@@ -93,36 +110,10 @@ class PrintTuple(Element):
         //printf("TUPLE[1] -- task = %d, fromtask = %d, str = %s, integer = %d\n", t->task, t->fromtask, t->v[1].str, t->v[1].integer);
         fflush(stdout);
     }
-    output { out(t); }
+    output switch { case t: out(t); }
         ''')
 
 print_tuple = PrintTuple()
-
-
-class SteerWorker(Element):
-    this = Persistent(TaskMaster)
-    def states(self, task_master): self.this = task_master
-
-    def configure(self):
-        self.inp = Input("struct tuple*")
-        self.out = [Output("struct tuple*") for i in range(n_workers)]
-        #self.out_nop = Output()
-
-    def impl(self):
-        src = ""
-        for i in range(n_workers):
-            src += "case (id == {0}): out{0}(t); ".format(i)
-        self.run_c(r'''
-    (struct tuple* t) = inp();
-    int id = -1;
-    if(t != NULL) {
-        id = this->task2worker[t->task];
-        printf("send to worker %d\n", id);
-    }
-    output switch { ''' + src + "}") # else: out_nop(); }")
-
-
-steer_worker = SteerWorker(states=[task_master])
 
 
 ############################### DCCP #################################
@@ -150,18 +141,19 @@ class DccpCheckCongestion(Element):
         self.dccp = dccp_info
 
     def configure(self):
-        self.inp = Input("void*", Int)
-        self.out = Output("void*", Int)
+        self.inp = Input("struct tuple*", Int)
+        self.out = Output("struct tuple*", Int)
 
     def impl(self):
         self.run_c(r'''
-        (struct void* t, int worker) = inp();
+        (struct tuple* t, int worker) = inp();
 
         if(rdtsc() >= dccp->retrans_timeout) {
             dccp->connections[worker].pipe = 0;
             __sync_fetch_and_add(&dccp->link_rtt, dccp->link_rtt);
         }
-        if(dccp->connections[worker].pipe <= dccp->connections[worker].cwnd) t = NULL;
+        if(dccp->connections[worker].pipe >= dccp->connections[worker].cwnd)
+            t = NULL;
 
         output switch { case t: out(t, worker); }
         ''')
@@ -202,13 +194,12 @@ class DccpSendAck(Element):
         self.dccp = dccp_info
 
     def configure(self):
-        self.inp = Input("struct pkt_dccp_headers*")
+        self.inp = Input("struct pkt_dccp_ack_headers *", "struct pkt_dccp_headers*")
         self.out = Output("struct pkt_dccp_ack_headers *")
 
-    def impl(self):  # TODO: reserve pkt buffer instead of malloc
+    def impl(self):
         self.run_c(r'''
-        (struct pkt_dccp_headers* p) = inp();
-        struct pkt_dccp_ack_headers *ack = (struct pkt_dccp_ack_headers *) malloc(sizeof(struct pkt_dccp_ack_headers));
+        (struct pkt_dccp_ack_headers* ack, struct pkt_dccp_headers* p) = inp();
         memcpy(ack, &dccp->header, sizeof(struct pkt_dccp_headers));
         ack->eth.dest = p->eth.src;
         ack->dccp.hdr.src = p->dccp.dst;
@@ -225,6 +216,7 @@ class DccpRecvAck(Element):
 
     def configure(self):
         self.inp = Input("struct pkt_dccp_headers*")
+        self.out = Output("struct pkt_dccp_headers*")
 
     def impl(self):
         self.run_c(r'''
@@ -278,11 +270,12 @@ class DccpRecvAck(Element):
 
 	connections[srcworker].lastack = MAX(connections[srcworker].lastack, (int32_t)ntohl(ack->dccp.ack));
 	connections[srcworker].acks++;
+	output { out(p); }
         ''')
 
 ################################################
 
-class GetWorkerID(Element):
+class SaveWorkerID(Element):
     this = Persistent(TaskMaster)
 
     def states(self):
@@ -290,35 +283,68 @@ class GetWorkerID(Element):
 
     def configure(self):
         self.inp = Input("struct tuple*")
-        self.out = Output("void*", Int)
+        self.out = Output("struct tuple*")
 
     def impl(self):
         self.run_c(r'''
         (struct tuple* t) = inp();
-        output { out(t, this->task2worker[t->task]); }
+        state.worker = this->task2worker[t->task]);
+        output { out(t); }
         ''')
 
-class Tuple2Pkt(Element):    # TODO: reserve pkt buffer instead of malloc
+class GetWorkerID(Element):
+    def configure(self):
+        self.inp = Input()
+        self.out = Output(Int)
+
+    def impl(self):
+        self.run_c(r'''output { out(state.worker); }''')
+
+class GetWorkerIDPkt(Element):
+    def configure(self):
+        self.inp = Input("struct pkt_dccp_headers*")
+        self.out = Output("struct pkt_dccp_headers*", Int)
+
+    def impl(self):
+        self.run_c(r'''
+        (struct pkt_dccp_headers* p) = inp();
+        output { out(p, state.worker); }
+        ''')
+
+
+class SaveTuple(Element):
+    def configure(self):
+        self.inp = Input("struct tuple*")
+        self.out = Output()
+
+    def impl(self):
+        self.run_c(r'''
+        (struct tuple* t) = inp();
+        state.tuple = t;
+        output { out(); }
+        ''')
+
+class Tuple2Pkt(Element):
     dccp = Persistent(DccpInfo)
 
     def states(self):
         self.dccp = dccp_info
 
     def configure(self):
-        self.inp = Input("void*", Int)
-        self.out = Output("struct pkt_dccp_headers*", Int)
+        self.inp = Input("struct pkt_dccp_headers*", "struct rte_mbuf *")
+        self.out = Output("struct pkt_dccp_headers*")
 
     def impl(self):
         self.run_c(r'''
-        (void* t, worker) = inp();
-        struct pkt_dccp_headers *header = (struct pkt_dccp_headers *) malloc(sizeof(struct pkt_dccp_headers) + sizeof(struct tuple));
+        (struct pkt_dccp_headers* header, struct rte_mbuf * b) = inp();
+        state.tx_buf = b;
         memcpy(header, &dccp->header, sizeof(struct pkt_dccp_headers));
-        memcpy(&header[1], t, sizeof(struct tuple));
+        memcpy(&header[1], state.tuple, sizeof(struct tuple));
 
-        header->dccp.dst = htons(worker);
-        header->eth.dest = workers[worker].mac;
+        header->dccp.dst = htons(state.worker);
+        header->eth.dest = workers[state.worker].mac;
 
-        output { out(header, worker); }
+        output { out(header); }
         ''')
 
 
@@ -333,27 +359,57 @@ class Pkt2Tuple(Element):
         output { out((struct tuple*) &p[1]); }
         ''')
 
-
-class Classifier(Element):
+class SizeAck(Element):
     def configure(self):
-        self.inp = Input("struct pkt_dccp_headers*")
-        self.pkt = Output("struct pkt_dccp_headers*")
-        self.ack = Output("struct pkt_dccp_ack_headers*")
+        self.inp = Input()
+        self.out = Output(Size)
 
     def impl(self):
         self.run_c(r'''
-        (struct pkt_dccp_headers* p) = inp();
-        int type = 0;
-        if (ntohs(p->eth.type) == ETHTYPE_IP && p->ip._proto == IP_PROTO_DCCP) {
-            if(((p->dccp.res_type_x >> 1) & 15) == DCCP_TYPE_ACK) type = 1;
-            else type = 2;
-        }
-        output switch {
-            case type==1: ack((struct pkt_dccp_ack_headers*) p);
-            case type==2: pkt(p);
-        }
+        output { out(sizeof(struct pkt_dccp_ack_headers)); }
         ''')
 
+class SizePkt(Element):
+    def configure(self):
+        self.inp = Input()
+        self.out = Output(Size)
+
+    def impl(self):
+        self.run_c(r'''
+        output { out(sizeof(struct pkt_dccp_headers)); }
+        ''')
+
+class GetBothPkts(Element):
+    def configure(self):
+        self.inp = Input("struct pkt_dccp_ack_headers*", "struct rte_mbuf *")
+        self.out = Output("struct pkt_dccp_ack_headers*", "struct pkt_dccp_headers*")
+
+    def impl(self):
+        self.run_c(r'''
+        (struct pkt_dccp_ack_headers* tx_pkt, struct rte_mbuf* tx_buf) = inp();
+        state.tx_buf = tx_buf;
+        output { out(tx_pkt, state.rx_pkt); }
+        ''')
+
+class GetTxBuf(Element):
+    def configure(self):
+        self.inp = Input()
+        self.out = Output("struct rte_mbuf *")
+
+    def impl(self):
+        self.run_c(r'''
+        output { out(state.tx_buf); }
+        ''')
+
+class GetRxBuf(Element):
+    def configure(self):
+        self.inp = Input()
+        self.out = Output("struct rte_mbuf *")
+
+    def impl(self):
+        self.run_c(r'''
+        output { out(state.rx_buf); }
+        ''')
 
 
 ############################### Queue #################################
@@ -414,23 +470,57 @@ rx_enq_creator, rx_deq_creator, rx_release_creator, scan = \
 tx_enq_creator, tx_deq_creator, tx_release_creator, scan = \
     queue2.queue_custom_owner_bit("tx_queue", "struct tuple", MAX_ELEMS, n_cores, "task", blocking=False)
 
-class nic_rx(InternalLoop):
-    def configure(self): self.process = 'flexstorm'
 
-    def spec(self):
-        # TODO: without DCCP
-        pass
+# FromNet | Output(type, struct rte_mbuf *)
+# NetworkFree | Input(struct rte_mbuf *)
+
+# NetworkAlloc | Input(Size), Output(type, struct rte_mbuf *)
+# ToNet | Input(struct rte_mbuf *)
+
+
+class RxState(State):
+    rx_pkt = Field("struct pkt_dccp_headers*")
+    rx_buf = Field("struct rte_mbuf *")
+    tx_buf = Field("struct rte_mbuf *")
+
+
+class NicRxPipeline(Pipeline):
+    state = PerPacket(RxState)
 
     def impl(self):
-        # TODO: from_net -> network_free
-        # TODO: network_buf_alloc -> to_net
-        classifier = Classifier()
-        from_net >> classifier
+        # All share the same mempool
+        FromNet, NetworkFree = dpdk.from_net()  # create one rx queue
+        NetworkAlloc, ToNet = dpdk.to_net()  # create one tx queue
 
-        classifier.pkt >> Pkt2Tuple() >> get_core >> rx_enq_creator() >> library_dsl2.Drop(configure=["struct tuple*"])
-        classifier.pkt >> DccpSendAck() >> to_net
+        from_net = FromNet(configure=["struct pkt_dccp_headers*"])
+        network_free = NetworkFree()
 
-        classifier.ack >> DccpRecvAck()
+        network_alloc = NetworkAlloc(configure=["struct pkt_dccp_ack_headers*"])
+        to_net = ToNet()
+
+        class nic_rx(InternalLoop):
+            def configure(self): self.process = 'flexstorm'
+
+            def impl(self):
+                from_net >> Save() >> Pkt2Tuple() >> GetCore() >> rx_enq_creator() >> GetRxBuf() >> network_free
+
+            def impl_dccp(self):
+                classifier = Classifier()
+                from_net >> classifier
+
+                # CASE 1: not ack
+                # send ack
+                classifier.pkt >> SizeAck() >> network_alloc >> GetBothPkts() >> DccpSendAck() >> GetTxBuf() >> to_net
+                # process
+                pkt2tuple = Pkt2Tuple()
+                classifier.pkt >> pkt2tuple >> GetCore() >> rx_enq_creator() >> GetRxBuf() >> network_free
+                run_order(to_net, pkt2tuple)
+
+                # CASE 2: ack
+                classifier.ack >> DccpRecvAck() >> GetRxBuf() >> network_free
+
+        nic_rx('nic_rx')
+
 
 class inqueue_get(API):
     def configure(self):
@@ -440,12 +530,14 @@ class inqueue_get(API):
 
     def impl(self): self.inp >> rx_deq_creator() >> self.out
 
+
 class inqueue_advance(API):
     def configure(self):
         self.process = 'flexstorm'
         self.inp = Input("struct tuple*")
 
     def impl(self): self.inp >> rx_release_creator()
+
 
 class outqueue_put(API):
     def configure(self):
@@ -454,42 +546,65 @@ class outqueue_put(API):
 
     def impl(self): self.inp >> tx_enq_creator()
 
-class nic_tx(InternalLoop):
-    def configure(self):
-        self.process = 'flexstorm'
+class RxState(State):
+    tuple = Field("struct tuple*")
+    worker = Field(Int)
+    tx_buf = Field("struct rte_mbuf *")
 
-    def spec(self):
-        # TODO: without DCCP
-        pass
+class NicTxPipeline(Pipeline):
+    state = PerPacket(RxState)
 
-    # Cleaner version
     def impl(self):
-        tx_deq = tx_deq_creator()
-        tx_release = tx_release_creator()
-        rx_enq = rx_enq_creator()
-        get_worker_id = GetWorkerID()
+        tx_release = tx_deq_creator()
+        NetworkAlloc, ToNet = dpdk.to_net()  # create one tx queue
+        network_alloc = NetworkAlloc(configure=["struct pkt_dccp_headers*"])
+        to_net = ToNet()
 
-        queue_schedule >> tx_deq >> print_tuple >> choose
-        tx_deq >> batch_inc
+        class PreparePkt(Composite):
+            def configure(self):
+                self.inp = Input("struct tuple*")
 
-        # send
-        choose.out_send >> steer_worker
-        for i in range(n_workers):
-            steer_worker.out[i] >> get_worker_id
-        get_worker_id >> DccpCheckCongestion() >> Tuple2Pkt() >> DccpSeqTime() >> to_net >> tx_release
+            def impl(self):
+                tuple2pkt = Tuple2Pkt()
 
-        # local
-        choose.out_local >> get_core2 >> rx_enq >> tx_release
+                # TODO: okay to connect non-empty port to empty port
+                self.inp >> SaveTuple() >> SizePkt() >> network_alloc >> tuple2pkt >> GetTxBuf() >> to_net
+                self.inp >> tx_release
+                run_order(tuple2pkt, tx_release)
+
+            def impl_dccp(self):
+                tuple2pkt = Tuple2Pkt()
+
+                self.inp >> SaveTuple() >> GetWorkerID() >> DccpCheckCongestion() >> SizePkt() >> network_alloc \
+                >> tuple2pkt >> GetWorkerIDPkt() >> DccpSeqTime() >> GetTxBuf() >> to_net
+                self.inp >> tx_release
+                run_order(tuple2pkt, tx_release)
+
+        class nic_tx(InternalLoop):
+            def configure(self):
+                self.process = 'flexstorm'
+
+            def impl(self):
+                tx_deq = tx_deq_creator()
+                rx_enq = rx_enq_creator()
+                local_or_remote = LocalOrRemote()
+
+                queue_schedule >> tx_deq >> print_tuple >> SaveWorkerID() >> local_or_remote
+                tx_deq >> batch_inc
+                # send
+                local_or_remote.out_send >> PreparePkt()
+                # local
+                local_or_remote.out_local >> GetCore() >> rx_enq >> tx_release
+
+        nic_tx('nic_tx')
 
 
-nic_rx('nic_rx')
 inqueue_get('inqueue_get')
 inqueue_advance('inqueue_advance')  # TODO: signature change
 outqueue_put('outqueue_put')
-nic_tx('nic_tx')
 
 
-c = Compiler()
+c = Compiler(NicRxPipeline, NicTxPipeline)
 c.include = r'''
 #include <rte_memcpy.h>
 #include "worker.h"
