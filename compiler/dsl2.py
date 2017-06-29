@@ -230,6 +230,9 @@ class SpecImplOutput(SpecImplPort):
 class Connectable(object):
     id = 0
 
+    def __str__(self):
+        return self.name
+
     def __init__(self, name=None, states=[], configure=[]):
         if name is None:
             name = self.__class__.__name__ + str(self.__class__.id)

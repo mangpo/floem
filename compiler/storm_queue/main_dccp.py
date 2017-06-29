@@ -471,13 +471,6 @@ tx_enq_creator, tx_deq_creator, tx_release_creator, scan = \
     queue2.queue_custom_owner_bit("tx_queue", "struct tuple", MAX_ELEMS, n_cores, "task", blocking=False)
 
 
-# FromNet | Output(type, struct rte_mbuf *)
-# NetworkFree | Input(struct rte_mbuf *)
-
-# NetworkAlloc | Input(Size), Output(type, struct rte_mbuf *)
-# ToNet | Input(struct rte_mbuf *)
-
-
 class RxState(State):
     rx_pkt = Field("struct pkt_dccp_headers*")
     rx_buf = Field("struct rte_mbuf *")
@@ -488,6 +481,13 @@ class NicRxPipeline(Pipeline):
     state = PerPacket(RxState)
 
     def impl(self):
+        # Signature
+        # FromNet: Output(header_type, struct rte_mbuf *)
+        # NetworkFree: Input(struct rte_mbuf *)
+
+        # NetworkAlloc: Input(Size), Output(header_type, struct rte_mbuf *)
+        # ToNet: Input(struct rte_mbuf *)
+        
         # All share the same mempool
         FromNet, NetworkFree = dpdk.from_net()  # create one rx queue
         NetworkAlloc, ToNet = dpdk.to_net()  # create one tx queue
@@ -567,7 +567,6 @@ class NicTxPipeline(Pipeline):
             def impl(self):
                 tuple2pkt = Tuple2Pkt()
 
-                # TODO: okay to connect non-empty port to empty port
                 self.inp >> SaveTuple() >> SizePkt() >> network_alloc >> tuple2pkt >> GetTxBuf() >> to_net
                 self.inp >> tx_release
                 run_order(tuple2pkt, tx_release)
@@ -615,3 +614,4 @@ c.include = r'''
 c.depend = {"test_storm": ['list', 'hash', 'hash_table', 'spout', 'count', 'rank', 'worker', 'flexstorm']}
 c.generate_code_as_header("flexstorm")
 c.compile_and_run([("test_storm", workerid[test])])
+

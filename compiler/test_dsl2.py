@@ -58,6 +58,9 @@ class TestDSL2(unittest.TestCase):
                  "probe_multi.py",
                  "nested_compo_in_impl.py",
                  "nested_spec_impl_in_compo.py",
+                 "pipeline_state_empty_port1.py",
+                 "pipeline_state_empty_port2.py",
+                 "pipeline_state_empty_port3.py",
                  ]
         for test in tests:
             status = os.system("cd programs_dsl2; python " + test + "; cd ..")
