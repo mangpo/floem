@@ -34,12 +34,25 @@ class main(Pipeline):
     class Get(Element):
         def configure(self):
             self.inp = Input(Int)
+            self.out = Output(Int, Int)
+
+        def impl(self):
+            self.run_c(r'''
+            int a = inp();
+            int b = state.b;
+            output { out(a, b); }
+            ''')
+
+    class Get2(Element):
+        def configure(self):
+            self.inp = Input(Int, Int)
             self.out = Output(Int)
 
         def impl(self):
             self.run_c(r'''
-            int x = state.b;
-            output { out(x); }
+            inp();
+            int b = state.b;
+            output { out(b); }
             ''')
 
     class Display(Element):
@@ -53,7 +66,7 @@ class main(Pipeline):
 
     class run(API):
         def impl(self):
-            main.Gen() >> main.Save() >> main.Get() >> main.Display()
+            main.Gen() >> main.Save() >> main.Get() >> main.Get2() >> main.Display()
 
     def impl(self):
         main.run('run')
