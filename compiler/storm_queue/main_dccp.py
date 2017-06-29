@@ -487,7 +487,7 @@ class NicRxPipeline(Pipeline):
 
         # NetworkAlloc: Input(Size), Output(header_type, struct rte_mbuf *)
         # ToNet: Input(struct rte_mbuf *)
-        
+
         # All share the same mempool
         FromNet, NetworkFree = dpdk.from_net()  # create one rx queue
         NetworkAlloc, ToNet = dpdk.to_net()  # create one tx queue
@@ -502,6 +502,7 @@ class NicRxPipeline(Pipeline):
             def configure(self): self.process = 'flexstorm'
 
             def impl(self):
+                # Notice that it's okay to connect non-empty port to an empty port.
                 from_net >> Save() >> Pkt2Tuple() >> GetCore() >> rx_enq_creator() >> GetRxBuf() >> network_free
 
             def impl_dccp(self):
