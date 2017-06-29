@@ -642,13 +642,13 @@ class Graph:
             in_argtypes += sum([port.argtypes for port in e2.inports], []) # Flatten a list of list
 
         # Check types
-        if not(in_argtypes == out_argtypes):
-            if out1 and in2:
-                raise Exception("Mismatched ports -- output port '%s' of element '%s' and input port '%s' of element '%s': %s vs %s"
-                                % (out1, name1, in2, name2, out_argtypes, in_argtypes))
-            else:
-                raise Exception("Mismatched ports -- output port of element '%s' and input port of element '%s': %s vs %s"
-                                % (name1, name2, out_argtypes, in_argtypes))
+        # if not(in_argtypes == out_argtypes):
+        #     if out1 and in2:
+        #         raise Exception("Mismatched ports -- output port '%s' of element '%s' and input port '%s' of element '%s': %s vs %s"
+        #                         % (out1, name1, in2, name2, out_argtypes, in_argtypes))
+        #     else:
+        #         raise Exception("Mismatched ports -- output port of element '%s' and input port of element '%s': %s vs %s"
+        #                         % (name1, name2, out_argtypes, in_argtypes))
 
         i1.connect_output_port(out1, i2.name, in2, overwrite)
         if isinstance(in2, str):

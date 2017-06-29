@@ -35,9 +35,11 @@ class Output(Port):
         elif isinstance(other, SpecImplPort):
             other.rshift__reversed(self)
         elif isinstance(other, Input):
-            assert self.args == other.args, "Illegal to connect %s of type %s to %s of type %s." \
-                                            % (self, self.args, other, other.args)
-            c = program.Connect(self.element, other.element, self.name, other.name)
+            if not self.args == other.args:
+                if len(other.args) > 0 or len(other.element.inports) > 1:
+                    raise Exception("Illegal to connect %s of type %s to %s of type %s." %
+                                    (self, self.args, other, other.args))
+            c = program.Connect(self.element.name, other.element.name, self.name, other.name)
             scope_append(c)
         else:
             raise Exception("Attempt to connect element '%s' to %s, which is not an element, a composite, or an input port." %
@@ -246,7 +248,7 @@ class Connectable(object):
                 continue
             if isinstance(o, Port):
                 o.name = s
-                o.element = name
+                o.element = self
                 if isinstance(o, Input) or isinstance(o, CompositeInput):
                     self.inports.append(o)
                 else:
@@ -255,7 +257,7 @@ class Connectable(object):
                 for i in range(len(o)):
                     p = o[i]
                     p.name = s + str(i)
-                    p.element = name
+                    p.element = self
                     if isinstance(p, Input) or isinstance(p, CompositeInput):
                         self.inports.append(p)
                     else:
