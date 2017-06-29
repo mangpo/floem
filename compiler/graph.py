@@ -369,7 +369,7 @@ class State:
         self.mapping = mapping
         if fields:
             self.fields = fields
-        elif content:
+        elif content is not None:
             self.fields = self.extract_fields()
         else:
             self.fields = None

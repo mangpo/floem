@@ -394,6 +394,17 @@ def compile_smart_queues(g, src2fields):
             continue
 
         instance = g.instances[inst_name]
+
+        for var in instance.uses:
+            has = False
+            for field in mapping:
+                m = re.match(field, var)
+                if m:
+                    has = True
+                    break
+            if not has:
+                raise Exception("Per-packet state '%s' does not contain field '%s'." % (state, var))
+
         new_state = state + "_compressed" + str(compress_id)
         compress_id += 1
         content = ""

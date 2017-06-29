@@ -69,26 +69,26 @@ def insert_pipeline_state(instance, state, start, g):
                         element.code = add + element.code
                     no_state = False
 
-        # if not inserted:
-        #     best_port = None
-        #     n_insts = 1000
-        #     for port in element.inports:
-        #         if port.name in instance.input2ele:
-        #             l = instance.input2ele[port.name]
-        #             all = True
-        #             for prev_name, prev_port in l:
-        #                 prev = g.instances[prev_name]
-        #                 if len(prev.uses) == 0 or not prev.element.output_fire == "all":
-        #                     all = False
-        #                     break
-        #             if all and len(l) < n_insts:
-        #                 n_insts = len(l)
-        #                 best_port = port.name
-        #
-        #     if best_port:
-        #         insert_pipeline_at_port(instance, best_port, g, state)
-        #     else:
-        #         raise Exception("No easy way to insert pipeline state for instance '%s'." % instance.name)
+        if not inserted:
+            best_port = None
+            n_insts = 1000
+            for port in element.inports:
+                if port.name in instance.input2ele:
+                    l = instance.input2ele[port.name]
+                    all = True
+                    for prev_name, prev_port in l:
+                        prev = g.instances[prev_name]
+                        if len(prev.uses) == 0 or not prev.element.output_fire == "all":
+                            all = False
+                            break
+                    if all and len(l) < n_insts:
+                        n_insts = len(l)
+                        best_port = port.name
+
+            if best_port:
+                insert_pipeline_at_port(instance, best_port, g, state)
+            else:
+                raise Exception("No easy way to insert pipeline state for instance '%s'." % instance.name)
 
     for port in element.outports:
         if len(port.argtypes) == 0:
@@ -548,30 +548,77 @@ def analyze_pipeline_states(g):
     return src2fields
 
 
+def find_starting(g, name):
+    instance = g.instances[name]
+    if instance.element.output_fire == "multi":
+        ret = set()
+        for next_name, next_port in instance.output2ele.values():
+            mine = find_starting(g, next_name)
+            ret = ret.union(mine)
+        return ret
+    else:
+        return set([name])
+
+
+def is_valid_start(g, name):
+    """
+    Not valid if it rearch dequeue or scan before enqueue
+    """
+    instance = g.instances[name]
+
+    if instance.element.special:
+        if instance.element.special.enq == instance:
+            return True
+        else:
+            return False
+
+    ret = True
+    for next, port in instance.output2ele.values():
+        ret = ret and is_valid_start(g, next)
+    return ret
+
+
 def insert_starting_point(g, pktstate):
-    for instance in g.instances.values():
-        if instance.element.special:
-            continue
+    inserted = False
 
-        candidate = False
-        for port in instance.element.outports:
-            if len(port.argtypes) == 0:
-                candidate = True
-                break
+    roots = g.find_roots()
+    for root in roots:
+        if not g.instances[root].element.special:
+            starts = find_starting(g, root)
 
-        if not candidate:
-            continue
+            for start in starts:
+                if is_valid_start(g, start):
+                    g.pipeline_states[start] = pktstate.__class__.__name__
+                    inserted = True
 
-        for port in instance.element.inports:
-            if len(port.argtypes) == 0:
-                if port.name in instance.input2ele:
-                    candidate = False
-                    break
 
-        if not candidate:
-            continue
+    # for instance in g.instances.values():
+    #     if instance.element.special:
+    #         continue
+    #
+    #     candidate = False
+    #     for port in instance.element.outports:
+    #         if len(port.argtypes) == 0:
+    #             candidate = True
+    #             break
+    #
+    #     if not candidate:
+    #         continue
+    #
+    #     for port in instance.element.inports:
+    #         if len(port.argtypes) == 0:
+    #             if port.name in instance.input2ele:
+    #                 candidate = False
+    #                 break
+    #
+    #     if not candidate:
+    #         continue
+    #
+    #     g.pipeline_states[instance.name] = pktstate.__class__.__name__
+    #     inserted = True
 
-        g.pipeline_states[instance.name] = pktstate.__class__.__name__
+    if not inserted:
+        raise Exception("Cannot find an entry point to create per-packet state '%s'." % pktstate.__class__.__name__)
 
 
 def compile_pipeline_states(g, pktstate):

@@ -196,7 +196,7 @@ def element_to_function(instance, state_rename, graph, ext):
         if m is None:
             m = re.search('(' + port + '[ ]*\(([^\)]*)\))', src)
         if m is None:
-            break
+            continue
 
         p = m.start(1)
         check_no_args(m.group(2))

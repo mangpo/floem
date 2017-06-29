@@ -46,6 +46,7 @@ class TestDSL2(unittest.TestCase):
                  "API_increment2.py",
                  "API_insert_start_element.py",
                  "pipeline_state_simple.py",
+                 "pipeline_state_nonempty.py",
                  "queue_owner_bit.py",
                  "queue_variable_size.py",
                  "join_inject.py",
