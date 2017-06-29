@@ -25,27 +25,82 @@ def insert_reference_count(st_name, g):
     state.content = "int refcount; " + state.content
 
 
-state_extra = 0
+# state_extra = 0
+# def insert_pipeline_at_port(instance, best_port, g, state):
+#     global state_extra
+#     l = []
+#     for prev_name, prev_port in instance.input2ele[best_port]:
+#         prev = g.instances[prev_name]
+#         prev_element = prev.element
+#
+#         port = Port("_out_state" + str(state_extra), [state + "*"])
+#         prev_element.outports.append(port)
+#         prev_element.output_code[port.name] = '%s(_state)' % port.name
+#         prev.output2ele[port.name] = (instance.name, "_in_state")
+#         l.append((prev_name, "_out_state" + str(state_extra)))
+#     state_extra += 1
+#
+#     port = Port("_in_state", [state + "*"])
+#     element = instance.element
+#     element.inports.append(port)
+#     add = '  %s *_state = %s();\n' % (state, port.name)
+#     element.code = add + element.code
+#     instance.input2ele[port.name] = l
+
+
 def insert_pipeline_at_port(instance, best_port, g, state):
-    global state_extra
     l = []
     for prev_name, prev_port in instance.input2ele[best_port]:
         prev = g.instances[prev_name]
         prev_element = prev.element
 
-        port = Port("_out_state" + str(state_extra), [state + "*"])
-        prev_element.outports.append(port)
-        prev_element.output_code[port.name] = '%s(_state)' % port.name
-        prev.output2ele[port.name] = (instance.name, "_in_state")
-        l.append((prev_name, "_out_state" + str(state_extra)))
-    state_extra += 1
+        port = [port for port in prev_element.outports if port.name == prev_port][0]
+        port.argtypes.append(state + "*")
+        out_code = prev_element.output_code[port.name]
+        out_code = out_code[:-1] + ", _state)"
+        prev_element.output_code[port.name] = out_code
 
-    port = Port("_in_state", [state + "*"])
     element = instance.element
-    element.inports.append(port)
-    add = '  %s *_state = %s();\n' % (state, port.name)
-    element.code = add + element.code
-    instance.input2ele[port.name] = l
+    port = [port for port in element.inports if port.name == best_port][0]
+    code_insert_arg_at_port(element, port, state)
+    port.argtypes.append(state + "*")
+
+
+def code_insert_arg_at_port(element, port, state):
+    src = element.code
+    argtypes = port.argtypes
+    m = re.search('[^a-zA-Z0-9_](' + port.name + '[ ]*\(([^\)]*)\))', src)
+    if m is None:
+        m = re.search('(' + port + '[ ]*\(([^\)]*)\))', src)
+
+    if m is None:
+        pass
+
+    p = m.start(1)
+    codegen.check_no_args(m.group(2))
+    c1, p1 = codegen.last_non_space(src, p)
+    c2, p2 = codegen.first_non_space(src, m.end(1))
+    c0, p0 = codegen.last_non_space(src, p1 - 1)
+
+    if c0 == ')' and c1 == '=' and c2 == ';':
+        #src = remove_asgn_stmt(funcname, src, port2args, port, p1, p2 + 1, argtypes)
+        src = src[:p0] + ', {0}* _state'.format(state) + src[p0:]
+    elif (c1 == ';' or c1 is None) and c2 == ';':
+        #src = remove_nonasgn_stmt(funcname, src, port2args, port, p1 + 1, p2 + 1, argtypes)
+        add = "\n("
+        for i in range(len(argtypes)):
+            type = argtypes[i]
+            add += "{0} _dummy{1}, ".format(type, i)
+        add += '{0}* _state) = {1}()'.format(state, port.name)
+        if p1 is None:
+            p1 = -1
+        src = src[:p1+1] + add + src[p2:]
+    else:
+        #src = remove_expr(funcname, src, port2args, port, p, m.end(1), argtypes)
+        src = src[:p] + "_dummy" + src[m.end(1):]
+        src = "({0} _dummy, {1}* _state) = {2}();\n".format(argtypes[0], state, port.name) + src
+
+    element.code = src
 
 
 def insert_pipeline_state(instance, state, start, g):

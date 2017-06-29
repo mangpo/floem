@@ -32,7 +32,7 @@ def last_non_space(s,i):
     :return: A pair of (the last character before s[i] that is not a space, its index)
     """
     i -= 1
-    while i >= 0 and s[i] == ' ':
+    while i >= 0 and (s[i] == ' ' or s[i] == '\n'):
         i -= 1
 
     if i >= 0:
@@ -48,7 +48,7 @@ def first_non_space(s,i):
     :return: A pair of (the first character start from s[i] that is not a space, its index)
     """
     l = len(s)
-    while i < l and s[i] == ' ':
+    while i < l and (s[i] == ' ' or s[i] == '\n'):
         i += 1
 
     if i < l:
@@ -60,6 +60,7 @@ def first_non_space(s,i):
 def remove_asgn_stmt(funcname, src, port2args,port,p_eq, p_end, inport_types):
     """
     Remove the reading from port statement from src, and put its LHS of the statement in port2args.
+    (int x) = inp();
     :param src:       string source code
     :param port2args: map port name to a list of (type,argument name)
     :param port:      port name
@@ -91,6 +92,7 @@ def remove_nonasgn_stmt(funcname, src,port2args,port,p_start, p_end, inport_type
     """
     Remove the reading from port statement from src,
     when the reading is not saved in any variable or used in any expression.
+    inp();
     :param src:       string source code
     :param port2args: map port name to a list of (type,argument name)
     :param port:      port name
@@ -108,6 +110,7 @@ def remove_nonasgn_stmt(funcname, src,port2args,port,p_start, p_end, inport_type
 def remove_expr(funcname, src,port2args,port,p_start, p_end, inport_types):
     """
     Remove the reading from port expression from src, and replace it with a fresh variable name.
+    int x = inp() + 1;
     :param src:       string source code
     :param port2args: map port name to a list of (type,argument name)
     :param port:      port name
