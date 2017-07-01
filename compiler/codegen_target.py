@@ -74,6 +74,7 @@ def inject_thread_code(injects, graph):
 
 
 # TODO: distinguish between from_net & DMA_read pipeline
+# For from_net: has an extra wqe argument for cavium
 def internal_thread_code(forever, graph):
     global_src = ""
     run_src = ""

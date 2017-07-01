@@ -331,12 +331,14 @@ def element_to_function(instance, state_rename, graph, ext):
 
 
 def generate_memory_regions(graph, ext):
+    master_h = ""
+    slave_h = ""
     master_src = ""
     slave_src = ""
 
     for region in graph.memory_regions:
-        master_src += 'void *%s;\n' % region.name
-        slave_src += 'void *%s;\n' % region.name
+        master_h += 'void *%s;\n' % region.name
+        slave_h += 'void *%s;\n' % region.name
 
     master_src += "static void init_memory_regions() {\n"
     slave_src += "static void init_memory_regions() {\n"
@@ -360,16 +362,22 @@ def generate_memory_regions(graph, ext):
     slave_src += "}\n"
 
     if len(graph.processes) > 1:
+        with open(graph.master_process + '.h', 'a') as f, redirect_stdout(f):
+            print master_h
         with open(graph.master_process + ext, 'a') as f, redirect_stdout(f):
             print master_src
 
         for process in graph.processes:
             if process is not graph.master_process:
+                with open(process + '.h', 'a') as f, redirect_stdout(f):
+                    print slave_h
                 with open(process + ext, 'a') as f, redirect_stdout(f):
                     print slave_src
 
     else:
         for process in graph.processes:
+            with open(process + ext, 'a') as f, redirect_stdout(f):
+                print slave_h
             with open(process + ext, 'a') as f, redirect_stdout(f):
                 print slave_src
 
@@ -706,7 +714,7 @@ def generate_code(graph, ext, testing=None, include=None):
         generate_include(include, graph.processes, '.h')
 
     # Generate memory regions.
-    generate_memory_regions(graph, ext)
+    generate_memory_regions(graph, '.c')
 
     # Generate states.
     for state_name in graph.state_order:
