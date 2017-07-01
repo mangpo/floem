@@ -24,12 +24,7 @@ def thread_func_create_cancel(func, device, size=None, interval=None):
     pthread_exit(NULL);
         ''' % (size, '%d', func, interval)
     else:
-        body = r'''
-    while(true) {
-        %s();
-        /* usleep(1000); */
-    }
-    ''' % func
+        body = r'''%s();''' % func
 
     if device[0] == target.CPU:
         thread = "pthread_t _thread_%s;\n" % func
@@ -68,6 +63,7 @@ def inject_thread_code(injects, graph):
     return global_src, run_src, kill_src
 
 
+# TODO: distinguish between from_net & DMA_read pipeline
 def internal_thread_code(forever, graph):
     global_src = ""
     run_src = ""
