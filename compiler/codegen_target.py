@@ -13,25 +13,35 @@ def redirect_stdout(new_target):
 
 def thread_func_create_cancel(func, device, size=None, interval=None):
     # TODO: potentially need to pass in core_id
-    if size:
-        body = r'''
-    usleep(1000);
-    for(int i=0; i<%d; i++) {
-        //printf("inject = %s\n", i);
-        %s();
-        usleep(%d);
-    }
-    pthread_exit(NULL);
-        ''' % (size, '%d', func, interval)
-    else:
-        body = r'''%s();''' % func
 
     if device[0] == target.CPU:
+        if size:
+            body = r'''
+        usleep(1000);
+        for(int i=0; i<%d; i++) {
+            //printf("inject = %s\n", i);
+            %s();
+            usleep(%d);
+        }
+        pthread_exit(NULL);
+            ''' % (size, '%d', func, interval)
+        else:
+            body = r'''
+        while(true) { %s(); /* usleep(1000); */ }
+        ''' % func
+
         thread = "pthread_t _thread_%s;\n" % func
         func_src = "void *_run_%s(void *threadid) {\n" % func + body + "}\n"
         create = "  pthread_create(&_thread_%s, NULL, _run_%s, NULL);\n" % (func, func)
         cancel = "  pthread_cancel(_thread_%s);\n" % func
     elif device[0] == target.CAVIUM:
+        if size:
+            raise Exception("Unimplemented for inject element on Cavium.")
+        else:
+            body = r'''
+        %s();
+            ''' % func
+
         thread = ""
         func_src = "void _run_%s() {\n" % func + body + "}\n"
 
