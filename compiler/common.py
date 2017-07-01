@@ -1,8 +1,6 @@
 import re
 
 standard_arg_format = "{0}_arg{1}"
-header_files = ["stdio.h", "stdlib.h", "string.h", "stddef.h", "stdint.h", "stdbool.h"]
-header_files_triggers = ["unistd.h", "pthread.h"]
 dpdk_include = "/home/mangpo/lib/dpdk-16.11/build/include/"
 pipeline_include = r'''
 typedef struct {

@@ -1,6 +1,7 @@
 import re
 import common
 import copy
+import target
 
 class UndefinedInstance(Exception):
     pass
@@ -264,6 +265,7 @@ class ElementNode:
         # Thread
         self.thread = thread
         self.process = None
+        self.device = None
 
         # Join information
         self.join_ports_same_thread = None
@@ -293,6 +295,7 @@ class ElementNode:
         node = ElementNode(self.name + suffix, new_element, self.state_args)
         node.thread = self.thread
         node.process = self.process
+        node.device = self.device
         node.liveness = self.liveness
         node.uses = self.uses
         node.extras = self.extras
@@ -431,9 +434,12 @@ class Graph:
 
         # Process
         self.processes = set()
+        self.devices = set()
         self.thread2process = {}
+        self.thread2device = {}
+        self.process2device = {}
         self.default_process = default_process
-        self.master_process = default_process
+        self.master_process = None
 
         # Per-packet state
         self.pipeline_states = {}
@@ -441,7 +447,7 @@ class Graph:
     def merge(self, other):
         assert other.default_process is 'tmp' or self.default_process == other.default_process, \
             "Graph merge failed -- mismatch default_process: %s vs %s." % (self.default_process, other.default_process)
-        assert other.master_process is 'tmp' or self.master_process == other.master_process, \
+        assert other.master_process is None or self.master_process == other.master_process, \
             "Graph merge failed -- mismatch master_process: %s vs %s." % (self.master_process, other.master_process)
         self.merge_dict(self.elements, other.elements)
         self.merge_dict(self.instances, other.instances)
@@ -460,7 +466,10 @@ class Graph:
         self.merge_dict(self.probe_compares, other.probe_compares)
 
         self.processes = self.merge_set(self.processes, other.processes)
+        self.devices = self.merge_set(self.devices, other.devices)
         self.merge_dict(self.thread2process, other.thread2process)
+        self.merge_dict(self.thread2device, other.thread2device)
+        self.merge_dict(self.process2device, other.process2device)
 
     @staticmethod
     def merge_dict(this, other):
@@ -783,6 +792,12 @@ class Graph:
             return self.thread2process[t]
         else:
             return self.default_process
+
+    def device_of_thread(self, t):
+        if t in self.thread2device:
+            return self.thread2device[t]
+        else:
+            return (target.CPU, [0])
 
 '''
 State initialization related functions

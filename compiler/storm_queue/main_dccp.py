@@ -482,11 +482,11 @@ class NicRxPipeline(Pipeline):
 
     def impl(self):
         # Signature
-        # FromNet: Output(header_type, struct rte_mbuf *)
+        # FromNet: Output(header_type *, struct rte_mbuf *)
         # NetworkFree: Input(struct rte_mbuf *)
 
-        # NetworkAlloc: Input(Size), Output(header_type, struct rte_mbuf *)
-        # ToNet: Input(struct rte_mbuf *)
+        # NetworkAlloc: Input(Size), Output(header_type *, struct rte_mbuf *)
+        # ToNet: Input(Size, header_type *, struct rte_mbuf *)
 
         # All share the same mempool
         FromNet, NetworkFree = dpdk.from_net()  # create one rx queue

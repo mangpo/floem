@@ -177,6 +177,13 @@ class ProcessMap:
         return self.thread + "@" + self.process
 
 
+class DeviceMap:
+    def __init__(self, device, thread, cores=[0]):
+        self.device = device
+        self.thread = thread
+        self.cores = cores
+
+
 class MasterProcess:
     def __init__(self, master):
         self.master = master
@@ -278,6 +285,9 @@ class GraphGenerator:
 
         elif isinstance(x, ProcessMap):
             self.graph.thread2process[get_resource_name(stack,x.thread)] = x.process
+
+        elif isinstance(x, DeviceMap):
+            self.graph.thread2device[get_resource_name(stack,x.thread)] = (x.device, x.cores)
 
         elif isinstance(x, MasterProcess):
             self.graph.master_process = x.master

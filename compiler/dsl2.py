@@ -456,12 +456,22 @@ class Composite(Connectable):
     def spec(self):
         return 'no spec'
 
-
-class API(Composite):
-    def __init__(self, name, default_return=None, process=None):
+class Runnable(Composite):
+    def __init__(self, name, process, device=None, cores=[0]):
         self.process = process
-        self.default_return = default_return
+        self.device = device
+        self.cores = cores
         Composite.__init__(self, name)
+
+        if self.process:
+            scope_append(program.ProcessMap(self.process, name))
+        if self.device:
+            scope_append(program.DeviceMap(self.device, name, cores))
+
+class API(Runnable):
+    def __init__(self, name, default_return=None, process=None):
+        self.default_return = default_return
+        Runnable.__init__(self, name, process)
 
         if len(self.inports) == 0:
             input = []
@@ -495,9 +505,6 @@ class API(Composite):
 
         t = APIThread(name, [x for x in input], output, default_val=self.default_return)
         t.run(self)
-
-        if self.process:
-            scope_append(program.ProcessMap(self.process, name))
 
     @abstractmethod
     def impl(self):
@@ -583,16 +590,12 @@ class API(Composite):
             inports[i].element_ports = [start.inp[i]]
 
 
-class InternalLoop(Composite):
-    def __init__(self, name, process=None):
-        self.process = process
-        Composite.__init__(self, name)
+class InternalLoop(Runnable):
+    def __init__(self, name, process=None, device=None, cores=[0]):
+        Runnable.__init__(self, name, process, device, cores)
 
         t = InternalThread(name)
         t.run(self)
-
-        if self.process:
-            scope_append(program.ProcessMap(self.process, name))
 
     @abstractmethod
     def impl(self):

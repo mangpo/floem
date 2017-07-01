@@ -5,7 +5,7 @@ import program
 import workspace
 import pipeline_state
 import join_handling
-import empty_port
+#import empty_port
 
 
 class Compiler:
@@ -35,7 +35,7 @@ class Compiler:
         dp = desugaring.desugar(p, self.desugar_mode, force=spec_impl)
 
         g = program.program_to_graph_pass(dp, default_process=filename, original=original)
-        empty_port.nonempty_to_empty_port_pass(g)
+        #empty_port.nonempty_to_empty_port_pass(g)
         pipeline_state.pipeline_state_pass(g, pktstate)
         return g
 

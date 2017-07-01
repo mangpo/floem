@@ -1,5 +1,5 @@
 from graph import AddressOf
-
+import target
 
 def assign_process_for_state_instance(g, process, st_inst_name):
     st_inst = g.state_instances[st_inst_name]
@@ -21,13 +21,21 @@ def assign_process_for_state_instance(g, process, st_inst_name):
 
 
 def annotate_process_info(g):
-    g.processes.add(g.master_process)
+    if g.master_process:
+        g.processes.add(g.master_process)
 
     for instance in g.instances.values():
         process = g.process_of_thread(instance.thread)
+        device = g.device_of_thread(instance.thread)
 
+        if device[0] == target.CAVIUM:
+            process = device[0]
+
+        g.process2device[process] = device[0]
         g.processes.add(process)
+        g.devices.add(device[0])
         instance.process = process
+        instance.device = device
         for st_inst_name in instance.state_args:
             assign_process_for_state_instance(g, process, st_inst_name)
 
