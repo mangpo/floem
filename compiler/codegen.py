@@ -148,8 +148,8 @@ def element_to_function(instance, state_rename, graph, ext):
     :return: a string of function source code
     """
     element = instance.element
-    src = element.code
-    out_src = element.get_output_code(instance.join_partial_order)
+    src = element.get_code(instance.device[0])
+    out_src = element.get_output_code(instance.join_partial_order, instance.device[0])
     funcname = instance.name
     inports = element.inports
     output2func = instance.output2ele
@@ -316,6 +316,9 @@ def element_to_function(instance, state_rename, graph, ext):
                 id += 1
                 args.append(arg_type)
 
+    if element.special == "from_net":
+        args.append("cvmx_wqe_t *wqe")
+
     # Code
     if instance.API_return:
         return_type = instance.API_return
@@ -361,24 +364,16 @@ def generate_memory_regions(graph, ext):
     master_src += "}\n"
     slave_src += "}\n"
 
-    if len(graph.processes) > 1:
-        with open(graph.master_process + '.h', 'a') as f, redirect_stdout(f):
-            print master_h
-        with open(graph.master_process + ext, 'a') as f, redirect_stdout(f):
-            print master_src
+    with open(graph.master_process + ext, 'a') as f, redirect_stdout(f):
+        print master_h
+    with open(graph.master_process + '.c', 'a') as f, redirect_stdout(f):
+        print master_src
 
-        for process in graph.processes:
-            if process is not graph.master_process:
-                with open(process + '.h', 'a') as f, redirect_stdout(f):
-                    print slave_h
-                with open(process + ext, 'a') as f, redirect_stdout(f):
-                    print slave_src
-
-    else:
-        for process in graph.processes:
+    for process in graph.processes:
+        if process is not graph.master_process:
             with open(process + ext, 'a') as f, redirect_stdout(f):
                 print slave_h
-            with open(process + ext, 'a') as f, redirect_stdout(f):
+            with open(process + '.c', 'a') as f, redirect_stdout(f):
                 print slave_src
 
 
@@ -714,7 +709,7 @@ def generate_code(graph, ext, testing=None, include=None):
         generate_include(include, graph.processes, '.h')
 
     # Generate memory regions.
-    generate_memory_regions(graph, '.c')
+    generate_memory_regions(graph, ext)
 
     # Generate states.
     for state_name in graph.state_order:
@@ -787,6 +782,11 @@ def remove_files(graph, ext):
         name = process + ext
         os.system("rm " + name)
 
+def generate_code_only(graph, testing, mode, include=None):
+    remove_files(graph, ".c")
+    generate_code(graph, ".c", testing, include)
+    generate_inject_probe_code(graph, ".c")
+    generate_internal_triggers(graph, ".c", mode)
 
 def generate_code_as_header(graph, testing, mode, include=None):
     remove_files(graph, ".h")

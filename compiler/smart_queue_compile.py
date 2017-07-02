@@ -1,4 +1,4 @@
-import queue2, workspace, desugaring
+import queue2, workspace, desugaring, queue_smart2
 from program import *
 from pipeline_state_join import get_node_before_release
 
@@ -369,7 +369,7 @@ def order_smart_queues(name, vis, order, g):
         order_smart_queues(next_name, vis, order, g)
 
     q = instance.element.special
-    if q and q.enq == instance:
+    if isinstance(q, queue_smart2.Queue) and q.enq == instance:
         order.append(q)
 
 
@@ -379,7 +379,7 @@ def compile_smart_queues(g, src2fields):
     vis = set()
     for instance in g.instances.values():
         q = instance.element.special
-        if q and q.enq == instance:
+        if isinstance(q, queue_smart2.Queue) and q.enq == instance:
             order_smart_queues(q.enq.name, vis, order, g)
 
     for q in order:

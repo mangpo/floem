@@ -39,6 +39,9 @@ def annotate_process_info(g):
         for st_inst_name in instance.state_args:
             assign_process_for_state_instance(g, process, st_inst_name)
 
+    if g.master_process is None:
+        g.master_process = [p for p in g.processes][0]
+
     for api in g.threads_API:
         process = g.process_of_thread(api.name)
         api.process = process

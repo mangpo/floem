@@ -4,14 +4,14 @@ from smart_queue_compile import compile_smart_queues
 import codegen
 
 
+
 def allocate_pipeline_state(g, element, state):
     assert not element.output_fire == "multi", "Batch element '%s' cannot allocate pipeline state." % element.name
     state_obj = g.states[state]
     add = "  {0} *_state = ({0} *) malloc(sizeof({0}));\n".format(state)
     add += "  _state->refcount = 1;\n"
     init = codegen.init_pointer(state_obj, state_obj.init, '_state')
-
-    element.code = add + init + element.code
+    element.prepend_code(add + init)
     element.cleanup = "  pipeline_unref((pipeline_state*) _state);\n"
 
 
@@ -25,29 +25,6 @@ def insert_reference_count(st_name, g):
     state.content = "int refcount; " + state.content
 
 
-# state_extra = 0
-# def insert_pipeline_at_port(instance, best_port, g, state):
-#     global state_extra
-#     l = []
-#     for prev_name, prev_port in instance.input2ele[best_port]:
-#         prev = g.instances[prev_name]
-#         prev_element = prev.element
-#
-#         port = Port("_out_state" + str(state_extra), [state + "*"])
-#         prev_element.outports.append(port)
-#         prev_element.output_code[port.name] = '%s(_state)' % port.name
-#         prev.output2ele[port.name] = (instance.name, "_in_state")
-#         l.append((prev_name, "_out_state" + str(state_extra)))
-#     state_extra += 1
-#
-#     port = Port("_in_state", [state + "*"])
-#     element = instance.element
-#     element.inports.append(port)
-#     add = '  %s *_state = %s();\n' % (state, port.name)
-#     element.code = add + element.code
-#     instance.input2ele[port.name] = l
-
-
 def insert_pipeline_at_port(instance, best_port, g, state):
     l = []
     for prev_name, prev_port in instance.input2ele[best_port]:
@@ -56,18 +33,15 @@ def insert_pipeline_at_port(instance, best_port, g, state):
 
         port = [port for port in prev_element.outports if port.name == prev_port][0]
         port.argtypes.append(state + "*")
-        out_code = prev_element.output_code[port.name]
-        out_code = out_code[:-1] + ", _state)"
-        prev_element.output_code[port.name] = out_code
+        prev_element.add_output_value(port.name, '_state')
 
     element = instance.element
     port = [port for port in element.inports if port.name == best_port][0]
-    code_insert_arg_at_port(element, port, state)
+    element_insert_arg_at_port(element, port, state)
     port.argtypes.append(state + "*")
 
 
-def code_insert_arg_at_port(element, port, state):
-    src = element.code
+def code_insert_arg_at_port(src, port, state):
     argtypes = port.argtypes
     m = re.search('[^a-zA-Z0-9_](' + port.name + '[ ]*\(([^\)]*)\))', src)
     if m is None:
@@ -100,7 +74,29 @@ def code_insert_arg_at_port(element, port, state):
         src = src[:p] + "_dummy" + src[m.end(1):]
         src = "({0} _dummy, {1}* _state) = {2}();\n".format(argtypes[0], state, port.name) + src
 
-    element.code = src
+    return src
+
+
+def element_insert_arg_at_port(element, port, state):
+    element.code = code_insert_arg_at_port(element.code, port, state)
+    if element.code_cavium:
+        element.code_cavium = code_insert_arg_at_port(element.code_cavium, port, state)
+
+def code_insert_arg_at_empyt_port(src, port, state):
+    m = re.search('[^a-zA-Z0-9_](' + port.name + ')\(', src)
+    if m:
+        add = '%s *_state = ' % state
+        src = src[:m.start(1)] + add + src[m.start(1):]
+    else:
+        add = '  %s *_state = %s();\n' % (state, port.name)
+        src = add + src
+    return src
+
+
+def element_insert_arg_at_empyt_port(element, port, state):
+    element.code = code_insert_arg_at_empyt_port(element.code, port, state)
+    if element.code_cavium:
+        element.code_cavium = code_insert_arg_at_empyt_port(element.code_cavium, port, state)
 
 
 def insert_pipeline_state(instance, state, start, g):
@@ -115,13 +111,7 @@ def insert_pipeline_state(instance, state, start, g):
                 port.pipeline = True
                 port.argtypes.append(state + "*")
                 if no_state:
-                    m = re.search('[^a-zA-Z0-9_](' + port.name + ')\(', element.code)
-                    if m:
-                        add = '%s *_state = ' % state
-                        element.code = element.code[:m.start(1)] + add + element.code[m.start(1):]
-                    else:
-                        add = '  %s *_state = %s();\n' % (state, port.name)
-                        element.code = add + element.code
+                    element_insert_arg_at_empyt_port(element, port, state)
                     no_state = False
 
         if not inserted:
@@ -152,31 +142,9 @@ def insert_pipeline_state(instance, state, start, g):
             if len(next_inst.uses) > 0:
                 port.pipeline = True
                 port.argtypes.append(state + "*")
-                if element.output_fire == "all":
-                    element.output_code[port.name] = '%s(_state)' % port.name
-                else:
-                    for i in range(len(element.output_code)):
-                        case, code = element.output_code[i]
-                        m = re.search(port.name + '\(', code)
-                        if m:
-                            m2 = re.search(port.name + '\([ ]*\)', code)
-                            assert m2, "Output port '%s' of element '%s' takes no argument, but it is called with argument(s): %s." \
-                                       % (port.name, element.name, code)
-                            code = code[:m.end(0)] + '_state' + code[m.end(0):]
-                            element.output_code[i] = (case, code)
+                element.reassign_output_values(port.name, "_state")
 
-    element.code = element.code.replace('state.', '_state->')
-    if element.output_fire == "all":
-        for port in element.output_code:
-            code = element.output_code[port]
-            code = code.replace('state.', '_state->')
-            element.output_code[port] = code
-    else:
-        for i in range(len(element.output_code)):
-            case, code = element.output_code[i]
-            code = code.replace('state.', '_state->')
-            case = case.replace('state.', '_state->')
-            element.output_code[i] = (case, code)
+    element.replace_in_code('[^a-zA-Z_0-9](state.)', '_state->')
 
 
 def need_replacement(element, live, extras):
@@ -191,6 +159,8 @@ def need_replacement(element, live, extras):
                 pos = out_code.find(var)
                 if pos >= 0:
                     return True
+        elif element.output_fire == "multi":
+            pass
         else:
             for case, out_code in element.output_code:
                 pos = case.find(var)
@@ -202,31 +172,11 @@ def need_replacement(element, live, extras):
     return False
 
 
-def replace_recursive(code, var, new_var):
-    m = re.search('[^a-zA-Z_0-9]state\.(' + var + ')[^a-zA-Z_0-9]', code)
-    if m:
-        code = code[:m.start(1)] + new_var + code[m.end(1):]
-        return replace_recursive(code, var, new_var)
-    else:
-        return code
-
-
 def replace_var(element, var, src2fields, prefix):
     new_var = prefix + src2fields[var][-1]
     if var == new_var:
         return
-    element.code = replace_recursive(element.code, var, new_var)
-
-    if element.output_fire == "all":
-        for port in element.output_code:
-            code = element.output_code[port]
-            element.output_code[port] = replace_recursive(code, var, new_var)
-    else:
-        for i in range(len(element.output_code)):
-            case, out_code = element.output_code[i]
-            case = case.replace(var, new_var)
-            out_code = replace_recursive(out_code, var, new_var)
-            element.output_code[i] = (case, out_code)
+    element.replace_in_code('[^a-zA-Z_0-9]state\.(' + var + ')[^a-zA-Z_0-9]', new_var)
 
 
 def replace_states(element, live, extras, special_fields, src2fields):
@@ -478,7 +428,7 @@ def analyze_fields_liveness_instance(g, name, in_port):
 
     # Smart queue
     q = instance.element.special
-    if q and q.enq == instance:
+    if isinstance(q, queue_smart2.Queue) and q.enq == instance:
         no = int(in_port[3:])
         if instance.liveness:
             return instance.liveness[no], instance.uses[no]
@@ -547,7 +497,6 @@ def analyze_fields_liveness_instance(g, name, in_port):
 
 def analyze_fields_liveness(g):
     for instance in g.instances.values():
-        q = instance.element.special
         if len(instance.input2ele) == 0:
             live, uses = analyze_fields_liveness_instance(g, instance.name, None)
 
@@ -621,7 +570,7 @@ def is_valid_start(g, name):
     """
     instance = g.instances[name]
 
-    if instance.element.special:
+    if isinstance(instance.element.special, queue_smart2.Queue):
         if instance.element.special.enq == instance:
             return True
         else:
@@ -638,7 +587,7 @@ def insert_starting_point(g, pktstate):
 
     roots = g.find_roots()
     for root in roots:
-        if not g.instances[root].element.special:
+        if not isinstance(g.instances[root].element.special, queue_smart2.Queue):
             starts = find_starting(g, root)
 
             for start in starts:

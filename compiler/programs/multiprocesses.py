@@ -11,5 +11,7 @@ t2.run(print_hello)
 CPU_process("hi", t1)
 CPU_process("hello", t2)
 
+master_process("hi")
+
 c = Compiler()
 c.generate_code_and_run()

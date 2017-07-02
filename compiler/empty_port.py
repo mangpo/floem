@@ -1,5 +1,6 @@
 import re
 
+
 def nonempty_to_empty_port_pass(g):
     vis = set()
     for instance in g.instances.values():
@@ -21,20 +22,4 @@ def nonempty_to_empty_port_pass(g):
 
                         prev_port = [port for port in new_element.outports if port.name == prev_portname][0]
                         prev_port.argtypes = []
-                        if new_element.output_fire == "all":
-                            new_element.output_code[prev_portname] = prev_portname + "()"
-                        elif new_element.output_fire == "multi":
-                            src = new_element.code
-                            m = re.search('[^a-zA-Z0-9_](' + prev_portname + '[ ]*\([^;];)', src)
-                            while m:
-                                src = src[:m.start(1)] + prev_portname + "();" + src[m.end(1):]
-                                m = re.search('[^a-zA-Z0-9_](' + prev_portname + '[ ]*\([^;];)', src)
-                            new_element.code = src
-                        else:
-                            cases_exprs = new_element.output_code
-                            for i in range(len(cases_exprs)):
-                                expr = cases_exprs[i][1]
-                                m = re.search(prev_portname + '[ ]*\(', expr)
-                                if m:
-                                    cases_exprs[i] = (cases_exprs[i][0], prev_portname + "()")
-
+                        new_element.reassign_output_values(prev_portname, '')

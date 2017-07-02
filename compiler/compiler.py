@@ -68,27 +68,8 @@ class Compiler:
 
         return original
 
-
-    # def generate_graph(self, filename="tmp"):
-    #     scope = workspace.get_last_scope()
-    #     decl = workspace.get_last_decl()
-    #     original = self.generate_graph_from_scope(decl + scope, filename)
-    #
-    #     all = []
-    #     for pipeline in self.pipelines:
-    #         p = pipeline()
-    #         g = self.generate_graph_from_scope(p.scope, filename, p.state, original)
-    #         all.append(g)
-    #
-    #     for g in all:
-    #         original.merge(g)
-    #
-    #     join_handling.join_and_resource_annotation_pass(original, self.resource, self.remove_unused)
-    #
-    #     return original
-
     def generate_code(self):
-        codegen.generate_code(self.generate_graph(), ".c", self.testing, self.include)
+        codegen.generate_code_only(self.generate_graph(), self.testing, self.desugar_mode, self.include)
 
     def generate_code_and_run(self, expect=None):
         codegen.generate_code_and_run(self.generate_graph(), self.testing, self.desugar_mode, expect, self.include, self.depend)

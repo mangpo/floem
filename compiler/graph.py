@@ -2,6 +2,7 @@ import re
 import common
 import copy
 import target
+import queue_smart2
 
 class UndefinedInstance(Exception):
     pass
@@ -30,16 +31,20 @@ def remove_comment(code):
 
 class Element:
 
-    def __init__(self, name, inports, outports, code, state_params=[], analyze=True):
+    def __init__(self, name, inports, outports, code, state_params=[], analyze=True, code_cavium=None):
         self.name = name
         self.inports = inports
         self.outports = outports
         self.code = '  ' + remove_comment(code)
+        if code_cavium:
+            code_cavium = '  ' + remove_comment(code_cavium)
+        self.code_cavium = code_cavium
         self.cleanup = ''
         self.state_params = state_params
 
         self.output_fire = None
         self.output_code = None
+        self.output_code_cavium = None
 
         self.special = None
         self.defs = set()
@@ -51,9 +56,10 @@ class Element:
 
     def clone(self, new_name):
         e = Element(new_name, [x.clone() for x in self.inports], [x.clone() for x in self.outports], self.code,
-                    self.state_params, False)
+                    self.state_params, False, code_cavium=self.code_cavium)
         e.output_fire = self.output_fire
         e.output_code = copy.copy(self.output_code)
+        e.output_code_cavium = copy.copy(self.output_code_cavium)
         e.cleanup = self.cleanup
         e.special = self.special
         return e
@@ -79,8 +85,8 @@ class Element:
 
     def add_empty_inports(self, port_names):
         self.inports += [Port(name, []) for name in port_names]
-        for name in port_names:
-            self.code = ("%s();\n" % name) + self.code
+        # for name in port_names:
+        #     self.code = ("%s();\n" % name) + self.code
 
     def __str__(self):
         return self.name
@@ -105,11 +111,19 @@ class Element:
             return 0
 
     def analyze_output_type(self):
-        m = re.search('output[ ]*\{([^}]*)}', self.code)
+        self.code, self.output_code, self.output_fire = self.analyze_output_type_internal(self.code)
+        if self.code_cavium:
+            code, output_code, output_fire = self.analyze_output_type_internal(self.code_cavium)
+            assert output_fire == self.output_fire, \
+                "CPU and Cavium code of element '%s' have different output firing types." % self.name
+            self.code_cavium, self.output_code_cavium = (code, output_code)
+
+    def analyze_output_type_internal(self, code):
+        m = re.search('output[ ]*\{([^}]*)}', code)
         if m:
             # output { ... }
-            self.output_fire = "all"
-            program_code = self.code[:m.start(0)]
+            output_fire = "all"
+            program_code = code[:m.start(0)]
             out_code = ' ' + m.group(1)
             occurrence_out = self.count_ports_occurrence(out_code)
 
@@ -123,14 +137,14 @@ class Element:
                 m = re.search('[^a-zA-Z0-9_](' + port.name + '[ ]*\([^;]*)', out_code)
                 name2call[port.name] = m.group(1)
 
-            self.output_code = name2call
+            output_code = name2call
 
         else:
-            m = re.search('output[ ]+switch[ ]*\{([^}]*)}', self.code)
+            m = re.search('output[ ]+switch[ ]*\{([^}]*)}', code)
             if m:
                 # output switch { ... }
-                program_code = self.code[:m.start(0)]
-                out_code = self.code[m.start(1):m.end(1)]
+                program_code = code[:m.start(0)]
+                out_code = code[m.start(1):m.end(1)]
                 cases = out_code.split(';')
                 if re.search('^[ \n]*$', cases[-1]) is None:
                     raise Exception("Illegal form of output { ... } block in element '%s'." % self.name)
@@ -140,13 +154,13 @@ class Element:
                 m = re.search('^[ \n]*else[ ]*:[ ]*([a-zA-Z0-9_]+)(\([^)]*\))[ ]*$', cases[-1])
                 if m:
                     # has else
-                    self.output_fire = "one"
+                    output_fire = "one"
                     count[m.group(1)] = 1
                     cases = cases[:-1]
                     else_expr = m.group(1) + m.group(2)
                 else:
                     # no else
-                    self.output_fire = "zero_or_one"
+                    output_fire = "zero_or_one"
                     else_expr = None
 
                 cases_exprs = []
@@ -168,13 +182,13 @@ class Element:
                     if port.name not in count:
                         raise Exception("Element '%s' never fire port '%s'." % (self.name, port.name))
 
-                self.output_code = cases_exprs
+                output_code = cases_exprs
             else:
                 m = re.search('output[ ]+multiple[ ]*;', self.code)
                 if m:
                     program_code = self.code[:m.start()]
-                    self.output_fire = "multi"
-                    self.output_code = {}
+                    output_fire = "multi"
+                    output_code = {}
                     assert len(self.outports) == 1, \
                         ("Element '%s' must have only one output port because it may fire the output port more than once."
                          % self.name)
@@ -182,23 +196,28 @@ class Element:
                     # no output area
                     if len(self.outports) > 0:
                         raise Exception("Element '%s' does not have output { ... } block." % self.name)
-                    program_code = self.code
-                    self.output_fire = "all"
-                    self.output_code = {}
+                    program_code = code
+                    output_fire = "all"
+                    output_code = {}
 
         # Check that it doesn't fire output port in program area.
-        if not self.output_fire == "multi":
+        if not output_fire == "multi":
             occurrence_program = self.count_ports_occurrence(program_code)
             for name, count in occurrence_program:
                 if count > 0:
                     raise Exception("Element '%s' fires port '%s' outside output { ... } block." % (self.name, name))
 
-        self.code = program_code
+        return program_code, output_code, output_fire
 
-    def get_output_code(self, order):
+    def get_output_code(self, order, device):
+        if device == target.CAVIUM and self.output_code_cavium:
+            return self.get_output_code_internal(self.output_code_cavium, order)
+        return self.get_output_code_internal(self.output_code, order)
+
+    def get_output_code_internal(self, output_code, order):
         src = ""
         if self.output_fire is None:
-            if self.output_code:
+            if output_code:
                 raise Exception("Element's output_fire is None, but its output_code is not None.")
             return src
         elif self.output_fire == "multi":
@@ -207,11 +226,11 @@ class Element:
         elif self.output_fire == "all":
             if len(order) == 0:
                 for port in self.outports:
-                    expr = self.output_code[port.name]
+                    expr = output_code[port.name]
                     src += "  %s;\n" % expr
             elif len(order) == len(self.outports):
                 for port_name in order:
-                    expr = self.output_code[port_name]
+                    expr = output_code[port_name]
                     src += "  %s;\n" % expr
             else:
                 raise Exception("Element '%s' has %d output ports, but the order of ports only include %d ports."
@@ -219,7 +238,7 @@ class Element:
             return src
 
         else:
-            cases_exprs = self.output_code
+            cases_exprs = output_code
             if self.output_fire == "one":
                 else_expr = cases_exprs[-1][1]
                 cases_exprs = cases_exprs[:-1]
@@ -251,6 +270,86 @@ class Element:
             for key in keys:
                 ports.append(index2port[key])
             self.outports = ports
+
+    def get_code(self, device):
+        if device == target.CAVIUM and self.code_cavium:
+            return self.code_cavium
+        return self.code
+
+    def prepend_code(self, add):
+        self.code = add + self.code
+        if self.code_cavium:
+            self.code_cavium = add + self.code_cavium
+
+    def reassign_output_values_internal(self, portname, args, code, output_code):
+        if self.output_fire == "all":
+            output_code[portname] = "%s(%s)" % (portname, args)
+        elif self.output_fire == "multi":
+            m = re.search('[^a-zA-Z0-9_](' + portname + '[ ]*\([^;];)', code)
+            while m:
+                code = code[:m.start(1)] + "%s(%s);" % (portname, args) + code[m.end(1):]
+                m = re.search('[^a-zA-Z0-9_](' + portname + '[ ]*\([^;];)', code)
+        else:
+            cases_exprs = output_code
+            for i in range(len(cases_exprs)):
+                expr = cases_exprs[i][1]
+                m = re.match(portname + '[ ]*\(', expr)
+                if m:
+                    cases_exprs[i] = (cases_exprs[i][0], "%s(%s)" % (portname, args))
+        return code, output_code
+
+    def reassign_output_values(self, portname, args):
+        (self.code, self.output_code) = \
+            self.reassign_output_values_internal(portname, args, self.code, self.output_code)
+        if self.code_cavium:
+            (self.code_cavium, self.output_code_cavium) = \
+                self.reassign_output_values_internal(portname, args, self.code_cavium, self.output_code_cavium)
+
+    def add_output_value(self, portname, arg):
+        assert self.output_fire == "all", \
+            "Cannot add a value to an output port of element '%s', which does not fire all ports." % \
+            (portname, self.name)
+        out_code = self.output_code[portname]
+        out_code = out_code[:-1] + ", %s)" % arg
+        self.output_code[portname] = out_code
+
+        if self.output_code_cavium:
+            out_code = self.output_code_cavium[portname]
+            out_code = out_code[:-1] + ", %s)" % arg
+            self.output_code_cavium[portname] = out_code
+
+    def replace_recursive(self, code, var, new_var):
+        m = re.search(var, code)
+        if m:
+            code = code[:m.start(1)] + new_var + code[m.end(1):]
+            return self.replace_recursive(code, var, new_var)
+        else:
+            return code
+
+    def replace_in_code_internal(self, x, y, code, output_code):
+        code = self.replace_recursive(code, x, y)
+
+        if self.output_fire == "all":
+            for port in output_code:
+                work = output_code[port]
+                work = self.replace_recursive(work, x, y)
+                output_code[port] = work
+        elif self.output_fire == "multi":
+            pass
+        else:
+            for i in range(len(output_code)):
+                case, work = output_code[i]
+                work = self.replace_recursive(work, x, y)
+                case = self.replace_recursive(case, x, y)
+                output_code[i] = (case, work)
+
+        return code, output_code
+
+    def replace_in_code(self, x, y):
+        (self.code, self.output_code) = self.replace_in_code_internal(x, y, self.code, self.output_code)
+        if self.code_cavium:
+            (self.code_cavium, self.output_code_cavium) = \
+                self.replace_in_code_internal(x, y, self.code_cavium, self.output_code_cavium)
 
 
 class ElementNode:
@@ -447,7 +546,8 @@ class Graph:
     def merge(self, other):
         assert other.default_process is 'tmp' or self.default_process == other.default_process, \
             "Graph merge failed -- mismatch default_process: %s vs %s." % (self.default_process, other.default_process)
-        assert other.master_process is None or self.master_process == other.master_process, \
+        assert other.master_process is None or self.master_process == None or \
+               self.master_process == other.master_process, \
             "Graph merge failed -- mismatch master_process: %s vs %s." % (self.master_process, other.master_process)
         self.merge_dict(self.elements, other.elements)
         self.merge_dict(self.instances, other.instances)
@@ -470,6 +570,7 @@ class Graph:
         self.merge_dict(self.thread2process, other.thread2process)
         self.merge_dict(self.thread2device, other.thread2device)
         self.merge_dict(self.process2device, other.process2device)
+        self.master_process = self.master_process or other.master_process
 
     @staticmethod
     def merge_dict(this, other):
@@ -587,7 +688,7 @@ class Graph:
         self.instances[name] = ret
 
         # Smart queue
-        if e.special:
+        if isinstance(e.special, queue_smart2.Queue):
             if e.special.enq == user_instance:
                 e.special.enq = ret
             elif e.special.deq == user_instance:

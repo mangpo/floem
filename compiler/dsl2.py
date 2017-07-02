@@ -295,7 +295,8 @@ class Element(Connectable):
         self.special = None
         self.def_fields = None
         self.used_fields = None
-        self.code = ''
+        self.code = None
+        self.code_cavium = None
 
         if not self.__class__.defined:  # subclass has not declared before
             self.__class__.defined = True
@@ -306,7 +307,13 @@ class Element(Connectable):
 
         # this comes after self.__class__.__name__ but before collection_states
         Connectable.__init__(self, name, states, configure)
+        self.impl_cavium()
+        if self.code:
+            self.code_cavium = self.code
+        self.code = ''
         self.impl()
+
+
         states_decls, states = self.collect_states()
 
         if len(configure) == 0:
@@ -317,7 +324,7 @@ class Element(Connectable):
             Element.all_defined.add(unique)
             inports = [graph.Port(p.name, p.args) for p in self.inports]
             outports = [graph.Port(p.name, p.args) for p in self.outports]
-            e = graph.Element(unique, inports, outports, self.code, states_decls)
+            e = graph.Element(unique, inports, outports, self.code, states_decls, code_cavium=self.code_cavium)
             e.special = self.special
             decl_append(e)
 
@@ -328,6 +335,9 @@ class Element(Connectable):
 
     @abstractmethod
     def impl(self):
+        pass
+
+    def impl_cavium(self):
         pass
 
     def run_c(self, code):

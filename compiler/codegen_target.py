@@ -57,6 +57,23 @@ def thread_func_create_cancel(func, device, size=None, interval=None):
     return (thread, func_src, create, cancel)
 
 
+def from_net_create(func, g):
+    func_src = r'''
+void run_from_net(cvmx_wqe_t *wqe) {
+    %s(wqe);
+}
+    ''' % func
+    cores = g.instances[func].device[1]
+    cond = " || ".join(["(corenum == %d)" % i for i in cores])
+    cond_src = r'''
+int get_wqe_cond() {
+    int corenum = cvmx_get_core_num();
+    return %s;
+}
+    ''' % cond
+    return cond_src, func_src
+
+
 def inject_thread_code(injects, graph):
     global_src = ""
     run_src = ""
@@ -121,6 +138,11 @@ def generate_internal_triggers_with_process(graph, process, ext, mode):
 
     forever = threads_internal.difference(all_injects)
     no_triggers = graph.threads_roots.difference(forever).difference(all_injects).difference(threads_api)
+    if target.CAVIUM in graph.processes:
+        from_net = [t for t in forever if graph.instances[t].element.special == 'from_net']
+    else:
+        from_net = []
+    forever = forever.difference(set(from_net))
 
     forever = [t for t in forever if graph.instances[t].process == process]
     no_triggers = [t for t in no_triggers if graph.instances[t].process == process]
@@ -146,6 +168,7 @@ def generate_internal_triggers_with_process(graph, process, ext, mode):
         header_src += "void kill_threads();\n"
 
     else:
+        assert not (target.CAVIUM is graph.processes), "Not supporting compare mode on Cavium."
         run_src = "void run_threads() { }\n"
         kill_src = "void kill_threads() { }\n"
 
@@ -167,6 +190,15 @@ def generate_internal_triggers_with_process(graph, process, ext, mode):
         header_src += "void spec_kill_threads();\n"
         header_src += "void impl_run_threads();\n"
         header_src += "void impl_kill_threads();\n"
+
+    if target.CAVIUM in graph.processes:
+        header_src += "int get_wqe_cond();\n"
+        header_src += "void run_from_net(cvmx_wqe_t *wqe);\n"
+
+        if len(from_net) > 0:
+            assert len(from_net) == 1, "There are more than one from_net elements."
+            cond_src, func_src = from_net_create(from_net[0], graph)
+            run_src += cond_src + func_src
 
     if ext == '.h':
         with open(process + '.h', 'a') as f, redirect_stdout(f):
