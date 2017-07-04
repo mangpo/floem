@@ -2,7 +2,7 @@ from codegen import *
 from dsl import *
 from pipeline_state import find_all_fields, analyze_pipeline_states
 import unittest
-import queue_smart2
+import graph_ir
 import queue_smart
 import dsl2
 
@@ -275,7 +275,7 @@ class TestPipelineState(unittest.TestCase):
 
     def test_smart_queue(self):
         n_cases = 2
-        queue = queue_smart2.Queue("smart_queue", 10, 4, 2)
+        queue = graph_ir.Queue("smart_queue", 10, 4, 2)
         Enq_ele = Element("smart_enq_ele", [Port("inp" + str(i), []) for i in range(n_cases)], [Port("out", [])],
                           "output { out(); }")
         Deq_ele = Element("smart_deq_ele", [Port("in_core", ["int"]), Port("in", [])],
@@ -348,7 +348,7 @@ class TestPipelineState(unittest.TestCase):
 
     def test_smart_queue2(self):
         n_cases = 2
-        queue = queue_smart2.Queue("smart_queue", 10, 4, 2)
+        queue = graph_ir.Queue("smart_queue", 10, 4, 2)
         Enq_ele = Element("smart_enq_ele", [Port("inp" + str(i), []) for i in range(n_cases)], [Port("out", [])],
                           "output { out(); }")
         Deq_ele = Element("smart_deq_ele", [Port("in_core", ["int"]), Port("in", [])],
@@ -462,7 +462,7 @@ class TestPipelineState(unittest.TestCase):
 
     def test_queue_release(self):
         n_cases = 1
-        queue = queue_smart2.Queue("smart_queue", 10, 4, n_cases)
+        queue = graph_ir.Queue("smart_queue", 10, 4, n_cases)
         Enq_ele = Element("smart_enq_ele", [Port("inp" + str(i), []) for i in range(n_cases)], [Port("out", [])],
                           "output { out(); }")
         Deq_ele = Element("smart_deq_ele", [Port("in_core", ["int"]), Port("in", [])],
@@ -531,7 +531,7 @@ class TestPipelineState(unittest.TestCase):
 
     def test_queue_release2(self):
         n_cases = 1
-        queue = queue_smart2.Queue("smart_queue", 10, 4, n_cases)
+        queue = graph_ir.Queue("smart_queue", 10, 4, n_cases)
         Enq_ele = Element("smart_enq_ele", [Port("inp" + str(i), []) for i in range(n_cases)], [Port("out", [])],
                           "output { out(); }")
         Deq_ele = Element("smart_deq_ele", [Port("in_core", ["int"]), Port("in", [])],

@@ -34,7 +34,7 @@ class Const(Element):
 class PreparePkt(Element):
     def configure(self):
         self.inp = Input("void *", "void *")
-        self.out = Output(Size, Int, "void *", "void *")  # size, dest_port, packet, buffer
+        self.out = Output(Size, "void *", "void *")  # size, dest_port, packet, buffer
 
     def impl(self):
         self.run_c(r'''
@@ -45,7 +45,7 @@ class PreparePkt(Element):
     rebuild_payload(pkt_ptr);
     recalculate_ip_chksum(pkt_ptr);
     recalculate_udp_chksum(pkt_ptr);
-    output { out(14 + 20 + 8 + 16, 2576, pkt_ptr, buf); }
+    output { out(14 + 20 + 8 + 16, pkt_ptr, buf); }
         ''')
 
 from_net = net_cavium.FromNet()

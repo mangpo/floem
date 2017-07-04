@@ -671,7 +671,7 @@ def generate_header(testing, graph, ext):
         if device == target.CPU:
             src = ""
             for file in target.cpu_header_files:
-                src += "#include <%s>\n" % file
+                src += "#include %s\n" % file
 
             src += common.pipeline_include
 
@@ -680,7 +680,7 @@ def generate_header(testing, graph, ext):
         elif device == target.CAVIUM:
             src = ""
             for file in target.cavium_header_files:
-                src += "#include <%s>\n" % file
+                src += "#include %s\n" % file
 
             src += common.pipeline_include
 

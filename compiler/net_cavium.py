@@ -61,7 +61,7 @@ class NetAlloc(Element):
 
 class ToNet(Element):
     def configure(self):
-        self.inp = Input(Size, Int, "void *", "void *")  # size, sending_port, packet, buffer
+        self.inp = Input(Size, "void *", "void *")  # size, packet, buffer
 
     def impl(self):
         # TODO: dpdk
@@ -69,8 +69,8 @@ class ToNet(Element):
 
     def impl_cavium(self):
         self.run_c(r'''
-    (size_t len, int sending_port, void* p, void* buf) = inp();
-    network_send(len, p, sending_port);
+    (size_t len, void* p, void* buf) = inp();
+    network_send(len, p, 2560);
     free(p);
         ''')
 

@@ -1,23 +1,10 @@
 from dsl2 import *
-
-class Queue:
-    def __init__(self, name, size, n_cores, n_cases, blocking=False, enq_atomic=False, deq_atomic=False):
-        self.name = name
-        self.size = size
-        self.n_cores = n_cores
-        self.n_cases = n_cases
-        self.enq = None
-        self.deq = None
-        self.scan = None
-        self.scan_type = None
-        self.blocking = blocking
-        self.enq_atomic = enq_atomic
-        self.deq_atomic = deq_atomic
+import graph_ir
 
 
 def smart_queue(name, size, n_cores, n_cases, blocking=False, enq_atomic=False, deq_atomic=False, clean=False):
     prefix = name + "_"
-    queue = Queue(name, size, n_cores, n_cases, blocking=blocking, enq_atomic=enq_atomic, deq_atomic=deq_atomic)
+    queue = graph_ir.Queue(name, size, n_cores, n_cases, blocking=blocking, enq_atomic=enq_atomic, deq_atomic=deq_atomic)
 
     class Enqueue(Element):
         def configure(self):

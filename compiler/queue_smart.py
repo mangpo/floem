@@ -1,11 +1,11 @@
 import dsl
 import graph
-import queue_smart2
+import graph_ir
 
 
 def smart_circular_queue_variablesize_one2many(name, size, n_cores, n_cases):
     prefix = "_%s_" % name
-    queue = queue_smart2.Queue(name, size, n_cores, n_cases)
+    queue = graph_ir.Queue(name, size, n_cores, n_cases)
     Smart_enq = dsl.create_element(prefix + "smart_enq_ele", [graph.Port("inp" + str(i), []) for i in range(n_cases)],
                                    [graph.Port("out", [])], "state.core; output { out(); }", special=queue)
 

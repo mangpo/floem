@@ -1,8 +1,7 @@
 from program import *
 from join_handling import annotate_join_info, clean_minimal_join_info
 from smart_queue_compile import compile_smart_queues
-import codegen
-
+import codegen, graph_ir
 
 
 def allocate_pipeline_state(g, element, state):
@@ -428,7 +427,7 @@ def analyze_fields_liveness_instance(g, name, in_port):
 
     # Smart queue
     q = instance.element.special
-    if isinstance(q, queue_smart2.Queue) and q.enq == instance:
+    if isinstance(q, graph_ir.Queue) and q.enq == instance:
         no = int(in_port[3:])
         if instance.liveness:
             return instance.liveness[no], instance.uses[no]
@@ -570,7 +569,7 @@ def is_valid_start(g, name):
     """
     instance = g.instances[name]
 
-    if isinstance(instance.element.special, queue_smart2.Queue):
+    if isinstance(instance.element.special, graph_ir.Queue):
         if instance.element.special.enq == instance:
             return True
         else:
@@ -587,7 +586,7 @@ def insert_starting_point(g, pktstate):
 
     roots = g.find_roots()
     for root in roots:
-        if not isinstance(g.instances[root].element.special, queue_smart2.Queue):
+        if not isinstance(g.instances[root].element.special, graph_ir.Queue):
             starts = find_starting(g, root)
 
             for start in starts:
