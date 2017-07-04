@@ -308,7 +308,7 @@ class Element(Connectable):
         # this comes after self.__class__.__name__ but before collection_states
         Connectable.__init__(self, name, states, configure)
         self.impl_cavium()
-        if self.code:
+        if self.code is not None:
             self.code_cavium = self.code
         self.code = ''
         self.impl()

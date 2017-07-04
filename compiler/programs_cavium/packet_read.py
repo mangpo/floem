@@ -5,12 +5,13 @@ from compiler import Compiler
 class Display(Element):
     def configure(self):
         self.inp = Input('void *', 'void *')
+        self.out = Output('void *', 'void *')
 
     def impl(self):
         self.run_c(r'''
+(void* p, void* buff) = inp();
 {
     int i;
-    (void* p, void* dummy) = inp();
     uint8_t* pkt = (uint8_t*) p;
 
     for (i = 0; i < 16; i++) {
@@ -18,13 +19,55 @@ class Display(Element):
     }
     printf("\n");
 }
+output { out(p, buff); }
         ''')
+
+
+class Const(Element):
+    def configure(self):
+        self.out = Output(Size)
+
+    def impl(self):
+        self.run_c("output { out(14 + 20 + 8 + 16); }")
+
+
+class PreparePkt(Element):
+    def configure(self):
+        self.inp = Input("void *", "void *")
+        self.out = Output(Size, Int, "void *", "void *")  # size, dest_port, packet, buffer
+
+    def impl(self):
+        self.run_c(r'''
+    (void* pkt_ptr, void* buf) = inp();
+    rebuild_ether_header(pkt_ptr);
+    rebuild_ip_header(pkt_ptr);
+    rebuild_udp_header(pkt_ptr);
+    rebuild_payload(pkt_ptr);
+    recalculate_ip_chksum(pkt_ptr);
+    recalculate_udp_chksum(pkt_ptr);
+    output { out(14 + 20 + 8 + 16, 2576, pkt_ptr, buf); }
+        ''')
+
+from_net = net_cavium.FromNet()
+from_net_free = net_cavium.FromNetFree()
+net_alloc = net_cavium.NetAlloc()
+to_net = net_cavium.ToNet()
 
 class test(InternalLoop):
     def impl(self):
-        net_cavium.FromNet() >> Display()
+        size = Const()
+        display = Display()
+        from_net >> display >> from_net_free
+        size >> net_alloc >> PreparePkt() >> to_net
+        run_order(from_net_free, size)
+
+    def impl2(self):
+        from_net >> Display() >> PreparePkt() >> to_net
+        from_net >> from_net_free
+        run_order(to_net, from_net_free)
 
 test('test', device=target.CAVIUM, cores=[0,1,2,3])
 
 c = Compiler()
+c.include = r'''#include "packet_build.h"'''
 c.generate_code_as_header()
