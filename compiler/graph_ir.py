@@ -109,7 +109,7 @@ class Element:
 
     def analyze_output_type(self):
         self.code, self.output_code, self.output_fire = self.analyze_output_type_internal(self.code)
-        if self.code_cavium:
+        if self.code_cavium is not None:
             code, output_code, output_fire = self.analyze_output_type_internal(self.code_cavium)
             assert output_fire == self.output_fire, \
                 "CPU and Cavium code of element '%s' have different output firing types." % self.name
@@ -269,13 +269,13 @@ class Element:
             self.outports = ports
 
     def get_code(self, device):
-        if device == target.CAVIUM and self.code_cavium:
+        if device == target.CAVIUM and self.code_cavium is not None:
             return self.code_cavium
         return self.code
 
     def prepend_code(self, add):
         self.code = add + self.code
-        if self.code_cavium:
+        if self.code_cavium is not None:
             self.code_cavium = add + self.code_cavium
 
     def reassign_output_values_internal(self, portname, args, code, output_code):
@@ -298,7 +298,7 @@ class Element:
     def reassign_output_values(self, portname, args):
         (self.code, self.output_code) = \
             self.reassign_output_values_internal(portname, args, self.code, self.output_code)
-        if self.code_cavium:
+        if self.code_cavium is not None:
             (self.code_cavium, self.output_code_cavium) = \
                 self.reassign_output_values_internal(portname, args, self.code_cavium, self.output_code_cavium)
 
@@ -344,7 +344,7 @@ class Element:
 
     def replace_in_code(self, x, y):
         (self.code, self.output_code) = self.replace_in_code_internal(x, y, self.code, self.output_code)
-        if self.code_cavium:
+        if self.code_cavium is not None:
             (self.code_cavium, self.output_code_cavium) = \
                 self.replace_in_code_internal(x, y, self.code_cavium, self.output_code_cavium)
 

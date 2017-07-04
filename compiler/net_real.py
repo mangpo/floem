@@ -71,6 +71,20 @@ class ToNet(Element):
         self.run_c(r'''
     (size_t len, void* p, void* buf) = inp();
     network_send(len, p, 2560);
+        ''')
+
+class NetAllocFree(Element):
+    def configure(self):
+        self.inp = Input("void *", "void *")  # packet, buffer
+
+    def impl(self):
+        # TODO: dpdk
+        self.run_c("")
+
+    def impl_cavium(self):
+        # Do nothing
+        self.run_c(r'''
+    (void* p, void* buf) = inp();
     free(p);
         ''')
 

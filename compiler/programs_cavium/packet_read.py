@@ -1,4 +1,4 @@
-import net_cavium, target
+import net_real, target
 from dsl2 import *
 from compiler import Compiler
 
@@ -48,10 +48,11 @@ class PreparePkt(Element):
     output { out(14 + 20 + 8 + 16, pkt_ptr, buf); }
         ''')
 
-from_net = net_cavium.FromNet()
-from_net_free = net_cavium.FromNetFree()
-net_alloc = net_cavium.NetAlloc()
-to_net = net_cavium.ToNet()
+from_net = net_real.FromNet()
+from_net_free = net_real.FromNetFree()
+net_alloc = net_real.NetAlloc()
+net_alloc_free = net_real.NetAllocFree()
+to_net = net_real.ToNet()
 
 class test(InternalLoop):
     def impl(self):
@@ -59,7 +60,10 @@ class test(InternalLoop):
         display = Display()
         from_net >> display >> from_net_free
         size >> net_alloc >> PreparePkt() >> to_net
+        net_alloc >> net_alloc_free
+
         run_order(from_net_free, size)
+        run_order(to_net, net_alloc_free)
 
     def impl2(self):
         from_net >> Display() >> PreparePkt() >> to_net

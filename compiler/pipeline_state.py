@@ -78,7 +78,7 @@ def code_insert_arg_at_port(src, port, state):
 
 def element_insert_arg_at_port(element, port, state):
     element.code = code_insert_arg_at_port(element.code, port, state)
-    if element.code_cavium:
+    if element.code_cavium is not None:
         element.code_cavium = code_insert_arg_at_port(element.code_cavium, port, state)
 
 def code_insert_arg_at_empyt_port(src, port, state):
@@ -94,7 +94,7 @@ def code_insert_arg_at_empyt_port(src, port, state):
 
 def element_insert_arg_at_empyt_port(element, port, state):
     element.code = code_insert_arg_at_empyt_port(element.code, port, state)
-    if element.code_cavium:
+    if element.code_cavium is not None:
         element.code_cavium = code_insert_arg_at_empyt_port(element.code_cavium, port, state)
 
 
