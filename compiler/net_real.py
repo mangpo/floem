@@ -1,13 +1,5 @@
 from dsl2 import *
 
-# Signature
-# FromNet: Output(void *, struct rte_mbuf *)
-# FromNetFree: Input(struct rte_mbuf *)
-
-# NetAlloc: Input(Size), Output(void *, struct rte_mbuf *)
-# ToNet: Input(Size, header_type *, struct rte_mbuf *)
-
-
 class FromNet(Element):
     def configure(self):
         self.out = Output("void *", "void *") # packet, buffer
