@@ -1,6 +1,5 @@
 import codegen
 import desugaring
-import graph
 import program
 import workspace
 import pipeline_state

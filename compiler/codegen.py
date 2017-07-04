@@ -665,12 +665,30 @@ def get_element_port_avail(func, port):
     return "_%s_%s_avail" % (func, port)
 
 
-def generate_header(testing, graph, ext):
+def generate_header_h(testing, graph):
     for process in graph.processes:
         device = graph.process2device[process]
         if device == target.CPU:
             src = ""
-            for file in target.cpu_header_files:
+            for file in target.cpu_include_h:
+                src += "#include %s\n" % file
+
+        elif device == target.CAVIUM:
+            src = ""
+            for file in target.cavium_include_h:
+                src += "#include %s\n" % file
+
+        name = process + '.h'
+        with open(name, 'a') as f, redirect_stdout(f):
+            print src
+
+
+def generate_header_c(testing, graph):
+    for process in graph.processes:
+        device = graph.process2device[process]
+        if device == target.CPU:
+            src = ""
+            for file in target.cpu_include_c:
                 src += "#include %s\n" % file
 
             src += common.pipeline_include
@@ -679,12 +697,12 @@ def generate_header(testing, graph, ext):
                 src += "void out(int x) { printf(\"%d\\n\", x); }"
         elif device == target.CAVIUM:
             src = ""
-            for file in target.cavium_header_files:
+            for file in target.cavium_include_c:
                 src += "#include %s\n" % file
 
             src += common.pipeline_include
 
-        name = process + ext
+        name = process + '.c'
         with open(name, 'a') as f, redirect_stdout(f):
             print src
 
@@ -703,10 +721,12 @@ def generate_code(graph, ext, testing=None, include=None):
     :param graph: data-flow graph
     """
 
-    generate_header(testing, graph, '.c')
-    generate_include(include, graph.processes, '.c')
+    if ext == '.h':
+        generate_header_h(testing, graph)
+    generate_header_c(testing, graph)
     if ext == '.h':
         generate_include(include, graph.processes, '.h')
+    generate_include(include, graph.processes, '.c')
 
     # Generate memory regions.
     generate_memory_regions(graph, ext)
