@@ -1,5 +1,4 @@
-import queue2
-from  library_dsl2 import Drop
+import queue2, net_real
 from dsl2 import *
 from compiler import Compiler
 
@@ -12,13 +11,14 @@ n_workers = 4
 
 class Classifier(Element):
     def configure(self):
-        self.inp = Input("struct pkt_dccp_headers*", "struct rte_mbuf *")
+        self.inp = Input("void*", "void*")
         self.pkt = Output("struct pkt_dccp_headers*")
         self.ack = Output("struct pkt_dccp_headers*")
 
     def impl(self):
         self.run_c(r'''
-        (struct pkt_dccp_headers* p, struct rte_mbuf *b) = inp();
+        (void* p, void* b) = inp();
+        struct pkt_dccp_headers* p = pkt;
         int type = 0;
         if (ntohs(p->eth.type) == ETHTYPE_IP && p->ip._proto == IP_PROTO_DCCP) {
             if(((p->dccp.res_type_x >> 1) & 15) == DCCP_TYPE_ACK) type = 1;
@@ -34,12 +34,12 @@ class Classifier(Element):
 
 class Save(Element):
     def configure(self):
-        self.inp = Input("struct pkt_dccp_headers*", "struct rte_mbuf *")
+        self.inp = Input("void *", "void *")
         self.out = Output("struct pkt_dccp_headers*")
 
     def impl(self):
         self.run_c(r'''
-        (struct pkt_dccp_headers* p, struct rte_mbuf *b) = inp();
+        (void* p, void* b) = inp();
         state.rx_pkt = p;
         state.rx_buf = b;
         output { out(p); }
@@ -113,7 +113,6 @@ class PrintTuple(Element):
     output switch { case t: out(t); }
         ''')
 
-print_tuple = PrintTuple()
 
 
 ############################### DCCP #################################
@@ -141,21 +140,22 @@ class DccpCheckCongestion(Element):
         self.dccp = dccp_info
 
     def configure(self):
-        self.inp = Input("struct tuple*", Int)
-        self.out = Output("struct tuple*", Int)
+        self.inp = Input(Int)
+        self.send = Output(Int)
+        self.drop = Output()
 
     def impl(self):
         self.run_c(r'''
-        (struct tuple* t, int worker) = inp();
+        (int worker) = inp();
 
         if(rdtsc() >= dccp->retrans_timeout) {
             dccp->connections[worker].pipe = 0;
             __sync_fetch_and_add(&dccp->link_rtt, dccp->link_rtt);
         }
         if(dccp->connections[worker].pipe >= dccp->connections[worker].cwnd)
-            t = NULL;
+            worker = -1;
 
-        output switch { case t: out(t, worker); }
+        output switch { case (worker >= 0): send(worker); else: drop(); }
         ''')
 
 
@@ -166,12 +166,13 @@ class DccpSeqTime(Element):
         self.dccp = dccp_info
 
     def configure(self):
-        self.inp = Input("struct pkt_dccp_headers*", Int)
-        self.out = Output("struct pkt_dccp_headers*")
+        self.inp = Input("void*", Int)
+        self.out = Output("void*")
 
     def impl(self):
         self.run_c(r'''
-        (struct pkt_dccp_headers* header, int worker) = inp();
+        (void* p, int worker) = inp();
+        struct pkt_dccp_headers* header = p;
         rte_spinlock_lock(&dccp->global_lock);
         dccp->retrans_timeout = rdtsc() + link_rtt * PROC_FREQ_MHZ;
         dccp->link_rtt = LINK_RTT;
@@ -183,7 +184,7 @@ class DccpSeqTime(Element):
         rte_spinlock_unlock(&dccp->global_lock);
 
         __sync_fetch_and_add(&dccp->connections[worker].pipe, 1);
-        output { out(header); }
+        output { out(p); }
         ''')
 
 
@@ -195,7 +196,7 @@ class DccpSendAck(Element):
 
     def configure(self):
         self.inp = Input("struct pkt_dccp_ack_headers *", "struct pkt_dccp_headers*")
-        self.out = Output("struct pkt_dccp_ack_headers *")
+        self.out = Output("void *")
 
     def impl(self):
         self.run_c(r'''
@@ -302,12 +303,12 @@ class GetWorkerID(Element):
 
 class GetWorkerIDPkt(Element):
     def configure(self):
-        self.inp = Input("struct pkt_dccp_headers*")
-        self.out = Output("struct pkt_dccp_headers*", Int)
+        self.inp = Input("void*")
+        self.out = Output("void*", Int)
 
     def impl(self):
         self.run_c(r'''
-        (struct pkt_dccp_headers* p) = inp();
+        (void* p) = inp();
         output { out(p, state.worker); }
         ''')
 
@@ -324,6 +325,16 @@ class SaveTuple(Element):
         output { out(); }
         ''')
 
+class GetTuple(Element):
+    def configure(self):
+        self.inp = Input()
+        self.out = Output("struct tuple*")
+
+    def impl(self):
+        self.run_c(r'''
+        output { out(state.tuple); }
+        ''')
+
 class Tuple2Pkt(Element):
     dccp = Persistent(DccpInfo)
 
@@ -331,12 +342,13 @@ class Tuple2Pkt(Element):
         self.dccp = dccp_info
 
     def configure(self):
-        self.inp = Input("struct pkt_dccp_headers*", "struct rte_mbuf *")
-        self.out = Output("struct pkt_dccp_headers*")
+        self.inp = Input("void*", "void*")
+        self.out = Output("void*")
 
     def impl(self):
         self.run_c(r'''
-        (struct pkt_dccp_headers* header, struct rte_mbuf * b) = inp();
+        (void* p, void* b) = inp();
+        struct pkt_dccp_headers* header = p;
         state.tx_buf = b;
         memcpy(header, &dccp->header, sizeof(struct pkt_dccp_headers));
         memcpy(&header[1], state.tuple, sizeof(struct tuple));
@@ -344,7 +356,7 @@ class Tuple2Pkt(Element):
         header->dccp.dst = htons(state.worker);
         header->eth.dest = workers[state.worker].mac;
 
-        output { out(header); }
+        output { out(p); }
         ''')
 
 
@@ -359,56 +371,50 @@ class Pkt2Tuple(Element):
         output { out((struct tuple*) &p[1]); }
         ''')
 
-class SizeAck(Element):
-    def configure(self):
-        self.inp = Input()
-        self.out = Output(Size)
-
-    def impl(self):
-        self.run_c(r'''
-        output { out(sizeof(struct pkt_dccp_ack_headers)); }
-        ''')
 
 class SizePkt(Element):
-    def configure(self):
+    def configure(self, len):
         self.inp = Input()
         self.out = Output(Size)
+        self.len = len
 
     def impl(self):
         self.run_c(r'''
-        output { out(sizeof(struct pkt_dccp_headers)); }
-        ''')
+        output { out(%s); }
+        ''' % self.len)
 
 class GetBothPkts(Element):
     def configure(self):
-        self.inp = Input("struct pkt_dccp_ack_headers*", "struct rte_mbuf *")
+        self.inp = Input("void*", "void*")
         self.out = Output("struct pkt_dccp_ack_headers*", "struct pkt_dccp_headers*")
 
     def impl(self):
         self.run_c(r'''
-        (struct pkt_dccp_ack_headers* tx_pkt, struct rte_mbuf* tx_buf) = inp();
+        (void* tx_pkt, void* tx_buf) = inp();
         state.tx_buf = tx_buf;
         output { out(tx_pkt, state.rx_pkt); }
         ''')
 
 class GetTxBuf(Element):
-    def configure(self):
-        self.inp = Input()
-        self.out = Output("struct rte_mbuf *")
+    def configure(self, len):
+        self.inp = Input("void *")
+        self.out = Output(Size, "void *", "void *")
+        self.len = len
 
     def impl(self):
         self.run_c(r'''
-        output { out(state.tx_buf); }
-        ''')
+        (void* p) = inp();
+        output { out(%s, p, state.tx_buf); }
+        ''' % self.len)
 
 class GetRxBuf(Element):
     def configure(self):
         self.inp = Input()
-        self.out = Output("struct rte_mbuf *")
+        self.out = Output("void *", "void *")
 
     def impl(self):
         self.run_c(r'''
-        output { out(state.rx_buf); }
+        output { out(state.rx_pkt, state.rx_buf); }
         ''')
 
 
@@ -458,8 +464,7 @@ class BatchInc(Element):
         // output switch { case t: out(t); };
         ''')
 
-queue_schedule = BatchScheduler(states=[batch_info])
-batch_inc = BatchInc(states=[batch_info])
+import target
 
 MAX_ELEMS = (4 * 1024)
 
@@ -473,52 +478,52 @@ tx_enq_creator, tx_deq_creator, tx_release_creator, scan = \
 
 class RxState(State):
     rx_pkt = Field("struct pkt_dccp_headers*")
-    rx_buf = Field("struct rte_mbuf *")
-    tx_buf = Field("struct rte_mbuf *")
+    rx_buf = Field("void *")
+    tx_buf = Field("void *")
 
 
 class NicRxPipeline(Pipeline):
     state = PerPacket(RxState)
 
     def impl(self):
-        # Signature
-        # FromNet: Output(header_type *, struct rte_mbuf *)
-        # NetworkFree: Input(struct rte_mbuf *)
+        from_net = net_real.FromNet()
+        from_net_free = net_real.FromNetFree()
 
-        # NetworkAlloc: Input(Size), Output(header_type *, struct rte_mbuf *)
-        # ToNet: Input(Size, header_type *, struct rte_mbuf *)
-
-        # All share the same mempool
-        FromNet, NetworkFree = dpdk.from_net()  # create one rx queue
-        NetworkAlloc, ToNet = dpdk.to_net()  # create one tx queue
-
-        from_net = FromNet(configure=["struct pkt_dccp_headers*"])
-        network_free = NetworkFree()
-
-        network_alloc = NetworkAlloc(configure=["struct pkt_dccp_ack_headers*"])
-        to_net = ToNet()
+        network_alloc = net_real.NetAlloc()
+        to_net = net_real.ToNet(configure=[True])
+        net_alloc_free = net_real.NetAllocFree()
 
         class nic_rx(InternalLoop):
-            def configure(self): self.process = 'flexstorm'
+            def configure_dpdk(self):
+                self.process = 'flexstorm'
+
+            def configure(self):
+                self.device = target.CAVIUM
+                self.cores = [0,1,2,3]
 
             def impl(self):
                 # Notice that it's okay to connect non-empty port to an empty port.
-                from_net >> Save() >> Pkt2Tuple() >> GetCore() >> rx_enq_creator() >> GetRxBuf() >> network_free
+                rx_enq = rx_enq_creator()
+                from_net >> Save() >> Pkt2Tuple() >> GetCore() >> rx_enq >> GetRxBuf() >> from_net_free
 
             def impl_dccp(self):
                 classifier = Classifier()
+                rx_enq = rx_enq_creator()
+                tx_buf = GetTxBuf(configure=['sizeof(struct pkt_dccp_ack_headers)'])
+                size_ack = SizePkt(configure=['sizeof(struct pkt_dccp_ack_headers)'])
+
                 from_net >> classifier
 
                 # CASE 1: not ack
                 # send ack
-                classifier.pkt >> SizeAck() >> network_alloc >> GetBothPkts() >> DccpSendAck() >> GetTxBuf() >> to_net
+                classifier.pkt >> size_ack >> network_alloc >> GetBothPkts() >> DccpSendAck() >> tx_buf >> to_net >> net_alloc_free
                 # process
                 pkt2tuple = Pkt2Tuple()
-                classifier.pkt >> pkt2tuple >> GetCore() >> rx_enq_creator() >> GetRxBuf() >> network_free
+                classifier.pkt >> pkt2tuple >> GetCore() >> rx_enq >> GetRxBuf() >> from_net_free
                 run_order(to_net, pkt2tuple)
 
                 # CASE 2: ack
-                classifier.ack >> DccpRecvAck() >> GetRxBuf() >> network_free
+                classifier.ack >> DccpRecvAck() >> GetRxBuf() >> from_net_free
 
         nic_rx('nic_rx')
 
@@ -547,19 +552,26 @@ class outqueue_put(API):
 
     def impl(self): self.inp >> tx_enq_creator()
 
-class RxState(State):
+class TxState(State):
     tuple = Field("struct tuple*")
     worker = Field(Int)
-    tx_buf = Field("struct rte_mbuf *")
+    tx_buf = Field("void *")
 
 class NicTxPipeline(Pipeline):
-    state = PerPacket(RxState)
+    state = PerPacket(TxState)
 
     def impl(self):
-        tx_release = tx_deq_creator()
-        NetworkAlloc, ToNet = dpdk.to_net()  # create one tx queue
-        network_alloc = NetworkAlloc(configure=["struct pkt_dccp_headers*"])
-        to_net = ToNet()
+        tx_release = tx_release_creator()
+        network_alloc = net_real.NetAlloc()
+        to_net = net_real.ToNet(configure=[True])
+        net_alloc_free = net_real.NetAllocFree()
+
+        get_tuple = GetTuple()
+        tx_buf = GetTxBuf(configure=['sizeof(struct pkt_dccp_headers) + sizeof(struct tuple)'])
+        size_pkt = SizePkt(configure=['sizeof(struct pkt_dccp_headers) + sizeof(struct tuple)'])
+
+        queue_schedule = BatchScheduler(states=[batch_info])
+        batch_inc = BatchInc(states=[batch_info])
 
         class PreparePkt(Composite):
             def configure(self):
@@ -568,28 +580,37 @@ class NicTxPipeline(Pipeline):
             def impl(self):
                 tuple2pkt = Tuple2Pkt()
 
-                self.inp >> SaveTuple() >> SizePkt() >> network_alloc >> tuple2pkt >> GetTxBuf() >> to_net
-                self.inp >> tx_release
-                run_order(tuple2pkt, tx_release)
+                self.inp >> SaveTuple() >> size_pkt >> network_alloc >> tuple2pkt >> tx_buf >> to_net >> net_alloc_free
+                tuple2pkt >> get_tuple >> tx_release
+                #run_order(tuple2pkt, get_tuple)
 
             def impl_dccp(self):
                 tuple2pkt = Tuple2Pkt()
+                dccp_check = DccpCheckCongestion()
 
-                self.inp >> SaveTuple() >> GetWorkerID() >> DccpCheckCongestion() >> SizePkt() >> network_alloc \
-                >> tuple2pkt >> GetWorkerIDPkt() >> DccpSeqTime() >> GetTxBuf() >> to_net
-                self.inp >> tx_release
-                run_order(tuple2pkt, tx_release)
+                self.inp >> SaveTuple() >> GetWorkerID() >> dccp_check
+
+                dccp_check.send >> size_pkt >> network_alloc >> tuple2pkt >> GetWorkerIDPkt() >> DccpSeqTime() \
+                >> tx_buf >> to_net >> net_alloc_free
+                tuple2pkt >> get_tuple >> tx_release
+                #run_order(tuple2pkt, get_tuple)
+
+                dccp_check.drop >> GetTuple() >> tx_release
 
         class nic_tx(InternalLoop):
-            def configure(self):
+            def configure_dpdk(self):
                 self.process = 'flexstorm'
+
+            def configure(self):
+                self.device = target.CAVIUM
+                self.cores = [4,5,6,7]
 
             def impl(self):
                 tx_deq = tx_deq_creator()
                 rx_enq = rx_enq_creator()
                 local_or_remote = LocalOrRemote()
 
-                queue_schedule >> tx_deq >> print_tuple >> SaveWorkerID() >> local_or_remote
+                queue_schedule >> tx_deq >> PrintTuple() >> SaveWorkerID() >> local_or_remote
                 tx_deq >> batch_inc
                 # send
                 local_or_remote.out_send >> PreparePkt()
@@ -614,5 +635,5 @@ c.include = r'''
 '''
 c.depend = {"test_storm": ['list', 'hash', 'hash_table', 'spout', 'count', 'rank', 'worker', 'flexstorm']}
 c.generate_code_as_header("flexstorm")
-c.compile_and_run([("test_storm", workerid[test])])
+#c.compile_and_run([("test_storm", workerid[test])])
 

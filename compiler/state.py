@@ -223,8 +223,8 @@ class Pipeline(object):
             self.impl()  # TODO: add pipeline state
             self.state = self.state.type(instance=False)
             scope, collection = pop_scope()
-            decl = pop_decl()
-            self.scope = decl + scope
+            self.decl = pop_decl()
+            self.scope = scope
 
         else:
             scope_spec, collection_spec = pop_scope()
@@ -232,8 +232,8 @@ class Pipeline(object):
             self.impl()  # TODO: add pipeline state
             self.state = self.state.type(instance=False)
             scope_impl, collection_impl = pop_scope()
-            decl = pop_decl()
-            self.scope = decl + [program.Spec(scope_spec), program.Impl(scope_impl)]
+            self.decl = pop_decl()
+            self.scope = [program.Spec(scope_spec), program.Impl(scope_impl)]
 
     @abstractmethod
     def impl(self):

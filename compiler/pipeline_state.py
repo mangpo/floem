@@ -44,7 +44,7 @@ def code_insert_arg_at_port(src, port, state):
     argtypes = port.argtypes
     m = re.search('[^a-zA-Z0-9_](' + port.name + '[ ]*\(([^\)]*)\))', src)
     if m is None:
-        m = re.search('(' + port + '[ ]*\(([^\)]*)\))', src)
+        m = re.search('(' + port.name + '[ ]*\(([^\)]*)\))', src)
 
     if m is None:
         pass
@@ -80,6 +80,7 @@ def element_insert_arg_at_port(element, port, state):
     element.code = code_insert_arg_at_port(element.code, port, state)
     if element.code_cavium is not None:
         element.code_cavium = code_insert_arg_at_port(element.code_cavium, port, state)
+
 
 def code_insert_arg_at_empyt_port(src, port, state):
     m = re.search('[^a-zA-Z0-9_](' + port.name + ')\(', src)
@@ -122,7 +123,7 @@ def insert_pipeline_state(instance, state, start, g):
                     all = True
                     for prev_name, prev_port in l:
                         prev = g.instances[prev_name]
-                        if len(prev.uses) == 0 or not prev.element.output_fire == "all":
+                        if len(prev.uses) == 0: # or not prev.element.output_fire == "all":
                             all = False
                             break
                     if all and len(l) < n_insts:
@@ -314,7 +315,7 @@ def insert_pipeline_states(g):
         instance = g.instances[start_name]
         element = instance.element
 
-        if len(ele2inst[element.name]) == 1:
+        if False: #len(ele2inst[element.name]) == 1:
             allocate_pipeline_state(g, element, state)
         else:
             new_element = element.clone(start_name + "_with_state_alloc")
@@ -331,7 +332,7 @@ def insert_pipeline_states(g):
             # If multiple instances can share the same element, make sure we don't modify an element more than once.
             if child.name not in vis and code_change(child):
                 vis.add(child.name)
-                if len(ele2inst[element.name]) == 1:
+                if False: #len(ele2inst[element.name]) == 1:
                     # TODO: modify element: empty port -> send state*
                     insert_pipeline_state(child, state, inst_name == start_name, g)
                 else:
@@ -447,7 +448,7 @@ def analyze_fields_liveness_instance(g, name, in_port):
             instance.uses[i] = ret_live.union(instance.element.uses)
 
         return instance.liveness[no], instance.uses[no]
-    elif q and q.deq == instance:
+    elif isinstance(q, graph_ir.Queue) and q.deq == instance:
         return set(), set()
 
     # Other elements

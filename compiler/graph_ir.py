@@ -302,18 +302,33 @@ class Element:
             (self.code_cavium, self.output_code_cavium) = \
                 self.reassign_output_values_internal(portname, args, self.code_cavium, self.output_code_cavium)
 
-    def add_output_value(self, portname, arg):
-        assert self.output_fire == "all", \
-            "Cannot add a value to an output port of element '%s', which does not fire all ports." % \
-            (portname, self.name)
-        out_code = self.output_code[portname]
-        out_code = out_code[:-1] + ", %s)" % arg
-        self.output_code[portname] = out_code
+    def add_output_value_internal(self, portname, arg, code, output_code):
+        if self.output_fire == "all":
+            src = output_code[portname]
+            src = src[:-1] + ", %s)" % arg
+            output_code[portname] = src
+        elif self.output_fire == "multi":
+            m = re.search('[^a-zA-Z0-9_](' + portname + '[ ]*\([^;];)', code)
+            while m:
+                p = code.rfind(')', m.start(1), m.end(1))
+                code = code[:p] + ", %s" % arg + code[p:]
+                m = re.search('[^a-zA-Z0-9_](' + portname + '[ ]*\([^;];)', code)
+        else:
+            cases_exprs = output_code
+            for i in range(len(cases_exprs)):
+                expr = cases_exprs[i][1]
+                m = re.match(portname + '[ ]*\(', expr)
+                if m:
+                    src = cases_exprs[i][1]
+                    src = src[:-1] + ", %s)" % arg
+                    cases_exprs[i] = (cases_exprs[i][0], src)
+        return code, output_code
 
-        if self.output_code_cavium:
-            out_code = self.output_code_cavium[portname]
-            out_code = out_code[:-1] + ", %s)" % arg
-            self.output_code_cavium[portname] = out_code
+    def add_output_value(self, portname, arg):
+        self.add_output_value_internal(portname, arg, self.code, self.output_code)
+
+        if self.code_cavium is not None:
+            self.add_output_value_internal(portname, arg, self.code_cavium, self.output_code_cavium)
 
     def replace_recursive(self, code, var, new_var):
         m = re.search(var, code)

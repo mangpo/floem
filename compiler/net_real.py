@@ -29,7 +29,9 @@ class FromNetFree(Element):
 
     def impl_cavium(self):
         # Do nothing
-        self.run_c("")
+        self.run_c(r'''
+    (void* p, void* buf) = inp();
+        ''')
 
 
 class NetAlloc(Element):
@@ -40,6 +42,7 @@ class NetAlloc(Element):
     def impl(self):
         # TODO: dpdk
         self.run_c(r'''
+    (size_t len) = inp();
     output { out(NULL, NULL); }
         ''')
 
@@ -52,18 +55,29 @@ class NetAlloc(Element):
 
 
 class ToNet(Element):
-    def configure(self):
+    def configure(self, has_output=False):
         self.inp = Input(Size, "void *", "void *")  # size, packet, buffer
+        self.has_output = has_output
+        if has_output:
+            self.out = Output("void *", "void *")
 
     def impl(self):
         # TODO: dpdk
-        self.run_c("")
+        out = r'''
+    output { out(p, buf); }
+    ''' if self.has_output else ""
+        self.run_c(r'''
+    (size_t len, void* p, void* buf) = inp();
+        ''' + out)
 
     def impl_cavium(self):
+        out = r'''
+    output { out(p, buf); }
+    ''' if self.has_output else ""
         self.run_c(r'''
     (size_t len, void* p, void* buf) = inp();
     network_send(len, p, 2560);
-        ''')
+        ''' + out)
 
 class NetAllocFree(Element):
     def configure(self):
@@ -71,7 +85,9 @@ class NetAllocFree(Element):
 
     def impl(self):
         # TODO: dpdk
-        self.run_c("")
+        self.run_c(r'''
+    (void* p, void* buf) = inp();
+        ''')
 
     def impl_cavium(self):
         # Do nothing

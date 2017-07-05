@@ -12,11 +12,12 @@ def reset():
 
 ###################### Port #######################
 
+import common
 class Port(object):
     def __init__(self, *args):
         self.name = None
         self.element = None
-        self.args = [string_type(x) for x in args]
+        self.args = [common.sanitize_type(string_type(x)) for x in args]
 
     def __str__(self):
         return "port '%s' of element '%s'" % (self.name, self.element)
@@ -476,7 +477,7 @@ class Runnable(Composite):
         if self.process:
             scope_append(program.ProcessMap(self.process, name))
         if self.device:
-            scope_append(program.DeviceMap(self.device, name, cores))
+            scope_append(program.DeviceMap(self.device, name, self.cores))
 
 class API(Runnable):
     def __init__(self, name, default_return=None, process=None):

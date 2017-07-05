@@ -44,21 +44,23 @@ class Compiler:
         decl = workspace.get_last_decl()
         org_scope = decl + scope
 
-        other_scopes = []
+        pipelines = []
         for pipeline in self.pipelines:
             p = pipeline()
-            other_scopes.append(p.scope)
+            pipelines.append(p)
 
         # Check if there is spec
-        has_spec_impl = self.has_spec_impl(other_scopes + [org_scope])
+        has_spec_impl = self.has_spec_impl([p.scope for p in pipelines] + [org_scope])
 
         # Generate graph
         original = self.generate_graph_from_scope(decl + scope, filename, spec_impl=has_spec_impl)
         all = []
-        for scope in other_scopes:
-            g = self.generate_graph_from_scope(scope, filename,
+        for i in range(len(self.pipelines)):
+            p = pipelines[i]
+            g = self.generate_graph_from_scope(decl + p.decl + p.scope, filename,
                                                pktstate=p.state, spec_impl=has_spec_impl, original=original)
             all.append(g)
+            decl += p.decl
 
         for g in all:
             original.merge(g)
