@@ -32,15 +32,14 @@ class Counter(Element):
         self.run_c(r'''
     (void* p, void* buf) = inp();
 
-    int ret, i;
     int *count;
-    ret = dma_read(this, sizeof(int), (void **) &count);
-    //if(ret) goto no_write_test;
+    dma_read(this, sizeof(int), (void **) &count);
 
-    *count++;
+    int local = my_htonl(*count);
+    local++;
+    *count = my_ntohl(local);
 
-    ret = dma_write(this, sizeof(int), count);
-    //if(ret) goto no_write_test;
+    dma_write(this, sizeof(int), count);
 
     // Free the block
     dma_free(count);

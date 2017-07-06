@@ -191,7 +191,7 @@ def generate_internal_triggers_with_process(graph, process, ext, mode):
         header_src += "void impl_run_threads();\n"
         header_src += "void impl_kill_threads();\n"
 
-    if target.CAVIUM in graph.processes:
+    if process == target.CAVIUM:
         header_src += "int get_wqe_cond();\n"
         header_src += "void run_from_net(cvmx_wqe_t *wqe);\n"
 
