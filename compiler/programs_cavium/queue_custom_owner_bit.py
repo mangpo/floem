@@ -5,11 +5,11 @@ import target, queue2
 MAX_ELEMS = 8
 n_cores = 1
 
-rx_enq_creator, rx_deq_creator, rx_release_creator, scan = \
+Enq, Deq, DeqRelease, Scan, ScanRelease = \
     queue2.queue_custom_owner_bit("rx_queue", "struct tuple", MAX_ELEMS, n_cores, "task", blocking=True,
                                   enq_output=True)
 
-Inject = create_inject("inject", "struct tuple*", 16, "random_count", 1000000)
+Inject = create_inject("inject", "struct tuple*", 16, "random_count", 100000)
 
 class GetCore(Element):
     def configure(self):
@@ -33,14 +33,14 @@ class Scheduler(Element):
 
 class Display(Element):
     def configure(self):
-        self.inp = Input("struct tuple*")
-        self.out = Output("struct tuple*")
+        self.inp = Input("struct tuple*", "uintptr_t")
+        self.out = Output("struct tuple*", "uintptr_t")
 
     def impl(self):
         self.run_c(r'''
-    (struct tuple* t) = inp();
+    (struct tuple* t, uintptr_t p) = inp();
     printf("t: %d %d\n", t->task, t->id);
-    output { out(t); }
+    output { out(t, p); }
         ''')
 
 class Free(Element):
@@ -57,15 +57,16 @@ class Free(Element):
 
 class nic_rx(InternalLoop):
     def impl(self):
-        Inject() >> GetCore() >> rx_enq_creator() >> Free()
+        Inject() >> GetCore() >> Enq() >> Free()
 
 
 class run(InternalLoop):
     def impl(self):
-        Scheduler() >> rx_deq_creator() >> Display() >> rx_release_creator()
+        Scheduler() >> Deq() >> Display() >> DeqRelease()
 
 
 nic_rx('nic_rx', device=target.CAVIUM, cores=[0])
+#nic_rx('nic_rx', process='test_queue')
 run('run', process='test_queue')
 
 c = Compiler()
@@ -88,3 +89,7 @@ sleep(10);
 '''
 c.generate_code_as_header("test_queue")
 #c.generate_code_and_run()
+
+# TODO
+# 1. test atomic
+# 5. one nic thread per out queue

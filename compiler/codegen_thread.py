@@ -14,17 +14,29 @@ def redirect_stdout(new_target):
 def thread_func_create_cancel(func, device, size=None, interval=None):
     # TODO: potentially need to pass in core_id
 
+    if size:
+        loop = r'''
+    int i;
+    usleep(1000);
+    for(i=0; i<%d; i++) {
+        //printf("inject = %s\n", i);
+        %s();
+        usleep(%d);
+    }
+    ''' % (size, '%d', func, interval)
+
     if device[0] == target.CPU:
         if size:
             body = r'''
-        usleep(1000);
-        for(int i=0; i<%d; i++) {
-            //printf("inject = %s\n", i);
-            %s();
-            usleep(%d);
-        }
-        pthread_exit(NULL);
-            ''' % (size, '%d', func, interval)
+    int i;
+    usleep(1000);
+    for(i=0; i<%d; i++) {
+        //printf("inject = %s\n", i);
+        %s();
+        usleep(%d);
+    }
+    pthread_exit(NULL);
+    ''' % (size, '%d', func, interval)
         else:
             body = r'''
         while(true) { %s(); /* usleep(1000); */ }
@@ -37,14 +49,15 @@ def thread_func_create_cancel(func, device, size=None, interval=None):
     elif device[0] == target.CAVIUM:
         if size:
             body = r'''
-                    usleep(1000);
-                    for(int i=0; i<%d; i++) {
-                        //printf("inject = %s\n", i);
-                        %s();
-                        usleep(%d);
-                    }
-                    sleep(10);
-                        ''' % (size, '%d', func, interval)
+    int i;
+    cvmx_wait_usec(1000);
+    for(i=0; i<%d; i++) {
+        //printf("inject = %s\n", i);
+        %s();
+        cvmx_wait_usec(%d);
+    }
+    cvmx_wait_usec(10000000);
+    ''' % (size, '%d', func, interval)
         else:
             body = r'''
         %s();
@@ -79,6 +92,11 @@ int get_wqe_cond() {
     return %s;
 }
     ''' % cond
+    return cond_src, func_src
+
+def no_from_net():
+    func_src = "void run_from_net(cvmx_wqe_t *wqe) {}\n"
+    cond_src = "int get_wqe_cond() { return 1; }\n"
     return cond_src, func_src
 
 
@@ -206,7 +224,9 @@ def generate_internal_triggers_with_process(graph, process, ext, mode):
         if len(from_net) > 0:
             assert len(from_net) == 1, "There are more than one from_net elements."
             cond_src, func_src = from_net_create(from_net[0], graph)
-            run_src += cond_src + func_src
+        else:
+            cond_src, func_src = no_from_net()
+        run_src += cond_src + func_src
 
     if ext == '.h':
         with open(process + '.h', 'a') as f, redirect_stdout(f):
@@ -294,7 +314,8 @@ def generate_testing_code(graph, code, ext):
 def generate_populate_state(inject, key):
     # src = "  // %s: populate %s and %s\n" % \
     #       (inject.name, inject.spec_instances[key], inject.impl_instances[key])
-    src = "  for(int i = 0; i < %d; i++) {\n" % inject.size
+    src = "  int i;\n"
+    src += "  for(i = 0; i < %d; i++) {\n" % inject.size
     src += "    %s temp = %s(i);\n" % (inject.type, inject.func)
     src += "    %s->data[i] = temp;\n" % inject.spec_instances[key]
     if key in inject.impl_instances:

@@ -118,9 +118,9 @@ def generate_state_instances_cpu_only(graph, ext, all_processes, shared):
         for name in shared:
             inst = graph.state_instances[name]
             shared_src += "shm_size += sizeof(%s);\n" % inst.state.name
-        master_src = 'shm = util_create_shmsiszed("SHARED", shm_size);\n'
+        master_src = 'shm = (uintptr_t) util_create_shmsiszed("SHARED", shm_size);\n'
         master_src += 'uintptr_t shm_p = (uintptr_t) shm;'
-        slave_src = 'shm = util_map_shm("SHARED", shm_size);\n'
+        slave_src = 'shm = (uintptr_t) util_map_shm("SHARED", shm_size);\n'
         slave_src += 'uintptr_t shm_p = (uintptr_t) shm;'
         with open(graph.master_process + ext, 'a') as f, redirect_stdout(f):
             print shared_src
@@ -175,7 +175,7 @@ def generate_state_instances_cpu_only(graph, ext, all_processes, shared):
 def generate_state_instances_cpu_cavium(graph, ext, all_processes, shared):
     if len(shared) > 0:
         # Kernel code
-        os.system('rm uio_simple.h')
+        os.system('rm uio_size.c')
         process = [p for p in all_processes if not (p == target.CAVIUM)][0]
         kernal_src = '#include "%s.h"\n' % process
         kernal_src += 'size_t get_shared_size() {\n'
@@ -185,7 +185,17 @@ def generate_state_instances_cpu_cavium(graph, ext, all_processes, shared):
             kernal_src += '  shm_size += sizeof(%s);\n' % inst.state.name
         kernal_src += '  return shm_size;\n}\n'
 
-        with open('uio_simple.h', 'a') as f, redirect_stdout(f):
+        kernal_src += r'''
+int main() {
+  FILE *f = fopen("uio_simple.h", "w");
+  fprintf(f, "#define SIZE %ld\n", get_shared_size());
+
+  fclose(f);
+  return 0;
+}
+        '''
+
+        with open('uio_size.c', 'a') as f, redirect_stdout(f):
             print kernal_src
 
     src_cpu = "void init_state_instances(char *argv[]) {\n"
@@ -196,7 +206,8 @@ def generate_state_instances_cpu_cavium(graph, ext, all_processes, shared):
         # Check processes
         assert (graph.master_process in graph.processes), "Please specify a master process using master_process(name)."
 
-        src_cpu += '  uintptr_t shm_p = util_map_dma();\n'
+        src_cpu += '  uintptr_t shm_p = (uintptr_t) util_map_dma();\n'
+        src_cpu += '  uintptr_t shm_start = shm_p;\n'
         src_cavium += '  uintptr_t shm_p = STATIC_ADDRESS_HERE;\n'
 
     for process in graph.processes:
@@ -214,6 +225,16 @@ def generate_state_instances_cpu_cavium(graph, ext, all_processes, shared):
             map_shared_state(name, inst, ext)
         else:
             allocate_state(name, inst, ext)
+
+    src_cpu = '  memset((void *) shm_start, 0, shm_p - shm_start);\n'
+    for process in graph.processes:
+        name = process + ext
+        with open(name, 'a') as f, redirect_stdout(f):
+            if graph.process2device[process] == target.CPU:
+                print src_cpu
+
+    for name in graph.state_instance_order:
+        inst = graph.state_instances[name]
         init_state(name, inst, graph.states[inst.state.name], graph.master_process, ext)
 
     src = "}\n"

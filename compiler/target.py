@@ -1,6 +1,6 @@
 HOST = 'CPU'
 CPU = 'CPU'
-cpu_include_h = ["<stdint.h>", "<stdbool.h>"]
+cpu_include_h = ["<stdint.h>", "<stdbool.h>", "<stdio.h>", "<stdlib.h>"]
 cpu_include_c = ["<stdint.h>", "<stdbool.h>", "<stdio.h>", "<stdlib.h>", "<string.h>", "<stddef.h>", "<unistd.h>", "<pthread.h>"]
 
 

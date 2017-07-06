@@ -252,10 +252,10 @@ def queue_variable_size(name, size, n_cores, blocking=False, enq_atomic=False, d
 # 1. ScanRelease
 # 2. Dequeue & Scan: output(type*, uintptr_t)
 # 3. TxRelease & ScanRelease: input(type*, uintptr_t)
-# 4. Cavium: sync, dma_read_with_buf
-# 5. Make storm works again
+# 4. Make storm works again
 def queue_custom_owner_bit(name, type, size, n_cores, owner,
-                           blocking=False, enq_atomic=False, deq_atomic=False, scan=False, enq_output=False):
+                           blocking=False, enq_atomic=False, deq_atomic=False, scan_atomic=False,
+                           scan=False, enq_output=False):
     """
     :param name: queue name
     :param type: entry type
@@ -289,11 +289,11 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
     atomic_src_cvm = r'''
         size_t old = p->offset;
         size_t new = (old + 1) %s %d;
-        while(!__sync_bool_compare_and_swap(&p->offset, old, new)) {
+        while(!cvmx_atomic_compare_and_store32(&p->offset, old, new)) {
             old = p->offset;
             new = (old + 1) %s %d;
         }
-        ''' % ('%', size, '%', size)  # TODO: __sync_bool_compare_and_swap
+        ''' % ('%', size, '%', size)
 
     wait_then_copy = r'''
     while(q->data[old].%s != 0) __sync_synchronize();
@@ -302,17 +302,17 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
     ''' % (owner, type)
 
     init_read_cvm = r'''
-        uintptr_t addr = &q->data[old];
+        uintptr_t addr = (uintptr_t) &q->data[old];
         %s* entry;
         int size = sizeof(%s);
-        dma_read(addr, size, &entry);
+        dma_read(addr, size, (void**) &entry);
         ''' % (type, type)
 
     wait_then_copy_cvm = init_read_cvm + r'''
-        while(entry->%s) dma_read_with_buff(addr, size, &entry);
+        while(entry->%s) dma_read_with_buf(addr, size, (void**) &entry);
         memcpy(entry, x, size);
         dma_write(addr, size, entry);
-        ''' % (owner)  # TODO: dma_read_with_buff
+        ''' % (owner)
 
     wait_then_get = r'''
     while(q->data[old].%s == 0) __sync_synchronize();
@@ -320,7 +320,7 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
     ''' % (owner, type_star)
 
     wait_then_get_cvm = init_read_cvm + r'''
-        while(entry->%s == 0) dma_read_with_buff(addr, size, &entry);
+        while(entry->%s == 0) dma_read_with_buf(addr, size, (void**) &entry);
         %s* x = entry;
         ''' % (owner, type)
 
@@ -503,7 +503,31 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
             self.out = Output(type_star, 'uintptr_t')
 
         def impl(self):
-            self.run_c(r'''
+            atomic_src = r'''
+                (size_t c) = in_core();
+                circular_queue_scan *q = this->cores[c];
+                %s* p = q->queue;
+                %s* entry = NULL;
+
+                while (q->clean != q->offset) {
+                    entry = &p->data[q->clean];
+                    if ((entry->%s) != 0) {
+                        entry = NULL;
+                        break
+                    } else {
+                        size_t old = q->clean;
+                        size_t new = (old + 1) %s q->len;
+                        if(__sync_bool_compare_and_swap(&q->clean, old, new))
+                            break;
+                        else {
+                            entry = NULL;
+                        }
+                    }
+                }
+                output { out(entry, 0); }
+                ''' % (Storage.__name__, type, owner, '%')
+
+            no_atomic_src = r'''
     (size_t c) = in_core();
     circular_queue_scan *q = this->cores[c];
     %s* p = q->queue;
@@ -517,18 +541,49 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
         }
     }
     output { out(entry, 0); }
-            ''' % (Storage.__name__, type, owner, '%'))
+            ''' % (Storage.__name__, type, owner, '%')
+
+            self.run_c(atomic_src if scan_atomic else no_atomic_src)
+
 
         def impl_cavium(self):
-            self.run_c(r'''
+            atomic_src = r'''
+    (size_t c) = in_core();
+    circular_queue_scan *q = this->cores[c];
+    %s* p = q->queue;
+    %s* entry = NULL;
+    uintptr_t addr;
+
+    while (q->clean != q->offset) {
+        addr = (uintptr_t) &q->data[q->clean];
+        dma_read(addr, sizeof(%s), (void**) &entry);
+        if ((entry->%s) != 0) {
+            dma_free(entry);
+            entry = NULL;
+            break
+        } else {
+            size_t old = q->clean;
+            size_t new = (old + 1) %s q->len;
+            if(cvmx_atomic_compare_and_store32(&q->clean, old, new))
+                break;
+            else {
+                dma_free(entry);
+                entry = NULL;
+            }
+        }
+    }
+    output { out(entry, addr); }
+    ''' % (Storage.__name__, type, type, owner, '%')
+
+            no_atomic_src = r'''
     (size_t c) = in_core();
     circular_queue_scan *q = this->cores[c];
     %s* p = q->queue;
     %s* entry = NULL;
     uintptr_t addr;
     if (q->clean != q->offset) {
-        addr = &q->data[q->clean];
-        dma_read(addr, sizeof(%s), &entry);
+        addr = (uintptr_t) &q->data[q->clean];
+        dma_read(addr, sizeof(%s), (void**) &entry);
         if ((entry->%s) != 0) {
             dma_free(entry);
             entry = NULL;
@@ -537,7 +592,9 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
         }
     }
     output { out(entry, addr); }
-            ''' % (Storage.__name__, type, type, owner, '%'))
+            ''' % (Storage.__name__, type, type, owner, '%')
+
+            self.run_c(atomic_src if scan_atomic else no_atomic_src)
 
     class ScanRelease(Element):
         def configure(self):
