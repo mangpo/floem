@@ -4,18 +4,22 @@ import types, os
 
 def declare_state(name, state_instance, ext):
     state = state_instance.state
-    src = ""
-    src += "{0}* {1};\n".format(state.name, name)
+    src = "{0}* {1};\n".format(state.name, name)
+    src_cavium = "CVMX_SHARED {0} _{1};\n".format(state.name, name)
+    src_cavium += "CVMX_SHARED {0}* {1};\n".format(state.name, name)  # TODO: CVMX_SHARED or not?
     for process in state_instance.processes:
         name = process + ext
         with open(name, 'a') as f, redirect_stdout(f):
-            print src
+            if process == target.CAVIUM:
+                print src_cavium
+            else:
+                print src
 
 
 def map_shared_state(name, state_instance, ext):
     state = state_instance.state
-    src = "{1} = ({0} *) shm_p;\n".format(state.name, name)
-    src += "shm_p = shm_p + sizeof({0});\n".format(state.name)
+    src = "  {1} = ({0} *) shm_p;\n".format(state.name, name)
+    src += "  shm_p = shm_p + sizeof({0});\n".format(state.name)
 
     for process in state_instance.processes:
         name = process + ext
@@ -25,13 +29,17 @@ def map_shared_state(name, state_instance, ext):
 
 def allocate_state(name, state_instance, ext):
     state = state_instance.state
-    src = "{1} = ({0} *) malloc(sizeof({0}));\n".format(state.name, name)
-    src += "memset({0}, 0, sizeof({1}));\n".format(name, state.name)
+    src_cpu = "  {1} = ({0} *) malloc(sizeof({0}));\n".format(state.name, name)
+    src_cavium = "  {0} = &_{0};\n".format(name)
+    src = "  memset({0}, 0, sizeof({1}));\n".format(name, state.name)
 
     for process in state_instance.processes:
         name = process + ext
         with open(name, 'a') as f, redirect_stdout(f):
-            print src
+            if process == target.CAVIUM:
+                print src_cavium + src
+            else:
+                print src_cpu + src
 
 
 def init_state(name, state_instance, state, master, ext):
@@ -188,8 +196,8 @@ def generate_state_instances_cpu_cavium(graph, ext, all_processes, shared):
         # Check processes
         assert (graph.master_process in graph.processes), "Please specify a master process using master_process(name)."
 
-        src_cpu += 'uintptr_t shm_p = util_map_dma();\n'
-        src_cavium += 'uintptr_t shm_p = STATIC_ADDRESS_HERE;\n'
+        src_cpu += '  uintptr_t shm_p = util_map_dma();\n'
+        src_cavium += '  uintptr_t shm_p = STATIC_ADDRESS_HERE;\n'
 
     for process in graph.processes:
         name = process + ext

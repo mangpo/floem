@@ -36,7 +36,15 @@ def thread_func_create_cancel(func, device, size=None, interval=None):
         cancel = "  pthread_cancel(_thread_%s);\n" % func
     elif device[0] == target.CAVIUM:
         if size:
-            raise Exception("Unimplemented for inject element on Cavium.")
+            body = r'''
+                    usleep(1000);
+                    for(int i=0; i<%d; i++) {
+                        //printf("inject = %s\n", i);
+                        %s();
+                        usleep(%d);
+                    }
+                    sleep(10);
+                        ''' % (size, '%d', func, interval)
         else:
             body = r'''
         %s();

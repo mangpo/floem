@@ -671,7 +671,7 @@ def generate_code_and_run(graph, testing, mode, expect=None, include=None, depen
 
 def compile_object_file(f):
     if isinstance(f, str):
-        cmd = 'gcc -O3 -g -msse4.1 -I %s -c %s.c -lrt' % (common.dpdk_include, f)
+        cmd = 'gcc -O0 -g -msse4.1 -I %s -c %s.c -lrt' % (common.dpdk_include, f)
         print cmd
         status = os.system(cmd)
         if not status == 0:
@@ -689,7 +689,7 @@ def compile_and_run(name, depend):
     compile_object_file(depend)
 
     if isinstance(name, str):
-        cmd = 'gcc -O3 -g -msse4.1 -I %s -pthread %s.c %s -o %s -lrt' % \
+        cmd = 'gcc -O0 -g -msse4.1 -I %s -pthread %s.c %s -o %s -lrt' % \
               (common.dpdk_include, name, ' '.join([d + '.o' for d in depend]), name)
         print cmd
         status = os.system(cmd)
@@ -705,7 +705,7 @@ def compile_and_run(name, depend):
         for f in name:
             if isinstance(f, tuple):
                 f = f[0]
-            cmd = 'gcc -O3 -g -msse4.1 -I %s -pthread %s.c %s -o %s -lrt' % \
+            cmd = 'gcc -O0 -g -msse4.1 -I %s -pthread %s.c %s -o %s -lrt' % \
                   (common.dpdk_include, f, ' '.join([d + '.o' for d in depend[f]]), f)
             print cmd
             status = os.system(cmd)
