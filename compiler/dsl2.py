@@ -2,6 +2,7 @@ from state import *
 from workspace import *
 import re
 import copy
+import target
 
 def reset():
     Element.defined = set()
@@ -13,6 +14,23 @@ def reset():
 ###################### Port #######################
 
 import common
+
+class ID(object):
+    def __init__(self):
+        pass
+
+    def __rshift__(self, other):
+        if isinstance(other, Input):
+            c = program.StartWithCoreID(other.element.name)
+            scope_append(c)
+        elif isinstance(other, Connectable):
+            self >> other.inports[0]
+        elif isinstance(other, CompositeInput):
+            for e in other.element_ports:
+                self >> e
+        return other
+
+
 class Port(object):
     def __init__(self, *args):
         self.name = None
@@ -478,6 +496,8 @@ class Runnable(Composite):
             scope_append(program.ProcessMap(self.process, name))
         if self.device:
             scope_append(program.DeviceMap(self.device, name, self.cores))
+        elif not cores == [0]:
+            scope_append(program.DeviceMap(target.CPU, name, self.cores))
 
 class API(Runnable):
     def __init__(self, name, default_return=None, process=None):
@@ -603,6 +623,7 @@ class API(Runnable):
 
 class InternalLoop(Runnable):
     def __init__(self, name, process=None, device=None, cores=[0]):
+        self.core_id = ID()
         Runnable.__init__(self, name, process, device, cores)
 
         t = InternalThread(name)

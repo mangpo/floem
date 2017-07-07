@@ -139,7 +139,7 @@ class ThreadAllocator:
             trigger.call_instance = start.name
 
             if start.name in self.roots:
-                assert len(start.element.inports) == 0, \
+                assert len(start.element.inports) == 0 or (len(start.element.inports) == 1 and start.core_id), \
                     ("The starting element '%s' of internal trigger '%s' cannot take any argument."
                      % (start.name, trigger.name))
 

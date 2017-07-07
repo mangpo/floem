@@ -2,14 +2,14 @@ from dsl2 import *
 from compiler import Compiler
 import target, queue2
 
-MAX_ELEMS = 8
+MAX_ELEMS = 30
 n_cores = 1
 
 Enq, Deq, DeqRelease, Scan, ScanRelease = \
-    queue2.queue_custom_owner_bit("rx_queue", "struct tuple", MAX_ELEMS, n_cores, "task", blocking=True,
-                                  enq_output=True)
+    queue2.queue_custom_owner_bit("rx_queue", "struct tuple", MAX_ELEMS, n_cores, "task",
+                                  blocking=True, enq_atomic=True, enq_output=True)
 
-Inject = create_inject("inject", "struct tuple*", 16, "random_count", 100000)
+Inject = create_inject("inject", "struct tuple*", 100, "random_count", 100000)
 
 class GetCore(Element):
     def configure(self):
@@ -65,7 +65,7 @@ class run(InternalLoop):
         Scheduler() >> Deq() >> Display() >> DeqRelease()
 
 
-nic_rx('nic_rx', device=target.CAVIUM, cores=[0])
+nic_rx('nic_rx', device=target.CAVIUM, cores=range(4))
 #nic_rx('nic_rx', process='test_queue')
 run('run', process='test_queue')
 

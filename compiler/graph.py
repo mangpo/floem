@@ -347,8 +347,6 @@ class Graph:
         delete = []
         for name in self.instances:
             instance = self.instances[name]
-            if name == '_spec_my_scheduler':
-                print
             if instance.unused() and instance.name not in used:
                 # No connection
                 delete.append(name)

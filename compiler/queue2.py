@@ -289,7 +289,7 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
     atomic_src_cvm = r'''
         size_t old = p->offset;
         size_t new = (old + 1) %s %d;
-        while(!cvmx_atomic_compare_and_store32(&p->offset, old, new)) {
+        while(!cvmx_atomic_compare_and_store64(&p->offset, old, new)) {
             old = p->offset;
             new = (old + 1) %s %d;
         }
@@ -564,7 +564,7 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
         } else {
             size_t old = q->clean;
             size_t new = (old + 1) %s q->len;
-            if(cvmx_atomic_compare_and_store32(&q->clean, old, new))
+            if(cvmx_atomic_compare_and_store64(&q->clean, old, new))
                 break;
             else {
                 dma_free(entry);

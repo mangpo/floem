@@ -372,6 +372,7 @@ class ElementNode:
         self.input2ele = {}    # map input port name to list of (element name, port)
         self.output2connect = {}
         self.state_args = state_args
+        self.core_id = False
 
         # Thread
         self.thread = thread
@@ -410,6 +411,7 @@ class ElementNode:
         node.liveness = self.liveness
         node.uses = self.uses
         node.extras = self.extras
+        node.core_id = self.core_id
         return node
 
     def __str__(self):
@@ -448,7 +450,9 @@ class ElementNode:
         print "}"
 
     def unused(self):
-        if len(self.element.inports) > 0:
+        if self.core_id:
+            return False
+        elif len(self.element.inports) > 0:
             return len(self.input2ele) == 0
         else:
             return len(self.element.outports) > 0 and len(self.output2ele) == 0

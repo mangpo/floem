@@ -11,66 +11,71 @@ def redirect_stdout(new_target):
         sys.stdout = old_target # restore to the previous value
 
 
-def thread_func_create_cancel(func, device, size=None, interval=None):
-    # TODO: potentially need to pass in core_id
+def thread_func_create_cancel(func, instance, size=None, interval=None):
+    device = instance.device[0]
+    cores = instance.device[1]
 
-    if size:
-        loop = r'''
-    int i;
-    usleep(1000);
-    for(i=0; i<%d; i++) {
-        //printf("inject = %s\n", i);
-        %s();
-        usleep(%d);
-    }
-    ''' % (size, '%d', func, interval)
+    if device == target.CPU:
+        if instance.core_id:
+            arg = "*((int*) tid)"
+        else:
+            arg = ""
 
-    if device[0] == target.CPU:
         if size:
             body = r'''
     int i;
     usleep(1000);
     for(i=0; i<%d; i++) {
         //printf("inject = %s\n", i);
-        %s();
+        %s(%s);
         usleep(%d);
     }
     pthread_exit(NULL);
-    ''' % (size, '%d', func, interval)
+    ''' % (size, '%d', func, arg, interval)
         else:
             body = r'''
-        while(true) { %s(); /* usleep(1000); */ }
-        ''' % func
+        while(true) { %s(%s); /* usleep(1000); */ }
+        ''' % (func, arg)
 
         thread = "pthread_t _thread_%s;\n" % func
-        func_src = "void *_run_%s(void *threadid) {\n" % func + body + "}\n"
-        create = "  pthread_create(&_thread_%s, NULL, _run_%s, NULL);\n" % (func, func)
+        func_src = "void *_run_%s(void *tid) {\n" % func + body + "}\n"
+        create = "  int ids[%d];\n" % len(cores)
+        for i in range(len(cores)):
+            id = cores[i]
+            create += "  ids[%d] = %d;\n" % (i, id)
+            create += "  pthread_create(&_thread_%s, NULL, _run_%s, (void*) &ids[%d]);\n" % (func, func, i)
         cancel = "  pthread_cancel(_thread_%s);\n" % func
-    elif device[0] == target.CAVIUM:
+
+    elif device == target.CAVIUM:
+        if instance.core_id:
+            arg = "corenum"
+        else:
+            arg = ""
+
         if size:
             body = r'''
     int i;
     cvmx_wait_usec(1000);
     for(i=0; i<%d; i++) {
         //printf("inject = %s\n", i);
-        %s();
+        %s(%s);
         cvmx_wait_usec(%d);
     }
     cvmx_wait_usec(10000000);
-    ''' % (size, '%d', func, interval)
+    ''' % (size, '%d', func, arg, interval)
         else:
             body = r'''
-        %s();
-            ''' % func
+        %s(%s);
+            ''' % (func, arg)
 
         thread = ""
-        func_src = "void _run_%s() {\n" % func + body + "}\n"
+        func_src = "void _run_%s(int corenum) {\n" % func + body + "}\n"
 
-        cond = " || ".join(["(corenum == %d)" % i for i in device[1]])
+        cond = " || ".join(["(corenum == %d)" % i for i in cores])
         create = r'''
     {
         int corenum = cvmx_get_core_num();
-        if(%s)  _run_%s();
+        if(%s)  _run_%s(corenum);
     }
         ''' % (cond, func)
         cancel = ""
@@ -107,7 +112,7 @@ def inject_thread_code(injects, graph):
 
     for (func, size, interval) in injects:
         instance = graph.instances[func]
-        (thread, func_src, create, cancel) = thread_func_create_cancel(func, instance.device, size, interval)
+        (thread, func_src, create, cancel) = thread_func_create_cancel(func, instance, size, interval)
         global_src += thread
         global_src += func_src
         run_src += create
@@ -125,11 +130,11 @@ def internal_thread_code(forever, graph):
 
     for func in forever:
         instance = graph.instances[func]
-        if len(instance.element.inports) > 0:
+        if len(instance.element.inports) > 0 and (not instance.core_id):
             raise Exception(
                 "The element '%s' cannot be a starting element because it receives an input from another element." % func)
 
-        (thread, func_src, create, cancel) = thread_func_create_cancel(func, instance.device)
+        (thread, func_src, create, cancel) = thread_func_create_cancel(func, instance)
         global_src += thread
         global_src += func_src
         run_src += create

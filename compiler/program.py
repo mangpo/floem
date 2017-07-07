@@ -195,6 +195,11 @@ class PipelineState:
         self.state = state
 
 
+class StartWithCoreID:
+    def __init__(self, instance):
+        self.instance = instance
+
+
 class GraphGenerator:
     def __init__(self, default_process, original=None):
         self.graph = Graph(default_process, original)
@@ -300,6 +305,9 @@ class GraphGenerator:
             self.graph.inject_populates[x.state_instance] = x.clone()
         elif isinstance(x, CompareState):
             self.graph.probe_compares[x.state_instance] = x.clone()
+
+        elif isinstance(x, StartWithCoreID):
+            self.graph.instances[x.instance].core_id = True
         else:
             raise Exception("GraphGenerator: unimplemented for %s." % x)
 
