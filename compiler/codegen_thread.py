@@ -39,11 +39,11 @@ def thread_func_create_cancel(func, instance, size=None, interval=None):
 
         thread = "pthread_t _thread_%s;\n" % func
         func_src = "void *_run_%s(void *tid) {\n" % func + body + "}\n"
-        create = "  int ids[%d];\n" % len(cores)
+        create = "  int ids_%s[%d];\n" % (func, len(cores))
         for i in range(len(cores)):
             id = cores[i]
-            create += "  ids[%d] = %d;\n" % (i, id)
-            create += "  pthread_create(&_thread_%s, NULL, _run_%s, (void*) &ids[%d]);\n" % (func, func, i)
+            create += "  ids_%s[%d] = %d;\n" % (func, i, id)
+            create += "  pthread_create(&_thread_%s, NULL, _run_%s, (void*) &ids_%s[%d]);\n" % (func, func, func, i)
         cancel = "  pthread_cancel(_thread_%s);\n" % func
 
     elif device == target.CAVIUM:
