@@ -14,6 +14,7 @@ def redirect_stdout(new_target):
 def thread_func_create_cancel(func, instance, size=None, interval=None):
     device = instance.device[0]
     cores = instance.device[1]
+    process = instance.process
 
     if device == target.CPU:
         if instance.core_id:
@@ -37,14 +38,22 @@ def thread_func_create_cancel(func, instance, size=None, interval=None):
         while(true) { %s(%s); /* usleep(1000); */ }
         ''' % (func, arg)
 
-        thread = "pthread_t _thread_%s;\n" % func
         func_src = "void *_run_%s(void *tid) {\n" % func + body + "}\n"
         create = "  int ids_%s[%d];\n" % (func, len(cores))
+
+        if not target.is_dpdk_proc(process):
+            thread = "pthread_t _thread_%s;\n" % func
+            cancel = "  pthread_cancel(_thread_%s);\n" % func
+        else:
+            thread = ""
+            cancel = "  //TODO\n"
         for i in range(len(cores)):
             id = cores[i]
             create += "  ids_%s[%d] = %d;\n" % (func, i, id)
-            create += "  pthread_create(&_thread_%s, NULL, _run_%s, (void*) &ids_%s[%d]);\n" % (func, func, func, i)
-        cancel = "  pthread_cancel(_thread_%s);\n" % func
+            if not target.is_dpdk_proc(process):
+                create += "  pthread_create(&_thread_%s, NULL, _run_%s, (void*) &ids_%s[%d]);\n" % (func, func, func, i)
+            else:
+                create += "  dpdk_thread_create(_run_%s, (void*) &ids_%s[%d]);\n" % (func, func, i)
 
     elif device == target.CAVIUM:
         if instance.core_id:
@@ -272,6 +281,8 @@ def generate_inject_probe_code_with_process(graph, process, ext):
         probe_src = ""
 
     src += "void init(char *argv[]) {\n" if graph.process2device[process] == target.CPU else "void init() {\n"
+    if target.is_dpdk_proc(process):
+        src += "  dpdk_init(argv, 1, 1);\n" # TODO: how do we get these numbers
     #src += "  init_memory_regions();\n"
     src += "  init_state_instances(argv);\n" if graph.process2device[process] == target.CPU else "  init_state_instances();\n"
     src += inject_src

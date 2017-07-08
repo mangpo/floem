@@ -3,18 +3,26 @@ from dsl2 import *
 class FromNet(Element):
     def configure(self):
         self.out = Output("void *", "void *") # packet, buffer
+        self.nothing = Output()
         self.special = 'from_net'
 
     def impl(self):
-        # TODO: dpdk
         self.run_c(r'''
-    output { out(NULL, NULL); }
+    void *data, *buf;
+    dpdk_from_net(&data, &buf);
+    output switch {
+        case data != NULL: out(data, buf);
+        case data == NULL: nothing();
+    }
         ''')
 
     def impl_cavium(self):
         self.run_c(r'''
     void* p = cvmx_phys_to_ptr(wqe->packet_ptr.s.addr);
-    output { out(p, wqe); }
+    output switch {
+        case p != NULL: out(p, wqe);
+        case p == NULL: nothing();
+    }
         ''')
 
 class FromNetFree(Element):
@@ -24,7 +32,7 @@ class FromNetFree(Element):
     def impl(self):
         self.run_c(r'''
     (void* p, void* buf) = inp();
-    rte_pktmbuf_free(buf);
+    dpdk_net_free(p, buf);
         ''')
 
     def impl_cavium(self):
@@ -38,19 +46,27 @@ class NetAlloc(Element):
     def configure(self):
         self.inp = Input(Size)
         self.out = Output("void *", "void *")  # packet, buffer
+        self.oom = Output()
 
     def impl(self):
-        # TODO: dpdk
         self.run_c(r'''
     (size_t len) = inp();
-    output { out(NULL, NULL); }
+    void *data, *buf;
+    dpdk_net_alloc(len, &data, &buf);
+    output switch {
+        case data != NULL: out(data, buf);
+        case data == NULL: oom();
+    }
         ''')
 
     def impl_cavium(self):
         self.run_c(r'''
     (size_t len) = inp();
     void* p = malloc(sizeof(uint8_t) * len);
-    output { out(p, NULL); }
+    output switch {
+        case p != NULL: out(p, NULL);
+        case p == NULL: oom();
+    }
         ''')
 
 
@@ -62,12 +78,14 @@ class ToNet(Element):
             self.out = Output("void *", "void *")
 
     def impl(self):
-        # TODO: dpdk
         out = r'''
     output { out(p, buf); }
     ''' if self.has_output else ""
         self.run_c(r'''
     (size_t len, void* p, void* buf) = inp();
+    dpdk_to_net(len, p, buf);
+
+    if (
         ''' + out)
 
     def impl_cavium(self):
@@ -84,9 +102,9 @@ class NetAllocFree(Element):
         self.inp = Input("void *", "void *")  # packet, buffer
 
     def impl(self):
-        # TODO: dpdk
         self.run_c(r'''
     (void* p, void* buf) = inp();
+    dpdk_net_free(p, buf);
         ''')
 
     def impl_cavium(self):

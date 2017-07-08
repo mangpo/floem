@@ -1,7 +1,16 @@
 import re
 
 standard_arg_format = "{0}_arg{1}"
-dpdk_include = "/home/mangpo/lib/dpdk-16.11/build/include/"
+dpdk_base = "/home/antoinek/dpdk/x86_64-native-linuxapp-gcc"
+dpdk_include = dpdk_base + "/include/"
+dpdk_lib = dpdk_base + "/lib/"
+dpdk_pmds = "-lrte_pmd_ixgbe -lrte_pmd_i40e"
+dpdk_libs = "-Wl,--whole-archive " + dpdk_pmds + " -lrte_eal" + \
+    " -lrte_mempool -lrte_hash -lrte_ring -lrte_kvargs -lrte_ethdev" + \
+    " -lrte_mbuf -lrte_pmd_ring -Wl,--no-whole-archive -lm -lpthread -lrt" + \
+    " -ldl"
+dpdk_driver_header = "<dpdk.h>"
+
 pipeline_include = r'''
 typedef struct {
     int refcount;

@@ -316,7 +316,7 @@ def element_to_function(instance, state_rename, graph, ext):
                 id += 1
                 args.append(arg_type)
 
-    if element.special == "from_net":
+    if element.special == "from_net" and instance.device[0] == target.CAVIUM:
         args.append("cvmx_wqe_t *wqe")
 
     # Code
@@ -451,6 +451,8 @@ def generate_header_h(testing, graph):
             src = ""
             for file in target.cpu_include_h:
                 src += "#include %s\n" % file
+            if target.is_dpdk_proc(process):
+                src += "#include %s" % common.dpdk_driver_header
 
         elif device == target.CAVIUM:
             src = ""
@@ -469,6 +471,8 @@ def generate_header_c(testing, graph):
             src = ""
             for file in target.cpu_include_c:
                 src += "#include %s\n" % file
+            if target.is_dpdk_proc(process):
+                src += "#include %s" % common.dpdk_driver_header
 
             src += common.pipeline_include
 
@@ -605,18 +609,24 @@ def generate_code_and_compile(graph, testing, mode, include=None, depend=None):
     generate_internal_triggers(graph, ".c", mode)
     generate_testing_code(graph, testing, ".c")
 
+    compilerdir = os.path.dirname(os.path.realpath(__file__))
+
     extra = ""
     if depend:
         for f in depend:
             extra += '%s.o ' % f
-            cmd = 'gcc -O0 -g -msse4.1 -I %s -c %s.c -lrt' % (common.dpdk_include, f)
+            cmd = 'gcc -O0 -g -msse4.1 -I %s -I %s -c %s.c -lrt' % \
+                    (compilerdir, common.dpdk_include, f)
             #cmd = 'gcc -O3 -msse4.1 -I %s -c %s.c' % (common.dpdk_include, f)
             status = os.system(cmd)
             if not status == 0:
                 raise Exception("Compile error: " + cmd)
 
     for process in graph.processes:
-        cmd = 'gcc -O0 -g -msse4.1 -I %s -pthread %s.c %s -o %s -lrt' % (common.dpdk_include, process, extra, process)
+        dpdk_libs = common.dpdk_libs if target.is_dpdk_proc(process) else ''
+        cmd = 'gcc -O0 -g -msse4.1 -I %s -I %s -L %s -pthread %s.c %s -o %s %s -lrt' % \
+                 (compilerdir, common.dpdk_include, common.dpdk_lib, process, extra, \
+                process, dpdk_libs)
         #cmd = 'gcc -O3 -msse4.1 -I %s -pthread %s.c %s -o %s' % (common.dpdk_include, process, extra, process)
         status = os.system(cmd)
         if not status == 0:
