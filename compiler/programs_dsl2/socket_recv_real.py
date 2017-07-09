@@ -32,6 +32,5 @@ class test(InternalLoop):
 test('test', process='dpdk')
 
 c = Compiler()
-
-#c.generate_code_as_header()
+c.testing = 'while (1) pause();'
 c.generate_code_and_compile()
