@@ -134,7 +134,7 @@ def generate_state_instances_cpu_only(graph, ext, all_processes, shared):
             inst = graph.state_instances[name]
             shared_src += "shm_size += sizeof(%s);\n" % inst.state.name
         for region in graph.memory_regions:
-            shared_src += "shm_size += sizeof(%s);\n" % region.size
+            shared_src += "shm_size += %d;\n" % region.size
 
         master_src = 'shm = (uintptr_t) util_create_shmsiszed("SHARED", shm_size);\n'
         master_src += 'uintptr_t shm_p = (uintptr_t) shm;'
@@ -144,6 +144,7 @@ def generate_state_instances_cpu_only(graph, ext, all_processes, shared):
         # Map shared states
         map_src = map_memory_regions(graph)
         for name in shared:
+            inst = graph.state_instances[name]
             map_src += map_shared_state(name, inst)
 
         with open(graph.master_process + ext, 'a') as f, redirect_stdout(f):
@@ -201,6 +202,8 @@ def generate_state_instances_cpu_cavium(graph, ext, all_processes, shared):
         for name in shared:
             inst = graph.state_instances[name]
             kernal_src += '  shm_size += sizeof(%s);\n' % inst.state.name
+        for region in graph.memory_regions:
+            kernal_src += "  shm_size += %d;\n" % region.size
         kernal_src += '  return shm_size;\n}\n'
 
         kernal_src += r'''
@@ -243,6 +246,7 @@ int main() {
     # Map shared states
     map_src = map_memory_regions(graph)
     for name in shared:
+        inst = graph.state_instances[name]
         map_src += map_shared_state(name, inst)
 
     for process in graph.processes:
@@ -313,23 +317,3 @@ def generate_state_instances(graph, ext):
         generate_state_instances_cpu_cavium(graph, ext, all_processes, shared)
     else:
         generate_state_instances_cpu_only(graph, ext, all_processes, shared)
-
-####################### memory region #########################
-
-# def generate_memory_regions(graph, ext):
-#     src_h = ""
-#     for region in graph.memory_regions:
-#         src_h += 'void *%s;\n' % region.name
-#
-#     src = "static void init_memory_regions() {\n"
-#     for region in graph.memory_regions:
-#         src += "  {0} = (void *) shm_p;\n".format(region.name)
-#         src += "  shm_p = shm_p + {0};\n".format(region.size)
-#
-#     src += "}\n"
-#
-#     for process in graph.processes:
-#         with open(process + ext, 'a') as f, redirect_stdout(f):
-#             print src_h
-#         with open(process + '.c', 'a') as f, redirect_stdout(f):
-#             print src
