@@ -1,31 +1,38 @@
 from codegen_thread import *
 import types, os
 
+#################### state ########################
+def declare_data_regions(graph, ext):
+    src = ""
+    for region in graph.memory_regions:
+        src += 'void *%s;\n' % region.name
+
+    for process in graph.processes:
+        name = process + ext
+        with open(name, 'a') as f, redirect_stdout(f):
+            print src
 
 def declare_state(name, state_instance, ext):
     state = state_instance.state
-    src = "{0}* {1};\n".format(state.name, name)
+    src_cpu = "{0}* {1};\n".format(state.name, name)
     src_cavium = "CVMX_SHARED {0} _{1};\n".format(state.name, name)
     src_cavium += "{0}* {1};\n".format(state.name, name)
+
     for process in state_instance.processes:
         name = process + ext
         with open(name, 'a') as f, redirect_stdout(f):
             if process == target.CAVIUM:
                 print src_cavium
             else:
-                print src
+                print src_cpu
 
 
-def map_shared_state(name, state_instance, ext):
+
+def map_shared_state(name, state_instance):
     state = state_instance.state
     src = "  {1} = ({0} *) shm_p;\n".format(state.name, name)
     src += "  shm_p = shm_p + sizeof({0});\n".format(state.name)
-
-    for process in state_instance.processes:
-        name = process + ext
-        with open(name, 'a') as f, redirect_stdout(f):
-            print src
-
+    return src
 
 def allocate_state(name, state_instance, ext):
     state = state_instance.state
@@ -98,7 +105,14 @@ def init_pointer(state, inits, name):
     return src
 
 
-# TODO: memory regions should be inclucded in there too.
+def map_memory_regions(graph):
+    src = "\n"
+    for region in graph.memory_regions:
+        src += "  {0} = (void *) shm_p;\n".format(region.name)
+        src += "  shm_p = shm_p + {0};\n".format(region.size)
+    return src
+
+
 def generate_state_instances_cpu_only(graph, ext, all_processes, shared):
     src = "size_t shm_size = 0;\n"
     src += "void *shm;\n"
@@ -119,37 +133,40 @@ def generate_state_instances_cpu_only(graph, ext, all_processes, shared):
         for name in shared:
             inst = graph.state_instances[name]
             shared_src += "shm_size += sizeof(%s);\n" % inst.state.name
+        for region in graph.memory_regions:
+            shared_src += "shm_size += sizeof(%s);\n" % region.size
+
         master_src = 'shm = (uintptr_t) util_create_shmsiszed("SHARED", shm_size);\n'
         master_src += 'uintptr_t shm_p = (uintptr_t) shm;'
         slave_src = 'shm = (uintptr_t) util_map_shm("SHARED", shm_size);\n'
         slave_src += 'uintptr_t shm_p = (uintptr_t) shm;'
+
+        # Map shared states
+        map_src = map_memory_regions(graph)
+        for name in shared:
+            map_src += map_shared_state(name, inst)
+
         with open(graph.master_process + ext, 'a') as f, redirect_stdout(f):
             print shared_src
-            print master_src
+            print master_src + map_src
         for process in all_processes:
             if process is not graph.master_process:
                 name = process + ext
                 with open(name, 'a') as f, redirect_stdout(f):
                     print shared_src
-                    print slave_src
+                    print slave_src + map_src
 
-    # Initialize states
+    # Allocate states
     for name in graph.state_instance_order:
         inst = graph.state_instances[name]
-        if name in shared:
-            map_shared_state(name, inst, ext)
-        else:
+        if name not in shared:
             allocate_state(name, inst, ext)
         init_state(name, inst, graph.states[inst.state.name], graph.master_process, ext)
 
     src = "}\n"
-    for process in graph.processes:
-        name = process + ext
-        with open(name, 'a') as f, redirect_stdout(f):
-            print src
 
     # Finalize states
-    src = "void finalize_state_instances() {\n"
+    src += "void finalize_state_instances() {\n"
     for process in graph.processes:
         name = process + ext
         with open(name, 'a') as f, redirect_stdout(f):
@@ -223,20 +240,23 @@ int main() {
         src_cpu += '  uintptr_t shm_start = shm_p;\n'
         src_cavium += '  uintptr_t shm_p = STATIC_ADDRESS_HERE;\n'
 
+    # Map shared states
+    map_src = map_memory_regions(graph)
+    for name in shared:
+        map_src += map_shared_state(name, inst)
+
     for process in graph.processes:
         name = process + ext
         with open(name, 'a') as f, redirect_stdout(f):
             if graph.process2device[process] == target.CPU:
-                print src_cpu
+                print src_cpu + map_src
             else:
-                print src_cavium
+                print src_cavium + map_src
 
     # Initialize states
     for name in graph.state_instance_order:
         inst = graph.state_instances[name]
-        if name in shared:
-            map_shared_state(name, inst, ext)
-        else:
+        if name not in shared:
             allocate_state(name, inst, ext)
 
     src_cpu = '  memset((void *) shm_start, 0, shm_p - shm_start);\n'
@@ -293,3 +313,23 @@ def generate_state_instances(graph, ext):
         generate_state_instances_cpu_cavium(graph, ext, all_processes, shared)
     else:
         generate_state_instances_cpu_only(graph, ext, all_processes, shared)
+
+####################### memory region #########################
+
+# def generate_memory_regions(graph, ext):
+#     src_h = ""
+#     for region in graph.memory_regions:
+#         src_h += 'void *%s;\n' % region.name
+#
+#     src = "static void init_memory_regions() {\n"
+#     for region in graph.memory_regions:
+#         src += "  {0} = (void *) shm_p;\n".format(region.name)
+#         src += "  shm_p = shm_p + {0};\n".format(region.size)
+#
+#     src += "}\n"
+#
+#     for process in graph.processes:
+#         with open(process + ext, 'a') as f, redirect_stdout(f):
+#             print src_h
+#         with open(process + '.c', 'a') as f, redirect_stdout(f):
+#             print src

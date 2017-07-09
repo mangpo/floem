@@ -272,14 +272,14 @@ def generate_inject_probe_code_with_process(graph, process, ext):
         probe_src = ""
 
     src += "void init(char *argv[]) {\n" if graph.process2device[process] == target.CPU else "void init() {\n"
-    src += "  init_memory_regions();\n"
+    #src += "  init_memory_regions();\n"
     src += "  init_state_instances(argv);\n" if graph.process2device[process] == target.CPU else "  init_state_instances();\n"
     src += inject_src
     src += "}\n\n"
 
     src += "void finalize_and_check() {\n"
     src += probe_src
-    src += "  finalize_memory_regions();\n"
+    #src += "  finalize_memory_regions();\n"
     src += "  finalize_state_instances();\n"
     src += "}\n\n"
 
@@ -338,59 +338,4 @@ def generate_compare_state(probe, key):
     #       (probe.name, probe.spec_instances[key], probe.impl_instances[key])
     src = "  {0}({1}->p, {1}->data, {2}->p, {2}->data);\n".format(probe.func, spec, impl)
     return src
-
-
-def generate_memory_regions_cpu(graph, ext):
-    master_h = ""
-    slave_h = ""
-    master_src = ""
-    slave_src = ""
-
-    for region in graph.memory_regions:
-        master_h += 'void *%s;\n' % region.name
-        slave_h += 'void *%s;\n' % region.name
-
-    master_src += "static void init_memory_regions() {\n"
-    slave_src += "static void init_memory_regions() {\n"
-
-    for region in graph.memory_regions:
-        master_src += '  %s = util_create_shmsiszed("%s", %d);\n' % (region.name, region.name, region.size)
-        slave_src += '  %s = util_map_shm("%s", %d);\n' % (region.name, region.name, region.size)
-
-    master_src += "}\n"
-    slave_src += "}\n"
-
-    master_src += "static void finalize_memory_regions() {\n"
-    slave_src += "static void finalize_memory_regions() {\n"
-
-    for region in graph.memory_regions:
-        master_src += '  shm_unlink("%s");\n' % region.name
-        master_src += '  munmap(%s, %d);\n' % (region.name, region.size)
-        slave_src += '  munmap(%s, %d);\n' % (region.name, region.size)
-
-    master_src += "}\n"
-    slave_src += "}\n"
-
-    with open(graph.master_process + ext, 'a') as f, redirect_stdout(f):
-        print master_h
-    with open(graph.master_process + '.c', 'a') as f, redirect_stdout(f):
-        print master_src
-
-    for process in graph.processes:
-        if process is not graph.master_process:
-            with open(process + ext, 'a') as f, redirect_stdout(f):
-                print slave_h
-            with open(process + '.c', 'a') as f, redirect_stdout(f):
-                print slave_src
-
-
-def generate_memory_regions_with_cavium(graph, ext):
-    assert len(graph.memory_regions) == 0, "Unimplemented"
-
-
-def generate_memory_regions(graph, ext):
-    if target.CAVIUM in graph.devices:
-        generate_memory_regions_with_cavium(graph, ext)
-    else:
-        generate_memory_regions_cpu(graph, ext)
 

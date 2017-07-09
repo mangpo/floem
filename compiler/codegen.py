@@ -1,6 +1,6 @@
 from join_handling import get_join_buffer_name
 from codegen_thread import *
-from codegen_state import generate_state_instances
+from codegen_state import generate_state_instances, declare_data_regions
 import re, os, subprocess, time
 
 var_id = 0
@@ -507,14 +507,15 @@ def generate_code(graph, ext, testing=None, include=None):
         generate_include(include, graph.processes, '.h')
     generate_include(include, graph.processes, '.c')
 
-    # Generate memory regions.
-    generate_memory_regions(graph, ext)
-
     # Generate states.
     for state_name in graph.state_order:
         generate_state(graph.states[state_name], graph, ext)
 
+    # Generate memory regions.
+    #generate_memory_regions(graph, ext)
+
     # Generate state instances.
+    declare_data_regions(graph, ext)
     generate_state_instances(graph, '.c')
     # for name in graph.state_instance_order:
     #     generate_state_instance(name, graph.state_instances[name], ext)
