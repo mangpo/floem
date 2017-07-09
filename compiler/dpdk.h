@@ -77,22 +77,22 @@ static void dpdk_init(char *argv[], unsigned num_threads,
     rte_eth_macaddr_get(dpdk_port_id, (struct ether_addr *) &dpdk_mac_addr);
     rte_eth_dev_info_get(dpdk_port_id, &dev_info);
 
-    /* initialize receive queues */
-    for (q = 0; q < num_rx; q++) {
-        ret = rte_eth_rx_queue_setup(dpdk_port_id, q, 128, rte_socket_id(),
-                &dev_info.default_rxconf, dpdk_pool);
-        if (ret != 0) {
-            fprintf(stderr, "dpdk_init: configuring rx queue %u failed\n", q);
-            abort();
-        }
-    }
-
     /* initialize send queues */
     for (q = 0; q < num_threads; q++) {
         ret = rte_eth_tx_queue_setup(dpdk_port_id, q, 256,
                 rte_socket_id(), &dev_info.default_txconf);
         if (ret != 0) {
             fprintf(stderr, "dpdk_init: configuring tx queue %u failed\n", q);
+            abort();
+        }
+    }
+
+    /* initialize receive queues */
+    for (q = 0; q < num_rx; q++) {
+        ret = rte_eth_rx_queue_setup(dpdk_port_id, q, 128, rte_socket_id(),
+                &dev_info.default_rxconf, dpdk_pool);
+        if (ret != 0) {
+            fprintf(stderr, "dpdk_init: configuring rx queue %u failed\n", q);
             abort();
         }
     }
