@@ -11,13 +11,6 @@ workerid = {"spout": 0, "count": 1, "rank": 2}
 n_cores = 5
 n_workers = 4
 
-from_net = net2.from_net_fixed_size_instance("tuple", "struct tuple", n_workers, 8192, "workers[atoi(argv[1])].port")
-to_nets = []
-for i in range(n_workers):
-    to_net = net2.to_net_fixed_size_instance("tuple" + str(i), "struct tuple",
-                                             "workers[%d].hostname" % i, "workers[%d].port" % i, output=True)
-    to_nets.append(to_net)
-
 
 class TaskMaster(State):
     task2executorid = Field(Pointer(Int))
@@ -46,9 +39,6 @@ class GetCore(Element):
     output { out(t, id); }
         ''')
 
-get_core = GetCore(states=[task_master])
-get_core2 = GetCore(states=[task_master])
-
 
 class Choose(Element):
     this = Persistent(TaskMaster)
@@ -71,8 +61,6 @@ class Choose(Element):
     output switch { case (t && local): out_local(t); case (t && !local): out_send(t); } // else: out_nop(); }
         ''')
 
-choose = Choose(states=[task_master])
-
 
 class PrintTuple(Element):
     def configure(self):
@@ -92,7 +80,6 @@ class PrintTuple(Element):
     output { out(t); }
         ''')
 
-print_tuple = PrintTuple()
 
 
 class SteerWorker(Element):
@@ -117,8 +104,6 @@ class SteerWorker(Element):
     }
     output switch { ''' + src + "}") # else: out_nop(); }")
 
-
-steer_worker = SteerWorker(states=[task_master])
 
 # class Drop(Element):
 #     def configure(self): self.inp = Input()
@@ -171,21 +156,72 @@ class BatchInc(Element):
         // output switch { case t: out(t); };
         ''')
 
-queue_schedule = BatchScheduler(states=[batch_info])
-batch_inc = BatchInc(states=[batch_info])
+################## Queue addr ####################
+class AddrState(State):
+    addr = Field("uintptr_t")
 
+class DropAddr(Element):
+    def configure(self):
+        self.inp = Input("struct tuple*", "uintptr_t")
+        self.out = Output("struct tuple*")
+
+    def impl(self):
+        self.run_c(r'''
+    (struct tuple* t, uintptr_t addr) = inp();
+    output { out(t); }
+        ''')
+
+class AddNullAddr(Element):
+    def configure(self):
+        self.inp = Input("struct tuple*")
+        self.out = Output("struct tuple*", "uintptr_t")
+
+    def impl(self):
+        self.run_c(r'''
+    (struct tuple* t) = inp();
+    output { out(t, 0); }
+        ''')
+
+class SaveAddr(Element):
+    def configure(self):
+        self.inp = Input("struct tuple*", "uintptr_t")
+        self.out = Output("struct tuple*")
+
+    def impl(self):
+        self.run_c(r'''
+    (struct tuple* t, uintptr_t addr) = inp();
+    state.addr = addr;
+    output { out(t); }
+        ''')
+
+class GetAddr(Element):
+    def configure(self):
+        self.inp = Input("struct tuple*")
+        self.out = Output("struct tuple*", "uintptr_t")
+
+    def impl(self):
+        self.run_c(r'''
+    (struct tuple* t) = inp();
+    uintptr_t addr = state.addr;
+    output { out(t, addr); }
+        ''')
 MAX_ELEMS = (4 * 1024)
 
-rx_enq_creator, rx_deq_creator, rx_release_creator, scan = \
+rx_enq_creator, rx_deq_creator, rx_release_creator, scan, scanrelease = \
     queue2.queue_custom_owner_bit("rx_queue", "struct tuple", MAX_ELEMS, n_cores, "task", blocking=True,
                                   enq_output=True)
 
-tx_enq_creator, tx_deq_creator, tx_release_creator, scan = \
+tx_enq_creator, tx_deq_creator, tx_release_creator, scan, scanrelease = \
     queue2.queue_custom_owner_bit("tx_queue", "struct tuple", MAX_ELEMS, n_cores, "task", blocking=False)
 
 class nic_rx(InternalLoop):
     def configure(self): self.process = 'flexstorm'
-    def impl(self): from_net >> get_core >> rx_enq_creator() >> library_dsl2.Drop(configure=["struct tuple*"])
+    def impl(self):
+        from_net = net2.from_net_fixed_size_instance("tuple", "struct tuple", n_workers, 8192,
+                                                     "workers[atoi(argv[1])].port")
+        get_core = GetCore(states=[task_master])
+
+        from_net >> get_core >> rx_enq_creator() >> library_dsl2.Drop(configure=["struct tuple*"])
 
 class inqueue_get(API):
     def configure(self):
@@ -193,14 +229,14 @@ class inqueue_get(API):
         self.inp = Input(Size)
         self.out = Output("struct tuple*")
 
-    def impl(self): self.inp >> rx_deq_creator() >> self.out
+    def impl(self): self.inp >> rx_deq_creator() >> DropAddr() >> self.out
 
 class inqueue_advance(API):
     def configure(self):
         self.process = 'flexstorm'
         self.inp = Input("struct tuple*")
 
-    def impl(self): self.inp >> rx_release_creator()
+    def impl(self): self.inp >> AddNullAddr() >> rx_release_creator()
 
 class outqueue_put(API):
     def configure(self):
@@ -236,30 +272,50 @@ class nic_tx(InternalLoop):  # TODO: ugly, sol: option to make to_net and enq re
 
     # Cleaner version
     def impl(self):
+        to_nets = []
+        for i in range(n_workers):
+            to_net = net2.to_net_fixed_size_instance("tuple" + str(i), "struct tuple",
+                                                     "workers[%d].hostname" % i, "workers[%d].port" % i, output=True)
+            to_nets.append(to_net)
+
         tx_deq = tx_deq_creator()
         tx_release = tx_release_creator()
         rx_enq = rx_enq_creator()
 
-        queue_schedule >> tx_deq >> print_tuple >> choose
-        tx_deq >> batch_inc
+        queue_schedule = BatchScheduler(states=[batch_info])
+        batch_inc = BatchInc(states=[batch_info])
+        save_addr = SaveAddr()
+        print_tuple = PrintTuple()
+        choose = Choose(states=[task_master])
+        steer_worker = SteerWorker(states=[task_master])
+        get_core = GetCore(states=[task_master])
+
+        # main connection
+        queue_schedule >> tx_deq >> save_addr >> print_tuple >> choose
+        save_addr >> batch_inc
 
         # send
         choose.out_send >> steer_worker
         for i in range(n_workers):
-            steer_worker.out[i] >> to_nets[i] >> tx_release
+            steer_worker.out[i] >> to_nets[i] >> GetAddr() >> tx_release
 
         # local
-        choose.out_local >> get_core2 >> rx_enq >> tx_release
+        choose.out_local >> get_core >> rx_enq >> GetAddr() >> tx_release
+
+class TxPipeline(Pipeline):
+    state = PerPacket(AddrState)
+
+    def impl(self):
+        nic_tx('nic_tx')
 
 
 nic_rx('nic_rx')
 inqueue_get('inqueue_get')
 inqueue_advance('inqueue_advance')  # TODO: signature change
 outqueue_put('outqueue_put')
-nic_tx('nic_tx')
 
 
-c = Compiler()
+c = Compiler(TxPipeline)
 c.include = r'''
 #include <rte_memcpy.h>
 #include "worker.h"

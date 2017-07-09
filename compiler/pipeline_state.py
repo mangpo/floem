@@ -1,7 +1,7 @@
 from program import *
 from join_handling import annotate_join_info, clean_minimal_join_info
 from smart_queue_compile import compile_smart_queues
-import codegen, graph_ir
+import codegen, codegen_state, graph_ir
 
 
 def allocate_pipeline_state(g, element, state):
@@ -9,7 +9,7 @@ def allocate_pipeline_state(g, element, state):
     state_obj = g.states[state]
     add = "  {0} *_state = ({0} *) malloc(sizeof({0}));\n".format(state)
     add += "  _state->refcount = 1;\n"
-    init = codegen.init_pointer(state_obj, state_obj.init, '_state')
+    init = codegen_state.init_pointer(state_obj, state_obj.init, '_state')
     element.prepend_code(add + init)
     element.cleanup = "  pipeline_unref((pipeline_state*) _state);\n"
 
@@ -211,7 +211,7 @@ def rename_entry_references(g, src2fields):
             child = g.instances[inst_name]
             element = child.element
             if need_replacement(element, instance.liveness, instance.extras):
-                if len(ele2inst[element.name]) == 1:
+                if False: #len(ele2inst[element.name]) == 1:
                     replace_states(element, instance.liveness, instance.extras, instance.special_fields, src2fields)
                 else:
                     new_element = element.clone(inst_name + "_with_state_at_" + instance.name)
@@ -301,7 +301,10 @@ def insert_pipeline_states(g):
         ele2inst[instance.element.name].append(instance)
 
     vis_states = []
+    fresh_id = 0
     for start_name in g.pipeline_states:
+        fresh_id += 1
+        
         state = g.pipeline_states[start_name]
         subgraph = set()
         g.find_subgraph(start_name, subgraph)
@@ -311,37 +314,28 @@ def insert_pipeline_states(g):
             insert_reference_count(state, g)
             vis_states.append(state)
 
+        # Clone all elements
+        for inst_name in subgraph:
+            instance = g.instances[inst_name]
+            element = instance.element
+            new_element = element.clone(element.name + "_cloned" + str(fresh_id))
+            g.addElement(new_element)
+            instance.element = new_element
+
         # Allocate state
         instance = g.instances[start_name]
         element = instance.element
 
-        if False: #len(ele2inst[element.name]) == 1:
-            allocate_pipeline_state(g, element, state)
-        else:
-            new_element = element.clone(start_name + "_with_state_alloc")
-            allocate_pipeline_state(g, new_element, state)
-            g.addElement(new_element)
-            instance.element = new_element
-            ele2inst[new_element.name] = [instance]
+        allocate_pipeline_state(g, element, state)
 
         # Pass state pointers
         vis = set()
         for inst_name in subgraph:
             child = g.instances[inst_name]
-            element = child.element
             # If multiple instances can share the same element, make sure we don't modify an element more than once.
             if child.name not in vis and code_change(child):
                 vis.add(child.name)
-                if False: #len(ele2inst[element.name]) == 1:
-                    # TODO: modify element: empty port -> send state*
-                    insert_pipeline_state(child, state, inst_name == start_name, g)
-                else:
-                    # TODO: create new element: empty port -> send state*
-                    new_element = element.clone(inst_name + "_with_state")
-                    child.element = new_element
-                    insert_pipeline_state(child, state, inst_name == start_name, g)
-                    g.addElement(new_element)
-                    vis.add(new_element.name)
+                insert_pipeline_state(child, state, inst_name == start_name, g)
 
 
 def find_all_fields(code):
