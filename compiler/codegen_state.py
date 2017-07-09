@@ -6,7 +6,7 @@ def declare_state(name, state_instance, ext):
     state = state_instance.state
     src = "{0}* {1};\n".format(state.name, name)
     src_cavium = "CVMX_SHARED {0} _{1};\n".format(state.name, name)
-    src_cavium += "CVMX_SHARED {0}* {1};\n".format(state.name, name)  # TODO: CVMX_SHARED or not?
+    src_cavium += "{0}* {1};\n".format(state.name, name)
     for process in state_instance.processes:
         name = process + ext
         with open(name, 'a') as f, redirect_stdout(f):
@@ -29,32 +29,35 @@ def map_shared_state(name, state_instance, ext):
 
 def allocate_state(name, state_instance, ext):
     state = state_instance.state
-    src_cpu = "  {1} = ({0} *) malloc(sizeof({0}));\n".format(state.name, name)
-    src_cavium = "  {0} = &_{0};\n".format(name)
-    src = "  memset({0}, 0, sizeof({1}));\n".format(name, state.name)
+    src_cpu = "  {1} = ({0} *) malloc(sizeof({0}));".format(state.name, name)
+    src_cavium = "  {0} = &_{0};".format(name)
 
     for process in state_instance.processes:
         name = process + ext
         with open(name, 'a') as f, redirect_stdout(f):
             if process == target.CAVIUM:
-                print src_cavium + src
+                print src_cavium
             else:
-                print src_cpu + src
+                print src_cpu
 
 
 def init_state(name, state_instance, state, master, ext):
-    src = ""
+    src = "  memset({0}, 0, sizeof({1}));\n".format(name, state.name)
     if state_instance.init or state.init:
         if state_instance.init:
             inits = state_instance.init
         else:
             inits = state.init
-        src = init_pointer(state, inits, name)
+        src += init_pointer(state, inits, name)
 
     if len(state_instance.processes) <= 1:
         process = [x for x in state_instance.processes][0]
     else:
         process = master
+
+    if process == target.CAVIUM:
+        src = "  if(corenum == 0) {\n%s  }\n" % src
+
     name = process + ext
     with open(name, 'a') as f, redirect_stdout(f):
         print src
@@ -99,15 +102,13 @@ def init_pointer(state, inits, name):
 def generate_state_instances_cpu_only(graph, ext, all_processes, shared):
     src = "size_t shm_size = 0;\n"
     src += "void *shm;\n"
+
     src_cpu = src + "void init_state_instances(char *argv[]) {\n"
-    src_cavium = src + "void init_state_instances() {\n"
+
     for process in graph.processes:
         name = process + ext
         with open(name, 'a') as f, redirect_stdout(f):
-            if graph.process2device[process] == target.CPU:
-                print src_cpu
-            else:
-                print src_cavium
+            print src_cpu
 
     # Create shared memory
     if len(all_processes) > 1:
@@ -199,7 +200,19 @@ int main() {
             print kernal_src
 
     src_cpu = "void init_state_instances(char *argv[]) {\n"
-    src_cavium = "void init_state_instances() {\n"
+    if len(shared) == 0:
+        src_cavium = "void init_state_instances() {\n"
+        src_cavium += "  int corenum = cvmx_get_core_num();\n"
+    else:
+        src_cavium = "CVMX_SHARED cvmx_spinlock_t read_lock;\n"
+        src_cavium += "CVMX_SHARED cvmx_spinlock_t write_lock;\n"
+        src_cavium += "void init_state_instances() {\n"
+        src_cavium += "  int corenum = cvmx_get_core_num();\n"
+
+        src_cavium += "  if(corenum == 0) {\n"
+        src_cavium += "    cvmx_spinlock_init(&read_lock);\n"
+        src_cavium += "    cvmx_spinlock_init(&write_lock);\n"
+        src_cavium += "  }\n"
 
     # Create shared memory
     if len(shared) > 0:

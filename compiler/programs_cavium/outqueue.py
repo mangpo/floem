@@ -2,7 +2,7 @@ from dsl2 import *
 from compiler import Compiler
 import queue2
 
-MAX_ELEMS = 30
+MAX_ELEMS = 10
 n_cores = 4
 
 class Tuple(State):
@@ -70,3 +70,4 @@ c.testing = r'''
 while(1);
 '''
 c.generate_code_and_run()
+#c.generate_code_as_header()

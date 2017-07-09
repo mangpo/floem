@@ -305,13 +305,13 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
         uintptr_t addr = (uintptr_t) &q->data[old];
         %s* entry;
         int size = sizeof(%s);
-        dma_read(addr, size, (void**) &entry);
+        dma_read(addr, size, (void**) &entry, &read_lock);
         ''' % (type, type)
 
-    wait_then_copy_cvm = init_read_cvm + r'''
-        while(entry->%s) dma_read_with_buf(addr, size, (void**) &entry);
+    wait_then_copy_cvm = r'''
+        while(entry->%s) dma_read_with_buf(addr, size, (void**) &entry, &read_lock);
         memcpy(entry, x, size);
-        dma_write(addr, size, entry);
+        dma_write(addr, size, entry, &write_lock);
         ''' % (owner)
 
     wait_then_get = r'''
@@ -319,8 +319,8 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
     %s x = &q->data[old];
     ''' % (owner, type_star)
 
-    wait_then_get_cvm = init_read_cvm + r'''
-        while(entry->%s == 0) dma_read_with_buf(addr, size, (void**) &entry);
+    wait_then_get_cvm = r'''
+        while(entry->%s == 0) dma_read_with_buf(addr, size, (void**) &entry, &read_lock);
         %s* x = entry;
         ''' % (owner, type)
 
@@ -371,14 +371,14 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
             noblock_noatom = "size_t old = p->offset;\n" + init_read_cvm + r'''
                 if(entry->%s == 0) {
                     memcpy(entry, x, size);
-                    dma_write(addr, size, entry);
+                    dma_write(addr, size, entry, &write_lock);
                     p->offset = (p->offset + 1) %s %d;
                 }
                 ''' % (owner, '%', size)
 
-            block_noatom = "size_t old = p->offset;\n" + wait_then_copy_cvm + inc_offset
+            block_noatom = "size_t old = p->offset;\n" + init_read_cvm + wait_then_copy_cvm + inc_offset
 
-            block_atom = atomic_src_cvm + wait_then_copy_cvm
+            block_atom = atomic_src_cvm + init_read_cvm + wait_then_copy_cvm
 
             if blocking:
                 src = block_atom if enq_atomic else block_noatom
@@ -445,12 +445,14 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
             if(entry->%s != 0) {
                 x = entry;
                 p->offset = (p->offset + 1) %s %d;
+            } else {
+                dma_free(entry);
             }
             ''' % (type_star, owner, '%', size)
 
-            block_noatom = "size_t old = p->offset;\n" + wait_then_get_cvm + inc_offset
+            block_noatom = "size_t old = p->offset;\n" + init_read_cvm + wait_then_get_cvm + inc_offset
 
-            block_atom = atomic_src_cvm + wait_then_get_cvm
+            block_atom = atomic_src_cvm + init_read_cvm + wait_then_get_cvm
 
             if blocking:
                 src = block_atom if deq_atomic else block_noatom
@@ -486,10 +488,10 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
             (%s x, uintptr_t addr) = inp();
             if(x) {
                 x->%s = 0;
-                dma_write(addr, size, x);
+                dma_write(addr, sizeof(%s), x, &write_lock);
                 dma_free(x);
             }
-            ''' % (type_star, owner))
+            ''' % (type_star, owner, type))
 
 
     class Scan(Element):
@@ -556,7 +558,7 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
 
     while (q->clean != q->offset) {
         addr = (uintptr_t) &q->data[q->clean];
-        dma_read(addr, sizeof(%s), (void**) &entry);
+        dma_read(addr, sizeof(%s), (void**) &entry, &read_lock);
         if ((entry->%s) != 0) {
             dma_free(entry);
             entry = NULL;
@@ -583,7 +585,7 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
     uintptr_t addr;
     if (q->clean != q->offset) {
         addr = (uintptr_t) &q->data[q->clean];
-        dma_read(addr, sizeof(%s), (void**) &entry);
+        dma_read(addr, sizeof(%s), (void**) &entry, &read_lock);
         if ((entry->%s) != 0) {
             dma_free(entry);
             entry = NULL;
