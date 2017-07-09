@@ -128,7 +128,24 @@ static void dpdk_from_net(void **pdata, void **pbuf)
     static volatile uint16_t rx_queue_alloc = 0;
     static __thread uint16_t rx_queue_id;
     struct rte_mbuf *mb = NULL;
+    static __thread unsigned cache_count;
+    static __thread unsigned cache_index;
+    static __thread struct rte_mbuf *cache_mbs[32];
+    struct rte_mbuf **mbs;
     void *data = NULL;
+    unsigned num, idx;
+
+    /* check cache first */
+    mbs = cache_mbs;
+    num = cache_count;
+    if (num > 0) {
+      idx = cache_index;
+      mb = mbs[idx];
+      if (++idx >= num) {
+        cache_count = 0;
+      }
+      goto out;
+    }
 
     /* get queue ID/initialize queue */
     uint16_t rxq = rx_queue_id;
@@ -144,9 +161,18 @@ static void dpdk_from_net(void **pdata, void **pbuf)
     }
     rxq--;
 
-    unsigned num = rte_eth_rx_burst(dpdk_port_id, rxq, &mb, 1);
-    if (num >= 1)
+    /* get more packets from NIC */
+    num = rte_eth_rx_burst(dpdk_port_id, rxq, mbs, 32);
+    mb = mbs[0];
+    if (num > 1) {
+      cache_count = num;
+      cache_index = 1;
+    }
+
+out:
+    if (num >= 1) {
         data = (uint8_t *) mb->buf_addr + mb->data_off;
+    }
 
     *pdata = data;
     *pbuf = mb;
