@@ -464,15 +464,63 @@ class BatchInc(Element):
         // output switch { case t: out(t); };
         ''')
 
+################## Queue addr ####################
+class DropAddr(Element):
+    def configure(self):
+        self.inp = Input("struct tuple*", "uintptr_t")
+        self.out = Output("struct tuple*")
+
+    def impl(self):
+        self.run_c(r'''
+    (struct tuple* t, uintptr_t addr) = inp();
+    output { out(t); }
+        ''')
+
+class AddNullAddr(Element):
+    def configure(self):
+        self.inp = Input("struct tuple*")
+        self.out = Output("struct tuple*", "uintptr_t")
+
+    def impl(self):
+        self.run_c(r'''
+    (struct tuple* t) = inp();
+    output { out(t, 0); }
+        ''')
+
+class SaveAddr(Element):
+    def configure(self):
+        self.inp = Input("struct tuple*", "uintptr_t")
+        self.out = Output("struct tuple*")
+
+    def impl(self):
+        self.run_c(r'''
+    (struct tuple* t, uintptr_t addr) = inp();
+    state.addr = addr;
+    output { out(t); }
+        ''')
+
+class GetAddr(Element):
+    def configure(self):
+        self.inp = Input("struct tuple*")
+        self.out = Output("struct tuple*", "uintptr_t")
+
+    def impl(self):
+        self.run_c(r'''
+    (struct tuple* t) = inp();
+    uintptr_t addr = state.addr;
+    output { out(t, addr); }
+        ''')
+
+#################### Connection ####################
 import target
 
 MAX_ELEMS = (4 * 1024)
 
-rx_enq_creator, rx_deq_creator, rx_release_creator, scan = \
+rx_enq_creator, rx_deq_creator, rx_release_creator, scan, scan_release = \
     queue2.queue_custom_owner_bit("rx_queue", "struct tuple", MAX_ELEMS, n_cores, "task", blocking=True,
                                   enq_output=True)
 
-tx_enq_creator, tx_deq_creator, tx_release_creator, scan = \
+tx_enq_creator, tx_deq_creator, tx_release_creator, scan, scan_release = \
     queue2.queue_custom_owner_bit("tx_queue", "struct tuple", MAX_ELEMS, n_cores, "task", blocking=False)
 
 
@@ -534,7 +582,7 @@ class inqueue_get(API):
         self.inp = Input(Size)
         self.out = Output("struct tuple*")
 
-    def impl(self): self.inp >> rx_deq_creator() >> self.out
+    def impl(self): self.inp >> rx_deq_creator() >> DropAddr() >> self.out
 
 
 class inqueue_advance(API):
@@ -542,7 +590,7 @@ class inqueue_advance(API):
         self.process = 'flexstorm'
         self.inp = Input("struct tuple*")
 
-    def impl(self): self.inp >> rx_release_creator()
+    def impl(self): self.inp >> AddNullAddr() >> rx_release_creator()
 
 
 class outqueue_put(API):
@@ -556,6 +604,7 @@ class TxState(State):
     tuple = Field("struct tuple*")
     worker = Field(Int)
     tx_buf = Field("void *")
+    addr = Field("uintptr_t")
 
 class NicTxPipeline(Pipeline):
     state = PerPacket(TxState)
@@ -609,13 +658,15 @@ class NicTxPipeline(Pipeline):
                 tx_deq = tx_deq_creator()
                 rx_enq = rx_enq_creator()
                 local_or_remote = LocalOrRemote()
+                save_addr = SaveAddr()
+                get_addr = GetAddr()
 
-                queue_schedule >> tx_deq >> PrintTuple() >> SaveWorkerID() >> local_or_remote
-                tx_deq >> batch_inc
+                queue_schedule >> tx_deq >> save_addr >> PrintTuple() >> SaveWorkerID() >> local_or_remote
+                save_addr >> batch_inc
                 # send
                 local_or_remote.out_send >> PreparePkt()
                 # local
-                local_or_remote.out_local >> GetCore() >> rx_enq >> tx_release
+                local_or_remote.out_local >> GetCore() >> rx_enq >> get_addr >> tx_release
 
         nic_tx('nic_tx')
 
