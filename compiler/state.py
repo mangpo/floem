@@ -9,6 +9,9 @@ Bool = 'bool'
 Int = 'int'
 Size = 'size_t'
 Void = 'void'
+Uintptr = 'uintptr_t'
+q_buffer = 'q_buffer'
+q_entry = 'q_entry'
 
 def Uint(bits):
     return 'uint%d_t' % bits

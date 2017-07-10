@@ -79,7 +79,7 @@ def find_pipeline_state(g, instance):
 def create_queue(name, size, n_cores, blocking, enq_atomic, deq_atomic, scan, core):
     workspace.push_decl()
     workspace.push_scope(name)
-    EnqAlloc, EnqSubmit, DeqGet, DeqRelease, Scan = \
+    EnqAlloc, EnqSubmit, DeqGet, DeqRelease, Scan, ScanRelease = \
         queue2.queue_variable_size(name, size, n_cores, blocking, enq_atomic, deq_atomic, scan, core)
     EnqAlloc(create=False)
     EnqSubmit(create=False)
@@ -87,6 +87,7 @@ def create_queue(name, size, n_cores, blocking, enq_atomic, deq_atomic, scan, co
     DeqRelease(create=False)
     if scan:
         Scan(create=False)
+        ScanRelease(create=False)
 
     decl = workspace.pop_decl()
     scope, collection = workspace.pop_scope()
@@ -94,7 +95,7 @@ def create_queue(name, size, n_cores, blocking, enq_atomic, deq_atomic, scan, co
     dp = desugaring.desugar(p)
     g = program_to_graph_pass(dp, default_process='tmp')
 
-    return g, EnqAlloc, EnqSubmit, DeqGet, DeqRelease, Scan
+    return g, EnqAlloc, EnqSubmit, DeqGet, DeqRelease, Scan, ScanRelease
 
 
 def compile_smart_queue(g, q, src2fields):
@@ -110,46 +111,40 @@ def compile_smart_queue(g, q, src2fields):
     else:
         prefix = ""
 
-    g_add, enq_alloc, enq_submit, deq_get, deq_release, scan = \
+    # TODO: scan_release
+    g_add, enq_alloc, enq_submit, deq_get, deq_release, scan, scan_release = \
         create_queue(q.name, q.size, q.n_cores,
                      blocking=q.blocking, enq_atomic=q.enq_atomic, deq_atomic=q.deq_atomic, scan=q.scan_type, core=True)
     g.merge(g_add)
 
-    # if isinstance(q, queue_ast.QueueVariableSizeOne2Many):
-    #     deq_types = ["q_entry*", "size_t"]
-    #     deq_src_in = "(q_entry* e, size_t core) = in();"
-    #     deq_args_out = "e,core"
-    # elif isinstance(q, queue_ast.QueueVariableSizeMany2One):
-    #     deq_types = ["q_entry*"]
-    #     deq_src_in = "(q_entry* e) = in();"
-    #     deq_args_out = "e"
-
-    deq_types = ["q_entry*", "size_t"]
-    deq_src_in = "(q_entry* e, size_t core) = in();"
-    deq_args_out = "e,core"
+    deq_types = ["q_buffer", "size_t"]
+    deq_src_in = "(q_buffer buff, size_t core) = in();"
+    deq_args_out = "buff,core"
 
     src_cases = ""
     for i in range(q.n_cases):
         src_cases += "    case (type == %d): out%d(%s);\n" % (i + 1, i, deq_args_out)
-    src_release = "    case (type == 0): release(e);\n"
+    src_release = "    case (type == 0): release(buff);\n"
     classify_ele = Element(q.deq.name + "_classify", [Port("in", deq_types)],
                            [Port("out" + str(i), deq_types) for i in range(q.n_cases)]
-                           + [Port("release", ["q_entry*"])], r'''
+                           + [Port("release", ["q_buffer"])], r'''
         %s
+        q_entry* e = buff.entry;
         int type = -1;
         if (e != NULL) type = (e->flags & TYPE_MASK) >> TYPE_SHIFT;
         output switch {
             %s
         }''' % (deq_src_in, src_cases + src_release))
-
-    scan_classify_ele = Element(q.deq.name + "_scan_classify", [Port("in", deq_types)],
-                                [Port("out" + str(i), deq_types) for i in range(q.n_cases)], r'''
-        %s
-        uint16_t type = 0;
-        if (e != NULL) type = (e->flags & TYPE_MASK) >> TYPE_SHIFT;
-        output switch {
-            %s
-        }''' % (deq_src_in, src_cases))
+    #
+    # scan_classify_ele = Element(q.deq.name + "_scan_classify", [Port("in", deq_types)],
+    #                             [Port("out" + str(i), deq_types) for i in range(q.n_cases)], r'''
+    #     %s
+    #     q_entry* e = buff.entry;
+    #     uint16_t type = 0;
+    #     if (e != NULL) type = (e->flags & TYPE_MASK) >> TYPE_SHIFT;
+    #     output switch {
+    #         %s
+    #     }''' % (deq_src_in, src_cases))
 
     g.addElement(classify_ele)
     deq_get_inst = deq_get(q.deq.name + "_get", create=False).instance
@@ -158,11 +153,14 @@ def compile_smart_queue(g, q, src2fields):
     new_instances = [deq_get_inst, deq_release_inst, classify_inst]
 
     if scan:
-        g.addElement(scan_classify_ele)
+        #g.addElement(scan_classify_ele)
         scan_inst = scan(q.enq.name + "_scan", create=False).instance
-        scan_classify_inst = ElementInstance(scan_classify_ele.name, scan_classify_ele.name + "_scan_inst")
+        scan_release_inst = deq_release(q.enq.name + "_release", create=False).instance
+        #scan_classify_inst = ElementInstance(scan_classify_ele.name, scan_classify_ele.name + "_scan_inst")
+        scan_classify_inst = ElementInstance(classify_ele.name, classify_ele.name + "_scan_inst")
         new_instances.append(scan_inst)
         new_instances.append(scan_classify_inst)
+        new_instances.append(scan_release_inst)
 
     for inst in new_instances:
         g.newElementInstance(inst.element, inst.name, inst.args)
@@ -175,6 +173,7 @@ def compile_smart_queue(g, q, src2fields):
     g.connect(classify_inst.name, deq_release_inst.name, "release")
     if scan:
         g.connect(scan_inst.name, scan_classify_inst.name)
+        g.connect(scan_classify_inst.name, scan_release_inst.name, "release")
 
     # Resource
     g.set_thread(deq_get_inst.name, deq_thread)
@@ -183,6 +182,7 @@ def compile_smart_queue(g, q, src2fields):
     if scan:
         g.set_thread(scan_inst.name, scan_thread)
         g.set_thread(scan_classify_inst.name, scan_thread)
+        g.set_thread(scan_release_inst.name, scan_thread)
 
     # Memorize connections
     ins_map = []
@@ -218,6 +218,7 @@ def compile_smart_queue(g, q, src2fields):
             for prev_inst, prev_port in l:
                 g.connect(prev_inst, scan_inst.name, prev_port, port)
 
+    release_vis = set()
     for i in range(q.n_cases):
         live = q.deq.liveness[i]
         uses = q.deq.uses[i]
@@ -236,7 +237,7 @@ def compile_smart_queue(g, q, src2fields):
         state_entry = State("entry_" + q.name + str(i),
                             "uint16_t flags; uint16_t len; " + content)
         state_pipeline = State("pipeline_" + q.name + str(i),
-                               state_entry.name + "* entry; " +
+                               "q_buffer buffer; %s* entry;" % state_entry.name +
                                get_state_content(extras, pipeline_state, g, src2fields, special))
         g.addState(state_entry)
         g.addState(state_pipeline)
@@ -250,7 +251,8 @@ def compile_smart_queue(g, q, src2fields):
         size_core_ele = Element(q.name + "_size_core" + str(i), [Port("in", [])], [Port("out", ["size_t", "size_t"])],
                                 r'''output { out(%s, state.core); }''' % size_src)
 
-        fill_src = "%s* e = (%s*) in_entry();\n" % (state_entry.name, state_entry.name)
+        fill_src = "q_buffer buff = in_entry();\n"
+        fill_src += "%s* e = (%s*) buff.entry;\n" % (state_entry.name, state_entry.name)
         for var in live:
             field = get_entry_field(var, src2fields)
             if var in special:
@@ -258,20 +260,21 @@ def compile_smart_queue(g, q, src2fields):
                 if special_t == "shared":
                     fill_src += "e->%s = (uintptr_t) state.%s - (uintptr_t) %s;\n" % (field, var, info)
                 elif special_t == "copysize":
-                    fill_src += "rte_memcpy(e->%s, state.%s, %s);\n" % (field, var, info)
+                    fill_src += "memcpy(e->%s, state.%s, %s);\n" % (field, var, info)
             else:
                 fill_src += "e->%s = state.%s;\n" % (field, var)
         fill_src += "e->flags |= %d << TYPE_SHIFT;\n" % (i+1)
-        fill_src += "output { out((q_entry*) e); }"
-        fill_ele = Element(q.name + "_fill" + str(i), [Port("in_entry", ["q_entry*"]), Port("in_pkt", [])],
-                           [Port("out", ["q_entry*"])], fill_src)  # TODO
+        fill_src += "output { out(buff); }"
+        fill_ele = Element(q.name + "_fill" + str(i), [Port("in_entry", ["q_buffer"]), Port("in_pkt", [])],
+                           [Port("out", ["q_buffer"])], fill_src)
         fork = Element(q.name + "_fork" + str(i), [Port("in", [])], [Port("out_size_core", []), Port("out_fill", [])],
                        r'''output { out_size_core(); out_fill(); }''')
 
         save_src = deq_src_in
         if 'core' in extras:
                 save_src += "state.core = core;\n"
-        save_src += "state.entry = ({0} *) e;\n".format(state_entry.name)
+        save_src += "state.buffer = buff;\n"
+        save_src += "state.entry = (%s*) buff.entry;\n" % state_entry.name
         for var in special:
             t, name, special_t, info = special[var]
             if special_t == "shared":
@@ -338,8 +341,10 @@ def compile_smart_queue(g, q, src2fields):
         g.connect(save_inst.name, out_inst, "out", out_port)
 
         # Dequeue release connection
-        node = get_node_before_release(out_inst, g, live, prefix)
-        g.connect(node.name, deq_release_inst.name, "release")
+        node = get_node_before_release(save_inst.name, g, live, prefix, release_vis)
+        if node not in release_vis:
+            release_vis.add(node)
+            g.connect(node.name, deq_release_inst.name, "release")
 
         if scan:
             # Create scan save
@@ -357,6 +362,11 @@ def compile_smart_queue(g, q, src2fields):
             clean_inst, clean_port = scan_map[i]
             g.connect(scan_classify_inst.name, scan_save_inst.name, "out" + str(i))
             g.connect(scan_save_inst.name, clean_inst, "out", clean_port)
+
+            # Scan release connection
+            node = get_node_before_release(scan_save_inst.name, g, live, prefix, release_vis)
+            if node not in release_vis:
+                g.connect(node.name, scan_release_inst.name, "release")
 
 
 def order_smart_queues(name, vis, order, g):

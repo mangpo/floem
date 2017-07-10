@@ -16,14 +16,14 @@ class circular_queue_lock(State):
     len = Field(Size)
     offset = Field(Size)
     queue = Field(Pointer(Void))
-    lock = Field('pthread_mutex_t')
+    lock = Field('lock_t')
     layout = [len, offset, queue, lock]
 
     def init(self, len=0, queue=0):
         self.len = len
         self.offset = 0
         self.queue = queue
-        self.lock = lambda (x): 'pthread_mutex_init(&%s, NULL)' % x
+        self.lock = lambda (x): 'lock_init(&%s)' % x
 
 class circular_queue_scan(State):
     len = Field(Size)
@@ -41,14 +41,14 @@ class circular_queue_lock_scan(State):
     len = Field(Size)
     offset = Field(Size)
     queue = Field(Pointer(Void))
-    lock = Field('pthread_mutex_t')
+    lock = Field('lock_t')
     clean = Field(Size)
 
     def init(self, len=0, queue=0):
         self.len = len
         self.offset = 0
         self.queue = queue
-        self.lock = lambda (x): 'pthread_mutex_init(&%s, NULL)' % x
+        self.lock = lambda (x): 'lock_init(&%s)' % x
         self.clean = 0
 
 
@@ -125,18 +125,18 @@ def queue_variable_size(name, size, n_cores, blocking=False, enq_atomic=False, d
 
         def configure(self):
             self.inp = Input(Size, Size)  # len, core
-            self.out = Output('q_entry*')
+            self.out = Output(q_buffer)
 
         def impl(self):
-            noblock_noatom = "q_entry* entry = (q_entry*) enqueue_alloc(q, len);\n"
+            noblock_noatom = "q_buffer buff = enqueue_alloc(q, len);\n"
             block_noatom = r'''
-            q_entry* entry = NULL;
-            do {
-                entry = (q_entry*) enqueue_alloc(q, len);
-            } while(entry == NULL)
-            '''
-            noblock_atom = "pthread_mutex_lock(&q->lock);\n" + noblock_noatom + "pthread_mutex_unlock(&q->lock);\n"
-            block_atom = "pthread_mutex_lock(&q->lock);\n" + block_noatom + "pthread_mutex_unlock(&q->lock);\n"
+                        q_buffer buff = { NULL, 0 };
+                        do {
+                            buff = enqueue_alloc(q, len);
+                        } while(buff.entry == NULL)
+                        '''
+            noblock_atom = "lock_lock(&q->lock);\n" + noblock_noatom + "lock_unlock(&q->lock);\n"
+            block_atom = "lock_lock(&q->lock);\n" + block_noatom + "lock_unlock(&q->lock);\n"
 
             if blocking:
                 src = block_atom if enq_atomic else block_noatom
@@ -144,23 +144,23 @@ def queue_variable_size(name, size, n_cores, blocking=False, enq_atomic=False, d
                 src = noblock_atom if enq_atomic else noblock_noatom
 
             self.run_c(r'''
-            (size_t len, size_t c) = inp();
-            %s *q = this->cores[c];  // TODO
-            ''' % EnqQueue.__name__
+                        (size_t len, size_t c) = inp();
+                        %s *q = this->cores[c];  // TODO
+                        ''' % EnqQueue.__name__
                        + src + r'''
-            //if(entry == NULL) { printf("queue %d is full.\n", c); }
-            //printf("ENQ' core=%ld, queue=%ld, entry=%ld\n", c, q->queue, entry);
-            output { out(entry); }
-            ''')
+                        //if(entry == NULL) { printf("queue %d is full.\n", c); }
+                        //printf("ENQ' core=%ld, queue=%ld, entry=%ld\n", c, q->queue, entry);
+                        output { out(buff); }
+                        ''')
 
     class EnqueueSubmit(Element):
         def configure(self):
-            self.inp = Input('q_entry*')
+            self.inp = Input(q_buffer)
 
         def impl(self):
             self.run_c(r'''
-            (q_entry* eqe) = inp();
-            enqueue_submit(eqe);
+            (q_buffer buf) = inp();
+            enqueue_submit(buf);
             ''')
 
     class DequeueGet(Element):
@@ -169,18 +169,18 @@ def queue_variable_size(name, size, n_cores, blocking=False, enq_atomic=False, d
 
         def configure(self):
             self.inp = Input(Size)
-            self.out = Output('q_entry*', Size) if core else Output('q_entry*')
+            self.out = Output(q_buffer, Size) if core else Output(q_buffer)
 
         def impl(self):
-            noblock_noatom = "q_entry* entry = dequeue_get(q);\n"
+            noblock_noatom = "q_buffer buff = dequeue_get(q);\n"
             block_noatom = r'''
-                        q_entry* entry = NULL;
-                        do {
-                            entry = dequeue_get(q);
-                        } while(entry == NULL)
-                        '''
-            noblock_atom = "pthread_mutex_lock(&q->lock);\n" + noblock_noatom + "pthread_mutex_unlock(&q->lock);\n"
-            block_atom = "pthread_mutex_lock(&q->lock);\n" + block_noatom + "pthread_mutex_unlock(&q->lock);\n"
+            q_buffer buff = { NULL, 0 };
+            do {
+                buff = dequeue_get(q);
+            } while(buff.entry == NULL)
+            '''
+            noblock_atom = "lock_lock(&q->lock);\n" + noblock_noatom + "lock_unlock(&q->lock);\n"
+            block_atom = "lock_lock(&q->lock);\n" + block_noatom + "lock_unlock(&q->lock);\n"
 
             if blocking:
                 src = block_atom if deq_atomic else block_noatom
@@ -188,26 +188,26 @@ def queue_variable_size(name, size, n_cores, blocking=False, enq_atomic=False, d
                 src = noblock_atom if deq_atomic else noblock_noatom
 
             self.run_c(r'''
-        (size_t c) = inp();
-        %s *q = this->cores[c];
-        ''' % DeqQueue.__name__
+                    (size_t c) = inp();
+                    %s *q = this->cores[c];
+                    ''' % DeqQueue.__name__
                        + src + r'''
-        //if(c == 3) printf("DEQ core=%ld, queue=%p, entry=%ld\n", c, q->queue, x); '''
+                    //if(c == 3) printf("DEQ core=%ld, queue=%p, entry=%ld\n", c, q->queue, x); '''
                        + r'''
-        output { out(%s); }
-            ''' % ('entry, c' if core else 'entry'))
+                    output { out(%s); }
+                        ''' % ('buff, c' if core else 'buff'))
 
     class DequeueRelease(Element):
         def configure(self):
-            self.inp = Input('q_entry*')
+            self.inp = Input(q_buffer)
 
         def impl(self):
             self.run_c(r'''
-            (q_entry* eqe) = inp();
-            dequeue_release(eqe);
+            (q_buffer buf) = inp();
+            dequeue_release(buf);
             ''')
 
-    class ScanClean(Element):
+    class CleanNext(Element):
         # For correctness, scan should be executed right before enqueue.
         # Even then, something bad can happen if the queue is completely full, off = clean; the queue won't get cleaned.
         this = Persistent(enq_all.__class__) if scan == 'enq' else Persistent(deq_all.__class__)
@@ -217,36 +217,37 @@ def queue_variable_size(name, size, n_cores, blocking=False, enq_atomic=False, d
 
         def configure(self):
             self.inp = Input(Size)
-            self.out = Output('q_entry*', Size) if core else Output('q_entry*')
+            self.out = Output(q_buffer, Size) if core else Output(q_buffer)
 
         def impl(self):
             self.run_c(r'''
-    (size_t c) = inp();
-    %s *q = this->cores[c]; ''' % (EnqQueue.__name__ if scan == 'enq' else DeqQueue.__name__)
+                (size_t c) = inp();
+                %s *q = this->cores[c]; ''' % (EnqQueue.__name__ if scan == 'enq' else DeqQueue.__name__)
                        + r'''
-    size_t off = q->offset;
-    size_t len = q->len;
-    size_t clean = q->clean;
-    void* base = q->queue;
-    //if(c==1 && cleaning.last != off) printf("SCAN: start, last = %ld, offset = %ld, clean = %ld\n", cleaning.last, off, clean);
-    q_entry *entry = NULL;
-    if (clean != off) {
-        entry = (q_entry *) ((uintptr_t) base + clean);
-        if ((entry->flags & FLAG_OWN) != 0) {
-            entry = NULL;
-        } else {
-            q->clean = (clean + entry->len) % len;
-        }
-    }''' + r'''output { out(%s); }''' % ('entry, c' if core else 'entry'))
+                q_buffer buff = next_clean(q);
+                output { out(%s); }
+                ''' % ('buff, c' if core else 'buff'))
+
+    class CleanRelease(Element):
+        def configure(self):
+            self.inp = Input(q_buffer)
+
+        def impl(self):
+            self.run_c(r'''
+            (q_buffer buf) = inp();
+            clean_release(buf);
+            ''')
 
     prefix = name + "_"
     EnqueueAlloc.__name__ = prefix + EnqueueAlloc.__name__
     EnqueueSubmit.__name__ = prefix + EnqueueSubmit.__name__
     DequeueGet.__name__ = prefix + DequeueGet.__name__
     DequeueRelease.__name__ = prefix + DequeueRelease.__name__
-    ScanClean.__name__ = prefix + ScanClean.__name__
+    CleanNext.__name__ = prefix + CleanNext.__name__
+    CleanRelease.__name__ = prefix + CleanRelease.__name__
 
-    return EnqueueAlloc, EnqueueSubmit, DequeueGet, DequeueRelease, ScanClean if scan else None
+    return EnqueueAlloc, EnqueueSubmit, DequeueGet, DequeueRelease, \
+           CleanNext if scan else None, CleanRelease if scan else None
 
 # TODO
 # 1. ScanRelease

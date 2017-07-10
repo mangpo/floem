@@ -136,9 +136,9 @@ def generate_state_instances_cpu_only(graph, ext, all_processes, shared):
         for region in graph.memory_regions:
             shared_src += "shm_size += %d;\n" % region.size
 
-        master_src = 'shm = (uintptr_t) util_create_shmsiszed("SHARED", shm_size);\n'
+        master_src = 'shm = util_create_shmsiszed("SHARED", shm_size);\n'
         master_src += 'uintptr_t shm_p = (uintptr_t) shm;'
-        slave_src = 'shm = (uintptr_t) util_map_shm("SHARED", shm_size);\n'
+        slave_src = 'shm = util_map_shm("SHARED", shm_size);\n'
         slave_src += 'uintptr_t shm_p = (uintptr_t) shm;'
 
         # Map shared states

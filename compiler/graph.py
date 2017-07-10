@@ -158,7 +158,8 @@ class Graph:
 
     def addElement(self,element):
         if element.name in self.elements:
-            if not self.elements[element.name] == element:
+            old_element = self.elements[element.name]
+            if not old_element == element:
                 raise RedefineError("Element '%s' is already defined." % element.name)
             return False
         else:

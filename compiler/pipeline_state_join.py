@@ -11,8 +11,8 @@ def add_release_port(g, instance):
 
 def add_release_entry_port(g, instance):
     new_element = instance.element.clone(instance.name + "_release_version")
-    new_element.outports.append(Port("release", ["q_entry*"]))
-    new_element.reassign_output_values("release", "(q_entry *) state.entry")
+    new_element.outports.append(Port("release", ["q_buffer"]))
+    new_element.reassign_output_values("release", "state.buffer")
     g.addElement(new_element)
     instance.element = new_element
 
@@ -93,7 +93,7 @@ def live_leaf_nodes(name, g, lives, ans, prefix):
     return ret
 
 
-def get_node_before_release(name, g, lives, prefix):
+def get_node_before_release(name, g, lives, prefix, vis):
     """
     :param name: root instance
     :param g: graph
@@ -110,5 +110,6 @@ def get_node_before_release(name, g, lives, prefix):
     else:
         node = merge_as_join(g, ret, name, prefix)
 
-    add_release_entry_port(g, node)
+    if node not in vis:
+        add_release_entry_port(g, node)
     return node
