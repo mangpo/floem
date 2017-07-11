@@ -7,7 +7,7 @@ typedef struct {
     int refcount;
 } pipeline_state;
 
-static void pipeline_unref(pipeline_state* s) {
+inline void pipeline_unref(pipeline_state* s) {
     s->refcount--;
     if(s->refcount == 0) {
         free(s);
@@ -15,7 +15,7 @@ static void pipeline_unref(pipeline_state* s) {
     }
 }
 
-static void pipeline_ref(pipeline_state* s) {
+inline void pipeline_ref(pipeline_state* s) {
     s->refcount++;
 }
 '''

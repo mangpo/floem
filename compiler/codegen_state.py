@@ -224,14 +224,11 @@ int main() {
         src_cavium = "void init_state_instances() {\n"
         src_cavium += "  int corenum = cvmx_get_core_num();\n"
     else:
-        src_cavium = "CVMX_SHARED cvmx_spinlock_t read_lock;\n"
-        src_cavium += "CVMX_SHARED cvmx_spinlock_t write_lock;\n"
-        src_cavium += "void init_state_instances() {\n"
+        src_cavium = "void init_state_instances() {\n"
         src_cavium += "  int corenum = cvmx_get_core_num();\n"
 
         src_cavium += "  if(corenum == 0) {\n"
-        src_cavium += "    cvmx_spinlock_init(&read_lock);\n"
-        src_cavium += "    cvmx_spinlock_init(&write_lock);\n"
+        src_cavium += "    init_dma_global_locks();\n"
         src_cavium += "  }\n"
 
     # Create shared memory

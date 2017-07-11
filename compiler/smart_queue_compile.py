@@ -258,7 +258,7 @@ def compile_smart_queue(g, q, src2fields):
         for var in live:
             field = get_entry_field(var, src2fields)
             if var in special:
-                t, name, special_t, info = special[var]
+                t, name, special_t, info = special[var]  # TODO: ntoh
                 if special_t == "shared":
                     fill_src += "e->%s = (uintptr_t) state.%s - (uintptr_t) %s;\n" % (field, var, info)
                 elif special_t == "copysize":

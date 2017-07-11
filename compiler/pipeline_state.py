@@ -40,14 +40,14 @@ def insert_pipeline_at_port(instance, best_port, g, state):
     port.argtypes.append(state + "*")
 
 
-def code_insert_arg_at_port(src, port, state):
+def code_insert_arg_at_port(element, src, port, state):
     argtypes = port.argtypes
     m = re.search('[^a-zA-Z0-9_](' + port.name + '[ ]*\(([^\)]*)\))', src)
     if m is None:
         m = re.search('(' + port.name + '[ ]*\(([^\)]*)\))', src)
 
     if m is None:
-        pass
+        raise Exception("Element '%s' doesn't call input port '%s'." % (element.name, port.name))
 
     p = m.start(1)
     codegen.check_no_args(m.group(2))
@@ -77,9 +77,9 @@ def code_insert_arg_at_port(src, port, state):
 
 
 def element_insert_arg_at_port(element, port, state):
-    element.code = code_insert_arg_at_port(element.code, port, state)
+    element.code = code_insert_arg_at_port(element, element.code, port, state)
     if element.code_cavium is not None:
-        element.code_cavium = code_insert_arg_at_port(element.code_cavium, port, state)
+        element.code_cavium = code_insert_arg_at_port(element, element.code_cavium, port, state)
 
 
 def code_insert_arg_at_empyt_port(src, port, state):

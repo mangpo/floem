@@ -1,28 +1,37 @@
 from dsl2 import *
-import queue_smart2
+import queue_smart2, net_real
 from compiler import Compiler
 
 class MyState(State):
     core = Field(Int)
     keylen = Field(Int)
-    key = Field(Pointer(Uint(8)), copysize='state.keylen')  # TODO
+    key = Field(Pointer(Uint(8)), copysize='state.keylen')
+
+class Count(State):
+    count = Field(Int)
+    def init(self):
+        self.count = 0
 
 class main(Pipeline):
     state = PerPacket(MyState)
 
     class Save(Element):
+        this = Persistent(Count)
+
         def configure(self):
-            self.inp = Input(Int, Uint(8))
+            self.inp = Input('void*', 'void*')
             self.out = Output()
+            self.this = Count()
 
         def impl(self):
             self.run_c(r'''
-    (int len, uint8_t data) = inp();
+    inp();
+    this->count++;
     state.core = 0;
-    state.key = (uint8_t *) malloc(len);
-    state.keylen = len;
-    for(int i=0; i<len ; i++)
-        state.key[i] = data;
+    state.key = (uint8_t *) malloc(this->count);
+    state.keylen = this->count;
+    for(int i=0; i<this->count ; i++)
+        state.key[i] = this->count;
     output { out(); }
             ''')
 
@@ -45,12 +54,13 @@ class main(Pipeline):
 
     Enq, Deq, Scan = queue_smart2.smart_queue("queue", 256, 2, 1)
 
-    class push(API):
-        def configure(self):
-            self.inp = Input(Int, Uint(8))
-
+    class push(InternalLoop):
         def impl(self):
-            self.inp >> main.Save() >> main.Enq()
+            from_net = net_real.FromNet()
+            from_net_free = net_real.FromNetFree()
+
+            from_net >> main.Save() >> main.Enq()
+            from_net >> from_net_free
 
     class pop(InternalLoop):
         # def configure(self):
@@ -60,10 +70,11 @@ class main(Pipeline):
             self.core_id >> main.Deq() >> main.Display()
 
     def impl(self):
-        main.push('push', process="queue_shared_data1")
-        main.pop('pop', device=target.CAVIUM) # process="queue_shared_data2")
+        main.push('push', device=target.CAVIUM) #process="queue_shared_data1")
+        main.pop('pop', process="queue_shared_data2")
 
-master_process("queue_shared_data1")
+#master_process("queue_shared_data1")
+master_process("queue_shared_data2")
 
 c = Compiler(main)
 c.include = r'''

@@ -23,7 +23,7 @@ class circular_queue_lock(State):
         self.len = len
         self.offset = 0
         self.queue = queue
-        self.lock = lambda (x): 'lock_init(&%s)' % x
+        self.lock = lambda (x): 'qlock_init(&%s)' % x
 
 class circular_queue_scan(State):
     len = Field(Size)
@@ -48,7 +48,7 @@ class circular_queue_lock_scan(State):
         self.len = len
         self.offset = 0
         self.queue = queue
-        self.lock = lambda (x): 'lock_init(&%s)' % x
+        self.lock = lambda (x): 'qlock_init(&%s)' % x
         self.clean = 0
 
 
@@ -135,8 +135,8 @@ def queue_variable_size(name, size, n_cores, blocking=False, enq_atomic=False, d
                             buff = enqueue_alloc(q, len);
                         } while(buff.entry == NULL)
                         '''
-            noblock_atom = "lock_lock(&q->lock);\n" + noblock_noatom + "lock_unlock(&q->lock);\n"
-            block_atom = "lock_lock(&q->lock);\n" + block_noatom + "lock_unlock(&q->lock);\n"
+            noblock_atom = "qlock_lock(&q->lock);\n" + noblock_noatom + "qlock_unlock(&q->lock);\n"
+            block_atom = "qlock_lock(&q->lock);\n" + block_noatom + "qlock_unlock(&q->lock);\n"
 
             if blocking:
                 src = block_atom if enq_atomic else block_noatom
@@ -179,8 +179,8 @@ def queue_variable_size(name, size, n_cores, blocking=False, enq_atomic=False, d
                 buff = dequeue_get(q);
             } while(buff.entry == NULL)
             '''
-            noblock_atom = "lock_lock(&q->lock);\n" + noblock_noatom + "lock_unlock(&q->lock);\n"
-            block_atom = "lock_lock(&q->lock);\n" + block_noatom + "lock_unlock(&q->lock);\n"
+            noblock_atom = "qlock_lock(&q->lock);\n" + noblock_noatom + "qlock_unlock(&q->lock);\n"
+            block_atom = "qlock_lock(&q->lock);\n" + block_noatom + "qlock_unlock(&q->lock);\n"
 
             if blocking:
                 src = block_atom if deq_atomic else block_noatom
