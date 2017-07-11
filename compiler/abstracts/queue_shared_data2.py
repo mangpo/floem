@@ -45,16 +45,16 @@ class main(Pipeline):
         def impl(self):
             self.inp >> main.Save() >> main.Enq()
 
-    class pop(API):
-        def configure(self):
-            self.inp = Input(Size)
+    class pop(InternalLoop):
+        # def configure(self):
+        #     self.inp = Input(Size)
 
         def impl(self):
-            self.inp >> main.Deq() >> main.Display()
+            self.core_id >> main.Deq() >> main.Display()
 
     def impl(self):
         main.push('push', process="queue_shared_data1")
-        main.pop('pop', process="queue_shared_data2")
+        main.pop('pop', device=target.CAVIUM) # process="queue_shared_data2")
 
 master_process("queue_shared_data1")
 

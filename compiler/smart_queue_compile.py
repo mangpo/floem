@@ -168,6 +168,8 @@ def compile_smart_queue(g, q, src2fields):
         instance.liveness = set()
         instance.uses = set()
 
+    g.instances[deq_get_inst.name].core_id = q.deq.core_id
+
     # Connect deq_get -> classify, classify -> release
     g.connect(deq_get_inst.name, classify_inst.name)
     g.connect(classify_inst.name, deq_release_inst.name, "release")
