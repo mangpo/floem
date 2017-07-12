@@ -5,16 +5,6 @@
 
 static struct item_allocator **iallocs;
 
-void settings_init()
-{
-    settings.udpport = 11211;
-    settings.verbose = 1;
-    settings.segsize = 4 * 1024; // 2 * 1024 * 1024
-    settings.segmaxnum = 512;
-    settings.segcqsize = 1024; // 32 * 1024
-}
-
-
 static size_t clean_log(struct item_allocator *ia, bool idle)
 {
     item *it, *nit;
@@ -80,7 +70,6 @@ void maintenance()
 
 int main(int argc, char *argv[]) {
   init(argv);
-  settings_init();
   ialloc_init(data_region);
 
   // spec
@@ -110,9 +99,10 @@ int main(int argc, char *argv[]) {
           exit(-1);
        }
   }
+  while(1);
 
-  printf("UNMAP memory\n");
-  finalize_and_check();
+  //printf("UNMAP memory\n");
+  //finalize_and_check();
   //ialloc_finalize();
 
   return 0;

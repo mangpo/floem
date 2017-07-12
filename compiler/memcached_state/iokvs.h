@@ -27,10 +27,14 @@ struct settings {
 };
 
 /** Global settings */
-struct settings settings;
+static struct settings settings = {
+  .udpport = 11211,
+  .verbose = 1,
+  .segsize = 4 * 1024, // 2 * 1024 * 1024
+  .segmaxnum = 512,
+  .segcqsize = 1024 // 32 * 1024
+};
 
-/** Initialize global settings from command-line. */
-void settings_init();
 
 /**
  * Item.
