@@ -246,6 +246,7 @@ get_item_creator = create_element("get_item_creator", [Port("in", [])], [Port("o
         // Assume that the next one is not full.
         it = segment_item_alloc(this->segbase, this->seglen, &this->offset, sizeof(item) + totlen);
     }
+    it->refcount = 1;
 
     printf("get_item id: %d, keylen: %ld, hash: %d, totlen: %ld, item: %ld\n",
            state.pkt->mcr.request.opaque, state.pkt->mcr.request.keylen, state.hash, totlen, it);

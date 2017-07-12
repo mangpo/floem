@@ -291,7 +291,7 @@ def compile_smart_queue(g, q, src2fields):
                 if special_t == "shared":
                     fill_src += "  e->%s = %s((uintptr_t) state.%s - (uintptr_t) %s);\n" % (field, htonp, var, info)
                 elif special_t == "copysize":
-                    assert common.sizeof(t[:-1]) == 1, \
+                    assert t == "void*" or common.sizeof(t[:-1]) == 1, \
                         "Smart queue: field '%s' of per-packet state '%s' must be a pointer to uint8_t array." % \
                         (field, pipeline_state)
                     fill_src += "  memcpy(e->%s, state.%s, %s);\n" % (field, var, info)
@@ -323,7 +323,7 @@ def compile_smart_queue(g, q, src2fields):
                     save_src += "  state.{0} = ({3}) ((uintptr_t) {1} + {2}(state.entry->{0}));\n".\
                         format(name, info, htonp, t)
                 elif special_t == "copysize":
-                    assert common.sizeof(t[:-1]) == 1, \
+                    assert t == "void*" or common.sizeof(t[:-1]) == 1, \
                         "Smart queue: field '%s' of per-packet state '%s' must be a pointer to uint8_t array." % \
                         (field, pipeline_state)
                     save_src += "  state.{0} = state.entry->{0};\n".format(name)

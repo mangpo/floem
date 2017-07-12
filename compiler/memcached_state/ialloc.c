@@ -253,7 +253,7 @@ item *segment_item_alloc(uint64_t thisbase, uint64_t seglen, uint64_t* offset, s
     }
 
     /* Ordering here is important */
-    it->refcount = 1;
+    //it->refcount = 1;
 
     *offset += total;
 

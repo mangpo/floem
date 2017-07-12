@@ -125,6 +125,7 @@ sizeof_dict = {
     "uint8_t": 1,
     "uint16_t": 2,
     "uint32_t": 4,
+    "uint64_t": 8,
     "size_t": 8,
     "uintptr_t": 8,
 }

@@ -310,13 +310,13 @@ output { out(); }
         // Assume that the next one is not full.
         it = segment_item_alloc(this->segbase, this->seglen, &this->offset, sizeof(item) + totlen);
     }
+    it->refcount = 1;
 
     printf("get_item id: %d, keylen: %ld, hash: %d, totlen: %ld, item: %ld\n",
            state.pkt->mcr.request.opaque, state.pkt->mcr.request.keylen, state.hash, totlen, it);
     it->hv = state.hash;
     it->vallen = totlen - state.pkt->mcr.request.keylen;
     it->keylen = state.pkt->mcr.request.keylen;
-    //it->refcount = 1;
     rte_memcpy(item_key(it), state.key, totlen);
     state.it = it;
     state.segfull = full;
