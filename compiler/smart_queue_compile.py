@@ -109,6 +109,7 @@ def need_byte_reverse(g, t1, t2):
 
     return d1 == target.CAVIUM and not d2 == target.CAVIUM
 
+
 def get_size2convert(g, enq_thread, deq_thread):
     byte_reverse = need_byte_reverse(g, enq_thread, deq_thread)
     if byte_reverse:
@@ -122,6 +123,64 @@ def get_size2convert(g, enq_thread, deq_thread):
 
     size2convert = {1: "", 2: htons, 4: htonl, 8: htonp}
     return byte_reverse, size2convert, htons, htonl, htonp
+
+
+def get_fill_entry_src(g, deq_thread, enq_thread, live, special, extras,
+                       state_entry, src2fields, mapping, pipeline_state, i):
+    byte_reverse, size2convert, htons, htonl, htonp = get_size2convert(g, deq_thread, enq_thread)
+
+    fill_src = "  q_buffer buff = in_entry();\n"
+    fill_src += "  %s* e = (%s*) buff.entry;\n" % (state_entry.name, state_entry.name)
+    for var in live:
+        field = get_entry_field(var, src2fields)
+        if var in special:
+            t, name, special_t, info = special[var]
+            if special_t == "shared":
+                fill_src += "  e->%s = %s((uintptr_t) state.%s - (uintptr_t) %s);\n" % (field, htonp, var, info)
+            elif special_t == "copysize":
+                assert t == "void*" or common.sizeof(t[:-1]) == 1, \
+                    "Smart queue: field '%s' of per-packet state '%s' must be a pointer to uint8_t array." % \
+                    (field, pipeline_state)
+                fill_src += "  memcpy(e->%s, state.%s, %s);\n" % (field, var, info)
+        else:
+            size = common.sizeof(mapping[var])
+            convert = size2convert[size]
+            fill_src += "  e->%s = %s(state.%s);\n" % (field, convert, var)
+
+    fill_src += "  e->flags |= %s(%d << TYPE_SHIFT);\n" % (htons, i + 1)
+    fill_src += "  output { out(buff); }"
+    return fill_src
+
+
+def get_save_state_src(g, deq_thread, enq_thread, live, special, extras,
+                       state_entry, src2fields, mapping, pipeline_state):
+    byte_reverse, size2convert, htons, htonl, htonp = get_size2convert(g, deq_thread, enq_thread)
+
+    save_src = "(q_buffer buff, size_t core) = in();"
+    if 'core' in extras:
+        save_src += "  state.core = core;\n"
+    save_src += "  state.buffer = buff;\n"
+    save_src += "  state.entry = (%s*) buff.entry;\n" % state_entry.name
+    for var in live:
+        field = get_entry_field(var, src2fields)
+        if var in special:
+            t, name, special_t, info = special[var]
+            if special_t == "shared":
+                save_src += "  state.{0} = ({3}) ((uintptr_t) {1} + {2}(state.entry->{0}));\n". \
+                    format(name, info, htonp, t)
+            elif special_t == "copysize":
+                assert t == "void*" or common.sizeof(t[:-1]) == 1, \
+                    "Smart queue: field '%s' of per-packet state '%s' must be a pointer to uint8_t array." % \
+                    (field, pipeline_state)
+                save_src += "  state.{0} = state.entry->{0};\n".format(name)
+        elif byte_reverse:
+            size = common.sizeof(mapping[var])
+            convert = size2convert[size]
+            save_src += "  state.{0} = {1}(state.{0});".format(var, convert)
+
+    save_src += "  output { out(); }\n"
+    return save_src
+
 
 def compile_smart_queue(g, q, src2fields):
     pipeline_state = find_pipeline_state(g, q.enq)
@@ -280,59 +339,16 @@ def compile_smart_queue(g, q, src2fields):
                                 r'''output { out(%s, state.core); }''' % size_src)
 
         # Create element: fill
-        byte_reverse, size2convert, htons, htonl, htonp = get_size2convert(g, enq_thread, deq_thread)
-
-        fill_src = "  q_buffer buff = in_entry();\n"
-        fill_src += "  %s* e = (%s*) buff.entry;\n" % (state_entry.name, state_entry.name)
-        for var in live:
-            field = get_entry_field(var, src2fields)
-            if var in special:
-                t, name, special_t, info = special[var]  # TODO: ntoh
-                if special_t == "shared":
-                    fill_src += "  e->%s = %s((uintptr_t) state.%s - (uintptr_t) %s);\n" % (field, htonp, var, info)
-                elif special_t == "copysize":
-                    assert t == "void*" or common.sizeof(t[:-1]) == 1, \
-                        "Smart queue: field '%s' of per-packet state '%s' must be a pointer to uint8_t array." % \
-                        (field, pipeline_state)
-                    fill_src += "  memcpy(e->%s, state.%s, %s);\n" % (field, var, info)
-            else:
-                size = common.sizeof(mapping[var])
-                convert = size2convert[size]
-                fill_src += "  e->%s = %s(state.%s);\n" % (field, convert, var)
-
-        fill_src += "  e->flags |= %s(%d << TYPE_SHIFT);\n" % (htons, i+1)
-        fill_src += "  output { out(buff); }"
+        fill_src = get_fill_entry_src(g, enq_thread, deq_thread, live, special, extras,
+                                      state_entry, src2fields, mapping, pipeline_state, i)
         fill_ele = Element(q.name + "_fill" + str(i), [Port("in_entry", ["q_buffer"]), Port("in_pkt", [])],
                            [Port("out", ["q_buffer"])], fill_src)
         fork = Element(q.name + "_fork" + str(i), [Port("in", [])], [Port("out_size_core", []), Port("out_fill", [])],
                        r'''output { out_size_core(); out_fill(); }''')
 
         # Create element: save
-        byte_reverse, size2convert, htons, htonl, htonp = get_size2convert(g, deq_thread, enq_thread)
-
-        save_src = deq_src_in
-        if 'core' in extras:
-                save_src += "  state.core = core;\n"
-        save_src += "  state.buffer = buff;\n"
-        save_src += "  state.entry = (%s*) buff.entry;\n" % state_entry.name
-        for var in live:
-            field = get_entry_field(var, src2fields)
-            if var in special:
-                t, name, special_t, info = special[var]
-                if special_t == "shared":
-                    save_src += "  state.{0} = ({3}) ((uintptr_t) {1} + {2}(state.entry->{0}));\n".\
-                        format(name, info, htonp, t)
-                elif special_t == "copysize":
-                    assert t == "void*" or common.sizeof(t[:-1]) == 1, \
-                        "Smart queue: field '%s' of per-packet state '%s' must be a pointer to uint8_t array." % \
-                        (field, pipeline_state)
-                    save_src += "  state.{0} = state.entry->{0};\n".format(name)
-            elif byte_reverse:
-                size = common.sizeof(mapping[var])
-                convert = size2convert[size]
-                save_src += "  state.{0} = {1}(state.{0});".format(var, convert)
-
-        save_src += "  output { out(); }\n"
+        save_src = get_save_state_src(g, deq_thread, enq_thread, live, special, extras,
+                                      state_entry, src2fields, mapping, pipeline_state)
         save = Element(q.name + "_save" + str(i), [Port("in", deq_types)], [Port("out", [])], save_src)
         g.addElement(size_core_ele)
         g.addElement(fill_ele)
@@ -399,7 +415,12 @@ def compile_smart_queue(g, q, src2fields):
 
         if scan:
             # Create scan save
-            scan_save_inst = ElementInstance(save.name, prefix + save.name + "_scan_inst")
+            scan_save_src = get_save_state_src(g, scan_thread, enq_thread, live, special, extras,
+                                               state_entry, src2fields, mapping, pipeline_state)
+            scan_save = Element(q.name + "_scan_save" + str(i), [Port("in", deq_types)], [Port("out", [])],
+                                scan_save_src)
+            scan_save_inst = ElementInstance(scan_save.name, prefix + scan_save.name + "_inst")
+            g.addElement(scan_save)
             g.newElementInstance(scan_save_inst.element, scan_save_inst.name, scan_save_inst.args)
             g.set_thread(scan_save_inst.name, scan_thread)
 
