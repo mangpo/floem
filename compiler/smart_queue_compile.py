@@ -298,7 +298,7 @@ def compile_smart_queue(g, q, src2fields):
             else:
                 size = common.sizeof(mapping[var])
                 convert = size2convert[size]
-                fill_src += "  e->%s = %s(state.%s);\n" % (field, convert, field)
+                fill_src += "  e->%s = %s(state.%s);\n" % (field, convert, var)
 
         fill_src += "  e->flags |= %s(%d << TYPE_SHIFT);\n" % (htons, i+1)
         fill_src += "  output { out(buff); }"
@@ -330,7 +330,7 @@ def compile_smart_queue(g, q, src2fields):
             elif byte_reverse:
                 size = common.sizeof(mapping[var])
                 convert = size2convert[size]
-                save_src += "  state.{0} = {1}(state.{0});".format(field, convert)
+                save_src += "  state.{0} = {1}(state.{0});".format(var, convert)
 
         save_src += "  output { out(); }\n"
         save = Element(q.name + "_save" + str(i), [Port("in", deq_types)], [Port("out", [])], save_src)
