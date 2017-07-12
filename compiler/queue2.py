@@ -131,9 +131,9 @@ def queue_variable_size(name, size, n_cores, blocking=False, enq_atomic=False, d
             noblock_noatom = "q_buffer buff = enqueue_alloc(q, len);\n"
             block_noatom = r'''
                         q_buffer buff = { NULL, 0 };
-                        do {
+                        while(buff.entry == NULL) {
                             buff = enqueue_alloc(q, len);
-                        } while(buff.entry == NULL)
+                        }
                         '''
             noblock_atom = "qlock_lock(&q->lock);\n" + noblock_noatom + "qlock_unlock(&q->lock);\n"
             block_atom = "qlock_lock(&q->lock);\n" + block_noatom + "qlock_unlock(&q->lock);\n"
@@ -175,9 +175,9 @@ def queue_variable_size(name, size, n_cores, blocking=False, enq_atomic=False, d
             noblock_noatom = "q_buffer buff = dequeue_get(q);\n"
             block_noatom = r'''
             q_buffer buff = { NULL, 0 };
-            do {
+            while(buff.entry == NULL) {
                 buff = dequeue_get(q);
-            } while(buff.entry == NULL)
+            }
             '''
             noblock_atom = "qlock_lock(&q->lock);\n" + noblock_noatom + "qlock_unlock(&q->lock);\n"
             block_atom = "qlock_lock(&q->lock);\n" + block_noatom + "qlock_unlock(&q->lock);\n"

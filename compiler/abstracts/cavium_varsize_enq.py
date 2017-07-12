@@ -6,6 +6,7 @@ class MyState(State):
     core = Field(Int)
     keylen = Field(Int)
     key = Field(Pointer(Uint(8)), copysize='state.keylen')
+    p = Field(Pointer(Int), shared='data_region')
 
 class Count(State):
     count = Field(Int)
@@ -27,11 +28,41 @@ class main(Pipeline):
             self.run_c(r'''
     inp();
     this->count++;
+    printf("inject = %d\n", this->count);
     state.core = 0;
     state.key = (uint8_t *) malloc(this->count);
     state.keylen = this->count;
-    for(int i=0; i<this->count ; i++)
+    int i;
+    for(i=0; i<this->count ; i++)
         state.key[i] = this->count;
+
+    int* p = data_region;
+    p[this->count] = 100 + this->count;
+    state.p = &p[this->count];
+    output { out(); }
+            ''')
+
+        def impl_cavium(self):
+            self.run_c(r'''
+    inp();
+    this->count++;
+    printf("inject = %d\n", this->count);
+    state.core = 0;
+    state.key = (uint8_t *) malloc(this->count);
+    state.keylen = this->count;
+    int i;
+    for(i=0; i<this->count ; i++)
+        state.key[i] = this->count;
+
+    int* p = data_region;
+    void* addr = &p[Count0->count];
+    int* x;
+    dma_buf_alloc((void**) &x);
+    *x = my_ntohl(100 + Count0->count);
+    dma_write((uintptr_t) addr, sizeof(int), x);
+    dma_free(x);
+    _state->p = addr;
+
     output { out(); }
             ''')
 
@@ -41,18 +72,11 @@ class main(Pipeline):
 
         def impl(self):
             self.run_c(r'''
-            printf("%d %d %d\n", state.keylen, state.key[0], state.key[state.keylen-1]);
+            printf("%d %d %d %d\n", state.keylen, state.key[0], state.key[state.keylen-1], *state.p);
             fflush(stdout);
             ''')
 
-        def impl_cavium(self):
-            self.run_c(r'''
-  int keylen = my_htonl(_state->entry->keylen);
-  printf("%d %d %d\n", keylen, _state->key[0],  _state->key[keylen-1]);
-  fflush(stdout);
-            ''')
-
-    Enq, Deq, Scan = queue_smart2.smart_queue("queue", 256, 2, 1)
+    Enq, Deq, Scan = queue_smart2.smart_queue("queue", 256, 2, 1, blocking=True)
 
     class push(InternalLoop):
         def impl(self):
@@ -70,20 +94,11 @@ class main(Pipeline):
             self.core_id >> main.Deq() >> main.Display()
 
     def impl(self):
-        main.push('push', device=target.CAVIUM) #process="queue_shared_data1")
-        main.pop('pop', process="queue_shared_data2")
+        MemoryRegion("data_region", 4 * 100)
+        main.push('push', device=target.CAVIUM)
+        main.pop('pop', process="varsize_enq")
 
-#master_process("queue_shared_data1")
-master_process("queue_shared_data2")
+master_process("varsize_enq")
 
 c = Compiler(main)
-c.include = r'''
-#include <rte_memcpy.h>
-#include "../queue.h"
-#include "../shm.h"
-'''
-
 c.generate_code_as_header()
-c.depend = {"queue_shared_data1_main": ['queue_shared_data1'],
-            "queue_shared_data2_main": ['queue_shared_data2']}
-c.compile_and_run(["queue_shared_data1_main", "queue_shared_data2_main"])

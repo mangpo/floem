@@ -7,7 +7,7 @@ typedef struct {
     int refcount;
 } pipeline_state;
 
-inline void pipeline_unref(pipeline_state* s) {
+static inline void pipeline_unref(pipeline_state* s) {
     s->refcount--;
     if(s->refcount == 0) {
         free(s);
@@ -15,7 +15,7 @@ inline void pipeline_unref(pipeline_state* s) {
     }
 }
 
-inline void pipeline_ref(pipeline_state* s) {
+static inline void pipeline_ref(pipeline_state* s) {
     s->refcount++;
 }
 '''
@@ -118,3 +118,22 @@ def get_type(type_var):
 
 def get_var(type_var):
     return get_type_var(type_var)[1]
+
+sizeof_dict = {
+    "int": 4,
+    "char": 4,
+    "uint8_t": 1,
+    "uint16_t": 2,
+    "uint32_t": 4,
+    "size_t": 8,
+    "uintptr_t": 8,
+}
+
+
+def sizeof(t):
+    if t[-1] == '*':
+        return 8
+    elif t in sizeof_dict:
+        return sizeof_dict[t]
+    else:
+        raise Exception("Unknown type '%s'." % t)

@@ -297,7 +297,6 @@ class Graph:
             else:
                 other.input2ele[next_port] = new_l
 
-
     def get_thread_of(self, name):
         return self.instances[name].thread
 

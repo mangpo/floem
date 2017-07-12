@@ -8,7 +8,6 @@ class MyState(State):
     key = Field(Pointer(Uint(8)), copysize='state.keylen')
     p = Field(Pointer(Int), shared='data_region')
 
-
 class main(Pipeline):
     state = PerPacket(MyState)
 
@@ -23,8 +22,10 @@ class main(Pipeline):
     state.core = 0;
     state.key = (uint8_t *) malloc(len);
     state.keylen = len;
-    for(int i=0; i<len ; i++)
+    int i;
+    for(i=0; i<len ; i++)
         state.key[i] = data;
+
     int* p = data_region;
     p[data] = 100 + data;
     state.p = &p[data];
@@ -39,6 +40,15 @@ class main(Pipeline):
             self.run_c(r'''
             printf("%d %d %d %d\n", state.keylen, state.key[0], state.key[state.keylen-1], *state.p);
             fflush(stdout);
+            ''')
+
+        def impl_cavium(self):
+            self.run_c(r'''
+            int* x;
+            dma_read((uintptr_t) state.p, sizeof(int), (void**) &x);
+            printf("%d %d %d %d\n", state.keylen, state.key[0], state.key[state.keylen-1], my_htonl(*x));
+            fflush(stdout);
+            dma_free(x);
             ''')
 
     Enq, Deq, Scan = queue_smart2.smart_queue("queue", 256, 2, 1, blocking=True)
@@ -59,19 +69,10 @@ class main(Pipeline):
 
     def impl(self):
         MemoryRegion("data_region", 4 * 100)
-        main.push('push', process="queue_shared_data1")
-        main.pop('pop', process="queue_shared_data2")
+        main.push('push', process="varsize_deq")
+        main.pop('pop', device=target.CAVIUM) # process="queue_shared_data2")
 
-master_process("queue_shared_data1")
+master_process("varsize_deq")
 
 c = Compiler(main)
-c.include = r'''
-#include <rte_memcpy.h>
-#include "../queue.h"
-#include "../shm.h"
-'''
-
 c.generate_code_as_header()
-c.depend = {"queue_shared_data1_main": ['queue_shared_data1'],
-            "queue_shared_data2_main": ['queue_shared_data2']}
-c.compile_and_run(["queue_shared_data1_main", "queue_shared_data2_main"])
