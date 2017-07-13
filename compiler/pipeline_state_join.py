@@ -10,7 +10,7 @@ def add_release_port(g, instance):
 
 
 def add_release_entry_port(g, instance):
-    new_element = instance.element.clone(instance.name + "_release_version")
+    new_element = instance.element.clone(instance.element.name + "_release_version")
     new_element.outports.append(Port("release", ["q_buffer"]))
     new_element.reassign_output_values("release", "state.buffer")
     g.addElement(new_element)

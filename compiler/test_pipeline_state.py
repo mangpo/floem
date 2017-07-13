@@ -520,10 +520,10 @@ class TestPipelineState(unittest.TestCase):
         #g.print_graphviz()
         deq_release = g.instances["smart_deq_release"]
         prevs = set([name for name, port in deq_release.input2ele["inp"]])
-        self.assertEqual(prevs, set(["smart_deq_classify_inst", 'myfork_merge2']))
+        self.assertEqual(prevs, set(["smart_deq_classify_inst", 'smart_queue_save0_inst_merge2']))
 
         merges = set()
-        myfork_merge2 = g.instances["myfork_merge2"]
+        myfork_merge2 = g.instances["smart_queue_save0_inst_merge2"]
         name, port = myfork_merge2.input2ele["in0"][0]
         merges.add(name)
         name, port = myfork_merge2.input2ele["in1"][0]
