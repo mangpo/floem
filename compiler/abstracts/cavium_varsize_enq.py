@@ -20,7 +20,7 @@ class main(Pipeline):
         this = Persistent(Count)
 
         def configure(self):
-            self.inp = Input('void*', 'void*')
+            self.inp = Input(Size, 'void*', 'void*')
             self.out = Output()
             self.this = Count()
 
@@ -76,6 +76,26 @@ class main(Pipeline):
             fflush(stdout);
             ''')
 
+    class Drop(Element):
+        def configure(self):
+            self.inp = Input()
+
+        def impl(self):
+            self.run_c(r'''while (0); ''')
+
+    class DisplayPacket(Element):
+        def configure(self):
+            self.inp = Input(Size, "void *", "void *")
+            self.out = Output("void *", "void *")
+
+        def impl(self):
+            self.run_c(r'''
+            (size_t len, void *pkt, void *buf) = inp();
+            if (pkt != NULL)
+                printf("Got packet\n");
+            output { out(pkt, buf); }
+            ''')
+
     Enq, Deq, Scan = queue_smart2.smart_queue("queue", 256, 2, 1, blocking=True)
 
     class push(InternalLoop):
@@ -83,19 +103,19 @@ class main(Pipeline):
             from_net = net_real.FromNet()
             from_net_free = net_real.FromNetFree()
 
-            from_net >> main.Save() >> main.Enq()
-            from_net >> from_net_free
+            from_net.out >> main.Save() >> main.Enq()
+            from_net.out >> main.DisplayPacket() >> from_net_free
+
+            from_net.nothing >> main.Drop()
 
     class pop(InternalLoop):
-        # def configure(self):
-        #     self.inp = Input(Size)
 
         def impl(self):
             self.core_id >> main.Deq() >> main.Display()
 
     def impl(self):
         MemoryRegion("data_region", 4 * 100)
-        main.push('push', device=target.CAVIUM)
+        main.push('push', process="dpdk") #device=target.CAVIUM)
         main.pop('pop', process="varsize_enq")
 
 master_process("varsize_enq")

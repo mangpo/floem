@@ -81,7 +81,7 @@ class test(InternalLoop):
         from_net.nothing >> Drop('drop')
         run_order(to_net, from_net_free)
 
-test('test', process='dpdk', cores=[0,1,2,3])
+test('test', device=target.CAVIUM, cores=[0,1,2,3])
 
 c = Compiler()
 c.include = r'''#include "packet_build.h"'''

@@ -23,7 +23,7 @@ class FromNet(Element):
     size_t size = 0;
     if(p) size = cvmx_wqe_get_len(wqe);
     output switch {
-        case p != NULL: out(0, p, wqe);
+        case p != NULL: out(size, p, wqe);
         case p == NULL: nothing();
     }
         ''')
