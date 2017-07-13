@@ -254,6 +254,11 @@ def generate_internal_triggers(graph, ext, mode):
     for process in graph.processes:
         generate_internal_triggers_with_process(graph, process, ext, mode)
 
+def dpdk_init_call(graph, process):
+    num_threads = len(graph.threads_internal)
+    fns = [x for x in graph.instances.values() if x.element.special == 'from_net']
+    num_rx = len(fns)
+    return "  dpdk_init(argv, %d, %d);\n" % (num_threads, num_rx)
 
 def generate_inject_probe_code_with_process(graph, process, ext):
     injects = graph.inject_populates
@@ -282,7 +287,7 @@ def generate_inject_probe_code_with_process(graph, process, ext):
 
     src += "void init(char *argv[]) {\n" if graph.process2device[process] == target.CPU else "void init() {\n"
     if target.is_dpdk_proc(process):
-        src += "  dpdk_init(argv, 1, 1);\n" # TODO: how do we get these numbers
+        src += dpdk_init_call(graph, process)
     #src += "  init_memory_regions();\n"
     src += "  init_state_instances(argv);\n" if graph.process2device[process] == target.CPU else "  init_state_instances();\n"
     src += inject_src
