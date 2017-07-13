@@ -4,12 +4,12 @@ from compiler import Compiler
 
 class DisplayPacket(Element):
     def configure(self):
-        self.inp = Input("void *", "void *")
+        self.inp = Input(Size, "void *", "void *")
         self.out = Output("void *", "void *")
 
     def impl(self):
         self.run_c(r'''
-        (void *pkt, void *buf) = inp();
+        (size_t len, void *pkt, void *buf) = inp();
         if (pkt != NULL)
             printf("Got packet\n");
         output { out(pkt, buf); }

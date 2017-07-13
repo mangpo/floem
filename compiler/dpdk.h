@@ -123,7 +123,7 @@ static void dpdk_thread_create(void *(*entry_point)(void *), void *arg)
     }
 }
 
-static void dpdk_from_net(void **pdata, void **pbuf)
+static void dpdk_from_net(size_t *sz, void **pdata, void **pbuf)
 {
     static volatile uint16_t rx_queue_alloc = 0;
     static __thread uint16_t rx_queue_id;
@@ -172,6 +172,7 @@ static void dpdk_from_net(void **pdata, void **pbuf)
 out:
     if (num >= 1) {
         data = (uint8_t *) mb->buf_addr + mb->data_off;
+        *sz = mb->data_len;
     }
 
     *pdata = data;

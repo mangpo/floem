@@ -2,16 +2,17 @@ from dsl2 import *
 
 class FromNet(Element):
     def configure(self):
-        self.out = Output("void *", "void *") # packet, buffer
+        self.out = Output(Size, "void *", "void *") # packet, buffer
         self.nothing = Output()
         self.special = 'from_net'
 
     def impl(self):
         self.run_c(r'''
     void *data, *buf;
-    dpdk_from_net(&data, &buf);
+    size_t size;
+    dpdk_from_net(&size, &data, &buf);
     output switch {
-        case data != NULL: out(data, buf);
+        case data != NULL: out(size, data, buf);
         case data == NULL: nothing();
     }
         ''')
@@ -20,7 +21,7 @@ class FromNet(Element):
         self.run_c(r'''
     void* p = cvmx_phys_to_ptr(wqe->packet_ptr.s.addr);
     output switch {
-        case p != NULL: out(p, wqe);
+        case p != NULL: out(0, p, wqe);
         case p == NULL: nothing();
     }
         ''')
