@@ -20,6 +20,8 @@ class FromNet(Element):
     def impl_cavium(self):
         self.run_c(r'''
     void* p = cvmx_phys_to_ptr(wqe->packet_ptr.s.addr);
+    size_t size = 0;
+    if(p) size = cvmx_wqe_get_len(wqe);
     output switch {
         case p != NULL: out(0, p, wqe);
         case p == NULL: nothing();
