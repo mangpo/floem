@@ -19,7 +19,6 @@ class Compiler:
         self.depend = None
 
         # Compiler option
-        self.I = None
         self.pipelines = pipelines
 
     def has_spec_impl(self, scopes):

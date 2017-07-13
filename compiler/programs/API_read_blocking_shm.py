@@ -17,7 +17,4 @@ CPU_process("put", t1)
 CPU_process("get", t2)
 
 c = Compiler()
-c.include = r'''
-#include "../shm.h"
-'''
 c.generate_code_and_compile()

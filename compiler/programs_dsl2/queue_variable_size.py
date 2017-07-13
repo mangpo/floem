@@ -10,7 +10,7 @@ class Entry(State):
     val = Field(Int)
     layout = [flags, len, val]
 
-EnqAlloc, EnqSubmit, DeqGet, DeqRelease, Scan = \
+EnqAlloc, EnqSubmit, DeqGet, DeqRelease, Scan, ScanRelease = \
     queue2.queue_variable_size("queue", 30, n_cores, blocking=False, enq_atomic=True, deq_atomic=True)
 
 class ComputeCore(Element):
@@ -27,19 +27,20 @@ class ComputeCore(Element):
 
 class FillEntry(Element):
     def configure(self):
-        self.in_entry = Input(Pointer(queue2.Qentry))
+        self.in_entry = Input(queue2.q_buffer)
         self.in_val = Input(Int)
-        self.out = Output(Pointer(queue2.Qentry))
+        self.out = Output(queue2.q_buffer)
 
     def impl(self):
         self.run_c(r'''
-    Entry* e = (Entry*) in_entry();
+    (q_buffer buff) = in_entry();
+    Entry* e = (Entry*) buff.entry;
     int v = in_val();
     if(e != NULL) {
       e->val = v;
       printf("%d enq\n", v);
       }
-    output switch { case (e != NULL): out((q_entry*) e); }
+    output switch { case (e != NULL): out(buff); }
         ''')
 
 
@@ -58,14 +59,14 @@ class rx_write(API):
 class rx_read(API):
     def configure(self):
         self.inp = Input(Size)
-        self.out = Output(Pointer(queue2.Qentry))
+        self.out = Output(queue2.q_buffer)
 
     def impl(self):
         self.inp >> DeqGet() >> self.out
 
 class rx_release(API):
     def configure(self):
-        self.inp = Input(Pointer(queue2.Qentry))
+        self.inp = Input(queue2.q_buffer)
 
     def impl(self):
         self.inp >> DeqRelease()
@@ -76,29 +77,33 @@ rx_read('rx_read')
 rx_release('rx_release')
 
 c = Compiler()
-c.include = r'''#include "../queue.h"'''
 c.testing = r'''
 Entry* e;
+q_buffer buff;
 rx_write(1,1);
 rx_write(2,2);
 rx_write(5,1);
 
-e = (Entry*) rx_read(1);
+buff = rx_read(1);
+e = (Entry*) buff.entry;
 //printf("out_entry = %ld\n", e);
 out(e->val);
-rx_release((q_entry*) e);
+rx_release(buff);
 
-e = (Entry*) rx_read(1);
+buff = rx_read(1);
+e = (Entry*) buff.entry;
 //printf("out_entry = %ld\n", e);
 out(e->val);
-rx_release((q_entry*) e);
+rx_release(buff);
 
-e = (Entry*) rx_read(2);
+buff = rx_read(2);
+e = (Entry*) buff.entry;
 //printf("out_entry = %ld\n", e);
 out(e->val);
-rx_release((q_entry*) e);
+rx_release(buff);
 
-e = (Entry*) rx_read(2);
+buff = rx_read(2);
+e = (Entry*) buff.entry;
 out(e);
 
 
@@ -106,9 +111,10 @@ rx_write(11,1);
 rx_write(12,1);
 rx_write(13,1);
 rx_write(14,1);
-e = (Entry*) rx_read(1);
+buff = rx_read(1);
+e = (Entry*) buff.entry;
 out(e->val);
-rx_release((q_entry*) e);
+rx_release(buff);
 rx_write(14,1);
 
 '''

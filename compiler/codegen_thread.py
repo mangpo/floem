@@ -337,8 +337,7 @@ def generate_testing_code(graph, code, ext):
 def generate_populate_state(inject, key):
     # src = "  // %s: populate %s and %s\n" % \
     #       (inject.name, inject.spec_instances[key], inject.impl_instances[key])
-    src = "  int i;\n"
-    src += "  for(i = 0; i < %d; i++) {\n" % inject.size
+    src = "  for(int i = 0; i < %d; i++) {\n" % inject.size
     src += "    %s temp = %s(i);\n" % (inject.type, inject.func)
     src += "    %s->data[i] = temp;\n" % inject.spec_instances[key]
     if key in inject.impl_instances:

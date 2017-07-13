@@ -55,20 +55,12 @@ typedef struct {
 
 typedef pthread_mutex_t lock_t;
 
-inline void lock_init(lock_t* lock) {
-    pthread_mutex_init(lock, NULL);
-}
-
-inline void lock_lock(lock_t* lock) {
-    pthread_mutex_lock(lock);
-}
-
-inline void lock_unlock(lock_t* lock) {
-    pthread_mutex_unlock(lock);
-}
+#define qlock_init(x) pthread_mutex_init(x, NULL)
+#define qlock_lock(x) pthread_mutex_lock(x)
+#define qlock_unlock(x) pthread_mutex_unlock(x)
 
 static q_buffer enqueue_alloc(circular_queue* q, size_t len) {
-    //printf("enq: queue = %p, len = %ld\n", q->queue, len);
+    //printf("enq: queue = %ld\n", q->queue);
     volatile uint16_t *flags;
     q_entry *eqe, *dummy;
     size_t off, qlen, total, elen, eqe_off;
@@ -124,7 +116,7 @@ static q_buffer enqueue_alloc(circular_queue* q, size_t len) {
     eqe->flags = 0;
     //printf("enq_alloc (before): offset = %ld, len = %ld, mod = %ld\n", eqe_off, len, qlen);
     q->offset = (eqe_off + len) % qlen;
-    printf("enq_alloc: queue = %p, entry = %p, len = %ld, offset = %ld\n", q->queue, eqe, eqe->len, q->offset);
+    //printf("enq_alloc: queue = %ld, entry = %ld, len = %ld, offset = %ld\n", q->queue, eqe, eqe->len, q->offset);
     q_buffer buff = { eqe, 0 };
     return buff;
 }
@@ -142,9 +134,9 @@ static q_buffer dequeue_get(circular_queue* q) {
     q_entry* eqe = q->queue + q->offset;
     __sync_synchronize();
     if(eqe->flags & FLAG_OWN) {
-        //printf("dequeue_get (before): entry = %ld, len = %ld, mod = %ld\n", eqe, eqe->len, q->len);
+        //printf("dequeue_get (before): entry = %p, len = %ld, mod = %ld\n", eqe, eqe->len, q->len);
         q->offset = (q->offset + eqe->len) % q->len;
-        //printf("dequeue_get_return: entry = %ld, offset = %ld\n", eqe, q->offset);
+        //printf("dequeue_get_return: entry = %p, offset = %ld\n", eqe, q->offset);
         q_buffer buff = { eqe, 0 };
         return buff;
     }

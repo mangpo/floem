@@ -451,8 +451,8 @@ def generate_header_h(testing, graph):
             src = ""
             for file in target.cpu_include_h:
                 src += "#include %s\n" % file
-            if target.is_dpdk_proc(process):
-                src += "#include %s" % common.dpdk_driver_header
+            # if target.is_dpdk_proc(process):
+            #     src += "#include %s" % target.dpdk_driver_header
 
         elif device == target.CAVIUM:
             src = ""
@@ -472,7 +472,8 @@ def generate_header_c(testing, graph):
             for file in target.cpu_include_c:
                 src += "#include %s\n" % file
             if target.is_dpdk_proc(process):
-                src += "#include %s" % common.dpdk_driver_header
+                for file in target.dpdk_driver_header:
+                    src += "#include %s\n" % file
 
             src += common.pipeline_include
 
@@ -609,25 +610,26 @@ def generate_code_and_compile(graph, testing, mode, include=None, depend=None):
     generate_internal_triggers(graph, ".c", mode)
     generate_testing_code(graph, testing, ".c")
 
-    compilerdir = os.path.dirname(os.path.realpath(__file__))
+    compilerdir = os.path.dirname(os.path.realpath(__file__)) + "/include"
 
     extra = ""
     if depend:
-        for f in depend:
-            extra += '%s.o ' % f
-            cmd = 'gcc -O0 -g -msse4.1 -I %s -I %s -c %s.c -lrt' % \
-                    (compilerdir, common.dpdk_include, f)
-            #cmd = 'gcc -O3 -msse4.1 -I %s -c %s.c' % (common.dpdk_include, f)
-            status = os.system(cmd)
-            if not status == 0:
-                raise Exception("Compile error: " + cmd)
+        compile_object_file(depend)
+        # for f in depend:
+        #     extra += '%s.o ' % f
+        #     cmd = 'gcc -O0 -g -msse4.1 -I %s -I %s -c %s.c -lrt' % \
+        #             (compilerdir, target.dpdk_include, f)
+        #     #cmd = 'gcc -O3 -msse4.1 -I %s -c %s.c' % (target.dpdk_include, f)
+        #     status = os.system(cmd)
+        #     if not status == 0:
+        #         raise Exception("Compile error: " + cmd)
 
     for process in graph.processes:
-        dpdk_libs = common.dpdk_libs if target.is_dpdk_proc(process) else ''
-        cmd = 'gcc -O0 -g -msse4.1 -I %s -I %s -L %s -pthread %s.c %s -o %s %s -lrt' % \
-                 (compilerdir, common.dpdk_include, common.dpdk_lib, process, extra, \
+        dpdk_libs = target.dpdk_libs if target.is_dpdk_proc(process) else ''
+        link = "-L %s" % target.dpdk_lib if target.is_dpdk_proc(process) else ''
+        cmd = 'gcc -O0 -g -msse4.1 -I %s -I %s %s -pthread %s.c %s -o %s %s -lrt' % \
+                 (compilerdir, target.dpdk_include, link, process, extra, \
                 process, dpdk_libs)
-        #cmd = 'gcc -O3 -msse4.1 -I %s -pthread %s.c %s -o %s' % (common.dpdk_include, process, extra, process)
         status = os.system(cmd)
         if not status == 0:
             raise Exception("Compile error: " + cmd)
@@ -682,9 +684,9 @@ def generate_code_and_run(graph, testing, mode, expect=None, include=None, depen
 
 def compile_object_file(f):
     if isinstance(f, str):
-        compilerdir = os.path.dirname(os.path.realpath(__file__))
+        compilerdir = os.path.dirname(os.path.realpath(__file__)) + "/include"
         cmd = 'gcc -O0 -g -msse4.1 -I %s -I %s -c %s.c -lrt' % \
-                (compilerdir, common.dpdk_include, f)
+                (compilerdir, target.dpdk_include, f)
         print cmd
         status = os.system(cmd)
         if not status == 0:
@@ -700,11 +702,11 @@ def compile_object_file(f):
 
 def compile_and_run(name, depend):
     compile_object_file(depend)
+    compilerdir = os.path.dirname(os.path.realpath(__file__)) + "/include"
 
     if isinstance(name, str):
-        compilerdir = os.path.dirname(os.path.realpath(__file__))
         cmd = 'gcc -O0 -g -msse4.1 -I % s-I %s -pthread %s.c %s -o %s -lrt' % \
-              (compilerdir, common.dpdk_include, name, ' '.join([d + '.o' for d in depend]), name)
+              (compilerdir, target.dpdk_include, name, ' '.join([d + '.o' for d in depend]), name)
         print cmd
         status = os.system(cmd)
         if not status == 0:
@@ -719,9 +721,8 @@ def compile_and_run(name, depend):
         for f in name:
             if isinstance(f, tuple):
                 f = f[0]
-            compilerdir = os.path.dirname(os.path.realpath(__file__))
             cmd = 'gcc -O0 -g -msse4.1 -I %s -I %s -pthread %s.c %s -o %s -lrt' % \
-                  (compilerdir, common.dpdk_include, f, ' '.join([d + '.o' for d in depend[f]]), f)
+                  (compilerdir, target.dpdk_include, f, ' '.join([d + '.o' for d in depend[f]]), f)
             print cmd
             status = os.system(cmd)
             if not status == 0:

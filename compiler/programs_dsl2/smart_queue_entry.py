@@ -98,9 +98,6 @@ class main(Pipeline):
 
 
 c = Compiler(main)
-c.include = r'''
-#include "../queue.h"
-'''
 #c.testing = "run1(123); run1(42); run2(0); run2(0);"
 c.testing = "run1(123); run1(42); run2(0); run2(0); clean(0); clean(0); clean(0); clean(1);"
 #c.generate_code_and_run(['b1', 246, 'a1', 142])

@@ -16,9 +16,6 @@ Test('test')
 c = Compiler()
 c.resource = False
 c.remove_unused = False
-c.include = r'''
-#include "../shm.h"
-'''
 c.testing = r'''
 test();
 '''

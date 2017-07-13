@@ -125,7 +125,7 @@ def generate_state_instances_cpu_only(graph, ext, all_processes, shared):
             print src_cpu
 
     # Create shared memory
-    if len(all_processes) > 1:
+    if len(all_processes) > 1 or len(graph.memory_regions) > 0:
         # Check processes
         assert (graph.master_process in graph.processes), "Please specify a master process using master_process(name)."
 
@@ -173,7 +173,7 @@ def generate_state_instances_cpu_only(graph, ext, all_processes, shared):
         with open(name, 'a') as f, redirect_stdout(f):
             print src
 
-    if len(all_processes) > 1:
+    if len(all_processes) > 1 or len(graph.memory_regions) > 0:
         master_src = 'shm_unlink("SHARED");\n'
         with open(graph.master_process + ext, 'a') as f, redirect_stdout(f):
             print master_src

@@ -35,8 +35,6 @@ master_process("queue_shared_data1")
 c = Compiler()
 c.include = r'''
 #include <rte_memcpy.h>
-#include "../queue.h"
-#include "../shm.h"
 '''
 
 c.generate_code_as_header()

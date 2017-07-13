@@ -320,7 +320,7 @@ c.include = r'''
 #include <rte_memcpy.h>
 #include "worker.h"
 #include "storm.h"
-#include "../net.h"
+#include "socket.h"
 '''
 c.depend = {"test_storm": ['list', 'hash', 'hash_table', 'spout', 'count', 'rank', 'worker', 'flexstorm']}
 c.generate_code_as_header("flexstorm")

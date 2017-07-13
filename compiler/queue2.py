@@ -1,6 +1,7 @@
 from dsl2 import *
 
-Qentry = 'q_entry'
+q_buffer = 'q_buffer'
+q_entry = 'q_entry'
 
 class circular_queue(State):
     len = Field(Size)
@@ -11,6 +12,7 @@ class circular_queue(State):
         self.len = len
         self.offset = 0
         self.queue = queue
+        self.declare = False
 
 class circular_queue_lock(State):
     len = Field(Size)
@@ -24,6 +26,7 @@ class circular_queue_lock(State):
         self.offset = 0
         self.queue = queue
         self.lock = lambda (x): 'qlock_init(&%s)' % x
+        self.declare = False
 
 class circular_queue_scan(State):
     len = Field(Size)
@@ -36,6 +39,7 @@ class circular_queue_scan(State):
         self.offset = 0
         self.queue = queue
         self.clean = 0
+        self.declare = False
 
 class circular_queue_lock_scan(State):
     len = Field(Size)
@@ -50,6 +54,7 @@ class circular_queue_lock_scan(State):
         self.queue = queue
         self.lock = lambda (x): 'qlock_init(&%s)' % x
         self.clean = 0
+        self.declare = False
 
 
 def get_field_name(state, field):

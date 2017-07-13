@@ -37,8 +37,5 @@ def run2(core):
     b1(b1_in)
 
 c = Compiler()
-c.include = r'''
-#include "../queue.h"
-'''
 c.testing = "run1(123); run1(42); run2(0); run2(0);"
 c.generate_code_and_run(['b1', 246, 'a1', 142])

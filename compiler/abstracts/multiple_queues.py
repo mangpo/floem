@@ -61,7 +61,6 @@ def run3(core):
 c = Compiler()
 c.include = r'''
 #include <rte_memcpy.h>
-#include "../queue.h"
 '''
 c.testing = "run1(123); run1(42); run2(1); run3(1); run2(1); run3(1);"
 c.generate_code_and_run([123, 42])

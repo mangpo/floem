@@ -593,8 +593,6 @@ c.include = r'''
 #include "nicif.h"
 #include "iokvs.h"
 #include "protocol_binary.h"
-#include "../queue.h"
-#include "../shm.h"
 '''
 c.triggers = True
 c.I = '/home/mangpo/lib/dpdk-16.11/build/include'

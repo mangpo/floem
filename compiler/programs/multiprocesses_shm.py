@@ -20,9 +20,6 @@ CPU_process("p2", t2)
 master_process("p1")
 
 c = Compiler()
-c.include = r'''
-#include "../shm.h"
-'''
 c.testing = "while(true);\n"
 #c.testing = "usleep(1000000);\n"
 c.generate_code_and_run()

@@ -457,7 +457,6 @@ c.include = r'''
 #include "nicif.h"
 #include "iokvs.h"
 #include "protocol_binary.h"
-#include "../queue.h"
 '''
 c.depend = ['jenkins_hash', 'hashtable', 'ialloc']
 c.triggers = True

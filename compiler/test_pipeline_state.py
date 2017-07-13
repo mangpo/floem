@@ -460,6 +460,7 @@ class TestPipelineState(unittest.TestCase):
         self.check_live_all(g, [("save", [])])
         self.check_uses_all(g, [("save", ['keylen', 'key'])])
 
+    # TODO: fail
     def test_queue_release(self):
         n_cases = 1
         queue = graph_ir.Queue("smart_queue", 10, 4, n_cases)
@@ -519,7 +520,7 @@ class TestPipelineState(unittest.TestCase):
         #g.print_graphviz()
         deq_release = g.instances["smart_deq_release"]
         prevs = set([name for name, port in deq_release.input2ele["inp"]])
-        self.assertEqual(prevs, set(["smart_deq_classify_inst", "myfork_merge2"]))
+        self.assertEqual(prevs, set(["smart_deq_classify_inst", 'myfork_merge2']))
 
         merges = set()
         myfork_merge2 = g.instances["myfork_merge2"]

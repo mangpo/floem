@@ -12,17 +12,17 @@ class Tuple(State):
 
 class Display(Element):
     def configure(self):
-        self.inp = Input(Pointer(Tuple))
-        self.out = Output(Pointer(Tuple))
+        self.inp = Input(Pointer(Tuple), Uintptr)
+        self.out = Output(Pointer(Tuple), Uintptr)
 
     def impl(self):
         self.run_c(r'''
-        (Tuple* t) = inp();
+        (Tuple* t, uintptr_t addr) = inp();
         if(t) printf("%d\n", t->val);
-        output switch { case t: out(t); }
+        output switch { case t: out(t, addr); }
         ''')
 
-Enq, Deq, Release, Scan = queue2.queue_custom_owner_bit('queue', Tuple, 4, n_cores, Tuple.task,
+Enq, Deq, Release, Scan, ScanRelease = queue2.queue_custom_owner_bit('queue', Tuple, 4, n_cores, Tuple.task,
                                                   blocking=False, enq_atomic=False)
 
 
