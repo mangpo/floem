@@ -39,7 +39,7 @@ def thread_func_create_cancel(func, instance, size=None, interval=None):
         ''' % (func, arg)
 
         func_src = "void *_run_%s(void *tid) {\n" % func + body + "}\n"
-        create = "  int ids_%s[%d];\n" % (func, len(cores))
+        func_src = "int ids_%s[%d];\n" % (func, len(cores))
 
         if not target.is_dpdk_proc(process):
             thread = "pthread_t _thread_%s;\n" % func
@@ -47,6 +47,8 @@ def thread_func_create_cancel(func, instance, size=None, interval=None):
         else:
             thread = ""
             cancel = "  //TODO\n"
+
+        create = ""
         for i in range(len(cores)):
             id = cores[i]
             create += "  ids_%s[%d] = %d;\n" % (func, i, id)
