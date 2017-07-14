@@ -603,6 +603,25 @@ def generate_code_as_header(graph, testing, mode, include=None):
     end_header(graph)
 
 
+def get_compile_command(process, object_files= ''):
+    compilerdir = os.path.dirname(os.path.realpath(__file__)) + "/include"
+    dpdk_libs = target.dpdk_libs if target.is_dpdk_proc(process) else ''
+    L = "-L %s" % target.dpdk_lib if target.is_dpdk_proc(process) else ''
+    cmd = 'gcc -O0 -g -msse4.1 -I %s -I %s %s %s.c %s -o %s %s -pthread -lrt' % \
+          (compilerdir, target.dpdk_include, L, process, object_files, \
+           process, dpdk_libs)
+    return cmd
+
+def get_compile_object_command(process):
+    compilerdir = os.path.dirname(os.path.realpath(__file__)) + "/include"
+    dpdk_libs = target.dpdk_libs if target.is_dpdk_proc(process) else ''
+    L = "-L %s" % target.dpdk_lib if target.is_dpdk_proc(process) else ''
+    cmd = 'gcc -O0 -g -msse4.1 -I %s -I %s %s -c %s.c %s -pthread -lrt' % \
+          (compilerdir, target.dpdk_include, L, process, dpdk_libs)
+    return cmd
+
+
+
 def generate_code_and_compile(graph, testing, mode, include=None, depend=None):
     remove_files(graph, ".c")
     generate_code(graph, ".c", testing, include)
@@ -610,26 +629,12 @@ def generate_code_and_compile(graph, testing, mode, include=None, depend=None):
     generate_internal_triggers(graph, ".c", mode)
     generate_testing_code(graph, testing, ".c")
 
-    compilerdir = os.path.dirname(os.path.realpath(__file__)) + "/include"
-
     extra = ""
     if depend:
         compile_object_file(depend)
-        # for f in depend:
-        #     extra += '%s.o ' % f
-        #     cmd = 'gcc -O0 -g -msse4.1 -I %s -I %s -c %s.c -lrt' % \
-        #             (compilerdir, target.dpdk_include, f)
-        #     #cmd = 'gcc -O3 -msse4.1 -I %s -c %s.c' % (target.dpdk_include, f)
-        #     status = os.system(cmd)
-        #     if not status == 0:
-        #         raise Exception("Compile error: " + cmd)
 
     for process in graph.processes:
-        dpdk_libs = target.dpdk_libs if target.is_dpdk_proc(process) else ''
-        link = "-L %s" % target.dpdk_lib if target.is_dpdk_proc(process) else ''
-        cmd = 'gcc -O0 -g -msse4.1 -I %s -I %s %s -pthread %s.c %s -o %s %s -lrt' % \
-                 (compilerdir, target.dpdk_include, link, process, extra, \
-                process, dpdk_libs)
+        cmd = get_compile_command(process)
         status = os.system(cmd)
         if not status == 0:
             raise Exception("Compile error: " + cmd)
@@ -684,9 +689,7 @@ def generate_code_and_run(graph, testing, mode, expect=None, include=None, depen
 
 def compile_object_file(f):
     if isinstance(f, str):
-        compilerdir = os.path.dirname(os.path.realpath(__file__)) + "/include"
-        cmd = 'gcc -O0 -g -msse4.1 -I %s -I %s -c %s.c -lrt' % \
-                (compilerdir, target.dpdk_include, f)
+        cmd = get_compile_object_command(f)
         print cmd
         status = os.system(cmd)
         if not status == 0:
@@ -700,13 +703,13 @@ def compile_object_file(f):
             s = s.union(set(l))
         compile_object_file([si for si in s])
 
+
 def compile_and_run(name, depend):
     compile_object_file(depend)
     compilerdir = os.path.dirname(os.path.realpath(__file__)) + "/include"
 
     if isinstance(name, str):
-        cmd = 'gcc -O0 -g -msse4.1 -I % s-I %s -pthread %s.c %s -o %s -lrt' % \
-              (compilerdir, target.dpdk_include, name, ' '.join([d + '.o' for d in depend]), name)
+        cmd = get_compile_command(name, ' '.join([d + '.o' for d in depend]))
         print cmd
         status = os.system(cmd)
         if not status == 0:
@@ -721,8 +724,7 @@ def compile_and_run(name, depend):
         for f in name:
             if isinstance(f, tuple):
                 f = f[0]
-            cmd = 'gcc -O0 -g -msse4.1 -I %s -I %s -pthread %s.c %s -o %s -lrt' % \
-                  (compilerdir, target.dpdk_include, f, ' '.join([d + '.o' for d in depend[f]]), f)
+            cmd = get_compile_command(f, ' '.join([d + '.o' for d in depend[f]]))
             print cmd
             status = os.system(cmd)
             if not status == 0:
