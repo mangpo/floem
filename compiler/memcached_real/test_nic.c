@@ -1,4 +1,4 @@
-#include "nic.h"
+#include "dpdk.h"
 #include "iokvs.h"
 
 int main(int argc, char *argv[]) {

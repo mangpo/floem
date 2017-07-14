@@ -603,10 +603,22 @@ def generate_code_as_header(graph, testing, mode, include=None):
     end_header(graph)
 
 
-def get_compile_command(process, object_files= ''):
+def get_compile_command(process, object_files=[]):
     compilerdir = os.path.dirname(os.path.realpath(__file__)) + "/include"
-    dpdk_libs = target.dpdk_libs if target.is_dpdk_proc(process) else ''
-    L = "-L %s" % target.dpdk_lib if target.is_dpdk_proc(process) else ''
+
+    dpdk = False
+    if target.is_dpdk_proc(process):
+        dpdk = True
+    else:
+        for o in object_files:
+            if target.is_dpdk_proc(o):
+                dpdk = True
+                break
+
+    object_files = ' '.join([d + '.o' for d in object_files])
+    dpdk_libs = target.dpdk_libs if dpdk else ''
+    L = "-L %s" % target.dpdk_lib if dpdk else ''
+
     cmd = 'gcc -O0 -g -msse4.1 -I %s -I %s %s %s.c %s -o %s %s -pthread -lrt -std=gnu99' % \
           (compilerdir, target.dpdk_include, L, process, object_files, \
            process, dpdk_libs)
@@ -706,10 +718,9 @@ def compile_object_file(f):
 
 def compile_and_run(name, depend):
     compile_object_file(depend)
-    compilerdir = os.path.dirname(os.path.realpath(__file__)) + "/include"
 
     if isinstance(name, str):
-        cmd = get_compile_command(name, ' '.join([d + '.o' for d in depend]))
+        cmd = get_compile_command(name, depend)
         print cmd
         status = os.system(cmd)
         if not status == 0:
@@ -724,7 +735,7 @@ def compile_and_run(name, depend):
         for f in name:
             if isinstance(f, tuple):
                 f = f[0]
-            cmd = get_compile_command(f, ' '.join([d + '.o' for d in depend[f]]))
+            cmd = get_compile_command(f, depend[f])
             print cmd
             status = os.system(cmd)
             if not status == 0:
