@@ -178,7 +178,7 @@ static struct segment_header *segment_alloc(void)
 
     segsz = settings.segsize;
     data = (void *) ((uintptr_t) seg_base + segsz * i);
-    printf("segment alloc: seg_base = %ld, data = %ld\n", seg_base, data);
+    printf("segment alloc: seg_base = %p, data = %p\n", seg_base, data);
 #ifndef BARRELFISH
     if (mprotect(data, settings.segsize, PROT_READ | PROT_WRITE) != 0) {
         perror("mprotect failed");
@@ -231,7 +231,7 @@ item *segment_item_alloc(uint64_t thisbase, uint64_t seglen, uint64_t* offset, s
 {
     //printf("segment_header = %ld\n", h);
     item *it = (item *) ((uintptr_t) seg_base + thisbase + *offset);
-    printf("item: seg_base = %ld, thisbase = %ld, offset = %ld\n", seg_base, thisbase, *offset);
+    printf("item: seg_base = %p, thisbase = %ld, offset = %ld\n", seg_base, thisbase, *offset);
     size_t avail;
 
     /* Not enough room in this segment */

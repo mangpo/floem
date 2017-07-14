@@ -20,6 +20,8 @@ struct settings {
     size_t segmaxnum;
     /** Size of seqment clean queue */
     size_t segcqsize;
+    /** Local IP */
+    uint32_t localip;
     /** UDP port to listen on */
     uint16_t udpport;
     /** Verbosity for log messages. */
@@ -27,13 +29,18 @@ struct settings {
 };
 
 /** Global settings */
+extern struct settings settings;
+void settings_init(char *argv[]);
+
+/*
 static struct settings settings = {
   .udpport = 11211,
   .verbose = 1,
-  .segsize = 4 * 1024, // 2 * 1024 * 1024
+  .segsize = 2 * 1024 * 1024, //  4 * 1024
   .segmaxnum = 512,
-  .segcqsize = 1024 // 32 * 1024
+  .segcqsize = 32 * 1024 // 1024
 };
+*/
 
 
 /**
@@ -406,7 +413,7 @@ static void cmp_func(int spec_n, iokvs_message **spec_data, int impl_n, iokvs_me
           // TODO: continue
     }
     if(!found) {
-        printf("Impl doesn't have a response for %d, %d, %ld, %ld.\n", ref->mcr.request.opcode, ref->mcr.request.opaque, ref->mcr.request.extlen, ref->mcr.request.bodylen);
+        printf("Impl doesn't have a response for %d, %d, %d, %d.\n", ref->mcr.request.opcode, ref->mcr.request.opaque, ref->mcr.request.extlen, ref->mcr.request.bodylen);
         //printf("Impl doesn't have some responses.");
         exit(-1);
     }

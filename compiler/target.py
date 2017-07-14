@@ -23,4 +23,4 @@ dpdk_libs = "-Wl,--whole-archive " + dpdk_pmds + " -lrte_eal" + \
     " -lrte_mempool -lrte_mempool_ring -lrte_hash -lrte_ring -lrte_kvargs" + \
     " -lrte_ethdev -lrte_mbuf -lrte_pmd_ring -Wl,--no-whole-archive -lm" + \
     " -lpthread -lrt -ldl"
-dpdk_driver_header = ["<dpdk.h>", '"dpdk.h"']
+dpdk_driver_header = ["<dpdk.h>", '"dpdkif.h"']
