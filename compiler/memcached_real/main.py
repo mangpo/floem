@@ -91,8 +91,8 @@ if (m->ether.ether_type == htons(ETHER_TYPE_IPv4) &&
     m->udp.dst_port == htons(11211) &&
     msglen >= sizeof(iokvs_message))
 {
-    blen = ntohl(m->mcr.request.bodylen);
-    keylen = ntohs(m->mcr.request.keylen);
+    uint32_t blen = ntohl(m->mcr.request.bodylen);
+    uint32_t keylen = ntohs(m->mcr.request.keylen);
 
         /* Ensure request is complete */
         if (blen < keylen + m->mcr.request.extlen ||
@@ -499,7 +499,7 @@ output { out(); }
     output switch { case it: out();  else: nothing(); }
                 ''')
 
-        def impl(self):
+        def impl_cavium(self):
             self.run_c(r'''
     size_t totlen = state.pkt->mcr.request.bodylen - state.pkt->mcr.request.extlen;
 
@@ -520,7 +520,7 @@ output { out(); }
 
     state.segfull = full;
 
-    if(it) {
+    if(addr) {
         item *it;
         dma_read((uintptr_t) addr, sizeof(item), (void**) &it);
         it->refcount = my_ntohs(1);
