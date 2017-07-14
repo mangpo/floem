@@ -87,8 +87,6 @@ class ToNet(Element):
         self.run_c(r'''
     (size_t len, void* p, void* buf) = inp();
     dpdk_to_net(len, p, buf);
-
-    if (
         ''' + out)
 
     def impl_cavium(self):
