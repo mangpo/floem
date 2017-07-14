@@ -244,7 +244,9 @@ if (it != NULL) {
   rte_memcpy(m->payload + 4, item_value(it), it->vallen);
 }
 
-output { out(msglen, m, state.pkt_buff); }
+void* pkt_buff = state.pkt_buff;
+
+output { out(msglen, m, pkt_buff); }
             ''')
 
 
@@ -269,7 +271,9 @@ m->mcr.request.keylen = 0;
 m->mcr.request.extlen = 0;
 m->mcr.request.bodylen = 0;
 
-output { out(msglen, m, state.pkt_buff); }
+void* pkt_buff = state.pkt_buff;
+
+output { out(msglen, m, pkt_buff); }
             ''' % self.status)
 
 
