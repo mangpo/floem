@@ -1,5 +1,5 @@
 from dsl2 import *
-import queue_smart2
+import queue_smart2, net_real
 from compiler import Compiler
 
 n_cores = 4
@@ -32,6 +32,7 @@ class iokvs_message(State):
 
 class MyState(State):
     pkt = Field(Pointer(iokvs_message))
+    pkt_buff = Field('void*')
     it = Field('item*', shared='data_region')
     key = Field('void*', copysize='state.pkt->mcr.request.keylen')
     hash = Field(Uint(32))
@@ -59,13 +60,14 @@ class main(Pipeline):
 
     class SaveState(Element):
         def configure(self):
-            self.inp = Input(Pointer(iokvs_message))
+            self.inp = Input(Size, "void *", "void *")
             self.out = Output()
 
         def impl(self):
             self.run_c(r'''
-(iokvs_message* m) = inp();
-state.pkt = m;
+(size_t size, void* pkt, void* buff) = inp();
+state.pkt = (iokvs_message*) pkt;
+state.pkt_buff = buff;
 output { out(); }
             ''')
 
@@ -140,6 +142,47 @@ output { out(); }
 this->core = (this->core + 1) %s %s;
 output { out(this->core); }''' % ('%', n_cores))
 
+            '''
+        hdrs[i]->mcr.request.magic = PROTOCOL_BINARY_RES;
+        hdrs[i]->mcr.request.keylen = 0;
+        hdrs[i]->mcr.request.datatype = PROTOCOL_BINARY_RAW_BYTES;
+        hdrs[i]->mcr.request.status = status[i];
+
+        if (cmds[i] == PROTOCOL_BINARY_CMD_GET) {
+            msglens[i] = sizeof(hdrs[i][0]) + 4;
+            hdrs[i]->mcr.request.extlen = 4;
+            hdrs[i]->mcr.request.bodylen = htonl(4);
+            *((uint32_t *) hdrs[i]->payload) = 0;
+            if (rdits[i] != NULL) {
+                msglens[i] += rdits[i]->vallen;
+                hdrs[i]->mcr.request.bodylen = htonl(4 + rdits[i]->vallen);
+                rte_memcpy(hdrs[i]->payload + 4, item_value(rdits[i]),
+                        rdits[i]->vallen);
+            }
+        } else {
+            msglens[i] = sizeof(hdrs[i][0]);
+            hdrs[i]->mcr.request.extlen = 0;
+            hdrs[i]->mcr.request.bodylen = 0;
+        }
+            '''
+
+'''
+        hdrs[j]->ether.d_addr = hdrs[j]->ether.s_addr;
+        hdrs[j]->ether.s_addr = mymac;
+
+#if !DPDK_IPV6
+        hdrs[j]->ipv4.dst_addr = hdrs[j]->ipv4.src_addr;
+        hdrs[j]->ipv4.src_addr = htonl(MY_IPADDR);
+        hdrs[j]->ipv4.total_length = htons(msglens[i] -
+                offsetof(struct iokvs_message, ipv4));
+        hdrs[j]->ipv4.time_to_live = 64;
+        hdrs[j]->ipv4.hdr_checksum = 0;
+#if DPDK_V4_HWXSUM
+        mbufs[j]->ol_flags |= PKT_TX_IP_CKSUM | PKT_TX_IPV4;
+#else
+        hdrs[j]->ipv4.hdr_checksum = rte_ipv4_cksum(&hdrs[j]->ipv4);
+#endif
+'''
     class PrepareGetResp(Element):
         def configure(self):
             self.inp = Input()
@@ -147,22 +190,38 @@ output { out(this->core); }''' % ('%', n_cores))
 
         def impl(self):
             self.run_c(r'''
-item* it = state.it;
-iokvs_message *m = (iokvs_message *) malloc(sizeof(iokvs_message) + 4 + it->vallen);
-m->mcr.request.opcode = PROTOCOL_BINARY_CMD_GET;
-m->mcr.request.magic = state.pkt->mcr.request.magic;
-m->mcr.request.opaque = state.pkt->mcr.request.opaque;
-m->mcr.request.keylen = 0;
-m->mcr.request.datatype = PROTOCOL_BINARY_RAW_BYTES;
-m->mcr.request.status = 0;
 
+        iokvs_message *m = state.pkt;
+        m->mcr.request.magic = PROTOCOL_BINARY_RES;
+        m->mcr.request.keylen = 0;
+        m->mcr.request.datatype = PROTOCOL_BINARY_RAW_BYTES;
+        m->mcr.request.status = status[i];
+        item* it = state.it;
+        if(it)
+            m->mcr.request.status = PROTOCOL_BINARY_RESPONSE_SUCCESS;
+        else
+            m->mcr.request.status = PROTOCOL_BINARY_RESPONSE_KEY_ENOENT;
+
+m->mcr.request.keylen = 0;
 m->mcr.request.extlen = 4;
 m->mcr.request.bodylen = 4;
 *((uint32_t *)m->payload) = 0;
 if (it != NULL) {
   m->mcr.request.bodylen = 4 + it->vallen;
-  memcpy(m->payload + 4, item_value(it), it->vallen);
+  rte_memcpy(m->payload + 4, item_value(it), it->vallen);
 }
+        m->ether.d_addr = m->ether.s_addr;
+        m->ether.s_addr = mymac; // TODO
+        m->ipv4.dst_addr = m->ipv4.src_addr;
+        m->ipv4.src_addr = htonl(MY_IPADDR); // TODO
+        m->ipv4.total_length = htons(msglens[i] - offsetof(struct iokvs_message, ipv4));  // TODO
+        m->ipv4.time_to_live = 64;
+        m->ipv4.hdr_checksum = 0;
+#if DPDK_V4_HWXSUM
+        mbufs[j]->ol_flags |= PKT_TX_IP_CKSUM | PKT_TX_IPV4; // TODO
+#else
+        hdrs[j]->ipv4.hdr_checksum = rte_ipv4_cksum(&hdrs[j]->ipv4);
+#endif
 
 output { out(m); }
             ''')  # TODO: free
@@ -422,19 +481,24 @@ output { out(); }
         def impl(self):
             self.run_c(r'''output { out(true); }''')
 
-    Inject = create_inject("inject", "iokvs_message*", 1000, "random_request")
-    # Inject = create_inject("inject", "iokvs_message*", 1000, "double_set_request")
-    Probe = create_probe("probe", "iokvs_message*", 1010, "cmp_func")
+    class Drop(Element):
+        def configure(self):
+            self.inp = Input()
+
+        def impl(self):
+            self.run_c("")
 
 
     ########################## program #########################
     def spec(self):
         class nic(InternalLoop):
             def impl(self):
+                from_net = net_real.FromNet('from_net')
                 classifier = main.Classifer()
                 display = main.PrintMsg()
 
-                main.Inject() >> main.SaveState() >> main.GetKey() >> main.JenkinsHash() >> classifier
+                from_net.out >> main.SaveState() >> main.GetKey() >> main.JenkinsHash() >> classifier
+                from_net.nothing >> main.Drop()
                 # get
                 classifier.out_get >> main.HashGet() >> main.PrepareGetResp() >> main.Probe() >> display
                 # set
@@ -458,8 +522,11 @@ output { out(); }
         ######################## NIC Rx #######################
         class nic_rx(InternalLoop):
             def impl(self):
+                from_net = net_real.FromNet('from_net')
                 classifier = main.Classifer()
-                main.Inject() >> main.SaveState() >> main.GetKey() >> main.JenkinsHash() >> main.GetCore() >> classifier
+
+                from_net.out >> main.SaveState() >> main.GetKey() >> main.JenkinsHash() >> main.GetCore() >> classifier
+                from_net.nothing >> main.Drop()
 
                 # get
                 classifier.out_get >> rx_enq.inp[0]
@@ -509,12 +576,13 @@ output { out(); }
         ####################### NIC Tx #######################
         class nic_tx(InternalLoop):
             def impl(self):
+                to_net = net_real.ToNet('to_net')
                 display = main.PrintMsg()
                 main.Scheduler() >> tx_deq
                 # get
-                tx_deq.out[0] >> main.PrepareGetResp() >> main.Probe() >> display
+                tx_deq.out[0] >> main.PrepareGetResp() >> display >> to_net
                 # set
-                tx_deq.out[1] >> main.PrepareSetResp() >> main.Probe() >> display
+                tx_deq.out[1] >> main.PrepareSetResp() >> display >> to_net
                 # full
                 tx_deq.out[2] >> main.AddLogseg()
 

@@ -1,6 +1,15 @@
 #ifndef PROTOCOL_BINARY_H
 #define PROTOCOL_BINARY_H
 
+    #define UDP_HEADER_SIZE 8
+
+    typedef struct {
+      uint16_t req_id;
+      uint16_t seq_id;
+      uint16_t n_data;
+      uint16_t extras;
+    } memcached_udp_header;
+
     /**
      * Definition of the legal "magic" values used in a packet.
      * See section 3.1 Magic byte

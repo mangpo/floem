@@ -15,7 +15,7 @@ class FromNet(Element):
         case data != NULL: out(size, data, buf);
         case data == NULL: nothing();
     }
-        ''')
+        ''')  # TODO: free mbuf when data == NULL?
 
     def impl_cavium(self):
         self.run_c(r'''
