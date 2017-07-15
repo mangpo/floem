@@ -654,7 +654,7 @@ output { out(); }
             def impl(self):
                 self.inp >> rx_deq
                 # get
-                rx_deq.out[0] >> main.HashGet() >> tx_enq.inp[0]
+                rx_deq.out[0] >> main.HashGet() >> tx_enq.inp[0]  # TODO: when hash get returns NULL
                 # set
                 rx_deq.out[1] >> main.HashPut() >> main.Unref() >> tx_enq.inp[1]
                 # full
