@@ -41,6 +41,7 @@ static size_t clean_log(struct item_allocator *ia, bool idle)
 
 void run_app(void *threadid) {
   long tid = (long)threadid;
+  printf("Worker %ld: segmaxnum = %d\n", tid, settings.segmaxnum);
   struct item_allocator ia;
   ialloc_init_allocator(&ia);
   iallocs[tid] = &ia;
@@ -69,10 +70,12 @@ void maintenance()
 }
 
 int main(int argc, char *argv[]) {
+  settings_init(argc, argv);
   init(argv);
   ialloc_init(data_region);
   hasht_init();
   iallocs = calloc(NUM_THREADS, sizeof(*iallocs));
+  printf("main: segmaxnum = %d\n", settings.segmaxnum);
 
   pthread_t threads[NUM_THREADS];
   for(int t=0;t<NUM_THREADS;t++) {
@@ -86,6 +89,7 @@ int main(int argc, char *argv[]) {
 
   printf("Starting maintenance\n");
   maintenance();
+  //while(1);
 
   return 0;
 }

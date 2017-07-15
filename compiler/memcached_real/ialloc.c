@@ -161,6 +161,7 @@ static struct segment_header *segment_alloc(void)
     i = seg_alloced;
     if (i >= settings.segmaxnum) {
         rte_spinlock_unlock(&segalloc_lock);
+	printf("i = %d >= settings.segmaxnum (1)\n", i);
         return NULL;
     }
 
@@ -170,6 +171,7 @@ static struct segment_header *segment_alloc(void)
     i = seg_alloced;
     if (i >= settings.segmaxnum) {
         rte_spinlock_unlock(&segalloc_lock);
+	printf("i = %d >= settings.segmaxnum (2)\n", i);
         return NULL;
     }
 
@@ -178,14 +180,18 @@ static struct segment_header *segment_alloc(void)
 
     segsz = settings.segsize;
     data = (void *) ((uintptr_t) seg_base + segsz * i);
-    printf("segment alloc: seg_base = %p, data = %p\n", seg_base, data);
-#ifndef BARRELFISH
+    printf("segment alloc: seg_base = %p, data = %p, i = %d\n", seg_base, data, i);
+    //#ifndef BARRELFISH
+#ifdef BARRELFISH
     if (mprotect(data, settings.segsize, PROT_READ | PROT_WRITE) != 0) {
+	printf("mprotect failed\n");
+	fflush(stdout);
         perror("mprotect failed");
         /* TODO: check what to do here */
         return NULL;
     }
 #endif
+    fflush(stdout);
 
     h = malloc(sizeof(*h));
     if (h == NULL) {
@@ -324,10 +330,10 @@ item *segment_item_alloc_pointer(struct segment_header *h, size_t total)
 void ialloc_init_allocator(struct item_allocator *ia)
 {
     struct segment_header *h;
-
     memset(ia, 0, sizeof(*ia));
 
     if ((h = segment_alloc()) == NULL) {
+      printf("Allocating segment failed (1)\n");
         fprintf(stderr, "Allocating segment failed\n");
         abort();
     }
@@ -336,7 +342,9 @@ void ialloc_init_allocator(struct item_allocator *ia)
     ia->oldest = h;
 
     if ((h = segment_alloc()) == NULL) {
+      printf("Allocating segment failed (2)\n");
         fprintf(stderr, "Allocating reserved segment failed\n");
+	fflush(stdout);
         abort();
     }
     h->next = NULL;
