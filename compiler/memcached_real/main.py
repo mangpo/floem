@@ -163,11 +163,17 @@ state.hash = jenkins_hash(state.key, state.pkt->mcr.request.keylen);
 output { out(); }
             ''')
 
-    class HashGet(ElementOneInOut):
+    class HashGet(Element):
+        def configure(self):
+            self.inp = Input()
+            self.out = Output()
+            self.null = Output()
+
         def impl(self):
             self.run_c(r'''
-state.it = hasht_get(state.key, state.pkt->mcr.request.keylen, state.hash);
-output { out(); }
+Item* it = hasht_get(state.key, state.pkt->mcr.request.keylen, state.hash);
+state.it = it;
+output switch { case it: out(); else: null(); }
             ''')
 
     class HashPut(ElementOneInOut):
@@ -192,29 +198,6 @@ output { out(); }
 this->core = (this->core + 1) %s %s;
 output { out(this->core); }''' % ('%', n_cores))
 
-            '''
-        hdrs[i]->mcr.request.magic = PROTOCOL_BINARY_RES;
-        hdrs[i]->mcr.request.keylen = 0;
-        hdrs[i]->mcr.request.datatype = PROTOCOL_BINARY_RAW_BYTES;
-        hdrs[i]->mcr.request.status = status[i];
-
-        if (cmds[i] == PROTOCOL_BINARY_CMD_GET) {
-            msglens[i] = sizeof(hdrs[i][0]) + 4;
-            hdrs[i]->mcr.request.extlen = 4;
-            hdrs[i]->mcr.request.bodylen = htonl(4);
-            *((uint32_t *) hdrs[i]->payload) = 0;
-            if (rdits[i] != NULL) {
-                msglens[i] += rdits[i]->vallen;
-                hdrs[i]->mcr.request.bodylen = htonl(4 + rdits[i]->vallen);
-                rte_memcpy(hdrs[i]->payload + 4, item_value(rdits[i]),
-                        rdits[i]->vallen);
-            }
-        } else {
-            msglens[i] = sizeof(hdrs[i][0]);
-            hdrs[i]->mcr.request.extlen = 0;
-            hdrs[i]->mcr.request.bodylen = 0;
-        }
-            '''
 
     class PrepareGetResp(Element):
         def configure(self):
@@ -229,25 +212,43 @@ output { out(this->core); }''' % ('%', n_cores))
         m->mcr.request.magic = PROTOCOL_BINARY_RES;
         m->mcr.request.datatype = PROTOCOL_BINARY_RAW_BYTES;
         item* it = state.it;
-        if(it)
-            m->mcr.request.status = htons(PROTOCOL_BINARY_RESPONSE_SUCCESS);
-        else
-            m->mcr.request.status = htons(PROTOCOL_BINARY_RESPONSE_KEY_ENOENT);
+        m->mcr.request.status = htons(PROTOCOL_BINARY_RESPONSE_SUCCESS);
 
 m->mcr.request.keylen = 0;
 m->mcr.request.extlen = 4;
 m->mcr.request.bodylen = htonl(4);
 *((uint32_t *)m->payload) = 0;
-if (it != NULL) {
-  msglen += it->vallen;
-  m->mcr.request.bodylen = htonl(4 + it->vallen);
-  rte_memcpy(m->payload + 4, item_value(it), it->vallen);
-}
+msglen += it->vallen;
+m->mcr.request.bodylen = htonl(4 + it->vallen);
+rte_memcpy(m->payload + 4, item_value(it), it->vallen);
 
 void* pkt_buff = state.pkt_buff;
 
 output { out(msglen, m, pkt_buff); }
             ''')
+
+    class PrepareGetNullResp(Element):
+        def configure(self):
+            self.inp = Input()
+            self.out = Output(Size, Pointer(iokvs_message), 'void*')
+
+        def impl(self):
+            self.run_c(r'''
+            iokvs_message *m = state.pkt;
+            int msglen = sizeof(iokvs_message) + 4;
+
+            m->mcr.request.magic = PROTOCOL_BINARY_RES;
+            m->mcr.request.datatype = PROTOCOL_BINARY_RAW_BYTES;
+            m->mcr.request.status = htons(PROTOCOL_BINARY_RESPONSE_KEY_ENOENT);
+
+    m->mcr.request.keylen = 0;
+    m->mcr.request.extlen = 4;
+    m->mcr.request.bodylen = htonl(4);
+    *((uint32_t *)m->payload) = 0;
+    void* pkt_buff = state.pkt_buff;
+
+    output { out(msglen, m, pkt_buff); }
+                ''')
 
 
     class PrepareSetResp(Element):
@@ -397,6 +398,12 @@ output { out(); }
 
     class NewSegment(ElementOneInOut):
         this = Persistent(ItemAllocators)
+        def configure(self):
+            self.inp = Input()
+            self.out = Output()
+            self.null = Output()
+
+
         def states(self): self.this = main.item_allocators
 
         def impl(self):
@@ -404,13 +411,14 @@ output { out(); }
 struct segment_header* segment = new_segment(this->ia[state.core], false);
 if(segment == NULL) {
     printf("Fail to allocate new segment.\n");
-    exit(-1);
+    //exit(-1);
+} else {
+    state.segbase = get_pointer_offset(segment->data);
+    state.seglen = segment->size;
 }
-state.segbase = get_pointer_offset(segment->data);
-state.seglen = segment->size;
 ialloc_nicsegment_full(state.segfull);
-output { out(); }
-            ''')
+output switch { case segment: out(); else: null(); }
+            ''')  # TODO: maybe we should exit if segment = NULL?
 
     segments = segments_holder()
 
@@ -440,6 +448,7 @@ output { out(); }
         this->last = this;
     }
 
+    if(1) {  // TODO: change to 0 for performance
     int count = 1;
     segments_holder* p = this;
     while(p->next != NULL) {
@@ -448,6 +457,7 @@ output { out(); }
     }
     printf("addlog: new->segbase = %ld, cur->segbase = %ld\n", state.segbase, this->segbase);
     printf("logseg count = %d\n", count);
+    }
             ''')
 
     ######################## item ########################
@@ -604,7 +614,7 @@ output { out(); }
 
         # Queue
         RxEnq, RxDeq, RxScan = queue_smart2.smart_queue("rx_queue", 10000, n_cores, 3)
-        TxEnq, TxDeq, TxScan = queue_smart2.smart_queue("tx_queue", 10000, n_cores, 3, clean="enq")
+        TxEnq, TxDeq, TxScan = queue_smart2.smart_queue("tx_queue", 10000, n_cores, 4, clean="enq")
         rx_enq = RxEnq()
         rx_deq = RxDeq()
         tx_enq = TxEnq()
@@ -627,6 +637,7 @@ output { out(); }
 
                 # get
                 classifier.out_get >> rx_enq.inp[0]
+
                 # set
                 get_item = main.GetItem()
                 classifier.out_set >> get_item
@@ -653,12 +664,22 @@ output { out(); }
 
             def impl(self):
                 self.inp >> rx_deq
+
                 # get
-                rx_deq.out[0] >> main.HashGet() >> tx_enq.inp[0]
+                hash_get = main.HashGet()
+                rx_deq.out[0] >> hash_get
+                hash_get.out >> tx_enq.inp[0]
+                hash_get.null >> tx_enq.inp[3]
+
                 # set
                 rx_deq.out[1] >> main.HashPut() >> main.Unref() >> tx_enq.inp[1]
+
                 # full
-                rx_deq.out[2] >> main.NewSegment() >> tx_enq.inp[2]
+                new_segment = main.NewSegment()
+                rx_deq.out[2] >> new_segment
+                new_segment.out >> tx_enq.inp[2]
+                new_segment.null >> main.Drop()
+
 
         class init_segment(API):
             def configure(self):
@@ -681,6 +702,7 @@ output { out(); }
 
                 tx_scan.out[1] >> clean
                 tx_scan.out[2] >> clean
+                tx_scan.out[3] >> clean
                 clean >> self.out
 
         ####################### NIC Tx #######################
@@ -690,8 +712,11 @@ output { out(); }
                 prepare_header = main.PrepareHeader()
                 display = main.PrintMsg()
                 main.Scheduler() >> tx_deq
+
                 # get
                 tx_deq.out[0] >> main.PrepareGetResp() >> prepare_header
+                tx_deq.out[3] >> main.PrepareGetNullResp() >> prepare_header
+
                 # set
                 set_response = main.PrepareSetResp(configure=['PROTOCOL_BINARY_RESPONSE_SUCCESS'])
                 tx_deq.out[1] >> set_response >> prepare_header
