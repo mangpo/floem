@@ -116,7 +116,7 @@ static q_buffer enqueue_alloc(circular_queue* q, size_t len) {
     eqe->flags = 0;
     //printf("enq_alloc (before): offset = %ld, len = %ld, mod = %ld\n", eqe_off, len, qlen);
     q->offset = (eqe_off + len) % qlen;
-    //printf("enq_alloc: queue = %ld, entry = %ld, len = %ld, offset = %ld\n", q->queue, eqe, eqe->len, q->offset);
+    printf("enq_alloc: queue = %p, entry = %p, len = %ld, offset = %ld\n", q->queue, eqe, eqe->len, q->offset);
     q_buffer buff = { eqe, 0 };
     return buff;
 }
@@ -125,7 +125,7 @@ static void enqueue_submit(q_buffer buff)
 {
     q_entry *e = buff.entry;
     e->flags |= FLAG_OWN;
-    //printf("enq_submit: entry = %ld, len = %d\n", e, e->len);
+    printf("enq_submit: entry = %p, len = %ld\n", e, e->len);
     //__sync_fetch_and_or(&e->flags, FLAG_OWN);
     __sync_synchronize();
 }

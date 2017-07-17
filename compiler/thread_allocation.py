@@ -161,8 +161,9 @@ class ThreadAllocator:
         for port in instance.element.inports:
             if port.name in instance.input2ele:
                 port_list = instance.input2ele[port.name]
-                name_list = [prev_name for (prev_name, prev_port) in port_list]
-                thread_list = [self.instances[prev_name].thread for prev_name in name_list]
+                inst_list = [self.instances[prev_name] for (prev_name, prev_port) in port_list]
+                name_list = [inst.name for inst in inst_list]
+                thread_list = [inst.thread for inst in inst_list]
                 if len(set(thread_list)) > 1:
                     raise Exception("Port '%s' of element instance '%s' is connected to multiple instances %s that run on different threads."
                                     % (port.name, instance.name, name_list))

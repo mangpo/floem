@@ -619,16 +619,16 @@ def get_compile_command(process, object_files=[]):
     dpdk_libs = target.dpdk_libs if dpdk else ''
     L = "-L %s" % target.dpdk_lib if dpdk else ''
 
-    cmd = 'gcc -O0 -g -msse4.1 -I %s -I %s %s %s.c %s -o %s %s -pthread -lrt -std=gnu99' % \
+    cmd = 'gcc -O0 -g -msse4.1 -I %s -I %s %s %s.c %s -o %s %s -pthread -lrt' % \
           (compilerdir, target.dpdk_include, L, process, object_files, \
-           process, dpdk_libs)
+           process, dpdk_libs) # -std=gnu99
     return cmd
 
 def get_compile_object_command(process):
     compilerdir = os.path.dirname(os.path.realpath(__file__)) + "/include"
     dpdk_libs = target.dpdk_libs if target.is_dpdk_proc(process) else ''
     L = "-L %s" % target.dpdk_lib if target.is_dpdk_proc(process) else ''
-    cmd = 'gcc -O0 -g -msse4.1 -I %s -I %s %s -c %s.c %s -pthread -lrt -std=gnu99' % \
+    cmd = 'gcc -O0 -g -msse4.1 -I %s -I %s %s -c %s.c %s -pthread -lrt' % \
           (compilerdir, target.dpdk_include, L, process, dpdk_libs)
     return cmd
 

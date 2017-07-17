@@ -30,7 +30,7 @@ struct settings {
 
 /** Global settings */
 extern struct settings settings;
-void settings_init(char *argv[]);
+void settings_init(int argc, char *argv[]);
 
 /*
 static struct settings settings = {

@@ -19,6 +19,12 @@ def add_release_entry_port(g, instance):
 
 def merge_as_join(g, nodes, name, prefix):
     n = len(nodes)
+    threads = set([inst.thread for inst in nodes])
+    if len(set(threads)) > 1:
+        raise Exception(
+            "Cannot create a merge node to release queue entries for elements that run on different threads: %s"
+            % nodes)
+
     join = Element("merge%d" % n, [Port("in" + str(i), []) for i in range(n)], [], r'''output { }''')
     new_inst_name = name + "_merge%d" % n
     g.addElement(join)
@@ -34,11 +40,19 @@ def merge_as_join(g, nodes, name, prefix):
         g.connect(instance.name, new_inst_name, "release", "in" + str(i))
         i += 1
 
-    return g.instances[new_inst_name]
+    node = g.instances[new_inst_name]
+    node.thread = [t for t in threads][0]
+
+    return node
 
 
 def merge_as_no_join(g, nodes, name, prefix):
-    n = len(nodes)
+    threads = set([inst.thread for inst in nodes])
+    if len(set(threads)) > 1:
+        raise Exception(
+            "Cannot create a merge node to release queue entries for elements that run on different threads: %s"
+            % nodes)
+
     join = Element("merge", [Port("in", [])], [], r'''output { }''')
     new_inst_name = name + "_merge"
     g.addElement(join)
@@ -50,9 +64,12 @@ def merge_as_no_join(g, nodes, name, prefix):
 
     for instance in nodes:
         add_release_port(g, instance)
-        g.connect(instance.name, new_inst_name)
+        g.connect(instance.name, new_inst_name, 'release')
 
-    return g.instances[new_inst_name]
+    node = g.instances[new_inst_name]
+    node.thread = [t for t in threads][0]
+
+    return node
 
 
 def handle_either_or_node(instance, g, lives, ans, prefix):
