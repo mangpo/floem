@@ -17,7 +17,7 @@ def add_release_entry_port(g, instance):
     instance.element = new_element
 
 
-def merge_as_join(g, nodes, name, prefix):
+def merge_as_join(g, nodes, name, prefix, lives):
     n = len(nodes)
     threads = set([inst.thread for inst in nodes])
     if len(set(threads)) > 1:
@@ -31,7 +31,7 @@ def merge_as_join(g, nodes, name, prefix):
     g.newElementInstance(join.name, prefix + new_inst_name, [])
     instance = g.instances[prefix + new_inst_name]
     instance.liveness = set()
-    instance.uses = set()
+    instance.uses = lives
     instance.extras = set()
 
     i = 0
@@ -46,7 +46,7 @@ def merge_as_join(g, nodes, name, prefix):
     return node
 
 
-def merge_as_no_join(g, nodes, name, prefix):
+def merge_as_no_join(g, nodes, name, prefix, lives):
     threads = set([inst.thread for inst in nodes])
     if len(set(threads)) > 1:
         raise Exception(
@@ -59,7 +59,7 @@ def merge_as_no_join(g, nodes, name, prefix):
     g.newElementInstance(join.name, prefix + new_inst_name, [])
     instance = g.instances[prefix + new_inst_name]
     instance.liveness = set()
-    instance.uses = set()
+    instance.uses = lives
     instance.extras = set()
 
     for instance in nodes:
@@ -77,13 +77,15 @@ def handle_either_or_node(instance, g, lives, ans, prefix):
     for next_name, next_port in instance.output2ele.values():
         ret = live_leaf_nodes(next_name, g, lives, ans, prefix)
         if len(ret) == 0:
-            merge_nodes.append(g.instances[next_name])
+            inst = g.instances[next_name]
+            inst.uses = lives
+            merge_nodes.append(inst)
         elif len(ret) == 1:
             merge_nodes += [x for x in ret]
         else:
             merge_nodes.append(merge_as_join(g, ret, next_name, prefix))
 
-    return merge_as_no_join(g, merge_nodes, instance.name, prefix)
+    return merge_as_no_join(g, merge_nodes, instance.name, prefix, lives)
 
 
 def live_leaf_nodes(name, g, lives, ans, prefix):
@@ -125,7 +127,7 @@ def get_node_before_release(name, g, lives, prefix, vis):
     elif len(ret) == 1:
         node = [x for x in ret][0]
     else:
-        node = merge_as_join(g, ret, name, prefix)
+        node = merge_as_join(g, ret, name, prefix, lives)
 
     if node not in vis:
         add_release_entry_port(g, node)
