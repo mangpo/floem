@@ -144,6 +144,7 @@ static void dpdk_from_net(size_t *sz, void **pdata, void **pbuf)
       if (++idx >= num) {
         cache_count = 0;
       }
+      cache_index = idx;
       goto out;
     }
 
