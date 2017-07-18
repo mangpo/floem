@@ -154,7 +154,7 @@ output { out(); }''')
             self.run_c(r'''
 int core = state.hash %s %d;;
 state.core = core;
-//printf("hash = %s, core = %s\n", state.hash, core);
+printf("hash = %s, core = %s\n", state.hash, core);
             output { out(); }''' % ('%', n_cores, '%d', '%d'))
 
     ######################## hash ########################
@@ -344,6 +344,7 @@ output { out(msglen, m, pkt_buff); }
         def configure(self):
             self.inp = Input("void *", "void *")
             self.out = Output(Size, "void *", "void *")
+            self.drop = Output("void *", "void *")
 
         def impl(self):
             self.run_c(r'''
@@ -360,7 +361,7 @@ output { out(msglen, m, pkt_buff); }
     {
         printf("Responding to ARP\n");
         resp = 1;
-        struct ether_addr mymac = m->ether.d_addr;
+        struct ether_addr mymac = msg->ether.d_addr;
         msg->ether.d_addr = msg->ether.s_addr;
         msg->ether.s_addr = mymac; // TODO
         arp->arp_op = htons(ARP_OP_REPLY);
@@ -374,10 +375,13 @@ output { out(msglen, m, pkt_buff); }
 /*
         mbuf->ol_flags = PKT_TX_L4_NO_CKSUM;
         mbuf->tx_offload = 0;
-/*
+*/
     }
 
-    output switch { case resp: out(sizeof(struct ether_hdr) + sizeof(struct arp_hdr), pkt, buff); }
+    output switch { 
+      case resp: out(sizeof(struct ether_hdr) + sizeof(struct arp_hdr), pkt, buff); 
+            else: drop(pkt, buff);
+    }
             ''')
 
 
@@ -392,12 +396,12 @@ output { out(msglen, m, pkt_buff); }
 iokvs_message* m = (iokvs_message*) pkt;
 uint8_t *val = m->payload + 4;
 uint8_t opcode = m->mcr.request.opcode;
-/*
+
 if(opcode == PROTOCOL_BINARY_CMD_GET)
     printf("GET -- status: %d, len: %d, val:%d\n", m->mcr.request.status, m->mcr.request.bodylen, val[0]);
 else if (opcode == PROTOCOL_BINARY_CMD_SET)
     printf("SET -- status: %d, len: %d\n", m->mcr.request.status, m->mcr.request.bodylen);
-*/
+
 
 output { out(msglen, (void*) m, buff); }
     ''')
@@ -691,7 +695,11 @@ output switch { case segment: out(); else: null(); }
                 filter_full >> rx_enq.inp[2]
 
                 # exception
-                check_packet.slowpath >> from_net_free  # TODO HandleArp
+                #check_packet.slowpath >> from_net_free
+                arp = main.HandleArp()
+                check_packet.slowpath >> arp
+                arp.out >> to_net
+                arp.drop >> from_net_free
                 check_packet.drop >> from_net_free
 
 
