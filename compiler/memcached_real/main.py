@@ -25,6 +25,10 @@ class protocol_binary_request_header(State):
 
 
 class iokvs_message(State):
+    ether = Field('struct ether_hdr')
+    ipv4 = Field('struct ipv4_hdr')
+    dup = Field('struct udp_hdr')
+    mcudp = Field('memcached_udp_header')
     mcr = Field(protocol_binary_request_header)
     payload = Field(Array(Uint(8)))
 
@@ -143,8 +147,6 @@ output switch{
         def impl(self):
             self.run_c(r'''
 state.key = state.pkt->payload + state.pkt->mcr.request.extlen;
-//state.keylen = state.pkt->mcr.request.keylen;
-//printf("keylen = %s\n", len);
 output { out(); }''')
 
     class GetCore(ElementOneInOut):
@@ -158,7 +160,7 @@ output { out(); }''' % ('%', n_cores))
     class JenkinsHash(ElementOneInOut):
         def impl(self):
             self.run_c(r'''
-state.hash = jenkins_hash(state.key, state.pkt->mcr.request.keylen);
+state.hash = jenkins_hash(state.key, htons(state.pkt->mcr.request.keylen));
 //printf("hash = %d\n", hash);
 output { out(); }
             ''')
@@ -171,7 +173,7 @@ output { out(); }
 
         def impl(self):
             self.run_c(r'''
-Item* it = hasht_get(state.key, state.pkt->mcr.request.keylen, state.hash);
+item* it = hasht_get(state.key, htons(state.pkt->mcr.request.keylen), state.hash);
 state.it = it;
 output switch { case it: out(); else: null(); }
             ''')
@@ -208,6 +210,7 @@ output { out(this->core); }''' % ('%', n_cores))
             self.run_c(r'''
         iokvs_message *m = state.pkt;
         int msglen = sizeof(iokvs_message) + 4;
+        uint32_t vallen = nic_htonl(it->vallen);
 
         m->mcr.request.magic = PROTOCOL_BINARY_RES;
         m->mcr.request.datatype = PROTOCOL_BINARY_RAW_BYTES;
@@ -218,9 +221,9 @@ m->mcr.request.keylen = 0;
 m->mcr.request.extlen = 4;
 m->mcr.request.bodylen = htonl(4);
 *((uint32_t *)m->payload) = 0;
-msglen += it->vallen;
-m->mcr.request.bodylen = htonl(4 + it->vallen);
-rte_memcpy(m->payload + 4, item_value(it), it->vallen);
+msglen += vallen;
+m->mcr.request.bodylen = htonl(4 + vallen);
+rte_memcpy(m->payload + 4, item_value(it), vallen);
 
 void* pkt_buff = state.pkt_buff;
 
@@ -276,8 +279,6 @@ void* pkt_buff = state.pkt_buff;
 
 output { out(msglen, m, pkt_buff); }
             ''' % self.status)
-
-
 
 
     class PrepareHeader(Element):
@@ -360,9 +361,9 @@ iokvs_message* m = (iokvs_message*) pkt;
 uint8_t *val = m->payload + 4;
 uint8_t opcode = m->mcr.request.opcode;
 if(opcode == PROTOCOL_BINARY_CMD_GET)
-    printf("GET -- id: %d, len: %d, val:%d\n", m->mcr.request.opaque, m->mcr.request.bodylen, val[0]);
+    printf("GET -- status: %d, len: %d, val:%d\n", htons(m->mcr.request.status), htonl(m->mcr.request.bodylen), val[0]);
 else if (opcode == PROTOCOL_BINARY_CMD_SET)
-    printf("SET -- id: %d, len: %d\n", m->mcr.request.opaque, m->mcr.request.bodylen);
+    printf("SET -- status: %d, len: %d\n", htons(m->mcr.request.status), htonl(m->mcr.request.bodylen));
 
 output { out(msglen, (void*) m, buff); }
     ''')
@@ -475,7 +476,7 @@ output switch { case segment: out(); else: null(); }
 
         def impl(self):
             self.run_c(r'''
-    size_t totlen = state.pkt->mcr.request.bodylen - state.pkt->mcr.request.extlen;
+    size_t totlen = htonl(state.pkt->mcr.request.bodylen) - state.pkt->mcr.request.extlen;
 
     uint64_t full = 0;
     printf("item_alloc: segbase = %ld\n", this->segbase);
@@ -496,12 +497,13 @@ output switch { case segment: out(); else: null(); }
 
     if(it) {
         it->refcount = 1;
+        uint16_t keylen = htons(state.pkt->mcr.request.keylen);
 
-        printf("get_item id: %d, keylen: %ld, hash: %d, totlen: %ld, item: %ld\n",
-            state.pkt->mcr.request.opaque, state.pkt->mcr.request.keylen, state.hash, totlen, it);
+        printf("get_item id: %d, keylen: %ld, totlen: %ld, item: %ld\n",
+            state.pkt->mcr.request.opaque, htons(state.pkt->mcr.request.keylen), totlen, it);
         it->hv = state.hash;
-        it->vallen = totlen - state.pkt->mcr.request.keylen;
-        it->keylen = state.pkt->mcr.request.keylen;
+        it->vallen = totlen - keylen;
+        it->keylen = keylen;
         memcpy(item_key(it), state.key, totlen);
         state.it = it;
     }
@@ -533,13 +535,13 @@ output switch { case segment: out(); else: null(); }
     if(addr) {
         item *it;
         dma_read((uintptr_t) addr, sizeof(item), (void**) &it);
-        it->refcount = my_ntohs(1);
+        it->refcount = nic_ntohs(1);
 
-        printf("get_item id: %d, keylen: %ld, hash: %d, totlen: %ld, item: %ld\n",
-            state.pkt->mcr.request.opaque, state.pkt->mcr.request.keylen, state.hash, totlen, it);
-        it->hv = my_ntohl(state.hash);
-        it->vallen = my_ntohl(totlen - state.pkt->mcr.request.keylen);
-        it->keylen = my_ntohs(state.pkt->mcr.request.keylen);
+        printf("get_item keylen: %ld, totlen: %ld, item: %ld\n",
+            state.pkt->mcr.request.keylen, totlen, it);
+        it->hv = nic_ntohl(state.hash);
+        it->vallen = nic_ntohl(totlen - state.pkt->mcr.request.keylen);
+        it->keylen = nic_ntohs(state.pkt->mcr.request.keylen);
         memcpy(item_key(it), state.key, totlen);
         dma_write((uintptr_t) addr, sizeof(item) + totlen, it);
         dma_free(it);
@@ -556,8 +558,8 @@ output switch { case segment: out(); else: null(); }
 
     item *it = (item *) malloc(sizeof(item) + totlen);
 
-    //printf("get_item id: %d, keylen: %ld, hash: %d, totlen: %ld, item: %ld\n",
-    //         state.pkt->mcr.request.opaque, state.pkt->mcr.request.keylen, state.hash, totlen, it);
+    //printf("get_item id: %d, keylen: %ld, totlen: %ld, item: %ld\n",
+    //         state.pkt->mcr.request.opaque, state.pkt->mcr.request.keylen, totlen, it);
     it->hv = state.hash;
     it->vallen = totlen - state.pkt->mcr.request.keylen;
     it->keylen = state.pkt->mcr.request.keylen;

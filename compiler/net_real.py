@@ -98,6 +98,7 @@ class ToNet(Element):
     network_send(len, p, 2560);
         ''' + out)
 
+
 class NetAllocFree(Element):
     def configure(self):
         self.inp = Input("void *", "void *")  # packet, buffer
@@ -115,3 +116,15 @@ class NetAllocFree(Element):
     free(p);
         ''')
 
+
+class HTON(Element):
+    def configure(self, state_name):
+        self.inp = Input(Size, "void *", "void *")
+        self.out = Output(Size, "void *", "void *")
+        self.special = ('hton', state_name)
+
+    def impl(self):
+        self.run_c(r'''
+        (size_t size, void* pkt, void* buf) = inp();
+        output { out(size, pkt, buf); }
+        ''')

@@ -223,4 +223,22 @@ static void dpdk_to_net(size_t size, void *data, void *buf)
     }
 }
 
+#define nic_htons(x) x
+#define nic_ntohs(x) x
+#define nic_htonl(x) x
+#define nic_ntohl(x) x
+#define nic_htonp(x) x
+#define nic_ntohp(x) x
+
+inline uint64_t htonp(uint64_t x)
+{
+  uint8_t *s = (uint8_t *)&x;
+  return (uint64_t)((uint64_t) s[7] << 56 | (uint64_t) s[6] << 48 | (uint64_t) s[5] << 40 | (uint64_t) s[4] << 32 |
+		    (uint64_t) s[3] << 24 | (uint64_t) s[2] << 16 | (uint64_t) s[1] << 8 | s[0]);
+}
+
+inline uint64_t ntohp(uint64_t x) {
+  return nic_htonp(x);
+}
+
 #endif /* ndef DPDK_H_ */

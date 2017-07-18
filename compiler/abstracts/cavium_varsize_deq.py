@@ -46,7 +46,7 @@ class main(Pipeline):
             self.run_c(r'''
             int* x;
             dma_read((uintptr_t) state.p, sizeof(int), (void**) &x);
-            printf("%d %d %d %d\n", state.keylen, state.key[0], state.key[state.keylen-1], my_htonl(*x));
+            printf("%d %d %d %d\n", state.keylen, state.key[0], state.key[state.keylen-1], nic_htonl(*x));
             fflush(stdout);
             dma_free(x);
             ''')

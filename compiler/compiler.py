@@ -5,7 +5,7 @@ import workspace
 import pipeline_state
 import join_handling
 import empty_port
-
+import hton
 
 class Compiler:
     def __init__(self, *pipelines):
@@ -65,6 +65,7 @@ class Compiler:
             original.merge(g)
 
         join_handling.join_and_resource_annotation_pass(original, self.resource, self.remove_unused)
+        hton.hton_pass(original)
 
         return original
 

@@ -113,9 +113,9 @@ def need_byte_reverse(g, t1, t2):
 def get_size2convert(g, enq_thread, deq_thread):
     byte_reverse = need_byte_reverse(g, enq_thread, deq_thread)
     if byte_reverse:
-        htons = "my_htons"
-        htonl = "my_htonl"
-        htonp = "my_htonp"
+        htons = "nic_htons"
+        htonl = "nic_htonl"
+        htonp = "nic_htonp"
     else:
         htons = ""
         htonl = ""

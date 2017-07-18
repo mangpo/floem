@@ -35,9 +35,9 @@ class Counter(Element):
     int *count;
     dma_read(this, sizeof(int), (void **) &count);
 
-    int local = my_htonl(*count);
+    int local = nic_htonl(*count);
     local++;
-    *count = my_ntohl(local);
+    *count = nic_ntohl(local);
 
     dma_write(this, sizeof(int), count);
 

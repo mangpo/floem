@@ -58,7 +58,7 @@ class main(Pipeline):
     void* addr = &p[Count0->count];
     int* x;
     dma_buf_alloc((void**) &x);
-    *x = my_ntohl(100 + Count0->count);
+    *x = nic_ntohl(100 + Count0->count);
     dma_write((uintptr_t) addr, sizeof(int), x);
     dma_free(x);
     _state->p = addr;

@@ -23,35 +23,35 @@
 #include "cvmcs-dma.h"
 
 
-inline uint16_t my_htons(uint16_t x)
+inline uint16_t nic_htons(uint16_t x)
 {
   uint8_t *s = (uint8_t *)&x;
   return (uint16_t)(s[1] << 8 | s[0]);
 }
 
-inline uint16_t my_ntohs(uint16_t x) {
-  return my_htons(x);
+inline uint16_t nic_ntohs(uint16_t x) {
+  return nic_htons(x);
 }
 
-inline uint32_t my_htonl(uint32_t x)
+inline uint32_t nic_htonl(uint32_t x)
 {
   uint8_t *s = (uint8_t *)&x;
   return (uint32_t)(s[3] << 24 | s[2] << 16 | s[1] << 8 | s[0]);
 }
 
-inline uint32_t my_ntohl(uint32_t x) {
-  return my_htonl(x);
+inline uint32_t nic_ntohl(uint32_t x) {
+  return nic_htonl(x);
 }
 
-inline uint64_t my_htonp(uint64_t x)
+inline uint64_t nic_htonp(uint64_t x)
 {
   uint8_t *s = (uint8_t *)&x;
   return (uint64_t)((uint64_t) s[7] << 56 | (uint64_t) s[6] << 48 | (uint64_t) s[5] << 40 | (uint64_t) s[4] << 32 |
 		    (uint64_t) s[3] << 24 | (uint64_t) s[2] << 16 | (uint64_t) s[1] << 8 | s[0]);
 }
 
-inline uint64_t my_ntohp(uint64_t x) {
-  return my_htonp(x); 
+inline uint64_t nic_ntohp(uint64_t x) {
+  return nic_htonp(x);
 }
 
 
