@@ -2,7 +2,7 @@ from dsl2 import *
 import queue_smart2, net_real
 from compiler import Compiler
 
-n_cores = 4
+n_cores = 10
 
 class protocol_binary_request_header_request(State):
     magic = Field(Uint(8))
@@ -154,7 +154,7 @@ output { out(); }''')
             self.run_c(r'''
 int core = state.hash %s %d;;
 state.core = core;
-printf("hash = %s, core = %s\n", state.hash, core);
+//printf("hash = %s, core = %s\n", state.hash, core);
             output { out(); }''' % ('%', n_cores, '%d', '%d'))
 
     ######################## hash ########################
@@ -392,10 +392,12 @@ output { out(msglen, m, pkt_buff); }
 iokvs_message* m = (iokvs_message*) pkt;
 uint8_t *val = m->payload + 4;
 uint8_t opcode = m->mcr.request.opcode;
+/*
 if(opcode == PROTOCOL_BINARY_CMD_GET)
     printf("GET -- status: %d, len: %d, val:%d\n", m->mcr.request.status, m->mcr.request.bodylen, val[0]);
 else if (opcode == PROTOCOL_BINARY_CMD_SET)
     printf("SET -- status: %d, len: %d\n", m->mcr.request.status, m->mcr.request.bodylen);
+*/
 
 output { out(msglen, (void*) m, buff); }
     ''')

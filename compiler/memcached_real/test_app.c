@@ -1,7 +1,7 @@
 #include "app.h"
 #include "iokvs.h"
 
-#define NUM_THREADS     4
+#define NUM_THREADS     10
 
 static struct item_allocator **iallocs;
 
