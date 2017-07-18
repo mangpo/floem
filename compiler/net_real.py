@@ -8,9 +8,14 @@ class FromNet(Element):
 
     def impl(self):
         self.run_c(r'''
+    static uint32_t count = 0;
     void *data, *buf;
     size_t size;
     dpdk_from_net(&size, &data, &buf);
+    if(data) { 
+            count++;
+        printf("GOT A PACKET %d\n", count);
+        }
     output switch {
         case data != NULL: out(size, data, buf);
         case data == NULL: nothing();

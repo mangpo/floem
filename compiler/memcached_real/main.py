@@ -133,7 +133,7 @@ output switch {
 
         def impl(self):
             self.run_c(r'''
-printf("receive id: %d\n", state.pkt->mcr.request.opaque);
+//printf("receive id: %d\n", state.pkt->mcr.request.opaque);
 uint8_t cmd = state.pkt->mcr.request.opcode;
 
 output switch{
@@ -152,8 +152,10 @@ output { out(); }''')
     class GetCore(ElementOneInOut):
         def impl(self):
             self.run_c(r'''
-state.core = state.hash %s %d;
-output { out(); }''' % ('%', n_cores))
+int core = state.hash %s %d;;
+state.core = core;
+printf("hash = %s, core = %s\n", state.hash, core);
+            output { out(); }''' % ('%', n_cores, '%d', '%d'))
 
     ######################## hash ########################
 
@@ -509,7 +511,7 @@ output switch { case segment: out(); else: null(); }
     size_t totlen = state.pkt->mcr.request.bodylen - state.pkt->mcr.request.extlen;
 
     uint64_t full = 0;
-    printf("item_alloc: segbase = %ld\n", this->segbase);
+    //printf("item_alloc: segbase = %ld\n", this->segbase);
     item *it = segment_item_alloc(this->segbase, this->seglen, &this->offset, sizeof(item) + totlen);
     if(it == NULL && this->next) {
         printf("Segment is full.\n");
@@ -529,8 +531,8 @@ output switch { case segment: out(); else: null(); }
         it->refcount = 1;
         uint16_t keylen = state.pkt->mcr.request.keylen;
 
-        printf("get_item id: %d, keylen: %ld, totlen: %ld, item: %ld\n",
-            state.pkt->mcr.request.opaque, state.pkt->mcr.request.keylen, totlen, it);
+        //    printf("get_item id: %d, keylen: %ld, totlen: %ld, item: %ld\n",
+        //state.pkt->mcr.request.opaque, state.pkt->mcr.request.keylen, totlen, it);
         it->hv = state.hash;
         it->vallen = totlen - keylen;
         it->keylen = keylen;
@@ -642,7 +644,7 @@ output switch { case segment: out(); else: null(); }
     #     nic('nic', process='nic')
 
     def impl(self):
-        MemoryRegion('data_region', 4 * 1024 * 512)
+        MemoryRegion('data_region', 2 * 1024 * 1024 * 512) #4 * 1024 * 512)
 
         # Queue
         RxEnq, RxDeq, RxScan = queue_smart2.smart_queue("rx_queue", 10000, n_cores, 3)
