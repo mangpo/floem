@@ -34,6 +34,7 @@ class Compiler:
 
         g = program.program_to_graph_pass(dp, default_process=filename, original=original)
         empty_port.nonempty_to_empty_port_pass(g)
+        hton.hton_pass(g)
         pipeline_state.pipeline_state_pass(g, pktstate)
         return g
 
@@ -65,7 +66,6 @@ class Compiler:
             original.merge(g)
 
         join_handling.join_and_resource_annotation_pass(original, self.resource, self.remove_unused)
-        hton.hton_pass(original)
 
         return original
 

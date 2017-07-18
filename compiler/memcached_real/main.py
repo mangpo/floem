@@ -95,8 +95,8 @@ if (m->ether.ether_type == htons(ETHER_TYPE_IPv4) &&
     m->udp.dst_port == htons(11211) &&
     msglen >= sizeof(iokvs_message))
 {
-    uint32_t blen = ntohl(m->mcr.request.bodylen);
-    uint32_t keylen = ntohs(m->mcr.request.keylen);
+    uint32_t blen = m->mcr.request.bodylen;
+    uint32_t keylen = m->mcr.request.keylen;
 
         /* Ensure request is complete */
         if (blen < keylen + m->mcr.request.extlen ||
@@ -160,7 +160,7 @@ output { out(); }''' % ('%', n_cores))
     class JenkinsHash(ElementOneInOut):
         def impl(self):
             self.run_c(r'''
-state.hash = jenkins_hash(state.key, htons(state.pkt->mcr.request.keylen));
+state.hash = jenkins_hash(state.key, state.pkt->mcr.request.keylen);
 //printf("hash = %d\n", hash);
 output { out(); }
             ''')
@@ -173,7 +173,7 @@ output { out(); }
 
         def impl(self):
             self.run_c(r'''
-item* it = hasht_get(state.key, htons(state.pkt->mcr.request.keylen), state.hash);
+item* it = hasht_get(state.key, state.pkt->mcr.request.keylen, state.hash);
 state.it = it;
 output switch { case it: out(); else: null(); }
             ''')
@@ -210,20 +210,50 @@ output { out(this->core); }''' % ('%', n_cores))
             self.run_c(r'''
         iokvs_message *m = state.pkt;
         int msglen = sizeof(iokvs_message) + 4;
-        uint32_t vallen = nic_htonl(it->vallen);
+        item* it = state.it;
+        uint32_t vallen = it->vallen;
 
         m->mcr.request.magic = PROTOCOL_BINARY_RES;
         m->mcr.request.datatype = PROTOCOL_BINARY_RAW_BYTES;
-        item* it = state.it;
-        m->mcr.request.status = htons(PROTOCOL_BINARY_RESPONSE_SUCCESS);
+        m->mcr.request.status = PROTOCOL_BINARY_RESPONSE_SUCCESS;
 
 m->mcr.request.keylen = 0;
 m->mcr.request.extlen = 4;
-m->mcr.request.bodylen = htonl(4);
+m->mcr.request.bodylen = 4;
 *((uint32_t *)m->payload) = 0;
 msglen += vallen;
-m->mcr.request.bodylen = htonl(4 + vallen);
+m->mcr.request.bodylen = 4 + vallen;
 rte_memcpy(m->payload + 4, item_value(it), vallen);
+
+void* pkt_buff = state.pkt_buff;
+
+output { out(msglen, m, pkt_buff); }
+            ''')
+
+        def impl_cavium(self):
+            self.run_c(r'''
+        iokvs_message *m = state.pkt;
+        int msglen = sizeof(iokvs_message) + 4;
+        item* it = state.it;
+        uint32_t* vallen
+        dma_read(&it->vallen, sizeof(uint32_t), (void**) &vallen);
+
+        m->mcr.request.magic = PROTOCOL_BINARY_RES;
+        m->mcr.request.datatype = PROTOCOL_BINARY_RAW_BYTES;
+        m->mcr.request.status = PROTOCOL_BINARY_RESPONSE_SUCCESS;
+
+m->mcr.request.keylen = 0;
+m->mcr.request.extlen = 4;
+m->mcr.request.bodylen = 4;
+*((uint32_t *)m->payload) = 0;
+msglen += *vallen;
+m->mcr.request.bodylen = 4 + *vallen;
+
+void* value;
+dma_read(item_value(it), *vallen, (void**) &value);
+rte_memcpy(m->payload + 4, value, *vallen);
+dma_free(vallen);
+dma_free(value);
 
 void* pkt_buff = state.pkt_buff;
 
@@ -242,11 +272,11 @@ output { out(msglen, m, pkt_buff); }
 
             m->mcr.request.magic = PROTOCOL_BINARY_RES;
             m->mcr.request.datatype = PROTOCOL_BINARY_RAW_BYTES;
-            m->mcr.request.status = htons(PROTOCOL_BINARY_RESPONSE_KEY_ENOENT);
+            m->mcr.request.status = PROTOCOL_BINARY_RESPONSE_KEY_ENOENT;
 
     m->mcr.request.keylen = 0;
     m->mcr.request.extlen = 4;
-    m->mcr.request.bodylen = htonl(4);
+    m->mcr.request.bodylen = 4;
     *((uint32_t *)m->payload) = 0;
     void* pkt_buff = state.pkt_buff;
 
@@ -269,7 +299,7 @@ int msglen = sizeof(iokvs_message) + 4;
 
 m->mcr.request.magic = PROTOCOL_BINARY_RES;
 m->mcr.request.datatype = PROTOCOL_BINARY_RAW_BYTES;
-m->mcr.request.status = htons(%s);
+m->mcr.request.status = %s;
 
 m->mcr.request.keylen = 0;
 m->mcr.request.extlen = 0;
@@ -361,9 +391,9 @@ iokvs_message* m = (iokvs_message*) pkt;
 uint8_t *val = m->payload + 4;
 uint8_t opcode = m->mcr.request.opcode;
 if(opcode == PROTOCOL_BINARY_CMD_GET)
-    printf("GET -- status: %d, len: %d, val:%d\n", htons(m->mcr.request.status), htonl(m->mcr.request.bodylen), val[0]);
+    printf("GET -- status: %d, len: %d, val:%d\n", m->mcr.request.status, m->mcr.request.bodylen, val[0]);
 else if (opcode == PROTOCOL_BINARY_CMD_SET)
-    printf("SET -- status: %d, len: %d\n", htons(m->mcr.request.status), htonl(m->mcr.request.bodylen));
+    printf("SET -- status: %d, len: %d\n", m->mcr.request.status, m->mcr.request.bodylen);
 
 output { out(msglen, (void*) m, buff); }
     ''')
@@ -476,7 +506,7 @@ output switch { case segment: out(); else: null(); }
 
         def impl(self):
             self.run_c(r'''
-    size_t totlen = htonl(state.pkt->mcr.request.bodylen) - state.pkt->mcr.request.extlen;
+    size_t totlen = state.pkt->mcr.request.bodylen - state.pkt->mcr.request.extlen;
 
     uint64_t full = 0;
     printf("item_alloc: segbase = %ld\n", this->segbase);
@@ -497,10 +527,10 @@ output switch { case segment: out(); else: null(); }
 
     if(it) {
         it->refcount = 1;
-        uint16_t keylen = htons(state.pkt->mcr.request.keylen);
+        uint16_t keylen = state.pkt->mcr.request.keylen;
 
         printf("get_item id: %d, keylen: %ld, totlen: %ld, item: %ld\n",
-            state.pkt->mcr.request.opaque, htons(state.pkt->mcr.request.keylen), totlen, it);
+            state.pkt->mcr.request.opaque, state.pkt->mcr.request.keylen, totlen, it);
         it->hv = state.hash;
         it->vallen = totlen - keylen;
         it->keylen = keylen;
@@ -631,10 +661,12 @@ output switch { case segment: out(); else: null(); }
                 to_net = net_real.ToNet('to_net')
                 classifier = main.Classifer()
                 check_packet = main.CheckPacket()
+                hton1 = net_real.HTON(configure=['iokvs_message'])
+                hton2 = net_real.HTON(configure=['iokvs_message'])
 
                 # from_net
                 from_net.nothing >> main.Drop()
-                from_net.out >> check_packet
+                from_net.out >> hton1 >> check_packet
                 check_packet.out >> main.SaveState() >> main.GetKey() >> main.JenkinsHash() >> main.GetCore() >> classifier
 
                 # get
@@ -646,7 +678,7 @@ output switch { case segment: out(); else: null(); }
                 get_item.out >> rx_enq.inp[1]
                 # set (unseccessful)
                 set_reponse_fail = main.PrepareSetResp(configure=['PROTOCOL_BINARY_RESPONSE_ENOMEM'])
-                get_item.nothing >> set_reponse_fail >> main.PrepareHeader() >> main.PrintMsg() >> to_net
+                get_item.nothing >> set_reponse_fail >> main.PrepareHeader() >> main.PrintMsg() >> hton2 >> to_net
 
                 # full
                 filter_full = main.FilterFull()
@@ -712,6 +744,9 @@ output switch { case segment: out(); else: null(); }
                 to_net = net_real.ToNet('to_net')
                 prepare_header = main.PrepareHeader()
                 display = main.PrintMsg()
+                hton = net_real.HTON(configure=['iokvs_message'])
+
+
                 main.Scheduler() >> tx_deq
 
                 # get
@@ -721,7 +756,7 @@ output switch { case segment: out(); else: null(); }
                 # set
                 set_response = main.PrepareSetResp(configure=['PROTOCOL_BINARY_RESPONSE_SUCCESS'])
                 tx_deq.out[1] >> set_response >> prepare_header
-                prepare_header >> display >> to_net
+                prepare_header >> display >> hton >> to_net
 
                 # full
                 tx_deq.out[2] >> main.AddLogseg()

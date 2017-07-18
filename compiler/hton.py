@@ -34,9 +34,15 @@ def hton_instance(g, instance, state_name):
     instance.element = new_element
 
 
+def is_on_CPU(g, instance):
+    t = instance.thread
+    d = (t in g.thread2device) and g.thread2device[t][0]
+    return d == target.CPU or d == False
+
+
 def hton_pass(g):
     for inst in g.instances.values():
         special = inst.element.special
         if isinstance(special, tuple) and special[0] == 'hton':
-            if inst.device[0] == target.CPU:
+            if is_on_CPU(g, inst):
                 hton_instance(g, inst, special[1])
