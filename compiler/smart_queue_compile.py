@@ -3,6 +3,26 @@ from program import *
 from pipeline_state_join import get_node_before_release
 
 
+def filter_live(vars):
+    var_list = [v for v in vars]
+    var_list = sorted(var_list, key=lambda x: len(x))
+    vars = []
+    for new_var in var_list:
+        add = True
+        for var in vars:
+            m = re.match(var + '\.', new_var)
+            if m:
+                add = False
+                break
+            m = re.match(var + '->', new_var)
+            if m:
+                add = False
+                break
+        if add:
+            vars.append(new_var)
+
+    return set(vars)
+
 def get_entry_content(vars, pipeline_state, g, src2fields):
     # content of struct
     content = " "
@@ -314,8 +334,8 @@ def compile_smart_queue(g, q, src2fields):
 
     release_vis = set()
     for i in range(q.n_cases):
-        live = q.deq.liveness[i]
-        uses = q.deq.uses[i]
+        live = filter_live(q.deq.liveness[i])
+        uses = filter_live(q.deq.uses[i])
         extras = uses.difference(live)
 
         #if isinstance(q, queue_ast.QueueVariableSizeOne2Many) and 'core' in live:

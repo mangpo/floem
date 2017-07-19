@@ -150,7 +150,7 @@ def queue_variable_size(name, size, n_cores, blocking=False, enq_atomic=False, d
 
             self.run_c(r'''
                         (size_t len, size_t c) = inp();
-                        %s *q = this->cores[c];  // TODO
+                        %s *q = this->cores[c];
                         ''' % EnqQueue.__name__
                        + src + r'''
                         //if(entry == NULL) { printf("queue %d is full.\n", c); }
