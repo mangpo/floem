@@ -23,7 +23,6 @@ class protocol_binary_request_header(State):
 
     def init(self): self.declare = False
 
-
 class iokvs_message(State):
     ether = Field('struct ether_hdr')
     ipv4 = Field('struct ipv4_hdr')
@@ -34,16 +33,27 @@ class iokvs_message(State):
 
     def init(self): self.declare = False
 
+class item(State):
+    next = Field('struct _item')
+    hv = Field(Uint(32))
+    vallen = Field(Uint(32))
+    refcount = Field(Uint(16))
+    keylen = Field(Uint(16))
+    flags = Field(Uint(32))
+
+    def init(self): self.declare = False
+
 class MyState(State):
     pkt = Field(Pointer(iokvs_message))
     pkt_buff = Field('void*')
-    it = Field('item*', shared='data_region')
+    it = Field(Pointer(item), shared='data_region')
     key = Field('void*', copysize='state.pkt->mcr.request.keylen')
     hash = Field(Uint(32))
     segfull = Field(Uint(64))
     segbase = Field(Uint(64))
     seglen = Field(Uint(64))
     core = Field(Uint(16))
+    vallen = Field(Uint(32))
 
 class Schedule(State):
     core = Field(Size)
@@ -73,6 +83,18 @@ class main(Pipeline):
 state.pkt = (iokvs_message*) pkt;
 state.pkt_buff = buff;
 output { out(); }
+            ''')
+
+    class GetPktBuff(Element):
+        def configure(self):
+            self.inp = Input()
+            self.out = Output("void*", "void*")
+
+        def impl(self):
+            self.run_c(r'''
+    void* pkt = state.pkt;
+    void* pkt_buff = state.pkt_buff;
+    output { out(pkt, pkt_buff); }
             ''')
 
     class CheckPacket(Element):
@@ -202,18 +224,39 @@ output { out(); }
 this->core = (this->core + 1) %s %s;
 output { out(this->core); }''' % ('%', n_cores))
 
+    class SizeGetResp(Element):
+        def configure(self):
+            self.inp = Input()
+            self.out = Output(Size)
+
+        def impl(self):
+            self.run_c(r'''
+    size_t msglen = sizeof(iokvs_message) + 4 + state.it->vallen;
+    state.vallen = state.it->vallen;
+    output { out(msglen); }
+            ''')
+
+        def impl_cavium(self):
+            self.run_c(r'''
+    uint32_t* vallen
+    dma_read(&state.it->vallen, sizeof(uint32_t), (void**) &vallen);
+    size_t msglen = sizeof(iokvs_message) + 4 + *vallen;
+    state.vallen = *vallen;
+    dma_free(vallen);
+    output { out(msglen); }
+                        ''')
 
     class PrepareGetResp(Element):
         def configure(self):
-            self.inp = Input()
+            self.inp = Input(Size, 'void*', 'void*')
             self.out = Output(Size, Pointer(iokvs_message), 'void*')
 
         def impl(self):
             self.run_c(r'''
-        iokvs_message *m = state.pkt;
-        int msglen = sizeof(iokvs_message) + 4;
+        (size_t msglen, void* pkt, void* pkt_buff) = inp();
+
+        iokvs_message *m = pkt;
         item* it = state.it;
-        uint32_t vallen = it->vallen;
 
         m->mcr.request.magic = PROTOCOL_BINARY_RES;
         m->mcr.request.datatype = PROTOCOL_BINARY_RAW_BYTES;
@@ -223,22 +266,18 @@ m->mcr.request.keylen = 0;
 m->mcr.request.extlen = 4;
 m->mcr.request.bodylen = 4;
 *((uint32_t *)m->payload) = 0;
-msglen += vallen;
-m->mcr.request.bodylen = 4 + vallen;
-rte_memcpy(m->payload + 4, item_value(it), vallen);
-
-void* pkt_buff = state.pkt_buff;
+m->mcr.request.bodylen = 4 + state.vallen;
+rte_memcpy(m->payload + 4, item_value(it), staet.vallen);
 
 output { out(msglen, m, pkt_buff); }
             ''')
 
         def impl_cavium(self):
             self.run_c(r'''
-        iokvs_message *m = state.pkt;
+        (size_t msglen, void* pkt, void* pkt_buff) = inp();
+        iokvs_message *m = pkt;
         int msglen = sizeof(iokvs_message) + 4;
         item* it = state.it;
-        uint32_t* vallen
-        dma_read(&it->vallen, sizeof(uint32_t), (void**) &vallen);
 
         m->mcr.request.magic = PROTOCOL_BINARY_RES;
         m->mcr.request.datatype = PROTOCOL_BINARY_RAW_BYTES;
@@ -248,28 +287,36 @@ m->mcr.request.keylen = 0;
 m->mcr.request.extlen = 4;
 m->mcr.request.bodylen = 4;
 *((uint32_t *)m->payload) = 0;
-msglen += *vallen;
-m->mcr.request.bodylen = 4 + *vallen;
+m->mcr.request.bodylen = 4 + state.vallen;
 
 void* value;
-dma_read(item_value(it), *vallen, (void**) &value);
-rte_memcpy(m->payload + 4, value, *vallen);
-dma_free(vallen);
+dma_read(item_value(it), state.vallen, (void**) &value);
+rte_memcpy(m->payload + 4, value, state.vallen);
 dma_free(value);
-
-void* pkt_buff = state.pkt_buff;
 
 output { out(msglen, m, pkt_buff); }
             ''')
 
-    class PrepareGetNullResp(Element):
+    class SizeGetNullResp(Element):
         def configure(self):
             self.inp = Input()
+            self.out = Output(Size)
+
+        def impl(self):
+            self.run_c(r'''
+            size_t msglen = sizeof(iokvs_message) + 4;
+            output { out(msglen); }
+            ''')
+
+    class PrepareGetNullResp(Element):
+        def configure(self):
+            self.inp = Input(Size, 'void*', 'void*')
             self.out = Output(Size, Pointer(iokvs_message), 'void*')
 
         def impl(self):
             self.run_c(r'''
-            iokvs_message *m = state.pkt;
+            (size_t msglen, void* pkt, void* pkt_buff) = inp();
+            iokvs_message *m = pkt;
             int msglen = sizeof(iokvs_message) + 4;
 
             m->mcr.request.magic = PROTOCOL_BINARY_RES;
@@ -280,15 +327,37 @@ output { out(msglen, m, pkt_buff); }
     m->mcr.request.extlen = 4;
     m->mcr.request.bodylen = 4;
     *((uint32_t *)m->payload) = 0;
-    void* pkt_buff = state.pkt_buff;
 
     output { out(msglen, m, pkt_buff); }
                 ''')
 
+    class SizeSetResp(Element):
+        def configure(self):
+            self.inp = Input()
+            self.out = Output(Size)
+
+        def impl(self):
+            self.run_c(r'''
+            size_t msglen = sizeof(iokvs_message) + 4;
+            output { out(msglen); }
+            ''')
+
+    class SizePktBuffSetResp(Element):
+        def configure(self):
+            self.inp = Input()
+            self.out = Output(Size, 'void*', 'void*')
+
+        def impl(self):
+            self.run_c(r'''
+            size_t msglen = sizeof(iokvs_message) + 4;
+            void* pkt = state.pkt;
+            void* pkt_buff = state.pkt_buff;
+            output { out(msglen, pkt, pkt_buff); }
+            ''')
 
     class PrepareSetResp(Element):
         def configure(self, status):
-            self.inp = Input()
+            self.inp = Input(Size, 'void*', 'void*')
             self.out = Output(Size, Pointer(iokvs_message), 'void*')
             self.status = status
             # PROTOCOL_BINARY_RESPONSE_SUCCESS
@@ -296,8 +365,8 @@ output { out(msglen, m, pkt_buff); }
 
         def impl(self):
             self.run_c(r'''
-iokvs_message *m = state.pkt;
-int msglen = sizeof(iokvs_message) + 4;
+(size_t msglen, void* pkt, void* pkt_buff) = inp();
+iokvs_message *m = pkt;
 
 m->mcr.request.magic = PROTOCOL_BINARY_RES;
 m->mcr.request.datatype = PROTOCOL_BINARY_RAW_BYTES;
@@ -306,8 +375,6 @@ m->mcr.request.status = %s;
 m->mcr.request.keylen = 0;
 m->mcr.request.extlen = 0;
 m->mcr.request.bodylen = 0;
-
-void* pkt_buff = state.pkt_buff;
 
 output { out(msglen, m, pkt_buff); }
             ''' % self.status)
@@ -653,7 +720,7 @@ output switch { case segment: out(); else: null(); }
         MemoryRegion('data_region', 2 * 1024 * 1024 * 512) #4 * 1024 * 512)
 
         # Queue
-        RxEnq, RxDeq, RxScan = queue_smart2.smart_queue("rx_queue", 10000, n_cores, 3)
+        RxEnq, RxDeq, RxScan = queue_smart2.smart_queue("rx_queue", 10000, n_cores, 3, enq_output=True)
         TxEnq, TxDeq, TxScan = queue_smart2.smart_queue("tx_queue", 10000, n_cores, 4, clean="enq")
         rx_enq = RxEnq()
         rx_deq = RxDeq()
@@ -666,7 +733,7 @@ output switch { case segment: out(); else: null(); }
             def impl(self):
                 from_net = net_real.FromNet('from_net')
                 from_net_free = net_real.FromNetFree('from_net_free')
-                to_net = net_real.ToNet('to_net')
+                to_net = net_real.ToNet('to_net', configure=['from_net'])
                 classifier = main.Classifer()
                 check_packet = main.CheckPacket()
                 hton1 = net_real.HTON(configure=['iokvs_message'])
@@ -682,11 +749,11 @@ output switch { case segment: out(); else: null(); }
 
                 # set
                 get_item = main.GetItem()
-                classifier.out_set >> get_item
-                get_item.out >> rx_enq.inp[1]
+                classifier.out_set >> get_item >> rx_enq.inp[1]
                 # set (unseccessful)
                 set_reponse_fail = main.PrepareSetResp(configure=['PROTOCOL_BINARY_RESPONSE_ENOMEM'])
-                get_item.nothing >> set_reponse_fail >> main.PrepareHeader() >> main.PrintMsg() >> hton2 >> to_net
+                get_item.nothing >> main.SizePktBuffSetResp() >> set_reponse_fail >> main.PrepareHeader() \
+                >> main.PrintMsg() >> hton2 >> to_net
 
                 # full
                 filter_full = main.FilterFull()
@@ -695,13 +762,13 @@ output switch { case segment: out(); else: null(); }
                 filter_full >> rx_enq.inp[2]
 
                 # exception
-                #check_packet.slowpath >> from_net_free
                 arp = main.HandleArp()
-                check_packet.slowpath >> arp
-                arp.out >> to_net
+                check_packet.slowpath >> arp >> to_net
+
+                # free from_net
                 arp.drop >> from_net_free
                 check_packet.drop >> from_net_free
-                # TODO: rx_enq.done >> get_pkt_buff >> from_net_free
+                rx_enq.done >> main.GetPktBuff() >> from_net_free
 
 
         ######################## APP #######################
@@ -722,8 +789,7 @@ output switch { case segment: out(); else: null(); }
 
                 # full
                 new_segment = main.NewSegment()
-                rx_deq.out[2] >> new_segment
-                new_segment.out >> tx_enq.inp[2]
+                rx_deq.out[2] >> new_segment >> tx_enq.inp[2]
                 new_segment.null >> main.Drop()
 
 
@@ -754,26 +820,35 @@ output switch { case segment: out(); else: null(); }
         ####################### NIC Tx #######################
         class nic_tx(InternalLoop):
             def impl(self):
-                to_net = net_real.ToNet('to_net')
+                to_net = net_real.ToNet('to_net', configure=['alloc'])
+                net_alloc0 = net_real.NetAlloc()
+                net_alloc1 = net_real.NetAlloc()
+                net_alloc3 = net_real.NetAlloc()
                 prepare_header = main.PrepareHeader()
                 display = main.PrintMsg()
                 hton = net_real.HTON(configure=['iokvs_message'])
-
 
                 main.Scheduler() >> tx_deq
 
                 # TODO: tx_deq.out[x] >> calc_size >> net_alloc >> main.PrepareGetResp() >> prepare_header
                 # get
-                tx_deq.out[0] >> main.PrepareGetResp() >> prepare_header
-                tx_deq.out[3] >> main.PrepareGetNullResp() >> prepare_header
+                tx_deq.out[0] >> main.SizeGetResp() >> net_alloc0 >> main.PrepareGetResp() >> prepare_header
+                tx_deq.out[3] >> main.SizeGetNullResp() >> net_alloc3 >> main.PrepareGetNullResp() >> prepare_header
 
                 # set
                 set_response = main.PrepareSetResp(configure=['PROTOCOL_BINARY_RESPONSE_SUCCESS'])
-                tx_deq.out[1] >> set_response >> prepare_header
+                tx_deq.out[1] >> main.SizeSetResp() >> net_alloc1 >> set_response >> prepare_header
+
+                # send
                 prepare_header >> display >> hton >> to_net
 
                 # full
                 tx_deq.out[2] >> main.AddLogseg()
+
+                # free net_alloc
+                net_alloc0.oom >> main.Drop()  # TODO: reuse drop => No easy way to insert pipeline state
+                net_alloc1.oom >> main.Drop()
+                net_alloc3.oom >> main.Drop()
 
         nic_rx('nic_rx', process='dpdk', cores=[1])
         process_eq('process_eq', process='app')

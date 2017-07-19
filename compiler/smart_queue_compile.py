@@ -53,9 +53,9 @@ def get_state_content(vars, pipeline_state, g, src2fields, special):
         current_type = pipeline_state
         for field in fields:
             if current_type[-1] == "*":
-                current_type.rstrip('*').rstip()
-            current_type = g.states[current_type].mapping[field]
-        content += "%s %s; " % (current_type[0], fields[-1])
+                current_type = current_type.rstrip('*').rstrip()
+            current_type = g.states[current_type].mapping[field][0]
+        content += "%s %s; " % (current_type, fields[-1])
 
     for var in special:
         t, name, special_t, info = special[var]
@@ -202,7 +202,6 @@ def compile_smart_queue(g, q, src2fields):
     else:
         prefix = ""
 
-    # TODO: scan_release
     g_add, enq_alloc, enq_submit, deq_get, deq_release, scan, scan_release = \
         create_queue(q.name, q.size, q.n_cores,
                      blocking=q.blocking, enq_atomic=q.enq_atomic, deq_atomic=q.deq_atomic, scan=q.scan_type, core=True)
@@ -399,7 +398,7 @@ def compile_smart_queue(g, q, src2fields):
             g.connect(fill_inst.name, enq_submit_inst.name, "out")
 
             if q.enq_output:
-                g.connect(fill_inst.name, enq_submit_inst.name, "done", enq_done)  # TODO: remove old connection?
+                g.connect(fill_inst.name, enq_done[0], "done", enq_done[1])
 
         # Create deq instances
         save_inst = ElementInstance(save.name, prefix + save.name + "_inst")

@@ -441,6 +441,12 @@ def analyze_fields_liveness_instance(g, name, in_port):
             instance.liveness[i] = ret_live.union(instance.element.uses)
             instance.uses[i] = ret_live.union(instance.element.uses)
 
+        if "done" in instance.output2ele:
+            next_name, next_port = instance.output2ele["done"]
+            done_live, done_uses = analyze_fields_liveness_instance(g, next_name, next_port)
+            for i in range(q.n_cases):
+                instance.uses[i] = instance.uses[i].union(done_uses)
+
         return instance.liveness[no], instance.uses[no]
     elif isinstance(q, graph_ir.Queue) and q.deq == instance:
         return set(), set()

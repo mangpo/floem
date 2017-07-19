@@ -292,9 +292,13 @@ class Connectable(object):
         pass
 
     def __rshift__(self, other):
-        assert len(self.outports) == 1, \
-            "Attempt to connect '%s', which has zero or multiple output ports, to '%s'." % (self.name, other)
-        self.outports[0] >> other
+        if len(self.outports) == 1:
+            self.outports[0] >> other
+        elif len(self.outports) > 1 and "out" in self.__dict__:
+            self.out >> other
+        else:
+            raise Exception("Attempt to connect '%s', which has zero or multiple output ports, to '%s'." %
+                            (self.name, other))
         return other
 
     def rshift__reversed(self, other):

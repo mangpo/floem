@@ -54,7 +54,7 @@ class FromNetFree(Element):
 class NetAlloc(Element):
     def configure(self):
         self.inp = Input(Size)
-        self.out = Output("void *", "void *")  # packet, buffer
+        self.out = Output(Size, "void *", "void *")  # packet, buffer
         self.oom = Output()
 
     def impl(self):
@@ -63,8 +63,8 @@ class NetAlloc(Element):
     void *data, *buf;
     dpdk_net_alloc(len, &data, &buf);
     output switch {
-        case data != NULL: out(data, buf);
-        case data == NULL: oom();
+        case data != NULL: out(len, data, buf);
+        else: oom();
     }
         ''')
 
@@ -73,18 +73,20 @@ class NetAlloc(Element):
     (size_t len) = inp();
     void* p = malloc(sizeof(uint8_t) * len);
     output switch {
-        case p != NULL: out(p, NULL);
-        case p == NULL: oom();
+        case p != NULL: out(len, p, NULL);
+        else: oom();
     }
         ''')
 
 
 class ToNet(Element):
-    def configure(self, has_output=False):
+    def configure(self, buffer="from_net", has_output=False):
         self.inp = Input(Size, "void *", "void *")  # size, packet, buffer
-        self.has_output = has_output
-        if has_output:
-            self.out = Output("void *", "void *")
+        self.buffer = buffer
+        self.has_output = False
+        # self.has_output = has_output
+        # if has_output:
+        #     self.out = Output("void *", "void *")
 
     def impl(self):
         out = r'''
@@ -99,28 +101,30 @@ class ToNet(Element):
         out = r'''
     output { out(p, buf); }
     ''' if self.has_output else ""
+        free = "" if self.buffer == "from_net" else "free(p);\n"
+
         self.run_c(r'''
     (size_t len, void* p, void* buf) = inp();
     network_send(len, p, 2560);
-        ''' + out)
+        ''' + free + out)
 
 
-class NetAllocFree(Element):
-    def configure(self):
-        self.inp = Input("void *", "void *")  # packet, buffer
-
-    def impl(self):
-        self.run_c(r'''
-    (void* p, void* buf) = inp();
-    dpdk_net_free(p, buf);
-        ''')
-
-    def impl_cavium(self):
-        # Do nothing
-        self.run_c(r'''
-    (void* p, void* buf) = inp();
-    free(p);
-        ''')
+# class NetAllocFree(Element):
+#     def configure(self):
+#         self.inp = Input("void *", "void *")  # packet, buffer
+#
+#     def impl(self):
+#         self.run_c(r'''
+#     (void* p, void* buf) = inp();
+#     dpdk_net_free(p, buf);
+#         ''')
+#
+#     def impl_cavium(self):
+#         # Do nothing
+#         self.run_c(r'''
+#     (void* p, void* buf) = inp();
+#     free(p);
+#         ''')
 
 
 class HTON(Element):
