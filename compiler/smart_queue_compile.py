@@ -337,6 +337,7 @@ def compile_smart_queue(g, q, src2fields):
         live = filter_live(q.deq.liveness[i])
         uses = filter_live(q.deq.uses[i])
         extras = uses.difference(live)
+        core_uses = copy.copy(uses).union(set(['core']))
         save_uses = copy.copy(uses).union(set(['buffer']))
 
         #if isinstance(q, queue_ast.QueueVariableSizeOne2Many) and 'core' in live:
@@ -401,6 +402,8 @@ def compile_smart_queue(g, q, src2fields):
                 instance = g.instances[inst.name]
                 instance.liveness = live
                 instance.uses = uses
+            g.instances[size_core.name].uses = core_uses
+            g.instances[fork_inst.name].uses = core_uses
 
             new_instances_nolive = [enq_submit_inst]
             for inst in new_instances_nolive:
