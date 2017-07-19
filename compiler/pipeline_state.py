@@ -190,9 +190,6 @@ def replace_states(element, live, extras, special_fields, src2fields):
     for var in special_fields:
         replace_var(element, var, src2fields, "")
 
-    if element.name.find("filter_full") >= 0:
-        print element
-
 
 def rename_entry_references(g, src2fields):
     ele2inst = {}

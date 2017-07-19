@@ -337,6 +337,7 @@ def compile_smart_queue(g, q, src2fields):
         live = filter_live(q.deq.liveness[i])
         uses = filter_live(q.deq.uses[i])
         extras = uses.difference(live)
+        save_uses = copy.copy(uses).union(set(['buffer']))
 
         #if isinstance(q, queue_ast.QueueVariableSizeOne2Many) and 'core' in live:
         if 'core' in live:
@@ -429,7 +430,7 @@ def compile_smart_queue(g, q, src2fields):
         g.add_pipeline_state(save_inst.name, state_pipeline.name)
         save_inst = g.instances[save_inst.name]
         save_inst.liveness = live
-        save_inst.uses = uses
+        save_inst.uses = save_uses
         save_inst.extras = extras
         save_inst.special_fields = special
 
@@ -458,7 +459,7 @@ def compile_smart_queue(g, q, src2fields):
             scan_save_inst = g.instances[scan_save_inst.name]
             g.add_pipeline_state(scan_save_inst.name, state_pipeline.name)
             scan_save_inst.liveness = live
-            scan_save_inst.uses = uses
+            scan_save_inst.uses = save_uses
             scan_save_inst.extras = extras
             scan_save_inst.special_fields = special
 
