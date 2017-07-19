@@ -126,29 +126,35 @@ def get_size2convert(g, enq_thread, deq_thread):
 
 
 def get_fill_entry_src(g, deq_thread, enq_thread, live, special, extras,
-                       state_entry, src2fields, mapping, pipeline_state, i):
+                       state_entry, src2fields, mapping, pipeline_state, i,
+                       enq_output):
     byte_reverse, size2convert, htons, htonl, htonp = get_size2convert(g, deq_thread, enq_thread)
 
     fill_src = "  q_buffer buff = in_entry();\n"
     fill_src += "  %s* e = (%s*) buff.entry;\n" % (state_entry.name, state_entry.name)
+    fill_src += "  if(e) {\n"
     for var in live:
         field = get_entry_field(var, src2fields)
         if var in special:
             t, name, special_t, info = special[var]
             if special_t == "shared":
-                fill_src += "  e->%s = %s((uintptr_t) state.%s - (uintptr_t) %s);\n" % (field, htonp, var, info)
+                fill_src += "    e->%s = %s((uintptr_t) state.%s - (uintptr_t) %s);\n" % (field, htonp, var, info)
             elif special_t == "copysize":
                 assert t == "void*" or common.sizeof(t[:-1]) == 1, \
                     "Smart queue: field '%s' of per-packet state '%s' must be a pointer to uint8_t array." % \
                     (field, pipeline_state)
-                fill_src += "  memcpy(e->%s, state.%s, %s);\n" % (field, var, info)
+                fill_src += "    memcpy(e->%s, state.%s, %s);\n" % (field, var, info)
         else:
             size = common.sizeof(mapping[var])
             convert = size2convert[size]
-            fill_src += "  e->%s = %s(state.%s);\n" % (field, convert, var)
+            fill_src += "    e->%s = %s(state.%s);\n" % (field, convert, var)
 
-    fill_src += "  e->flags |= %s(%d << TYPE_SHIFT);\n" % (htons, i + 1)
-    fill_src += "  output { out(buff); }"
+    fill_src += "    e->flags |= %s(%d << TYPE_SHIFT);\n" % (htons, i + 1)
+    fill_src += "  }" # end if(e)
+    if enq_output:
+        fill_src += "  output { out(buff); done(); }"
+    else:
+        fill_src += "  output { out(buff); }"
     return fill_src
 
 
@@ -275,6 +281,8 @@ def compile_smart_queue(g, q, src2fields):
     ins_map = []
     out_map = []
     scan_map = []
+    if q.enq_output:
+        enq_done = q.enq.output2ele["done"]
 
     for i in range(q.n_cases):
         ins = q.enq.input2ele["inp" + str(i)]
@@ -340,9 +348,10 @@ def compile_smart_queue(g, q, src2fields):
 
         # Create element: fill
         fill_src = get_fill_entry_src(g, enq_thread, deq_thread, live, special, extras,
-                                      state_entry, src2fields, mapping, pipeline_state, i)
+                                      state_entry, src2fields, mapping, pipeline_state, i, q.enq_output)
+        fill_extra_port = [Port("done", [])] if q.enq_output else []
         fill_ele = Element(q.name + "_fill" + str(i), [Port("in_entry", ["q_buffer"]), Port("in_pkt", [])],
-                           [Port("out", ["q_buffer"])], fill_src)
+                           [Port("out", ["q_buffer"])] + fill_extra_port, fill_src)
         fork = Element(q.name + "_fork" + str(i), [Port("in", [])], [Port("out_size_core", []), Port("out_fill", [])],
                        r'''output { out_size_core(); out_fill(); }''')
 
@@ -387,7 +396,10 @@ def compile_smart_queue(g, q, src2fields):
             g.connect(size_core.name, enq_alloc_inst.name)
             g.connect(enq_alloc_inst.name, fill_inst.name, "out", "in_entry")
             g.connect(fork_inst.name, fill_inst.name, "out_fill", "in_pkt")
-            g.connect(fill_inst.name, enq_submit_inst.name)
+            g.connect(fill_inst.name, enq_submit_inst.name, "out")
+
+            if q.enq_output:
+                g.connect(fill_inst.name, enq_submit_inst.name, "done", enq_done)  # TODO: remove old connection?
 
         # Create deq instances
         save_inst = ElementInstance(save.name, prefix + save.name + "_inst")

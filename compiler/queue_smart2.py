@@ -2,16 +2,24 @@ from dsl2 import *
 import graph_ir
 
 
-def smart_queue(name, size, n_cores, n_cases, blocking=False, enq_atomic=False, deq_atomic=False, clean=False):
+def smart_queue(name, size, n_cores, n_cases, blocking=False, enq_atomic=False, deq_atomic=False, clean=False,
+                enq_output=False):
     prefix = name + "_"
-    queue = graph_ir.Queue(name, size, n_cores, n_cases, blocking=blocking, enq_atomic=enq_atomic, deq_atomic=deq_atomic)
+    queue = graph_ir.Queue(name, size, n_cores, n_cases, blocking=blocking,
+                           enq_atomic=enq_atomic, deq_atomic=deq_atomic, enq_output=enq_output)
 
     class Enqueue(Element):
         def configure(self):
             self.inp = [Input() for i in range(n_cases)]
             self.special = queue
+            if enq_output:
+                self.done = Output()
 
-        def impl(self): self.run_c("state.core;")
+        def impl(self):
+            if enq_output:
+                self.run_c("state.core; output { done(); }")
+            else:
+                self.run_c("state.core;")
 
         def __init__(self, name=None, create=True):
             Element.__init__(self, name=name, create=create)

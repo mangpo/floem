@@ -520,7 +520,8 @@ class MemoryRegion:
 
 
 class Queue:
-    def __init__(self, name, size, n_cores, n_cases, blocking=False, enq_atomic=False, deq_atomic=False):
+    def __init__(self, name, size, n_cores, n_cases, blocking=False, enq_atomic=False, deq_atomic=False,
+                 enq_output=False):
         self.name = name
         self.size = size
         self.n_cores = n_cores
@@ -532,3 +533,4 @@ class Queue:
         self.blocking = blocking
         self.enq_atomic = enq_atomic
         self.deq_atomic = deq_atomic
+        self.enq_output = enq_output

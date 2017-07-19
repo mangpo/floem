@@ -701,6 +701,7 @@ output switch { case segment: out(); else: null(); }
                 arp.out >> to_net
                 arp.drop >> from_net_free
                 check_packet.drop >> from_net_free
+                # TODO: rx_enq.done >> get_pkt_buff >> from_net_free
 
 
         ######################## APP #######################
@@ -761,6 +762,7 @@ output switch { case segment: out(); else: null(); }
 
                 main.Scheduler() >> tx_deq
 
+                # TODO: tx_deq.out[x] >> calc_size >> net_alloc >> main.PrepareGetResp() >> prepare_header
                 # get
                 tx_deq.out[0] >> main.PrepareGetResp() >> prepare_header
                 tx_deq.out[3] >> main.PrepareGetNullResp() >> prepare_header

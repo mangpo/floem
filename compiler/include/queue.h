@@ -124,10 +124,12 @@ static q_buffer enqueue_alloc(circular_queue* q, size_t len) {
 static void enqueue_submit(q_buffer buff)
 {
     q_entry *e = buff.entry;
-    e->flags |= FLAG_OWN;
-    //printf("enq_submit: entry = %p, len = %d\n", e, e->len);
-    //__sync_fetch_and_or(&e->flags, FLAG_OWN);
-    __sync_synchronize();
+    if(e) {
+        e->flags |= FLAG_OWN;
+        //printf("enq_submit: entry = %p, len = %d\n", e, e->len);
+        //__sync_fetch_and_or(&e->flags, FLAG_OWN);
+        __sync_synchronize();
+    }
 }
 
 static q_buffer dequeue_get(circular_queue* q) {
