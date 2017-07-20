@@ -495,9 +495,10 @@ def compile_smart_queue(g, q, src2fields):
 
     if scan:
         duplicate_overlapped(g, scan_save_inst_names)
-        node = get_node_before_release(scan_save_inst_names[i], g, lives[i], prefix, release_vis)
-        if node not in release_vis:
-            g.connect(node.name, scan_release_inst.name, "release")
+        for i in range(q.n_cases):
+            node = get_node_before_release(scan_save_inst_names[i], g, lives[i], prefix, release_vis)
+            if node not in release_vis:
+                g.connect(node.name, scan_release_inst.name, "release")
 
 def code_change(instance):
     return len(instance.uses) > 0
