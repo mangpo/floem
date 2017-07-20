@@ -55,6 +55,7 @@ class MyState(State):
     core = Field(Uint(16))
     vallen = Field(Uint(32))
     src_mac = Field('struct ether_addr')
+    dst_mac = Field('struct ether_addr')
     src_ip = Field(Uint(32))
     src_port = Field(Uint(16))
 
@@ -87,6 +88,7 @@ iokvs_message* m = (iokvs_message*) pkt;
 state.pkt = m;
 state.pkt_buff = buff;
 state.src_mac = m->ether.s_addr;
+state.dst_mac = m->ether.d_addr;
 state.src_ip = m->ipv4.src_addr;
 state.src_port = m->udp.src_port;
 output { out(); }
@@ -162,8 +164,8 @@ output switch {
 
         def impl(self):
             self.run_c(r'''
-//printf("receive id: %d\n", state.pkt->mcr.request.opaque);
 uint8_t cmd = state.pkt->mcr.request.opcode;
+printf("receive: %d\n", cmd);
 
 output switch{
   case (cmd == PROTOCOL_BINARY_CMD_GET): out_get();
@@ -205,6 +207,7 @@ output { out(); }
         def impl(self):
             self.run_c(r'''
 item* it = hasht_get(state.key, state.pkt->mcr.request.keylen, state.hash);
+printf("hash get\n");
 state.it = it;
 output switch { case it: out(); else: null(); }
             ''')
@@ -212,6 +215,7 @@ output switch { case it: out(); else: null(); }
     class HashPut(ElementOneInOut):
         def impl(self):
             self.run_c(r'''
+printf("hash put\n");
 hasht_put(state.it, NULL);
 output { out(); }
             ''')
@@ -238,6 +242,7 @@ output { out(this->core); }''' % ('%', n_cores))
 
         def impl(self):
             self.run_c(r'''
+printf("size get\n");
     size_t msglen = sizeof(iokvs_message) + 4 + state.it->vallen;
     state.vallen = state.it->vallen;
     output { out(msglen); }
@@ -311,6 +316,7 @@ output { out(msglen, m, pkt_buff); }
 
         def impl(self):
             self.run_c(r'''
+printf("size get null\n");
             size_t msglen = sizeof(iokvs_message) + 4;
             output { out(msglen); }
             ''')
@@ -344,6 +350,7 @@ output { out(msglen, m, pkt_buff); }
 
         def impl(self):
             self.run_c(r'''
+printf("size set\n");
             size_t msglen = sizeof(iokvs_message) + 4;
             output { out(msglen); }
             ''')
@@ -396,7 +403,7 @@ output { out(msglen, m, pkt_buff); }
         (size_t msglen, iokvs_message* m, void* buff) = inp();
 
         m->ether.d_addr = state.src_mac;
-        m->ether.s_addr = settings.localmac;
+        m->ether.s_addr = state.dst_mac; //settings.localmac;
         m->ipv4.dst_addr = state.src_ip;
         m->ipv4.src_addr = settings.localip;
         m->ipv4.total_length = htons(msglen - offsetof(iokvs_message, ipv4));
