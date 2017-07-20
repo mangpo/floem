@@ -2,7 +2,7 @@ from dsl2 import *
 import queue_smart2, net_real
 from compiler import Compiler
 
-n_cores = 8
+n_cores = 10
 
 class protocol_binary_request_header_request(State):
     magic = Field(Uint(8))
@@ -575,7 +575,7 @@ output switch { case segment: out(); else: null(); }
         this->last = this;
     }
 
-/*  
+/*
 // TODO: change to 0 for performance
     int count = 1;
     segments_holder* p = this;
@@ -610,7 +610,7 @@ output switch { case segment: out(); else: null(); }
     //printf("item_alloc: segbase = %ld\n", this->segbase);
     item *it = segment_item_alloc(this->segbase, this->seglen, &this->offset, sizeof(item) + totlen);
     if(it == NULL && this->next) {
-        //printf("Segment is full.\n");
+        printf("Segment is full.\n");
         full = this->segbase + this->offset;
         this->segbase = this->next->segbase;
         this->seglen = this->next->seglen;

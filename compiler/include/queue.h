@@ -154,7 +154,7 @@ static void dequeue_release(q_buffer buff, uint8_t flag_clean)
 {
     q_entry *e = buff.entry;
     e->flags = (e->flags & ~FLAG_OWN) | flag_clean;
-    //printf("release: entry=%ld\n", e);
+    //printf("release: entry=%p\n", e);
     //__sync_fetch_and_and(&e->flags, ~FLAG_OWN);
     __sync_synchronize();
 }
@@ -166,15 +166,16 @@ static q_buffer next_clean(circular_queue_scan* q) {
     void* base = q->queue;
     //if(c==1 && cleaning.last != off) printf("SCAN: start, last = %ld, offset = %ld, clean = %ld\n", cleaning.last, off, clean);
     q_entry *entry = NULL;
-    if (clean != off) {
+    //if (clean != off) {
         entry = (q_entry *) ((uintptr_t) base + clean);
         __sync_synchronize();
         if ((entry->flags & FLAG_MASK) == FLAG_CLEAN) {
-            q->clean = (clean + entry->len) % len;
+	  //printf("clean: entry = %p, flag = %x\n", entry, entry->flags);
+	  q->clean = (clean + entry->len) % len;
         } else {
             entry = NULL;
         }
-    }
+	//}
     q_buffer buff = { entry, 0 };
     return buff;
 }
@@ -183,6 +184,7 @@ static void clean_release(q_buffer buff)
 {
     q_entry *e = buff.entry;
     e->flags = e->flags & ~FLAG_MASK;
+    //printf("clean_release: entry = %p, flags = %x\n", e, e->flags);
     __sync_synchronize();
 }
 
