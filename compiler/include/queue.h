@@ -179,7 +179,7 @@ static q_buffer next_clean(circular_queue_scan* q) {
     return buff;
 }
 
-static void clean_release(q_buffer buf)
+static void clean_release(q_buffer buff)
 {
     q_entry *e = buff.entry;
     e->flags = e->flags & ~FLAG_MASK;

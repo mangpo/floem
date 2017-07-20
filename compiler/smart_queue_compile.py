@@ -267,8 +267,8 @@ def compile_smart_queue(g, q, src2fields):
 
     if scan:
         #g.addElement(scan_classify_ele)
-        scan_inst = scan(q.enq.name + "_scan", create=False).instance
-        scan_release_inst = deq_release(q.enq.name + "_release", create=False).instance
+        scan_inst = scan(q.name + "_scan", create=False).instance
+        scan_release_inst = scan_release(q.name + "_scan_release", create=False).instance
         #scan_classify_inst = ElementInstance(scan_classify_ele.name, scan_classify_ele.name + "_scan_inst")
         scan_classify_inst = ElementInstance(classify_ele.name, classify_ele.name + "_scan_inst")
         new_instances.append(scan_inst)
