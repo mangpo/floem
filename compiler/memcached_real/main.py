@@ -268,9 +268,11 @@ printf("size get\n");
         (size_t msglen, void* pkt, void* pkt_buff) = inp();
 
         iokvs_message *m = pkt;
+        memcpy(m, &iokvs_template, sizeof(iokvs_message));
         item* it = state.it;
 
         m->mcr.request.magic = PROTOCOL_BINARY_RES;
+        m->mcr.request.opcode = PROTOCOL_BINARY_CMD_GET;
         m->mcr.request.datatype = PROTOCOL_BINARY_RAW_BYTES;
         m->mcr.request.status = PROTOCOL_BINARY_RESPONSE_SUCCESS;
 
@@ -288,10 +290,12 @@ output { out(msglen, m, pkt_buff); }
             self.run_c(r'''
         (size_t msglen, void* pkt, void* pkt_buff) = inp();
         iokvs_message *m = pkt;
+        memcpy(m, &iokvs_template, sizeof(iokvs_message));
         int msglen = sizeof(iokvs_message) + 4;
         item* it = state.it;
 
         m->mcr.request.magic = PROTOCOL_BINARY_RES;
+        m->mcr.request.opcode = PROTOCOL_BINARY_CMD_GET;
         m->mcr.request.datatype = PROTOCOL_BINARY_RAW_BYTES;
         m->mcr.request.status = PROTOCOL_BINARY_RESPONSE_SUCCESS;
 
@@ -330,8 +334,10 @@ printf("size get null\n");
             self.run_c(r'''
             (size_t msglen, void* pkt, void* pkt_buff) = inp();
             iokvs_message *m = pkt;
+            memcpy(m, &iokvs_template, sizeof(iokvs_message));
 
             m->mcr.request.magic = PROTOCOL_BINARY_RES;
+            m->mcr.request.opcode = PROTOCOL_BINARY_CMD_GET;
             m->mcr.request.datatype = PROTOCOL_BINARY_RAW_BYTES;
             m->mcr.request.status = PROTOCOL_BINARY_RESPONSE_KEY_ENOENT;
 
@@ -380,8 +386,10 @@ printf("size set\n");
             self.run_c(r'''
 (size_t msglen, void* pkt, void* pkt_buff) = inp();
 iokvs_message *m = pkt;
+memcpy(m, &iokvs_template, sizeof(iokvs_message));
 
 m->mcr.request.magic = PROTOCOL_BINARY_RES;
+m->mcr.request.opcode = PROTOCOL_BINARY_CMD_SET;
 m->mcr.request.datatype = PROTOCOL_BINARY_RAW_BYTES;
 m->mcr.request.status = %s;
 
