@@ -22,6 +22,8 @@ struct settings {
     size_t segcqsize;
     /** Local IP */
     uint32_t localip;
+    /** Local IP */
+    uint64_t localmac;
     /** UDP port to listen on */
     uint16_t udpport;
     /** Verbosity for log messages. */

@@ -130,6 +130,8 @@ sizeof_dict = {
     "uintptr_t": 8,
 }
 
+class UnkownType(Exception):
+    pass
 
 def sizeof(t):
     if t[-1] == '*':
@@ -137,4 +139,4 @@ def sizeof(t):
     elif t in sizeof_dict:
         return sizeof_dict[t]
     else:
-        raise Exception("Unknown type '%s'." % t)
+        raise UnkownType("Unknown type '%s'." % t)

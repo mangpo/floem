@@ -507,6 +507,7 @@ class API(Runnable):
     def __init__(self, name, default_return=None, process=None):
         self.default_return = default_return
         Runnable.__init__(self, name, process)
+        self.output_elements = []
 
         if len(self.inports) == 0:
             input = []
@@ -532,13 +533,18 @@ class API(Runnable):
             else:
                 raise Exception("Output port '%s' of API '%s' returns more than one value." %
                                 (self.outports[0].name, self.name))
+
+            self.output_elements = [port.element for port in self.outports[0].spec.element_ports]
+            if self.outports[0].impl:
+                self.output_elements += [port.element for port in self.outports[0].impl.element_ports]
         else:
             raise Exception("API '%s' has more than one output port: %s." % (self.name, self.outports))
 
         # Insert an element for an API with multiple starting elements.
         self.check_api_start_node()
 
-        t = APIThread(name, [x for x in input], output, default_val=self.default_return)
+        t = APIThread(name, [x for x in input], output, default_val=self.default_return,
+                      output_elements=self.output_elements)
         t.run(self)
 
     @abstractmethod
@@ -743,8 +749,8 @@ def run_order(*instances):
 
 
 class APIThread(Thread):
-    def __init__(self, name, call_types, return_types, default_val=None):
-        api = program.APIFunction(name, call_types, return_types, default_val)
+    def __init__(self, name, call_types, return_types, default_val=None, output_elements=None):
+        api = program.APIFunction(name, call_types, return_types, default_val, output_elements=output_elements)
         scope_prepend(api)
         Thread.__init__(self, name)
 

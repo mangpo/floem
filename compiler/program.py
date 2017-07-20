@@ -132,7 +132,7 @@ def get_resource_name(stack, name):
         return name
 
 class APIFunction:
-    def __init__(self, name, call_types, return_type, default_val=None):
+    def __init__(self, name, call_types, return_type, default_val=None, output_elements=[]):
         assert isinstance(call_types, list), \
             ("call_types argument of APIFunction should be a list of types. '%s' is given." % call_types)
         assert (return_type is None or isinstance(return_type, str)), \
@@ -145,6 +145,7 @@ class APIFunction:
         self.return_instance = None
         self.return_port = None
         self.process = None
+        self.output_elements = output_elements
 
 
 class InternalTrigger:
@@ -267,6 +268,9 @@ class GraphGenerator:
         elif isinstance(x, APIFunction):
             global_name = get_resource_name(stack, x.name)
             #global_name = x.name
+            for inst in x.output_elements:
+                new_name = get_node_name(stack, inst.name)
+                self.graph.API_outputs.append(new_name)
             self.graph.threads_API.append(APIFunction(global_name, x.call_types, x.return_type, x.default_val))
 
         elif isinstance(x, ResourceMap):

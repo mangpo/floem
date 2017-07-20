@@ -132,3 +132,28 @@ def get_node_before_release(name, g, lives, prefix, vis):
     if node not in vis:
         add_release_entry_port(g, node)
     return node
+
+
+def duplicate_subgraph(g, node_list, parents):
+    suffix = "_dup"
+    for inst_name in node_list:
+        instance = g.instances[inst_name]
+        n = len(parents[inst_name])
+        for i in range(n):
+            g.copy_node_and_element(inst_name, suffix + str(i))
+
+        for inport in instance.input2ele:
+            l = instance.input2ele[inport]
+            assert len(l) == n, "len(l) != n"
+            for i in range(n):
+                prev_name, prev_port = l[0]  # index = 0 because l is mutated.
+                g.disconnect(prev_name, inst_name, prev_port, inport)
+                g.connect(prev_name, inst_name + suffix + str(i), prev_port, inport)
+
+        for outport in instance.output2ele.keys():
+            next_name, next_port = instance.output2ele[outport]
+            g.disconnect(inst_name, next_name, outport, next_port)
+            for i in range(n):
+                g.connect(inst_name + suffix + str(i), next_name, outport, next_port)
+
+        g.deleteElementInstance(inst_name)

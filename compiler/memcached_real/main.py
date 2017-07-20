@@ -54,6 +54,9 @@ class MyState(State):
     seglen = Field(Uint(64))
     core = Field(Uint(16))
     vallen = Field(Uint(32))
+    src_mac = Field('struct ether_addr')
+    src_ip = Field(Uint(32))
+    src_port = Field(Uint(16))
 
 class Schedule(State):
     core = Field(Size)
@@ -80,8 +83,12 @@ class main(Pipeline):
         def impl(self):
             self.run_c(r'''
 (size_t size, void* pkt, void* buff) = inp();
-state.pkt = (iokvs_message*) pkt;
+iokvs_message* m = (iokvs_message*) pkt;
+state.pkt = m;
 state.pkt_buff = buff;
+state.src_mac = m->ether.s_addr;
+state.src_ip = m->ipv4.src_addr;
+state.src_port = m->udp.src_port;
 output { out(); }
             ''')
 
@@ -267,7 +274,7 @@ m->mcr.request.extlen = 4;
 m->mcr.request.bodylen = 4;
 *((uint32_t *)m->payload) = 0;
 m->mcr.request.bodylen = 4 + state.vallen;
-rte_memcpy(m->payload + 4, item_value(it), staet.vallen);
+rte_memcpy(m->payload + 4, item_value(it), state.vallen);
 
 output { out(msglen, m, pkt_buff); }
             ''')
@@ -317,7 +324,6 @@ output { out(msglen, m, pkt_buff); }
             self.run_c(r'''
             (size_t msglen, void* pkt, void* pkt_buff) = inp();
             iokvs_message *m = pkt;
-            int msglen = sizeof(iokvs_message) + 4;
 
             m->mcr.request.magic = PROTOCOL_BINARY_RES;
             m->mcr.request.datatype = PROTOCOL_BINARY_RAW_BYTES;
@@ -388,18 +394,17 @@ output { out(msglen, m, pkt_buff); }
         def impl(self):
             self.run_c(r'''
         (size_t msglen, iokvs_message* m, void* buff) = inp();
-        struct ether_addr mymac = m->ether.d_addr;
 
-        m->ether.d_addr = m->ether.s_addr;
-        m->ether.s_addr = mymac; // TODO: mymac
-        m->ipv4.dst_addr = m->ipv4.src_addr;
+        m->ether.d_addr = state.src_mac;
+        m->ether.s_addr = settings.localmac;
+        m->ipv4.dst_addr = state.src_ip;
         m->ipv4.src_addr = settings.localip;
         m->ipv4.total_length = htons(msglen - offsetof(iokvs_message, ipv4));
         m->ipv4.time_to_live = 64;
         m->ipv4.hdr_checksum = 0;
         //m->ipv4.hdr_checksum = rte_ipv4_cksum(&m->ipv4);  // TODO
 
-        m->udp.dst_port = m->udp.src_port;
+        m->udp.dst_port = state.src_port;
         m->udp.src_port = htons(11211);
         m->udp.dgram_len = htons(msglen - offsetof(iokvs_message, udp));
         m->udp.dgram_cksum = 0;
@@ -821,9 +826,9 @@ output switch { case segment: out(); else: null(); }
         class nic_tx(InternalLoop):
             def impl(self):
                 to_net = net_real.ToNet('to_net', configure=['alloc'])
-                net_alloc0 = net_real.NetAlloc()
-                net_alloc1 = net_real.NetAlloc()
-                net_alloc3 = net_real.NetAlloc()
+                net_alloc0 = net_real.NetAlloc('net_alloc0')
+                net_alloc1 = net_real.NetAlloc('net_alloc1')
+                net_alloc3 = net_real.NetAlloc('net_alloc3')
                 prepare_header = main.PrepareHeader()
                 display = main.PrintMsg()
                 hton = net_real.HTON(configure=['iokvs_message'])
@@ -846,9 +851,10 @@ output switch { case segment: out(); else: null(); }
                 tx_deq.out[2] >> main.AddLogseg()
 
                 # free net_alloc
-                net_alloc0.oom >> main.Drop()  # TODO: reuse drop => No easy way to insert pipeline state
-                net_alloc1.oom >> main.Drop()
-                net_alloc3.oom >> main.Drop()
+                drop = main.Drop()
+                net_alloc0.oom >> drop  # TODO: reuse drop => No easy way to insert pipeline state
+                net_alloc1.oom >> drop
+                net_alloc3.oom >> drop
 
         nic_rx('nic_rx', process='dpdk', cores=[1])
         process_eq('process_eq', process='app')

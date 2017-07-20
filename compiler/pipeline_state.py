@@ -2,6 +2,7 @@ from program import *
 from join_handling import annotate_join_info, clean_minimal_join_info
 from smart_queue_compile import compile_smart_queues
 import codegen, codegen_state, graph_ir
+from pipeline_state_join import duplicate_subgraph
 
 
 def allocate_pipeline_state(g, element, state):
@@ -220,72 +221,38 @@ def rename_entry_references(g, src2fields):
 def code_change(instance):
     return len(instance.uses) > 0
 
-dup_id = 0
-
-def duplicate_subgraph(g, start_name, parents):
-    global  dup_id
-    suffix = "_dup" + str(dup_id)
-    dup_id += 1
-
-    dup_set = set()
-
-    # Duplicate element instances
-    for inst_name in parents:
-        myparents = parents[inst_name]
-        instance = g.instances[inst_name]
-        if len(myparents) > 1 and code_change(instance) and start_name in myparents:
-            dup_set.add(inst_name)
-            g.copy_node_and_element(inst_name, suffix)
-
-    # Duplicate connections
-    for inst_name in dup_set:
-        instance = g.instances[inst_name]
-        for inport in instance.input2ele:
-            for prev_name, prev_port in instance.input2ele[inport]:
-                theirs = parents[prev_name]
-                if len(theirs) == 1:
-                    g.disconnect(prev_name, inst_name, prev_port, inport)
-                    g.connect(prev_name, inst_name + suffix, prev_port, inport)
-                elif len(theirs) > 1:
-                    g.connect(prev_name + suffix, inst_name + suffix, prev_port, inport)
-                else:
-                    raise Exception("This shouldn't happen. Cannot duplicate an edge when its incoming node doesn't have pipeline state.")
-
-        for outport in instance.output2ele:
-            next_name, next_port = instance.output2ele[outport]
-            theirs = parents[next_name]
-            if next_name not in dup_set:
-                g.connect(inst_name + suffix, next_name, outport, next_port)
-
-    # Delete start_name from parents
-    for inst_name in dup_set:
-        myparents = parents[inst_name]
-        myparents.remove(start_name)
-
+# def duplicate_instances(g):
+#     parents = {}
+#     for instance in g.instances.values():
+#         parents[instance.name] = []
+#
+#     for start_name in g.pipeline_states:
+#         subgraph = set()
+#         g.find_subgraph(start_name, subgraph)
+#
+#         for inst_name in subgraph:
+#             parents[inst_name].append(start_name)
+#
+#     duplicate_instances_with_parents(g, parents, code_change)
 
 def duplicate_instances(g):
     parents = {}
     for instance in g.instances.values():
         parents[instance.name] = []
 
+    global_list = []
     for start_name in g.pipeline_states:
-        subgraph = set()
-        g.find_subgraph(start_name, subgraph)
+        subgraph = g.find_subgraph_list(start_name, [])
 
         for inst_name in subgraph:
             parents[inst_name].append(start_name)
 
-    duplicate = False
-    for inst_name in parents:
-        myparents = parents[inst_name]
-        instance = g.instances[inst_name]
+        for x in reversed(subgraph):
+            if x not in global_list:
+                global_list.insert(0, x)
 
-        if len(myparents) > 1 and code_change(instance):
-            duplicate = True
-
-    if duplicate:
-        for start_name in g.pipeline_states:
-            duplicate_subgraph(g, start_name, parents)
+    filtered_list = [x for x in global_list if len(parents[x]) > 1 and code_change(g.instances[x])]
+    duplicate_subgraph(g, filtered_list, parents)
 
 
 def insert_pipeline_states(g):

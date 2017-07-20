@@ -1,6 +1,6 @@
 import queue2, workspace, desugaring, graph_ir
 from program import *
-from pipeline_state_join import get_node_before_release
+from pipeline_state_join import get_node_before_release, duplicate_subgraph
 
 
 def filter_live(vars):
@@ -165,9 +165,12 @@ def get_fill_entry_src(g, deq_thread, enq_thread, live, special, extras,
                     (field, pipeline_state)
                 fill_src += "    memcpy(e->%s, state.%s, %s);\n" % (field, var, info)
         else:
-            size = common.sizeof(mapping[var])
-            convert = size2convert[size]
-            fill_src += "    e->%s = %s(state.%s);\n" % (field, convert, var)
+            try:
+                size = common.sizeof(mapping[var])
+                convert = size2convert[size]
+                fill_src += "    e->%s = %s(state.%s);\n" % (field, convert, var)
+            except common.UnkownType:
+                fill_src += "    e->%s = state.%s;\n" % (field, var)
 
     fill_src += "    e->flags |= %s(%d << TYPE_SHIFT);\n" % (htons, i + 1)
     fill_src += "  }" # end if(e)
@@ -332,6 +335,10 @@ def compile_smart_queue(g, q, src2fields):
             for prev_inst, prev_port in l:
                 g.connect(prev_inst, scan_inst.name, prev_port, port)
 
+    save_inst_names = []
+    scan_save_inst_names = []
+    lives = []
+
     release_vis = set()
     for i in range(q.n_cases):
         live = filter_live(q.deq.liveness[i])
@@ -443,10 +450,12 @@ def compile_smart_queue(g, q, src2fields):
         g.connect(save_inst.name, out_inst, "out", out_port)
 
         # Dequeue release connection
-        node = get_node_before_release(save_inst.name, g, live, prefix, release_vis)
-        if node not in release_vis:
-            release_vis.add(node)
-            g.connect(node.name, deq_release_inst.name, "release")
+        lives.append(live)
+        save_inst_names.append(save_inst.name)
+        # node = get_node_before_release(save_inst.name, g, live, prefix, release_vis)
+        # if node not in release_vis:
+        #     release_vis.add(node)
+        #     g.connect(node.name, deq_release_inst.name, "release")
 
         if scan:
             # Create scan save
@@ -471,9 +480,47 @@ def compile_smart_queue(g, q, src2fields):
             g.connect(scan_save_inst.name, clean_inst, "out", clean_port)
 
             # Scan release connection
-            node = get_node_before_release(scan_save_inst.name, g, live, prefix, release_vis)
-            if node not in release_vis:
-                g.connect(node.name, scan_release_inst.name, "release")
+            scan_save_inst_names.append(scan_save_inst.name)
+            # node = get_node_before_release(scan_save_inst.name, g, live, prefix, release_vis)
+            # if node not in release_vis:
+            #     g.connect(node.name, scan_release_inst.name, "release")
+
+    # Insert release dequeue
+    duplicate_overlapped(g, save_inst_names)
+    for i in range(q.n_cases):
+        node = get_node_before_release(save_inst_names[i], g, lives[i], prefix, release_vis)
+        if node not in release_vis:
+            release_vis.add(node)
+            g.connect(node.name, deq_release_inst.name, "release")
+
+    if scan:
+        duplicate_overlapped(g, scan_save_inst_names)
+        node = get_node_before_release(scan_save_inst_names[i], g, lives[i], prefix, release_vis)
+        if node not in release_vis:
+            g.connect(node.name, scan_release_inst.name, "release")
+
+def code_change(instance):
+    return len(instance.uses) > 0
+
+def duplicate_overlapped(g, save_inst_names):
+    parents = {}
+    for instance in g.instances.values():
+        parents[instance.name] = []
+
+    global_list = []
+    for i in range(len(save_inst_names)):
+        start_name = save_inst_names[i]
+        subgraph = g.find_subgraph_list(start_name, [])
+
+        for inst_name in subgraph:
+            parents[inst_name].append(start_name)
+
+        for x in reversed(subgraph):
+            if x not in global_list:
+                global_list.insert(0, x)
+
+    filtered_list = [x for x in global_list if (len(parents[x]) > 1) and (x not in g.API_outputs)]
+    duplicate_subgraph(g, filtered_list, parents)
 
 
 def order_smart_queues(name, vis, order, g):

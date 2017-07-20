@@ -27,6 +27,7 @@ class Graph:
         self.threads_API = []
         self.threads_order = []
         self.threads_roots = set()
+        self.API_outputs = []
 
         # Process
         self.processes = set()
@@ -58,6 +59,7 @@ class Graph:
         self.merge_list(self.threads_API, other.threads_API)
         self.merge_list(self.threads_order, other.threads_order)
         self.threads_roots = self.merge_set(self.threads_roots, other.threads_roots)
+        self.merge_list(self.API_outputs, other.API_outputs)
 
         self.merge_dict(self.inject_populates, other.inject_populates)
         self.merge_dict(self.probe_compares, other.probe_compares)
@@ -210,6 +212,14 @@ class Graph:
 
         return ret
 
+    def deleteElementInstance(self, name):
+        instance = self.instances[name]
+        for l in instance.input2ele.values():
+            assert len(l) == 0, "Cannot delete Element '%s' because it is still connected from %s." % (name, l)
+        for next, port in instance.output2ele.values():
+            raise Exception("Cannot delete Element '%s' because it is still connected to %s." % (name, next))
+        del self.instances[name]
+
     def copy_node_and_element(self, inst_name, suffix):
         instance = self.instances[inst_name]
         new_instance = instance.deep_clone(suffix)
@@ -271,7 +281,6 @@ class Graph:
 
         del i1.output2ele[out1]
         i2.input2ele[in2].remove((name1, out1))
-        print name1
 
     def delete_instance(self, name):
         instance = self.instances[name]
@@ -325,6 +334,14 @@ class Graph:
 
         roots = set(self.instances.keys()).difference(not_roots)
         return roots
+
+    def find_subgraph_list(self, root, subgraph):
+        instance = self.instances[root]
+        if instance.name not in subgraph:
+            subgraph.append(instance.name)
+            for inst,port in instance.output2ele.values():
+                self.find_subgraph_list(inst, subgraph)
+        return subgraph
 
     def find_subgraph(self, root, subgraph):
         instance = self.instances[root]
