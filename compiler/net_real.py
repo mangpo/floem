@@ -94,6 +94,14 @@ class ToNet(Element):
     ''' if self.has_output else ""
         self.run_c(r'''
     (size_t len, void* p, void* buf) = inp();
+/*    uint8_t* x = p;
+    int i;
+    printf("send:");
+    for(i=0;i<len;i++) {
+        if(i%16==0) printf("\n");
+        printf("%x ", x[i]);
+    }
+    printf("\n"); */
     dpdk_to_net(len, p, buf);
         ''' + out)
 

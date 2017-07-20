@@ -286,10 +286,10 @@ typedef struct {
 } __attribute__ ((packed)) iokvs_message;
 
 static iokvs_message iokvs_template = {
- .ether = { .ether_type = 0x0800 },
- .ipv4 = { .version_ihl = 0x45, .time_to_live = 0x40, .next_proto_id = 0x11}
- .mcr = { .n_data = 1 }
-}
+ .ether = { .ether_type = 0x0008 },
+ .ipv4 = { .version_ihl = 0x45, .time_to_live = 0x40, .next_proto_id = 0x11},
+ .mcudp = { .n_data = 0x0100 }
+};
 
 uint32_t jenkins_hash(const void *key, size_t length);
 void populate_hasht();

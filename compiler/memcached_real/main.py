@@ -2,7 +2,7 @@ from dsl2 import *
 import queue_smart2, net_real
 from compiler import Compiler
 
-n_cores = 10
+n_cores = 8
 
 class protocol_binary_request_header_request(State):
     magic = Field(Uint(8))
@@ -165,7 +165,7 @@ output switch {
         def impl(self):
             self.run_c(r'''
 uint8_t cmd = state.pkt->mcr.request.opcode;
-printf("receive: %d\n", cmd);
+//printf("receive: %d\n", cmd);
 
 output switch{
   case (cmd == PROTOCOL_BINARY_CMD_GET): out_get();
@@ -185,7 +185,7 @@ output { out(); }''')
             self.run_c(r'''
 int core = state.hash %s %d;;
 state.core = core;
-printf("hash = %s, core = %s\n", state.hash, core);
+//printf("hash = %s, core = %s\n", state.hash, core);
             output { out(); }''' % ('%', n_cores, '%d', '%d'))
 
     ######################## hash ########################
@@ -207,7 +207,7 @@ output { out(); }
         def impl(self):
             self.run_c(r'''
 item* it = hasht_get(state.key, state.pkt->mcr.request.keylen, state.hash);
-printf("hash get\n");
+//printf("hash get\n");
 state.it = it;
 output switch { case it: out(); else: null(); }
             ''')
@@ -215,7 +215,7 @@ output switch { case it: out(); else: null(); }
     class HashPut(ElementOneInOut):
         def impl(self):
             self.run_c(r'''
-printf("hash put\n");
+//printf("hash put\n");
 hasht_put(state.it, NULL);
 output { out(); }
             ''')
@@ -242,7 +242,7 @@ output { out(this->core); }''' % ('%', n_cores))
 
         def impl(self):
             self.run_c(r'''
-printf("size get\n");
+//printf("size get\n");
     size_t msglen = sizeof(iokvs_message) + 4 + state.it->vallen;
     state.vallen = state.it->vallen;
     output { out(msglen); }
@@ -320,7 +320,7 @@ output { out(msglen, m, pkt_buff); }
 
         def impl(self):
             self.run_c(r'''
-printf("size get null\n");
+//printf("size get null\n");
             size_t msglen = sizeof(iokvs_message) + 4;
             output { out(msglen); }
             ''')
@@ -356,7 +356,7 @@ printf("size get null\n");
 
         def impl(self):
             self.run_c(r'''
-printf("size set\n");
+//printf("size set\n");
             size_t msglen = sizeof(iokvs_message) + 4;
             output { out(msglen); }
             ''')
@@ -484,11 +484,12 @@ iokvs_message* m = (iokvs_message*) pkt;
 uint8_t *val = m->payload + 4;
 uint8_t opcode = m->mcr.request.opcode;
 
+/*
 if(opcode == PROTOCOL_BINARY_CMD_GET)
     printf("GET -- status: %d, len: %d, val:%d\n", m->mcr.request.status, m->mcr.request.bodylen, val[0]);
 else if (opcode == PROTOCOL_BINARY_CMD_SET)
     printf("SET -- status: %d, len: %d\n", m->mcr.request.status, m->mcr.request.bodylen);
-
+*/
 
 output { out(msglen, (void*) m, buff); }
     ''')
@@ -703,12 +704,13 @@ output switch { case segment: out(); else: null(); }
             ''')
 
     class Clean(Element):
-        def configure(self):
+        def configure(self, val):
             self.inp = Input()
             self.out = Output(Bool)
+            self.val = val
 
         def impl(self):
-            self.run_c(r'''output { out(true); }''')
+            self.run_c(r'''output { out(%s); }''' % self.val)
 
     class Drop(Element):
         def configure(self):
@@ -716,6 +718,17 @@ output switch { case segment: out(); else: null(); }
 
         def impl(self):
             self.run_c("")
+
+    class ForwardBool(Element):
+        def configure(self):
+            self.inp = Input(Bool)
+            self.out = Output(Bool)
+
+        def impl(self):
+            self.run_c(r'''
+            (bool x) = inp();
+            output { out(x); }
+            ''')
 
 
     ########################## program #########################
@@ -827,15 +840,17 @@ output switch { case segment: out(); else: null(); }
                 self.default_return = 'false'
 
             def impl(self):
-                clean = main.Clean()
+                clean = main.Clean(configure=['true'])
+                unclean = main.Clean(configure=['false'])
+                ret = main.ForwardBool()
                 self.inp >> tx_scan
                 # get
-                tx_scan.out[0] >> main.Unref() >> clean
+                tx_scan.out[0] >> main.Unref() >> clean >> ret
 
-                tx_scan.out[1] >> clean
-                tx_scan.out[2] >> clean
-                tx_scan.out[3] >> clean
-                clean >> self.out
+                tx_scan.out[1] >> unclean
+                tx_scan.out[2] >> unclean
+                tx_scan.out[3] >> unclean
+                unclean >> ret >> self.out
 
         ####################### NIC Tx #######################
         class nic_tx(InternalLoop):

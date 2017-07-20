@@ -38,7 +38,7 @@ void settings_init(int argc, char *argv[])
   settings.segmaxnum = 128;
   settings.segcqsize = 8 * 1024;
 
-  if (argc != 3) {
+  if (argc != 2) {
     fprintf(stderr, "Usage: flexkvs LOCAL-IP LOCAL-MAC\n");
     exit(1);
   }
@@ -48,9 +48,9 @@ void settings_init(int argc, char *argv[])
     exit(1);
   }
 
-  if (parse_mac(argv[2], &setting.localmac) != 0) {
-    fprintf(stderr, "Parsing mac failed\n");
-    exit(1);
-  }
+  /* if (parse_mac(argv[2], &settings.localmac) != 0) { */
+  /*   fprintf(stderr, "Parsing mac failed\n"); */
+  /*   exit(1); */
+  /* } */
 }
 
