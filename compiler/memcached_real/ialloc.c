@@ -270,7 +270,7 @@ item *segment_item_alloc(uint64_t thisbase, uint64_t seglen, uint64_t* offset, s
 /** Mark NIC log segment as full. */
 void ialloc_nicsegment_full(uintptr_t last)
 {
-    printf("ialloc_nicsegment_full\n");
+  //printf("ialloc_nicsegment_full\n");
     uintptr_t it_a = (uintptr_t) seg_base + last;
     struct segment_header *h = segment_from_part((item *) (it_a - sizeof(item)));
     size_t off = it_a - (uintptr_t) h->data;
@@ -556,7 +556,7 @@ void ialloc_maintenance(struct item_allocator *ia)
         next = h->next;
         ratio = (double) h->freed / h->size;
         /* Done with this segment? */
-        //printf("maintain %ld %ld\n", h->freed, h->size);
+        //printf("maintain %p %ld %ld\n", h, h->freed, h->size);
         if (h->freed == h->size) {
             if (prev == NULL) {
                 ia->oldest = h->next;
@@ -570,8 +570,9 @@ void ialloc_maintenance(struct item_allocator *ia)
              * necessary */
             ratio = (double) h->freed / h->size;
             if (ratio >= 0.8 && ratio > cand_ratio) {
-                cand_ratio = ratio;
-                cand = h;
+	      printf("EXCEED RATIO %p\n", h);
+	      cand_ratio = ratio;
+	      cand = h;
             }
         }
         prev = h;
@@ -589,6 +590,7 @@ void ialloc_maintenance(struct item_allocator *ia)
         if (h != NULL) {
             h->flags |= SF_CLEANED;
         }
+	if(h)	  printf("cleanning %p!!!!!!!!!!!!!!\n", h);
     }
 
     /* No segments to clean, that's great! */

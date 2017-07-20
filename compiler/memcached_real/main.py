@@ -575,16 +575,18 @@ output switch { case segment: out(); else: null(); }
         this->last = this;
     }
 
-    if(1) {  // TODO: change to 0 for performance
+/*  
+// TODO: change to 0 for performance
     int count = 1;
     segments_holder* p = this;
     while(p->next != NULL) {
         count++;
         p = p->next;
     }
-    printf("addlog: new->segbase = %ld, cur->segbase = %ld\n", state.segbase, this->segbase);
     printf("logseg count = %d\n", count);
-    }
+*/
+    printf("addlog: new->segbase = %ld, cur->segbase = %ld\n", state.segbase, this->segbase);
+
             ''')
 
     ######################## item ########################
@@ -608,7 +610,7 @@ output switch { case segment: out(); else: null(); }
     //printf("item_alloc: segbase = %ld\n", this->segbase);
     item *it = segment_item_alloc(this->segbase, this->seglen, &this->offset, sizeof(item) + totlen);
     if(it == NULL && this->next) {
-        printf("Segment is full.\n");
+        //printf("Segment is full.\n");
         full = this->segbase + this->offset;
         this->segbase = this->next->segbase;
         this->seglen = this->next->seglen;
@@ -841,16 +843,16 @@ output switch { case segment: out(); else: null(); }
 
             def impl(self):
                 clean = main.Clean(configure=['true'])
-                unclean = main.Clean(configure=['false'])
-                ret = main.ForwardBool()
+                #unclean = main.Clean(configure=['false'])
+                #ret = main.ForwardBool()
                 self.inp >> tx_scan
                 # get
-                tx_scan.out[0] >> main.Unref() >> clean >> ret
+                tx_scan.out[0] >> main.Unref() >> clean
 
-                tx_scan.out[1] >> unclean
-                tx_scan.out[2] >> unclean
-                tx_scan.out[3] >> unclean
-                unclean >> ret >> self.out
+                tx_scan.out[1] >> clean
+                tx_scan.out[2] >> clean
+                tx_scan.out[3] >> clean
+                clean >> self.out
 
         ####################### NIC Tx #######################
         class nic_tx(InternalLoop):

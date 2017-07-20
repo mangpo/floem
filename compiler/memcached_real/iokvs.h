@@ -255,8 +255,10 @@ static inline void item_unref(item *it)
 {
     uint16_t c;
     assert(it->refcount > 0);
+    //if(it->refcount > 10) printf("refcount = %d\n", it->refcount);
     if ((c = __sync_sub_and_fetch(&it->refcount, 1)) == 0) {
-        ialloc_free(it, item_totalsz(it));
+      //printf("ialloc_free!!!!!!!!!!!!!!!!!!\n");
+      ialloc_free(it, item_totalsz(it));
     }
 }
 

@@ -35,7 +35,7 @@ void settings_init(int argc, char *argv[])
   settings.udpport = 11211;
   settings.verbose = 1;
   settings.segsize = 2 * 1024 * 1024;
-  settings.segmaxnum = 128;
+  settings.segmaxnum = 512;
   settings.segcqsize = 8 * 1024;
 
   if (argc != 2) {

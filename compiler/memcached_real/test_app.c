@@ -50,8 +50,9 @@ void run_app(void *threadid) {
   printf("Worker %ld starting\n", tid);
 
   while(true) {
+    //printf(".");
     process_eq(tid);
-    clean_log(&ia, true);
+    clean_log(&ia, true); // TODO: is this frequent enough?
     bool cleaning = true;
     while(cleaning) { cleaning = clean_cq(tid); }  // TODO: clean before process_eq
   }
@@ -60,7 +61,7 @@ void run_app(void *threadid) {
 void maintenance()
 {
     size_t i;
-    usleep(1000);
+    usleep(100000);
     while (1) {
         for (i = 0; i < NUM_THREADS; i++) {
             ialloc_maintenance(iallocs[i]);

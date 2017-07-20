@@ -146,6 +146,7 @@ def generate_state_instances_cpu_only(graph, ext, all_processes, shared):
         for name in shared:
             inst = graph.state_instances[name]
             map_src += map_shared_state(name, inst)
+        map_src += r'''  printf("shm_p = %p\n", (void *) shm_p);'''
 
         with open(graph.master_process + ext, 'a') as f, redirect_stdout(f):
             print shared_src
