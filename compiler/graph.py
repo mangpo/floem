@@ -299,7 +299,7 @@ class Graph:
             l = other.input2ele[next_port]
             new_l = []
             for this_name, this_port in l:
-                if not this_name == name:
+                if not (this_name == name and this_port == port):
                     new_l.append((this_name, this_port))
             if len(new_l) == 0:
                 del other.input2ele[next_port]
