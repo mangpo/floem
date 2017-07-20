@@ -7,7 +7,9 @@
 #include <pthread.h>
 
 #define ALIGN 8U
+#define FLAG_MASK 3
 #define FLAG_OWN 1
+#define FLAG_CLEAN 2
 #define TYPE_NOP 0
 #define TYPE_SHIFT 8
 #define TYPE_MASK  0xFF00
@@ -76,7 +78,7 @@ static q_buffer enqueue_alloc(circular_queue* q, size_t len) {
     do {
         flags = (volatile uint16_t *) ((uintptr_t) eq + off);
         __sync_synchronize();
-        if ((*flags & FLAG_OWN) != 0) {
+        if ((*flags & FLAG_MASK) != 0) {
             q->offset = eqe_off;
             //printf("enq_alloc (NULL): queue = %ld, entry = %ld, flag = %ld\n", q->queue, eqe, *flags);
             q_buffer buff = { NULL, 0 };
@@ -148,10 +150,10 @@ static q_buffer dequeue_get(circular_queue* q) {
     }
 }
 
-static void dequeue_release(q_buffer buff)
+static void dequeue_release(q_buffer buff, uint8_t flag_clean)
 {
     q_entry *e = buff.entry;
-    e->flags &= ~FLAG_OWN;
+    e->flags = (e->flags & ~FLAG_OWN) | flag_clean;
     //printf("release: entry=%ld\n", e);
     //__sync_fetch_and_and(&e->flags, ~FLAG_OWN);
     __sync_synchronize();
@@ -167,10 +169,10 @@ static q_buffer next_clean(circular_queue_scan* q) {
     if (clean != off) {
         entry = (q_entry *) ((uintptr_t) base + clean);
         __sync_synchronize();
-        if ((entry->flags & FLAG_OWN) != 0) {
-            entry = NULL;
-        } else {
+        if ((entry->flags & FLAG_MASK) == FLAG_CLEAN) {
             q->clean = (clean + entry->len) % len;
+        } else {
+            entry = NULL;
         }
     }
     q_buffer buff = { entry, 0 };
@@ -179,6 +181,9 @@ static q_buffer next_clean(circular_queue_scan* q) {
 
 static void clean_release(q_buffer buf)
 {
+    q_entry *e = buff.entry;
+    e->flags = e->flags & ~FLAG_MASK;
+    __sync_synchronize();
 }
 
 #endif

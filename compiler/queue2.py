@@ -207,10 +207,16 @@ def queue_variable_size(name, size, n_cores, blocking=False, enq_atomic=False, d
             self.inp = Input(q_buffer)
 
         def impl(self):
-            self.run_c(r'''
-            (q_buffer buf) = inp();
-            dequeue_release(buf);
-            ''')
+            if scan:
+                self.run_c(r'''
+                            (q_buffer buf) = inp();
+                            dequeue_release(buf, FLAG_CLEAN);
+                            ''')
+            else:
+                self.run_c(r'''
+                            (q_buffer buf) = inp();
+                            dequeue_release(buf, 0);
+                            ''')
 
     class CleanNext(Element):
         # For correctness, scan should be executed right before enqueue.
