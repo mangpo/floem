@@ -2,6 +2,107 @@ from graph import *
 import common
 
 
+def insert_ports(graph, inst_name, extra_in, extra_out):
+    """
+    Insert empty input and output ports to an instance, and insert connection accordingly.
+    :param inst_name: instance
+    :param extra_out: a list of (inst_name, port_id) that instance should connect to
+    :param extra_in: a list of (inst_name, port_id) that instance should connect to
+    :return:
+    """
+    instance = graph.instances[inst_name]
+    suffix_in = ""
+    suffix_out = ""
+    if extra_in:
+        suffix_in = "_i" + str(len(extra_in))
+    if extra_out:
+        suffix_out = "_o" + str(len(extra_out))
+
+    # Create new element with extra ports.
+    new_element = instance.element.clone(instance.element.name + "_clone" + suffix_in + suffix_out)
+    if extra_out:
+        new_element.add_empty_outports(["_out" + str(i) for i in range(len(extra_out))])
+        for i in range(len(extra_out)):
+            next_inst, id = extra_out[i]
+            instance.output2ele["_out" + str(i)] = (next_inst, "_in" + str(id))
+
+    if extra_in:
+        new_element.add_empty_inports(["_in" + str(i) for i in range(len(extra_in))])
+        for i in range(len(extra_in)):
+            prev_inst, id = extra_in[i]
+            instance.input2ele["_in" + str(i)] = [(prev_inst, "_out" + str(id))]
+
+    graph.addElement(new_element)
+    instance.element = new_element
+
+
+def merge_as_no_join(graph, froms, to):
+    for f in froms:
+        instance = graph.instances[f]
+        new_element = instance.element.clone(instance.element.name + "_clone_o")
+        new_element.add_empty_outports(["_out"])
+        instance.output2ele["_out"] = (to, "_in")
+        graph.addElement(new_element)
+        instance.element = new_element
+
+    instance = graph.instances[to]
+    new_element = instance.element.clone(instance.element.name + "_clone_i")
+    new_element.add_empty_inports(["_in"])
+    instance.input2ele["_in"] = [(f, "_out") for f in froms]
+    graph.addElement(new_element)
+    instance.element = new_element
+
+def insert_resource_order(graph):
+    """
+    Insert input and output ports to impose the resource scheduling constraints.
+    Insert connection accordingly.
+    :return: void
+    """
+    bPointsTo = {}
+    for a, b in graph.threads_order:
+        if isinstance(a, list):
+            continue
+        if a not in bPointsTo:
+            bPointsTo[a] = graph.find_subgraph_same_thread(a, set(), graph.instances[a].thread)
+        if b not in bPointsTo:
+            bPointsTo[b] = graph.find_subgraph_same_thread(b, set(), graph.instances[b].thread)
+
+    # Collect extra input and output ports for every instance.
+    extra_out = {}
+    extra_in = {}
+    for a, b in graph.threads_order:
+        if isinstance(a, list):
+            continue
+        if a in bPointsTo[b]:  # b points to a, illegal
+            raise Exception("Cannot order '{0}' before '{1}' because '{1}' points to '{0}'.".format(a, b))
+        if b in bPointsTo[a]:
+            continue  # if a already points to b, then we don't have to add this edge.
+
+        if a not in extra_out:
+            extra_out[a] = []
+        if b not in extra_in:
+            extra_in[b] = []
+        len_a = len(extra_out[a])
+        len_b = len(extra_in[b])
+        extra_out[a].append((b, len_b))
+        extra_in[b].append((a, len_a))
+
+    # Insert ports.
+    all_insts = set(extra_out.keys() + extra_in.keys())
+    for inst in all_insts:
+        my_extra_out = None
+        my_extra_in = None
+        if inst in extra_in:
+            my_extra_in = extra_in[inst]
+        if inst in extra_out:
+            my_extra_out = extra_out[inst]
+        insert_ports(graph, inst, my_extra_in, my_extra_out)
+
+    for a, b in graph.threads_order:
+        if isinstance(a, list):
+            merge_as_no_join(graph, a, b)
+
+
 class ThreadAllocator:
     def __init__(self, graph):
         self.roots = set()
@@ -15,7 +116,7 @@ class ThreadAllocator:
         2. Assign call_instance to each thread.
         3. Insert read/write buffer elements when necessary.
         """
-        self.insert_resource_order()  # Impose scheduling order by inserting necessary edges.
+        #self.insert_resource_order()  # Impose scheduling order by inserting necessary edges.
         self.find_roots()
         self.check_resources()
         self.insert_threading_elements()
@@ -319,102 +420,3 @@ class ThreadAllocator:
             new_instance = self.graph.newElementInstance(ele.name, ele.name, ['_' + st_name])
             new_instance.thread = instance.thread
         return ele_name
-
-    def insert_ports(self, inst_name, extra_in, extra_out):
-        """
-        Insert empty input and output ports to an instance, and insert connection accordingly.
-        :param inst_name: instance
-        :param extra_out: a list of (inst_name, port_id) that instance should connect to
-        :param extra_in: a list of (inst_name, port_id) that instance should connect to
-        :return:
-        """
-        instance = self.graph.instances[inst_name]
-        suffix_in = ""
-        suffix_out = ""
-        if extra_in:
-            suffix_in = "_i" + str(len(extra_in))
-        if extra_out:
-            suffix_out = "_o" + str(len(extra_out))
-
-        # Create new element with extra ports.
-        new_element = instance.element.clone(instance.element.name + "_clone" + suffix_in + suffix_out)
-        if extra_out:
-            new_element.add_empty_outports(["_out" + str(i) for i in range(len(extra_out))])
-            for i in range(len(extra_out)):
-                next_inst, id = extra_out[i]
-                instance.output2ele["_out" + str(i)] = (next_inst, "_in" + str(id))
-
-        if extra_in:
-            new_element.add_empty_inports(["_in" + str(i) for i in range(len(extra_in))])
-            for i in range(len(extra_in)):
-                prev_inst, id = extra_in[i]
-                instance.input2ele["_in" + str(i)] = [(prev_inst, "_out" + str(id))]
-
-        self.graph.addElement(new_element)
-        instance.element = new_element
-
-    def merge_as_no_join(self, froms, to):
-        for f in froms:
-            instance = self.graph.instances[f]
-            new_element = instance.element.clone(instance.element.name + "_clone_o")
-            new_element.add_empty_outports(["_out"])
-            instance.output2ele["_out"] = (to, "_in")
-            self.graph.addElement(new_element)
-            instance.element = new_element
-
-        instance = self.graph.instances[to]
-        new_element = instance.element.clone(instance.element.name + "_clone_i")
-        new_element.add_empty_inports(["_in"])
-        instance.input2ele["_in"] = [(f, "_out") for f in froms]
-        self.graph.addElement(new_element)
-        instance.element = new_element
-
-    def insert_resource_order(self):
-        """
-        Insert input and output ports to impose the resource scheduling constraints.
-        Insert connection accordingly.
-        :return: void
-        """
-        bPointsTo = {}
-        for a, b in self.graph.threads_order:
-            if isinstance(a, list):
-                continue
-            if a not in bPointsTo:
-                bPointsTo[a] = self.graph.find_subgraph_same_thread(a, set(), self.graph.instances[a].thread)
-            if b not in bPointsTo:
-                bPointsTo[b] = self.graph.find_subgraph_same_thread(b, set(), self.graph.instances[b].thread)
-
-        # Collect extra input and output ports for every instance.
-        extra_out = {}
-        extra_in = {}
-        for a, b in self.graph.threads_order:
-            if isinstance(a, list):
-                continue
-            if a in bPointsTo[b]:  # b points to a, illegal
-                raise Exception("Cannot order '{0}' before '{1}' because '{1}' points to '{0}'.".format(a, b))
-            if b in bPointsTo[a]:
-                continue  # if a already points to b, then we don't have to add this edge.
-
-            if a not in extra_out:
-                extra_out[a] = []
-            if b not in extra_in:
-                extra_in[b] = []
-            len_a = len(extra_out[a])
-            len_b = len(extra_in[b])
-            extra_out[a].append((b, len_b))
-            extra_in[b].append((a, len_a))
-
-        # Insert ports.
-        all_insts = set(extra_out.keys() + extra_in.keys())
-        for inst in all_insts:
-            my_extra_out = None
-            my_extra_in = None
-            if inst in extra_in:
-                my_extra_in = extra_in[inst]
-            if inst in extra_out:
-                my_extra_out = extra_out[inst]
-            self.insert_ports(inst, my_extra_in, my_extra_out)
-
-        for a, b in self.graph.threads_order:
-            if isinstance(a, list):
-                self.merge_as_no_join(a, b)

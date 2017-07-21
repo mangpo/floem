@@ -9,6 +9,8 @@
 #include <assert.h>
 #include "protocol_binary.h"
 
+#define NUM_THREADS     11
+
 /******************************************************************************/
 /* Settings */
 
@@ -146,10 +148,12 @@ struct item_allocator {
 //void ialloc_finalize(void);
 //void ialloc_finalize_slave(void);
 uint64_t get_pointer_offset(void* p);
+struct item_allocator* get_item_allocators();
 void ialloc_init(void*);
 
 /** Initialize an item allocator instance. */
 void ialloc_init_allocator(struct item_allocator *ia);
+size_t clean_log(struct item_allocator *ia, bool idle);
 
 /**
  * Allocate an item.

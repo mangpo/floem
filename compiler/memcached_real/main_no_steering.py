@@ -1,6 +1,6 @@
 from dsl2 import *
-import queue_smart2, net_real
 from compiler import Compiler
+import net_real
 
 n_cores = 11
 
@@ -58,14 +58,18 @@ class MyState(State):
     # dst_mac = Field('struct ether_addr')
     # src_ip = Field(Uint(32))
     # src_port = Field(Uint(16))  # TODO: remove some fields
-    ia = Field('struct item_allocator *')
 
 class Schedule(State):
     core = Field(Size)
     def init(self): self.core = 0
 
 class ItemAllocators(State):
-    ia = Field(Array('struct item_allocator*', n_cores))
+    ia = Field('struct item_allocator*')
+
+    def init(self):
+        self.ia = 'get_item_allocators()'
+
+item_allocators = ItemAllocators()
 
 class segments_holder(State):
     segbase = Field(Uint(64))
@@ -77,15 +81,14 @@ class segments_holder(State):
 class main(Pipeline):
     state = PerPacket(MyState)
 
-    class SaveIalloc(Element):
+    class SaveID(Element):
         def configure(self):
-            self.inp = Input('struct item_allocator*')
-            self.out = Output()
+            self.inp = Input(Int)
 
         def impl(self):
             self.run_c(r'''
-    state.ia = inp();
-    output { out(); }
+    state.core = inp();
+    state.pkt = NULL;
             ''')
 
     class SaveState(Element):
@@ -101,24 +104,6 @@ class main(Pipeline):
     state.pkt_buff = buff;
     output { out(); }
                 ''')
-
-    class SaveState(Element):
-        def configure(self):
-            self.inp = Input(Size, "void *", "void *")
-            self.out = Output()
-
-        def impl(self):
-            self.run_c(r'''
-(size_t size, void* pkt, void* buff) = inp();
-iokvs_message* m = (iokvs_message*) pkt;
-state.pkt = m;
-state.pkt_buff = buff;
-state.src_mac = m->ether.s_addr;
-state.dst_mac = m->ether.d_addr;
-state.src_ip = m->ipv4.src_addr;
-state.src_port = m->udp.src_port;
-output { out(); }
-            ''')
 
     class GetPktBuff(Element):
         def configure(self):
@@ -448,16 +433,17 @@ output { out(msglen, m, pkt_buff); }
             self.run_c(r'''
         (size_t msglen, iokvs_message* m, void* buff) = inp();
 
-        m->ether.d_addr = state.src_mac;
-        m->ether.s_addr = state.dst_mac; //settings.localmac;
-        m->ipv4.dst_addr = state.src_ip;
+        struct ether_addr mymac = m->ether.d_addr;
+        m->ether.d_addr = m->ether.s_addr;
+        m->ether.s_addr = mymac; //settings.localmac;
+        m->ipv4.dst_addr = m->ipv4.src_addr;
         m->ipv4.src_addr = settings.localip;
         m->ipv4.total_length = htons(msglen - offsetof(iokvs_message, ipv4));
         m->ipv4.time_to_live = 64;
         m->ipv4.hdr_checksum = 0;
-        //m->ipv4.hdr_checksum = rte_ipv4_cksum(&m->ipv4);  // TODO
+        //m->ipv4.hdr_checksum = rte_ipv4_cksum(&m->ipv4);
 
-        m->udp.dst_port = state.src_port;
+        m->udp.dst_port = m->udp.src_port;
         m->udp.src_port = htons(11211);
         m->udp.dgram_len = htons(msglen - offsetof(iokvs_message, udp));
         m->udp.dgram_cksum = 0;
@@ -488,7 +474,7 @@ output { out(msglen, m, pkt_buff); }
         resp = 1;
         struct ether_addr mymac = msg->ether.d_addr;
         msg->ether.d_addr = msg->ether.s_addr;
-        msg->ether.s_addr = mymac; // TODO
+        msg->ether.s_addr = mymac;
         arp->arp_op = htons(ARP_OP_REPLY);
         arp->arp_data.arp_tha = arp->arp_data.arp_sha;
         arp->arp_data.arp_sha = mymac;
@@ -533,119 +519,12 @@ output { out(msglen, (void*) m, buff); }
     ''')
 
 
-    ######################## log segment #######################
-
-    item_allocators = ItemAllocators()
-
-    class FilterFull(ElementOneInOut):
-        def impl(self):
-            self.run_c(r'''output switch { case state.segfull: out(); }''')
-
-
-    class FirstSegment(Element):
-        this = Persistent(ItemAllocators)
-        def states(self): self.this = main.item_allocators
-
-        def configure(self):
-            self.inp = Input(Size, 'struct item_allocator*')
-            self.out = Output()
-
-        def impl(self):
-            self.run_c(r'''
-(size_t core, struct item_allocator* ia) = inp();
-this->ia[core] = ia;
-state.core = core;
-state.segbase = get_pointer_offset(ia->cur->data);
-state.seglen = ia->cur->size;
-output { out(); }
-            ''')
-
-
-    class NewSegment(ElementOneInOut):
-        this = Persistent(ItemAllocators)
-        def configure(self):
-            self.inp = Input()
-            self.out = Output()
-            self.null = Output()
-
-
-        def states(self): self.this = main.item_allocators
-
-        def impl(self):
-            self.run_c(r'''
-struct segment_header* segment = new_segment(this->ia[state.core], false);
-if(segment == NULL) {
-    printf("Fail to allocate new segment.\n");
-    //exit(-1);
-} else {
-    state.segbase = get_pointer_offset(segment->data);
-    state.seglen = segment->size;
-}
-ialloc_nicsegment_full(state.segfull);
-output switch { case segment: out(); else: null(); }
-            ''')  # TODO: maybe we should exit if segment = NULL?
-
-    segments = segments_holder()
-
-    class AddLogseg(Element):
-        this = Persistent(segments_holder)
-
-        def configure(self):
-            self.inp = Input()
-            self.this = main.segments
-
-        def impl(self):
-            self.run_c(r'''
-    if(this->last != NULL) {
-        //printf("this (before): %u, base = %u\n", this, this->segbase);
-        struct _segments_holder* holder = (struct _segments_holder*) malloc(sizeof(struct _segments_holder));
-        holder->segbase = state.segbase;
-        holder->seglen = state.seglen;
-        holder->offset = 0;
-        this->last->next = holder;
-        this->last = holder;
-        //printf("this (after): %u, base = %u\n", this, this->segbase);
-    }
-    else {
-        this->segbase = state.segbase;
-        this->seglen = state.seglen;
-        this->offset = 0;
-        this->last = this;
-    }
-
-/*
-// TODO: change to 0 for performance
-    int count = 1;
-    segments_holder* p = this;
-    while(p->next != NULL) {
-        count++;
-        p = p->next;
-    }
-    printf("logseg count = %d\n", count);
-*/
-    printf("addlog: new->segbase = %ld, cur->segbase = %ld\n", state.segbase, this->segbase);
-
-            ''')
 
     ######################## item ########################
     class GetItemSpec(Element):
-        def configure(self):
-            self.inp = Input()
-            self.out = Output()
-            self.nothing = Output()
-
-        def impl(self):
-            self.run_c(r'''
-    size_t totlen = state.pkt->mcr.request.bodylen - state.pkt->mcr.request.extlen;
-    item *it = segment_item_alloc(this->segbase, this->seglen, &this->offset, sizeof(item) + totlen);
-    ialloc_alloc(struct item_allocator *ia, totlen, false); // TODO
-            ''')
-
-    class GetItem(Element):
-        this = Persistent(segments_holder)
-
+        this = Persistent(ItemAllocators)
         def states(self):
-            self.this = main.segments
+            self.this = item_allocators
 
         def configure(self):
             self.inp = Input()
@@ -655,24 +534,7 @@ output switch { case segment: out(); else: null(); }
         def impl(self):
             self.run_c(r'''
     size_t totlen = state.pkt->mcr.request.bodylen - state.pkt->mcr.request.extlen;
-
-    uint64_t full = 0;
-    //printf("item_alloc: segbase = %ld\n", this->segbase);
-    item *it = segment_item_alloc(this->segbase, this->seglen, &this->offset, sizeof(item) + totlen);
-    if(it == NULL && this->next) {
-        printf("Segment is full.\n");
-        full = this->segbase + this->offset;
-        this->segbase = this->next->segbase;
-        this->seglen = this->next->seglen;
-        this->offset = this->next->offset;
-        //free(this->next);
-        this->next = this->next->next;
-        // Assume that the next one is not full.
-        it = segment_item_alloc(this->segbase, this->seglen, &this->offset, sizeof(item) + totlen);
-    }
-
-    state.segfull = full;
-
+    item *it = ialloc_alloc(&this->ia[state.core], totlen, false); // TODO
     if(it) {
         it->refcount = 1;
         uint16_t keylen = state.pkt->mcr.request.keylen;
@@ -687,66 +549,8 @@ output switch { case segment: out(); else: null(); }
     }
 
     output switch { case it: out();  else: nothing(); }
-                ''')
-
-        def impl_cavium(self):
-            self.run_c(r'''
-    size_t totlen = state.pkt->mcr.request.bodylen - state.pkt->mcr.request.extlen;
-
-    uint64_t full = 0;
-    printf("item_alloc: segbase = %ld\n", this->segbase);
-    void* addr = segment_item_alloc(this->segbase, this->seglen, &this->offset, sizeof(item) + totlen);
-    if(addr == NULL) {
-        printf("Segment is full.\n");
-        full = this->segbase + this->offset;
-        this->segbase = this->next->segbase;
-        this->seglen = this->next->seglen;
-        this->offset = this->next->offset;
-        //free(this->next);
-        this->next = this->next->next;
-        // Assume that the next one is not full.
-        addr = segment_item_alloc(this->segbase, this->seglen, &this->offset, sizeof(item) + totlen);
-    }
-
-    state.segfull = full;
-
-    if(addr) {
-        item *it;
-        dma_read((uintptr_t) addr, sizeof(item), (void**) &it);
-        it->refcount = nic_ntohs(1);
-
-        printf("get_item keylen: %ld, totlen: %ld, item: %ld\n",
-            state.pkt->mcr.request.keylen, totlen, it);
-        it->hv = nic_ntohl(state.hash);
-        it->vallen = nic_ntohl(totlen - state.pkt->mcr.request.keylen);
-        it->keylen = nic_ntohs(state.pkt->mcr.request.keylen);
-        memcpy(item_key(it), state.key, totlen);
-        dma_write((uintptr_t) addr, sizeof(item) + totlen, it);
-        dma_free(it);
-        state.it = addr;
-    }
-
-    output switch { case addr: out();  else: nothing(); }
             ''')
 
-    class GetItemSpec(ElementOneInOut):
-        def impl(self):
-            self.run_c(r'''
-    size_t totlen = state.pkt->mcr.request.bodylen - state.pkt->mcr.request.extlen;
-
-    item *it = (item *) malloc(sizeof(item) + totlen);
-
-    //printf("get_item id: %d, keylen: %ld, totlen: %ld, item: %ld\n",
-    //         state.pkt->mcr.request.opaque, state.pkt->mcr.request.keylen, totlen, it);
-    it->hv = state.hash;
-    it->vallen = totlen - state.pkt->mcr.request.keylen;
-    it->keylen = state.pkt->mcr.request.keylen;
-    it->refcount = 1;
-    memcpy(item_key(it), state.key, totlen);
-    state.it = it;
-
-    output { out(); }
-            ''')
 
     class Unref(ElementOneInOut):
         def impl(self):
@@ -782,36 +586,25 @@ output switch { case segment: out(); else: null(); }
             output { out(x); }
             ''')
 
+    class CleanLog(Element):
+        this = Persistent(ItemAllocators)
 
-    ########################## program #########################
-    # def spec(self):
-    #     class nic(InternalLoop):
-    #         def impl(self):
-    #             from_net = net_real.FromNet('from_net')
-    #             classifier = main.Classifer()
-    #             display = main.PrintMsg()
-    #
-    #             from_net.out >> main.SaveState() >> main.GetKey() >> main.JenkinsHash() >> classifier
-    #             from_net.nothing >> main.Drop()
-    #             # get
-    #             classifier.out_get >> main.HashGet() >> main.PrepareGetResp() >> main.Probe() >> display
-    #             # set
-    #             classifier.out_set >> main.GetItemSpec() >> main.HashPut() >> main.PrepareSetResp() >> main.Probe() \
-    #             >> display
-    #
-    #     nic('nic', process='nic')
+        def states(self):
+            self.this = item_allocators
+
+        def impl(self):
+            self.run_c(r'''
+    clean_log(&this->ia[state.core], state.pkt == NULL);
+            ''')
 
     def impl(self):
         MemoryRegion('data_region', 2 * 1024 * 1024 * 512) #4 * 1024 * 512)
 
 
         ######################## NIC Rx #######################
-        class process_one_pkt(API):
-            def configure(self):
-                self.inp = Input('struct item_allocator *')
-
+        class process_one_pkt(InternalLoop):
             def impl(self):
-                from_net = net_real.FromNet('from_net', configure=[True])
+                from_net = net_real.FromNet('from_net')
                 from_net_free = net_real.FromNetFree('from_net_free')
                 to_net = net_real.ToNet('to_net', configure=['from_net'])
                 classifier = main.Classifer()
@@ -821,11 +614,15 @@ output switch { case segment: out(); else: null(); }
 
                 prepare_header = main.PrepareHeader()
                 display = main.PrintMsg()
+                drop = main.Drop()
+                save_id = main.SaveID()
+
+                self.core_id >> save_id
 
                 # from_net
-                self.inp >> main.SaveIalloc() >> from_net >> hton1 >> check_packet >> main.SaveState() \
+                from_net >> hton1 >> check_packet >> main.SaveState() \
                 >> main.GetKey() >> main.JenkinsHash() >> classifier
-                from_net.nothing >> main.Drop()
+                from_net.nothing >> drop
 
                 # get
                 hash_get = main.HashGet()
@@ -855,8 +652,33 @@ output switch { case segment: out(); else: null(); }
                 # send
                 prepare_header >> display >> hton2 >> to_net
 
-        process_one_pkt('process_one_pkt', process='dpdk')
+                # clean log
+                clean_log = main.CleanLog()
 
+                run_order(save_id, from_net)
+                run_order([to_net, from_net_free, drop], clean_log)
+
+        process_one_pkt('process_one_pkt', process='dpdk', cores=range(n_cores))
+
+class MaintenanceThread(InternalLoop):
+    class Maintenance(Element):
+        this = Persistent(ItemAllocators)
+        def states(self):
+            self.this = item_allocators
+
+        def impl(self):
+            self.run_c(r'''
+    int i;
+    for (i = 0; i < %d; i++) {
+        ialloc_maintenance(&this->ia[i]);
+    }
+    usleep(10);
+            ''' % n_cores)
+
+    def impl(self):
+        MaintenanceThread.Maintenance()
+
+MaintenanceThread('MaintenanceThread', process='dpdk')
 master_process('dpdk')
 
 
@@ -869,4 +691,4 @@ c.include = r'''
 '''
 c.generate_code_as_header()
 c.depend = ['jenkins_hash', 'hashtable', 'ialloc', 'settings', 'dpdk']
-c.compile_and_run("test_no_steer")
+c.compile_and_run('test_no_steer')

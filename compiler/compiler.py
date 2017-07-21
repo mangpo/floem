@@ -6,6 +6,7 @@ import pipeline_state
 import join_handling
 import empty_port
 import hton
+import thread_allocation
 
 class Compiler:
     def __init__(self, *pipelines):
@@ -35,6 +36,7 @@ class Compiler:
         g = program.program_to_graph_pass(dp, default_process=filename, original=original)
         empty_port.nonempty_to_empty_port_pass(g)
         hton.hton_pass(g)
+        thread_allocation.insert_resource_order(g)
         pipeline_state.pipeline_state_pass(g, pktstate)
         return g
 

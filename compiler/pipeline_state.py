@@ -138,6 +138,8 @@ def insert_pipeline_state(instance, state, start, g):
 
     for port in element.outports:
         if len(port.argtypes) == 0:
+            assert port.name in instance.output2ele, \
+                "Output port '%s' of element '%s' doesn't connect to any element." % (port.name, instance.name)
             next_name, next_port = instance.output2ele[port.name]
             next_inst = g.instances[next_name]
             if len(next_inst.uses) > 0:
