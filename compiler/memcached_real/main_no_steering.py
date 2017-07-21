@@ -2,7 +2,7 @@ from dsl2 import *
 import queue_smart2, net_real
 from compiler import Compiler
 
-n_cores = 10
+n_cores = 11
 
 class protocol_binary_request_header_request(State):
     magic = Field(Uint(8))
@@ -49,15 +49,16 @@ class MyState(State):
     it = Field(Pointer(item), shared='data_region')
     key = Field('void*', copysize='state.pkt->mcr.request.keylen')
     hash = Field(Uint(32))
-    segfull = Field(Uint(64))
-    segbase = Field(Uint(64))
-    seglen = Field(Uint(64))
+    # segfull = Field(Uint(64))
+    # segbase = Field(Uint(64))
+    # seglen = Field(Uint(64))
     core = Field(Uint(16))
     vallen = Field(Uint(32))
-    src_mac = Field('struct ether_addr')
-    dst_mac = Field('struct ether_addr')
-    src_ip = Field(Uint(32))
-    src_port = Field(Uint(16))
+    # src_mac = Field('struct ether_addr')
+    # dst_mac = Field('struct ether_addr')
+    # src_ip = Field(Uint(32))
+    # src_port = Field(Uint(16))  # TODO: remove some fields
+    ia = Field('struct item_allocator *')
 
 class Schedule(State):
     core = Field(Size)
@@ -75,6 +76,31 @@ class segments_holder(State):
 
 class main(Pipeline):
     state = PerPacket(MyState)
+
+    class SaveIalloc(Element):
+        def configure(self):
+            self.inp = Input('struct item_allocator*')
+            self.out = Output()
+
+        def impl(self):
+            self.run_c(r'''
+    state.ia = inp();
+    output { out(); }
+            ''')
+
+    class SaveState(Element):
+        def configure(self):
+            self.inp = Input(Size, "void *", "void *")
+            self.out = Output()
+
+        def impl(self):
+            self.run_c(r'''
+    (size_t size, void* pkt, void* buff) = inp();
+    iokvs_message* m = (iokvs_message*) pkt;
+    state.pkt = m;
+    state.pkt_buff = buff;
+    output { out(); }
+                ''')
 
     class SaveState(Element):
         def configure(self):
@@ -400,6 +426,18 @@ m->mcr.request.bodylen = 0;
 output { out(msglen, m, pkt_buff); }
             ''' % self.status)
 
+    class SizePktBuff(Element):
+        def configure(self):
+            self.inp = Input(Size)
+            self.out = Output(Size, 'void*', 'void*')
+
+        def impl(self):
+            self.run_c(r'''
+            size_t msglen = inp();
+            void* pkt = state.pkt;
+            void* pkt_buff = state.pkt_buff;
+            output { out(msglen, pkt, pkt_buff); }
+            ''')
 
     class PrepareHeader(Element):
         def configure(self):
@@ -590,6 +628,18 @@ output switch { case segment: out(); else: null(); }
             ''')
 
     ######################## item ########################
+    class GetItemSpec(Element):
+        def configure(self):
+            self.inp = Input()
+            self.out = Output()
+            self.nothing = Output()
+
+        def impl(self):
+            self.run_c(r'''
+    size_t totlen = state.pkt->mcr.request.bodylen - state.pkt->mcr.request.extlen;
+    item *it = segment_item_alloc(this->segbase, this->seglen, &this->offset, sizeof(item) + totlen);
+    ialloc_alloc(struct item_allocator *ia, totlen, false); // TODO
+            ''')
 
     class GetItem(Element):
         this = Persistent(segments_holder)
@@ -754,150 +804,60 @@ output switch { case segment: out(); else: null(); }
     def impl(self):
         MemoryRegion('data_region', 2 * 1024 * 1024 * 512) #4 * 1024 * 512)
 
-        # Queue
-        RxEnq, RxDeq, RxScan = queue_smart2.smart_queue("rx_queue", 10000, n_cores, 3, enq_output=True)
-        TxEnq, TxDeq, TxScan = queue_smart2.smart_queue("tx_queue", 10000, n_cores, 4, clean="enq")
-        rx_enq = RxEnq()
-        rx_deq = RxDeq()
-        tx_enq = TxEnq()
-        tx_deq = TxDeq()
-        tx_scan = TxScan()
 
         ######################## NIC Rx #######################
-        class nic_rx(InternalLoop):
+        class process_one_pkt(API):
+            def configure(self):
+                self.inp = Input('struct item_allocator *')
+
             def impl(self):
-                from_net = net_real.FromNet('from_net')
+                from_net = net_real.FromNet('from_net', configure=[True])
                 from_net_free = net_real.FromNetFree('from_net_free')
-                to_net = net_real.ToNet('to_net', configure=['alloc'])
+                to_net = net_real.ToNet('to_net', configure=['from_net'])
                 classifier = main.Classifer()
                 check_packet = main.CheckPacket()
                 hton1 = net_real.HTON(configure=['iokvs_message'])
                 hton2 = net_real.HTON(configure=['iokvs_message'])
 
+                prepare_header = main.PrepareHeader()
+                display = main.PrintMsg()
+
                 # from_net
+                self.inp >> main.SaveIalloc() >> from_net >> hton1 >> check_packet >> main.SaveState() \
+                >> main.GetKey() >> main.JenkinsHash() >> classifier
                 from_net.nothing >> main.Drop()
-                from_net.out >> hton1 >> check_packet
-                check_packet.out >> main.SaveState() >> main.GetKey() >> main.JenkinsHash() >> main.GetCore() >> classifier
 
                 # get
-                classifier.out_get >> rx_enq.inp[0]
+                hash_get = main.HashGet()
+                get_response = main.PrepareGetResp()
+                classifier.out_get >> hash_get >> main.SizeGetResp() >> main.SizePktBuff() >> get_response >> prepare_header
+                get_response >> main.Unref() >> main.Drop()
+
+                # get (null)
+                hash_get.null >> main.SizeGetNullResp() >> main.SizePktBuff() >> main.PrepareGetNullResp() >> prepare_header
 
                 # set
-                get_item = main.GetItem()
-                classifier.out_set >> get_item >> rx_enq.inp[1]
+                get_item = main.GetItemSpec()
+                set_response = main.PrepareSetResp(configure=['PROTOCOL_BINARY_RESPONSE_SUCCESS'])
+                classifier.out_set >> get_item >> main.HashPut() >> main.Unref() >> main.SizeSetResp() \
+                >> main.SizePktBuff() >> set_response >> prepare_header
+
                 # set (unseccessful)
                 set_reponse_fail = main.PrepareSetResp(configure=['PROTOCOL_BINARY_RESPONSE_ENOMEM'])
-                get_item.nothing >> main.SizePktBuffSetResp() >> set_reponse_fail >> main.PrepareHeader() \
-                >> main.PrintMsg() >> hton2 >> to_net
-
-                # full
-                filter_full = main.FilterFull()
-                get_item.out >> filter_full
-                get_item.nothing >> filter_full
-                filter_full >> rx_enq.inp[2]
+                get_item.nothing >> main.SizeSetResp() >> main.SizePktBuff() >> set_reponse_fail >> prepare_header
 
                 # exception
                 arp = main.HandleArp()
                 check_packet.slowpath >> arp >> to_net
-
-                # free from_net
                 arp.drop >> from_net_free
                 check_packet.drop >> from_net_free
-                rx_enq.done >> main.GetPktBuff() >> from_net_free
-
-
-        ######################## APP #######################
-        class process_eq(API):
-            def configure(self):
-                self.inp = Input(Size)
-
-            def impl(self):
-                self.inp >> rx_deq
-
-                # get
-                hash_get = main.HashGet()
-                rx_deq.out[0] >> hash_get
-                hash_get.out >> tx_enq.inp[0]
-                hash_get.null >> tx_enq.inp[3]
-                # set
-                rx_deq.out[1] >> main.HashPut() >> main.Unref() >> tx_enq.inp[1]
-
-                # full
-                new_segment = main.NewSegment()
-                rx_deq.out[2] >> new_segment >> tx_enq.inp[2]
-                new_segment.null >> main.Drop()
-
-
-        class init_segment(API):
-            def configure(self):
-                self.inp = Input(Size)
-
-            def impl(self):
-                self.inp >> main.FirstSegment() >> tx_enq.inp[2]
-
-        class clean_cq(API):
-            def configure(self):
-                self.inp = Input(Size)
-                self.out = Output(Bool)
-                self.default_return = 'false'
-
-            def impl(self):
-                clean = main.Clean(configure=['true'])
-                #unclean = main.Clean(configure=['false'])
-                #ret = main.ForwardBool()
-                self.inp >> tx_scan
-                # get
-                tx_scan.out[0] >> main.Unref() >> clean
-
-                tx_scan.out[1] >> clean
-                tx_scan.out[2] >> clean
-                tx_scan.out[3] >> clean
-                clean >> self.out
-
-        ####################### NIC Tx #######################
-        class nic_tx(InternalLoop):
-            def impl(self):
-                to_net = net_real.ToNet('to_net', configure=['alloc'])
-                net_alloc0 = net_real.NetAlloc('net_alloc0')
-                net_alloc1 = net_real.NetAlloc('net_alloc1')
-                net_alloc3 = net_real.NetAlloc('net_alloc3')
-                prepare_header = main.PrepareHeader()
-                display = main.PrintMsg()
-                hton = net_real.HTON(configure=['iokvs_message'])
-
-                main.Scheduler() >> tx_deq
-
-                # TODO: tx_deq.out[x] >> calc_size >> net_alloc >> main.PrepareGetResp() >> prepare_header
-                # get
-                tx_deq.out[0] >> main.SizeGetResp() >> net_alloc0 >> main.PrepareGetResp() >> prepare_header
-                tx_deq.out[3] >> main.SizeGetNullResp() >> net_alloc3 >> main.PrepareGetNullResp() >> prepare_header
-
-                # set
-                set_response = main.PrepareSetResp(configure=['PROTOCOL_BINARY_RESPONSE_SUCCESS'])
-                tx_deq.out[1] >> main.SizeSetResp() >> net_alloc1 >> set_response >> prepare_header
 
                 # send
-                prepare_header >> display >> hton >> to_net
+                prepare_header >> display >> hton2 >> to_net
 
-                # full
-                tx_deq.out[2] >> main.AddLogseg()
+        process_one_pkt('process_one_pkt', process='dpdk')
 
-                # free net_alloc
-                drop = main.Drop()
-                net_alloc0.oom >> drop  # TODO: reuse drop => No easy way to insert pipeline state
-                net_alloc1.oom >> drop
-                net_alloc3.oom >> drop
-
-        nic_rx('nic_rx', process='dpdk', cores=[1])
-        process_eq('process_eq', process='app')
-        init_segment('init_segment', process='app')
-        clean_cq('clean_cq', process='app')
-        nic_tx('nic_tx', process='dpdk', cores=[2])
-
-master_process('app')
-
-# NIC: ['jenkins_hash', 'ialloc', 'settings']
-# APP: ['jenkins_hash', 'hashtable', 'ialloc', 'settings']
+master_process('dpdk')
 
 
 ######################## Run test #######################
@@ -908,9 +868,5 @@ c.include = r'''
 #include "protocol_binary.h"
 '''
 c.generate_code_as_header()
-c.depend = {"test_app": ['jenkins_hash', 'hashtable', 'ialloc', 'settings', 'app'],
-            "test_nic": ['jenkins_hash', 'ialloc', 'settings', 'dpdk']}
-c.compile_and_run(["test_app", "test_nic"])
-
-
-# TODO: spec
+c.depend = ['jenkins_hash', 'hashtable', 'ialloc', 'settings', 'dpdk']
+c.compile_and_run("test_no_steer")
