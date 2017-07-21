@@ -534,7 +534,7 @@ output { out(msglen, (void*) m, buff); }
         def impl(self):
             self.run_c(r'''
     size_t totlen = state.pkt->mcr.request.bodylen - state.pkt->mcr.request.extlen;
-    item *it = ialloc_alloc(&this->ia[state.core], totlen, false); // TODO
+    item *it = ialloc_alloc(&this->ia[state.core], sizeof(item) + totlen, false); // TODO
     if(it) {
         it->refcount = 1;
         uint16_t keylen = state.pkt->mcr.request.keylen;
@@ -660,25 +660,25 @@ output { out(msglen, (void*) m, buff); }
 
         process_one_pkt('process_one_pkt', process='dpdk', cores=range(n_cores))
 
-class MaintenanceThread(InternalLoop):
-    class Maintenance(Element):
-        this = Persistent(ItemAllocators)
-        def states(self):
-            self.this = item_allocators
+# class MaintenanceThread(InternalLoop):
+#     class Maintenance(Element):
+#         this = Persistent(ItemAllocators)
+#         def states(self):
+#             self.this = item_allocators
 
-        def impl(self):
-            self.run_c(r'''
-    int i;
-    for (i = 0; i < %d; i++) {
-        ialloc_maintenance(&this->ia[i]);
-    }
-    usleep(10);
-            ''' % n_cores)
+#         def impl(self):
+#             self.run_c(r'''
+#     int i;
+#     for (i = 0; i < %d; i++) {
+#         ialloc_maintenance(&this->ia[i]);
+#     }
+#     usleep(10);
+#             ''' % n_cores)
 
-    def impl(self):
-        MaintenanceThread.Maintenance()
+#     def impl(self):
+#         MaintenanceThread.Maintenance()
 
-MaintenanceThread('MaintenanceThread', process='dpdk')
+# MaintenanceThread('MaintenanceThread', process='dpdk')
 master_process('dpdk')
 
 

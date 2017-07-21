@@ -603,15 +603,15 @@ output switch { case segment: out(); else: null(); }
             self.nothing = Output()
 
         def impl(self):
-            self.run_c(r'''
+            self.run_c(r''this->segbase + this'
     size_t totlen = state.pkt->mcr.request.bodylen - state.pkt->mcr.request.extlen;
 
     uint64_t full = 0;
     //printf("item_alloc: segbase = %ld\n", this->segbase);
     item *it = segment_item_alloc(this->segbase, this->seglen, &this->offset, sizeof(item) + totlen);
-    if(it == NULL && this->next) {
+    if(it == NULL) full = this->segbase + this->offset;
+    if(it == NULL) {
         printf("Segment is full.\n");
-        full = this->segbase + this->offset;
         this->segbase = this->next->segbase;
         this->seglen = this->next->seglen;
         this->offset = this->next->offset;

@@ -34,6 +34,7 @@ void* get_pointer(uint64_t offset) {
 
 void ialloc_init(void* p) {
   seg_base = p;
+  printf("seg_base = %p\n", seg_base);
   if ((seg_headers = calloc(settings.segmaxnum, sizeof(*seg_headers))) ==
             NULL)
     {
@@ -228,6 +229,7 @@ static void segment_free(struct segment_header *h)
 
 void segment_item_free(struct segment_header *h, size_t total)
 {
+  //printf("free: h->data = %p, size = %ld\n", h->data, total);
     if (h->size != __sync_add_and_fetch(&h->freed, total)) {
         return;
     }
@@ -307,14 +309,13 @@ item *segment_item_alloc_pointer(struct segment_header *h, size_t total)
             it->vallen = 0;
         }
         // The following should be done on APP.
-        //segment_item_free(h, avail);
-        //h->offset += avail;
+        segment_item_free(h, avail);
+        h->offset += avail;
         return NULL;
     }
 
     /* Ordering here is important */
     it->refcount = 1;
-
     h->offset += total;
 
     return it;
@@ -388,6 +389,7 @@ item *ialloc_alloc(struct item_allocator *ia, size_t total, bool cleanup)
 {
     struct segment_header *h, *old;
     item *it;
+    if(total > settings.segsize)
     assert(total < settings.segsize);
 
     /* If the reserved segment is currently active, only allocations for cleanup
@@ -570,12 +572,16 @@ void ialloc_maintenance(struct item_allocator *ia)
              * necessary */
             ratio = (double) h->freed / h->size;
             if (ratio >= 0.8 && ratio > cand_ratio) {
-	      printf("EXCEED RATIO %p\n", h);
+	      //printf("EXCEED RATIO h->data = %p, ratio = %f\n", h->data, ratio);
 	      cand_ratio = ratio;
 	      cand = h;
             }
         }
-        prev = h;
+	/* else if ((h->flags & SF_CLEANED) == SF_CLEANED) { */
+        /*     ratio = (double) h->freed / h->size; */
+	/*     printf("ratio: %f = %ld/%ld\n", ratio, h->freed, h->size); */
+	/* } */
+	prev = h;
         h = next;
     }
 
@@ -590,7 +596,6 @@ void ialloc_maintenance(struct item_allocator *ia)
         if (h != NULL) {
             h->flags |= SF_CLEANED;
         }
-	if(h)	  printf("cleanning %p!!!!!!!!!!!!!!\n", h);
     }
 
     /* No segments to clean, that's great! */
@@ -610,6 +615,9 @@ void ialloc_maintenance(struct item_allocator *ia)
         }
         if (item_tryref(it)) {
             cq[idx] = it;
+	    if(item_totalsz(it) > settings.segsize)
+	      printf("cq: offset = %ld, it = %p, totlen = %ld\n", off, it, item_totalsz(it));
+	    assert(item_totalsz(it) < settings.segsize);
             idx = (idx + 1) % settings.segcqsize;
         }
         off += item_totalsz(it);
@@ -622,17 +630,19 @@ void ialloc_maintenance(struct item_allocator *ia)
 size_t clean_log(struct item_allocator *ia, bool idle)
 {
     item *it, *nit;
-    size_t n;
+    size_t n, m;
 
     if (!idle) {
         /* We're starting processing for a new request */
         ialloc_cleanup_nextrequest(ia);
     }
 
-    n = 0;
+    n = 0, m = 0;
     while ((it = ialloc_cleanup_item(ia, idle)) != NULL) {
         n++;
         if (it->refcount != 1) {
+	  //if(sizeof(*nit) + it->keylen + it->vallen > settings.segsize)
+	  //printf("size problem: it = %p, size = %ld + %ld + %ld\n", it, sizeof(*nit), it->keylen, it->vallen);
             if ((nit = ialloc_alloc(ia, sizeof(*nit) + it->keylen + it->vallen,
                     true)) == NULL)
             {
@@ -646,9 +656,14 @@ size_t clean_log(struct item_allocator *ia, bool idle)
             rte_memcpy(item_key(nit), item_key(it), it->keylen + it->vallen);
             hasht_put(nit, it);
             item_unref(nit);
+	    m++;
         }
         item_unref(it);
+	//if(it->refcount != 0)
+	//  printf("old it->refcount = %d\n", it->refcount);
+	//assert(it->refcount == 0);
     }
+    //if(m>0) printf("clean: move %d items\n", m);
     return n;
 }
 
@@ -656,8 +671,8 @@ struct item_allocator iallocs[NUM_THREADS];
 bool init_allocator = false;
 
 struct item_allocator* get_item_allocators() {
-    if(!init) {
-        init = true;
+    if(!init_allocator) {
+        init_allocator = true;
         printf("Init item_allocator\n");
         for(int i=0; i<NUM_THREADS; i++) {
             ialloc_init_allocator(&iallocs[i]);
