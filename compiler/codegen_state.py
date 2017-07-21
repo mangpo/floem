@@ -109,6 +109,8 @@ def map_memory_regions(graph):
     src = "\n"
     for region in graph.memory_regions:
         src += "  {0} = (void *) shm_p;\n".format(region.name)
+        if region.init:
+            src += region.init + '\n'
         src += "  shm_p = shm_p + {0};\n".format(region.size)
     return src
 

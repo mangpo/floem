@@ -603,21 +603,19 @@ output switch { case segment: out(); else: null(); }
             self.nothing = Output()
 
         def impl(self):
-            self.run_c(r''this->segbase + this'
+            self.run_c(r'''
     size_t totlen = state.pkt->mcr.request.bodylen - state.pkt->mcr.request.extlen;
 
     uint64_t full = 0;
     //printf("item_alloc: segbase = %ld\n", this->segbase);
     item *it = segment_item_alloc(this->segbase, this->seglen, &this->offset, sizeof(item) + totlen);
     if(it == NULL) full = this->segbase + this->offset;
-    if(it == NULL) {
-        printf("Segment is full.\n");
+    if(this->next) {
         this->segbase = this->next->segbase;
         this->seglen = this->next->seglen;
         this->offset = this->next->offset;
         //free(this->next);
         this->next = this->next->next;
-        // Assume that the next one is not full.
         it = segment_item_alloc(this->segbase, this->seglen, &this->offset, sizeof(item) + totlen);
     }
 
@@ -646,15 +644,13 @@ output switch { case segment: out(); else: null(); }
     uint64_t full = 0;
     printf("item_alloc: segbase = %ld\n", this->segbase);
     void* addr = segment_item_alloc(this->segbase, this->seglen, &this->offset, sizeof(item) + totlen);
-    if(addr == NULL) {
-        printf("Segment is full.\n");
-        full = this->segbase + this->offset;
+    if(addr == NULL) full = this->segbase + this->offset;
+    if(this->next) {
         this->segbase = this->next->segbase;
         this->seglen = this->next->seglen;
         this->offset = this->next->offset;
         //free(this->next);
         this->next = this->next->next;
-        // Assume that the next one is not full.
         addr = segment_item_alloc(this->segbase, this->seglen, &this->offset, sizeof(item) + totlen);
     }
 

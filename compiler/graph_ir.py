@@ -514,9 +514,10 @@ class StateNode:
 
 
 class MemoryRegion:
-    def __init__(self, name, size):
+    def __init__(self, name, size, init=None):
         self.name = name
         self.size = size
+        self.init = init
 
 
 class Queue:

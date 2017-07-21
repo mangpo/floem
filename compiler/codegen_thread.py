@@ -257,9 +257,21 @@ def generate_internal_triggers(graph, ext, mode):
         generate_internal_triggers_with_process(graph, process, ext, mode)
 
 def dpdk_init_call(graph, process):
-    num_threads = len(graph.threads_internal)
-    fns = [x for x in graph.instances.values() if x.element.special == 'from_net']
-    num_rx = len(fns)
+    num_threads = 0
+    num_rx = 0
+    for t in graph.threads_internal:
+        process = graph.thread2process[t.name]
+        if target.is_dpdk_proc(process):
+            n = len(graph.thread2device[t.name][1])
+            num_threads += n
+
+            subgraph = set()
+            graph.find_subgraph(t.call_instance, subgraph)
+            for name in subgraph:
+                x = graph.instances[name]
+                if x.element.special == 'from_net':
+                    num_rx += n
+
     return "  dpdk_init(argv, %d, %d);\n" % (num_threads, num_rx)
 
 def generate_inject_probe_code_with_process(graph, process, ext):

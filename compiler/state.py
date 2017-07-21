@@ -39,11 +39,12 @@ def string_type(x):
 ####################### Memory Region ########################
 
 class MemoryRegion(object):
-    def __init__(self, name, size):
+    def __init__(self, name, size, init=None):
         self.name = name
         self.size = size
+        self.init = init
 
-        scope_append(program.MemoryRegion(name, size))
+        scope_append(program.MemoryRegion(name, size, init))
 
 ####################### State ########################
 

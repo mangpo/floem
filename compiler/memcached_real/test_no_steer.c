@@ -16,13 +16,10 @@ void maintenance(struct item_allocator *iallocs)
 int main(int argc, char *argv[]) {
   settings_init(argc, argv);
   init(argv);
-  //printf("data_region = %p\n", data_region);
-  //ialloc_init(data_region);
   hasht_init();
   struct item_allocator *iallocs = get_item_allocators();
 
   run_threads();
   maintenance(iallocs);
-  //while(1) pause();
   return 0;
 }

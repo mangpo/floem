@@ -598,7 +598,7 @@ output { out(msglen, (void*) m, buff); }
             ''')
 
     def impl(self):
-        MemoryRegion('data_region', 2 * 1024 * 1024 * 512) #4 * 1024 * 512)
+        MemoryRegion('data_region', 2 * 1024 * 1024 * 512, init='ialloc_init(data_region);') #4 * 1024 * 512)
 
 
         ######################## NIC Rx #######################
