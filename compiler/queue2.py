@@ -110,7 +110,8 @@ def create_queue_states(name, type, size, n_cores, declare=True, enq_lock=False,
     return enq_all, deq_all, enq, deq, Storage
 
 
-def queue_variable_size(name, size, n_cores, blocking=False, enq_atomic=False, deq_atomic=False, scan=False, core=False):
+def queue_variable_size(name, size, n_cores, enq_blocking=False, deq_blocking=False, enq_atomic=False, deq_atomic=False,
+                        scan=False, core=False):
     """
     :param name: queue name
     :param size: number of bytes
@@ -143,7 +144,7 @@ def queue_variable_size(name, size, n_cores, blocking=False, enq_atomic=False, d
             noblock_atom = "qlock_lock(&q->lock);\n" + noblock_noatom + "qlock_unlock(&q->lock);\n"
             block_atom = "qlock_lock(&q->lock);\n" + block_noatom + "qlock_unlock(&q->lock);\n"
 
-            if blocking:
+            if enq_blocking:
                 src = block_atom if enq_atomic else block_noatom
             else:
                 src = noblock_atom if enq_atomic else noblock_noatom
@@ -187,7 +188,7 @@ def queue_variable_size(name, size, n_cores, blocking=False, enq_atomic=False, d
             noblock_atom = "qlock_lock(&q->lock);\n" + noblock_noatom + "qlock_unlock(&q->lock);\n"
             block_atom = "qlock_lock(&q->lock);\n" + block_noatom + "qlock_unlock(&q->lock);\n"
 
-            if blocking:
+            if deq_blocking:
                 src = block_atom if deq_atomic else block_noatom
             else:
                 src = noblock_atom if deq_atomic else noblock_noatom
@@ -266,7 +267,7 @@ def queue_variable_size(name, size, n_cores, blocking=False, enq_atomic=False, d
 # 3. TxRelease & ScanRelease: input(type*, uintptr_t)
 # 4. Make storm works again
 def queue_custom_owner_bit(name, type, size, n_cores, owner,
-                           blocking=False, enq_atomic=False, deq_atomic=False, scan_atomic=False,
+                           enq_blocking=False, deq_blocking=False, enq_atomic=False, deq_atomic=False, scan_atomic=False,
                            scan=False, enq_output=False):
     """
     :param name: queue name
@@ -362,7 +363,7 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
 
             block_atom = atomic_src_cvm + wait_then_copy
 
-            if blocking:
+            if enq_blocking:
                 src = block_atom if enq_atomic else block_noatom
             else:
                 if enq_atomic:
@@ -392,7 +393,7 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
 
             block_atom = atomic_src_cvm + init_read_cvm + wait_then_copy_cvm
 
-            if blocking:
+            if enq_blocking:
                 src = block_atom if enq_atomic else block_noatom
             else:
                 if enq_atomic:
@@ -432,7 +433,7 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
 
             block_atom = atomic_src + wait_then_get
 
-            if blocking:
+            if deq_blocking:
                 src = block_atom if deq_atomic else block_noatom
             else:
                 if deq_atomic:
@@ -466,7 +467,7 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
 
             block_atom = atomic_src_cvm + init_read_cvm + wait_then_get_cvm
 
-            if blocking:
+            if deq_blocking:
                 src = block_atom if deq_atomic else block_noatom
             else:
                 if deq_atomic:

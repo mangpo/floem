@@ -757,8 +757,8 @@ output switch { case segment: out(); else: null(); }
         MemoryRegion('data_region', 2 * 1024 * 1024 * 512) #4 * 1024 * 512)
 
         # Queue
-        RxEnq, RxDeq, RxScan = queue_smart2.smart_queue("rx_queue", 64000, n_cores, 3, enq_output=True)
-        TxEnq, TxDeq, TxScan = queue_smart2.smart_queue("tx_queue", 64000, n_cores, 4, clean="enq")
+        RxEnq, RxDeq, RxScan = queue_smart2.smart_queue("rx_queue", 64000, n_cores, 3, enq_output=True, enq_blocking=True)
+        TxEnq, TxDeq, TxScan = queue_smart2.smart_queue("tx_queue", 64000, n_cores, 4, clean="enq", enq_blocking=True)
         rx_enq = RxEnq()
         rx_deq = RxDeq()
         tx_enq = TxEnq()
