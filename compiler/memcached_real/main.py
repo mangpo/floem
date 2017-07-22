@@ -609,8 +609,12 @@ output switch { case segment: out(); else: null(); }
     uint64_t full = 0;
     //printf("item_alloc: segbase = %ld\n", this->segbase);
     item *it = segment_item_alloc(this->segbase, this->seglen, &this->offset, sizeof(item) + totlen);
-    //if(it == NULL) full = this->segbase + this->offset;
+            //if(it == NULL) full = this->segbase + this->offset; 
+            // Including this is bad is not good because, when tx queue is backed up, CPU will have high number of segment, but NIC will never get anything back.
+    
     if(it == NULL && this->next) {
+            //printf("Segment is full.\n");  // including this line will make CPU keep making new segment. Without this line, # of segment will stop under 100.
+
         full = this->segbase + this->offset;
         this->segbase = this->next->segbase;
         this->seglen = this->next->seglen;
