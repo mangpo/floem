@@ -174,6 +174,12 @@ def get_fill_entry_src(g, deq_thread, enq_thread, live, special, extras,
 
     fill_src += "    e->flags |= %s(%d << TYPE_SHIFT);\n" % (htons, i + 1)
     fill_src += "  }" # end if(e)
+    if i == 2:
+        fill_src += r'''
+        else {
+        printf("drop new segment\n");
+        }
+        '''
     if enq_output:
         fill_src += "  output { out(buff); done(); }"
     else:

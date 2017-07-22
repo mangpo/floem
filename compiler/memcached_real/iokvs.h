@@ -9,7 +9,7 @@
 #include <assert.h>
 #include "protocol_binary.h"
 
-#define NUM_THREADS     11
+#define NUM_THREADS     9
 
 /******************************************************************************/
 /* Settings */

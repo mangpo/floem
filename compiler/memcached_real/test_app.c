@@ -1,43 +1,7 @@
 #include "app.h"
 #include "iokvs.h"
 
-#define NUM_THREADS     10
-
 static struct item_allocator **iallocs;
-
-static size_t clean_log(struct item_allocator *ia, bool idle)
-{
-    item *it, *nit;
-    size_t n;
-
-    if (!idle) {
-        /* We're starting processing for a new request */
-        ialloc_cleanup_nextrequest(ia);
-    }
-
-    n = 0;
-    while ((it = ialloc_cleanup_item(ia, idle)) != NULL) {
-        n++;
-        if (it->refcount != 1) {
-            if ((nit = ialloc_alloc(ia, sizeof(*nit) + it->keylen + it->vallen,
-                    true)) == NULL)
-            {
-                fprintf(stderr, "Warning: ialloc_alloc failed during cleanup :-/\n");
-                abort();
-            }
-
-            nit->hv = it->hv;
-            nit->vallen = it->vallen;
-            nit->keylen = it->keylen;
-            rte_memcpy(item_key(nit), item_key(it), it->keylen + it->vallen);
-            hasht_put(nit, it);
-            item_unref(nit);
-        }
-        item_unref(it);
-    }
-    return n;
-}
-
 
 void run_app(void *threadid) {
   long tid = (long)threadid;

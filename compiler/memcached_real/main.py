@@ -2,7 +2,7 @@ from dsl2 import *
 import queue_smart2, net_real
 from compiler import Compiler
 
-n_cores = 10
+n_cores = 9
 
 class protocol_binary_request_header_request(State):
     magic = Field(Uint(8))
@@ -542,6 +542,8 @@ if(segment == NULL) {
 } else {
     state.segbase = get_pointer_offset(segment->data);
     state.seglen = segment->size;
+            printf("New segment: segbase = %p.\n", (void*) get_pointer_offset(segment->data));
+
 }
 ialloc_nicsegment_full(state.segfull);
 output switch { case segment: out(); else: null(); }
@@ -575,7 +577,6 @@ output switch { case segment: out(); else: null(); }
         this->last = this;
     }
 
-/*
 // TODO: change to 0 for performance
     int count = 1;
     segments_holder* p = this;
@@ -584,8 +585,7 @@ output switch { case segment: out(); else: null(); }
         p = p->next;
     }
     printf("logseg count = %d\n", count);
-*/
-    printf("addlog: new->segbase = %ld, cur->segbase = %ld\n", state.segbase, this->segbase);
+    printf("addlog: new->segbase = %p, cur->segbase = %p\n", (void*) state.segbase, (void*) this->segbase);
 
             ''')
 
@@ -609,8 +609,9 @@ output switch { case segment: out(); else: null(); }
     uint64_t full = 0;
     //printf("item_alloc: segbase = %ld\n", this->segbase);
     item *it = segment_item_alloc(this->segbase, this->seglen, &this->offset, sizeof(item) + totlen);
-    if(it == NULL) full = this->segbase + this->offset;
-    if(this->next) {
+    //if(it == NULL) full = this->segbase + this->offset;
+    if(it == NULL && this->next) {
+        full = this->segbase + this->offset;
         this->segbase = this->next->segbase;
         this->seglen = this->next->seglen;
         this->offset = this->next->offset;
@@ -619,6 +620,7 @@ output switch { case segment: out(); else: null(); }
         it = segment_item_alloc(this->segbase, this->seglen, &this->offset, sizeof(item) + totlen);
     }
 
+    //printf("it = %p, full = %p\n", it, (void*) full);
     state.segfull = full;
 
     if(it) {
@@ -645,7 +647,7 @@ output switch { case segment: out(); else: null(); }
     printf("item_alloc: segbase = %ld\n", this->segbase);
     void* addr = segment_item_alloc(this->segbase, this->seglen, &this->offset, sizeof(item) + totlen);
     if(addr == NULL) full = this->segbase + this->offset;
-    if(this->next) {
+    if(addr == NULL && this->next) {
         this->segbase = this->next->segbase;
         this->seglen = this->next->seglen;
         this->offset = this->next->offset;
@@ -751,8 +753,8 @@ output switch { case segment: out(); else: null(); }
         MemoryRegion('data_region', 2 * 1024 * 1024 * 512) #4 * 1024 * 512)
 
         # Queue
-        RxEnq, RxDeq, RxScan = queue_smart2.smart_queue("rx_queue", 10000, n_cores, 3, enq_output=True)
-        TxEnq, TxDeq, TxScan = queue_smart2.smart_queue("tx_queue", 10000, n_cores, 4, clean="enq")
+        RxEnq, RxDeq, RxScan = queue_smart2.smart_queue("rx_queue", 64000, n_cores, 3, enq_output=True)
+        TxEnq, TxDeq, TxScan = queue_smart2.smart_queue("tx_queue", 64000, n_cores, 4, clean="enq")
         rx_enq = RxEnq()
         rx_deq = RxDeq()
         tx_enq = TxEnq()
@@ -905,7 +907,7 @@ c.include = r'''
 '''
 c.generate_code_as_header()
 c.depend = {"test_app": ['jenkins_hash', 'hashtable', 'ialloc', 'settings', 'app'],
-            "test_nic": ['jenkins_hash', 'ialloc', 'settings', 'dpdk']}
+            "test_nic": ['jenkins_hash', 'hashtable', 'ialloc', 'settings', 'dpdk']}
 c.compile_and_run(["test_app", "test_nic"])
 
 

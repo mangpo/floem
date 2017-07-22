@@ -163,6 +163,7 @@ static struct segment_header *segment_alloc(void)
     if (i >= settings.segmaxnum) {
         rte_spinlock_unlock(&segalloc_lock);
 	printf("i = %d >= settings.segmaxnum (1)\n", i);
+	exit(1);
         return NULL;
     }
 
@@ -173,6 +174,7 @@ static struct segment_header *segment_alloc(void)
     if (i >= settings.segmaxnum) {
         rte_spinlock_unlock(&segalloc_lock);
 	printf("i = %d >= settings.segmaxnum (2)\n", i);
+	exit(1);
         return NULL;
     }
 
@@ -670,13 +672,13 @@ size_t clean_log(struct item_allocator *ia, bool idle)
 struct item_allocator iallocs[NUM_THREADS];
 bool init_allocator = false;
 
-struct item_allocator* get_item_allocators() {
-    if(!init_allocator) {
-        init_allocator = true;
-        printf("Init item_allocator\n");
-        for(int i=0; i<NUM_THREADS; i++) {
-            ialloc_init_allocator(&iallocs[i]);
-        }
-    }
-    return iallocs;
-}
+/* struct item_allocator* get_item_allocators() { */
+/*     if(!init_allocator) { */
+/*         init_allocator = true; */
+/*         printf("Init item_allocator\n"); */
+/*         for(int i=0; i<NUM_THREADS; i++) { */
+/*             ialloc_init_allocator(&iallocs[i]); */
+/*         } */
+/*     } */
+/*     return iallocs; */
+/* } */

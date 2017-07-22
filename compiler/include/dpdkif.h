@@ -112,7 +112,7 @@ static void dpdk_thread_create(void *(*entry_point)(void *), void *arg)
 
     if (id >= dpdk_thread_num) {
         fprintf(stderr, "dpdk_thread_create: specified number of threads "
-                "exceeded\n");
+                "exceeded. (id = %d >= dpdk_thread_num = %d)\n", id, dpdk_thread_num);
         abort();
     }
 
