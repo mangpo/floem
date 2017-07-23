@@ -91,7 +91,7 @@ static q_buffer enqueue_alloc(circular_queue* q, size_t len, void(*clean)(q_buff
             elen = qlen - off;
         }
         q_buffer temp = { eqe, 0 };
-        clean(temp);
+        clean(temp); // TODO: loop over this when clean_offset != offset
         total += elen;
         if (total < len) {
             /* Need more */

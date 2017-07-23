@@ -9,7 +9,7 @@
 #include <assert.h>
 #include "protocol_binary.h"
 
-#define NUM_THREADS     9
+#define NUM_THREADS     4
 
 /******************************************************************************/
 /* Settings */
@@ -104,6 +104,7 @@ struct segment_header {
     uint32_t freed;
     uint32_t size;
     uint32_t flags;
+    uint32_t core_id;
 };
 
 
@@ -127,7 +128,9 @@ struct item_allocator {
     /* Clenanup counter, limits mandatory cleanup per request */
     size_t cleanup_count;
 
-    uint8_t pad_1[40];
+  uint16_t core_id;
+
+  uint8_t pad_1[38]; // [40]
     /***********************************************************/
     /* Part 3: Only accessed by maintenance threads */
 
@@ -152,7 +155,7 @@ struct item_allocator* get_item_allocators();
 void ialloc_init(void*);
 
 /** Initialize an item allocator instance. */
-void ialloc_init_allocator(struct item_allocator *ia);
+void ialloc_init_allocator(struct item_allocator *ia, uint32_t core_id);
 size_t clean_log(struct item_allocator *ia, bool idle);
 
 /**
@@ -203,7 +206,7 @@ struct segment_header *new_segment(struct item_allocator *ia, bool cleanup);
 void segment_item_free(struct segment_header *h, size_t total);
 uint64_t get_pointer_offset(void* p);
 void* get_pointer(uint64_t offset);
-void ialloc_nicsegment_full(uintptr_t last);
+uint32_t ialloc_nicsegment_full(uintptr_t last);
 
 /******************************************************************************/
 /* Items */
@@ -259,7 +262,7 @@ static inline void item_unref(item *it)
 {
     uint16_t c;
     assert(it->refcount > 0);
-    //if(it->refcount > 10) printf("refcount = %d\n", it->refcount);
+    //if(it->refcount > 30) printf("refcount = %d\n", it->refcount);
     if ((c = __sync_sub_and_fetch(&it->refcount, 1)) == 0) {
       //printf("ialloc_free!!!!!!!!!!!!!!!!!!\n");
       ialloc_free(it, item_totalsz(it));

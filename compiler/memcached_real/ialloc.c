@@ -43,102 +43,7 @@ void ialloc_init(void* p) {
     }
 }
 
-/*
-void ialloc_init_slave(void) {
-    size_t total;
-    total = settings.segsize * settings.segmaxnum;
-    int fd;
-    if ((fd = shm_open(DATA_REGION_NAME, O_RDWR, 0600))
-            == -1)
-    {
-        perror("shm_open failed");
-        abort();
-    }
-    if (ftruncate(fd, total) != 0) {
-        perror("ftruncate failed");
-        abort();
-    }
-    if ((seg_base = mmap(NULL, total, PROT_READ | PROT_WRITE, MAP_SHARED, fd,
-                    0)) == MAP_FAILED)
-    {
-        perror("mmap() of segments base failed");
-        abort();
-    }
-    close(fd);
-}
-
-void ialloc_finalize_slave(void)
-{
-    size_t total = settings.segsize * settings.segmaxnum;
-    munmap(seg_base, total);
-}
-
-void ialloc_finalize(void)
-{
-    size_t total = settings.segsize * settings.segmaxnum;
-    shm_unlink(DATA_REGION_NAME);
-    munmap(seg_base, total);
-}
-
-void ialloc_init(void)
-{
-    rte_spinlock_init(&segalloc_lock);
-    free_segments = NULL;
-    size_t total;
-
-    seg_alloced = 0;
-    total = settings.segsize * settings.segmaxnum;
-    printf("Allocating %lu bytes\n", (long unsigned int) total);
-
-#ifdef BARRELFISH
-    {
-        errval_t r;
-        struct capref cap;
-        struct frame_identity id;
-
-        r = myt_alloc_map(VREGION_FLAGS_READ_WRITE, total, &seg_base, &cap);
-        if (err_is_fail(r)) {
-            USER_PANIC_ERR(r, "Preallocating failed");
-        }
-
-        r = invoke_frame_identify(cap, &id);
-        if (err_is_fail(r)) {
-            USER_PANIC_ERR(r, "identify failed");
-        }
-
-        mem_base = seg_base;
-        mem_base_phys = id.base;
-    }
-#else
-    printf("ialloc: create shared memory.\n");
-    int fd;
-    if ((fd = shm_open(DATA_REGION_NAME, O_CREAT | O_EXCL | O_RDWR, 0600))
-            == -1)
-    {
-        perror("shm_open failed");
-        abort();
-    }
-    if (ftruncate(fd, total) != 0) {
-        perror("ftruncate failed");
-        abort();
-    }
-    if ((seg_base = mmap(NULL, total, PROT_READ | PROT_WRITE, MAP_SHARED, fd,
-                    0)) == MAP_FAILED)
-    {
-        perror("mmap() of segments base failed");
-        abort();
-    }
-    close(fd);
-#endif
-    if ((seg_headers = calloc(settings.segmaxnum, sizeof(*seg_headers))) ==
-            NULL)
-    {
-        perror("Allocating segment header array failed");
-        abort();
-    }
-}*/
-
-static struct segment_header *segment_alloc(void)
+static struct segment_header *segment_alloc(uint32_t core_id)
 {
     struct segment_header *h = NULL;
     void *data;
@@ -209,6 +114,7 @@ init_h:
     h->offset = 0;
     h->flags = 0;
     h->freed = 0;
+    h->core_id = core_id;
     return h;
 }
 
@@ -271,13 +177,45 @@ item *segment_item_alloc(uint64_t thisbase, uint64_t seglen, uint64_t* offset, s
 }
 
 
+struct segment_header *new_segment(struct item_allocator *ia, bool cleanup) {
+  // TODO: ia
+    struct segment_header *h, *old;
+
+    __sync_synchronize();
+    if ((h = segment_alloc(ia->core_id)) == NULL) {
+        /* We're currently doing cleanup, and still have the reserved segment
+         * then that can be used now */
+        if (cleanup && ia->reserved != NULL) {
+            h = ia->reserved;
+            ia->reserved = NULL;
+        } else {
+            printf("Fail 2!\n");
+            return NULL;
+        }
+    }
+    h->next = NULL;
+    old = ia->cur;
+    old->next = h;
+    /* Mark old segment as GC-able */
+    old->flags |= SF_INACTIVE;
+    ia->cur = h;
+    __sync_synchronize();
+
+//    printf("New segment %ld %ld %ld\n", old->next, old, ia->oldest);
+//    printf("New segment %ld %d\n", ia->oldest->next, (ia->oldest->flags & SF_INACTIVE) == SF_INACTIVE);
+
+    return h;
+}
+
+
 /** Mark NIC log segment as full. */
-void ialloc_nicsegment_full(uintptr_t last)
+uint32_t ialloc_nicsegment_full(uintptr_t last)
 {
   //printf("ialloc_nicsegment_full\n");
     uintptr_t it_a = (uintptr_t) seg_base + last;
     struct segment_header *h = segment_from_part((item *) (it_a - sizeof(item)));
     size_t off = it_a - (uintptr_t) h->data;
+    printf("nicsegment_full: core_id =%d, h = %p, segment = %p, offset = %ld\n", h->core_id, h, h->data, off);
 
     /* If segment is not quite full yet, add dummy entry to fill up. */
     if (off + sizeof(item) <= h->size) {
@@ -288,7 +226,8 @@ void ialloc_nicsegment_full(uintptr_t last)
     }
     segment_item_free(h, h->size - off);
 
-    h->flags |= SF_INACTIVE;
+    //h->flags |= SF_INACTIVE;
+    return h->core_id; 
 }
 
 
@@ -330,12 +269,14 @@ item *segment_item_alloc_pointer(struct segment_header *h, size_t total)
 //}
 
 
-void ialloc_init_allocator(struct item_allocator *ia)
+void ialloc_init_allocator(struct item_allocator *ia, uint32_t core_id)
 {
+  printf("init allocator %p (%d)\n", ia, ia->core_id);
     struct segment_header *h;
     memset(ia, 0, sizeof(*ia));
+    ia->core_id = core_id;
 
-    if ((h = segment_alloc()) == NULL) {
+    if ((h = segment_alloc(ia->core_id)) == NULL) {
       printf("Allocating segment failed (1)\n");
         fprintf(stderr, "Allocating segment failed\n");
         abort();
@@ -344,7 +285,7 @@ void ialloc_init_allocator(struct item_allocator *ia)
     ia->cur = h;
     ia->oldest = h;
 
-    if ((h = segment_alloc()) == NULL) {
+    if ((h = segment_alloc(ia->core_id)) == NULL) {
       printf("Allocating segment failed (2)\n");
         fprintf(stderr, "Allocating reserved segment failed\n");
 	fflush(stdout);
@@ -358,33 +299,7 @@ void ialloc_init_allocator(struct item_allocator *ia)
     ia->cleanup_queue = calloc(settings.segcqsize, sizeof(*ia->cleanup_queue));
     ia->cq_head = ia->cq_tail = 0;
     ia->cleaning = NULL;
-}
-
-struct segment_header *new_segment(struct item_allocator *ia, bool cleanup) {
-    struct segment_header *h, *old;
-
-    if ((h = segment_alloc()) == NULL) {
-        /* We're currently doing cleanup, and still have the reserved segment
-         * then that can be used now */
-        if (cleanup && ia->reserved != NULL) {
-            h = ia->reserved;
-            ia->reserved = NULL;
-        } else {
-            printf("Fail 2!\n");
-            return NULL;
-        }
-    }
-    old = ia->cur;
-    old->next = h;
-    h->next = NULL;
-    /* Mark old segment as GC-able */
-    old->flags |= SF_INACTIVE;
-    ia->cur = h;
-
-//    printf("New segment %ld %ld %ld\n", old->next, old, ia->oldest);
-//    printf("New segment %ld %d\n", ia->oldest->next, (ia->oldest->flags & SF_INACTIVE) == SF_INACTIVE);
-
-    return h;
+    __sync_synchronize();
 }
 
 item *ialloc_alloc(struct item_allocator *ia, size_t total, bool cleanup)
@@ -396,6 +311,7 @@ item *ialloc_alloc(struct item_allocator *ia, size_t total, bool cleanup)
 
     /* If the reserved segment is currently active, only allocations for cleanup
      * are allowed */
+    __sync_synchronize();
     if (ia->reserved == NULL && !cleanup) {
         printf("Only cleanup!\n");
         return NULL;
@@ -406,7 +322,7 @@ item *ialloc_alloc(struct item_allocator *ia, size_t total, bool cleanup)
         return it;
     }
 
-    if ((h = segment_alloc()) == NULL) {
+    if ((h = segment_alloc(ia->core_id)) == NULL) {
         /* We're currently doing cleanup, and still have the reserved segment
          * then that can be used now */
         if (cleanup && ia->reserved != NULL) {
@@ -422,6 +338,7 @@ item *ialloc_alloc(struct item_allocator *ia, size_t total, bool cleanup)
     /* Mark old segment as GC-able */
     old->flags |= SF_INACTIVE;
     ia->cur = h;
+    __sync_synchronize();
 
     it = segment_item_alloc_pointer(h, total);
     if (it == NULL) {
@@ -434,6 +351,7 @@ item *ialloc_alloc(struct item_allocator *ia, size_t total, bool cleanup)
 void ialloc_free(item *it, size_t total)
 {
     struct segment_header *h = segment_from_part(it);
+    //printf("free: segment = %p, it = %p, size = %ld\n", h->data, it, total);
     segment_item_free(h, total);
 }
 
@@ -442,6 +360,7 @@ item *ialloc_cleanup_item(struct item_allocator *ia, bool idle)
     size_t i;
     item *it;
 
+    __sync_synchronize();
     if (!idle) {
         if (ia->cleanup_count >= 32) {
             return NULL;
@@ -456,19 +375,20 @@ item *ialloc_cleanup_item(struct item_allocator *ia, bool idle)
         ia->cq_head = (i + 1) % settings.segcqsize;
     }
     if (ia->reserved == NULL) {
-        ia->reserved = segment_alloc();
+        ia->reserved = segment_alloc(ia->core_id);
     }
+    __sync_synchronize();
     return it;
 }
 
 void ialloc_cleanup_nextrequest(struct item_allocator *ia)
 {
     ia->cleanup_count = 0;
+    __sync_synchronize();
 }
 
 void ialloc_maintenance(struct item_allocator *ia)
 {
-#if 0
     struct segment_header *h, *prev, *next, *cand;
     item *it,  **cq = ia->cleanup_queue;
     size_t off, size, idx;
@@ -477,80 +397,15 @@ void ialloc_maintenance(struct item_allocator *ia)
 
     /* Check if we can now free some segments? While we're at it, we can also
      * look for a candidate to be cleaned */
-    h = ia->oldest;
-    prev = NULL;
-    cand = NULL;
-    cand_ratio = 0;
-    while (h != NULL && (h->flags & SF_INACTIVE) == SF_INACTIVE) {
-        next = h->next;
-        /* Done with this segment? */
-        if (h->freed == h->size) {
-            if (prev == NULL) {
-                ia->oldest = h->next;
-            } else {
-                prev->next = h->next;
-            }
-            segment_free(h);
-            h = prev;
-        } else {
-            /* Otherwise we also look for the next cleanup candidate if
-             * necessary */
-            ratio = (double) h->freed / h->size;
-            if (ratio >= 0.5 && ratio > cand_ratio) {
-                cand_ratio = ratio;
-                cand = h;
-            }
-        }
-        prev = h;
-        h = next;
-    }
-
-    /* Check if we're currently working on cleaning a segment */
-    h = ia->cleaning;
-    off = ia->clean_offset;
-    size = (h == NULL ? 0 : h->size);
-    if (h == NULL || off == size) {
-        h = cand;
-        ia->cleaning = h;
-        off = ia->clean_offset = 0;
-    }
-
-    /* No segments to clean, that's great! */
-    if (h == NULL) {
-        return;
-    }
-
-    /* Enqueue clean requests to worker untill we run out or the queue is filled
-     * up */
-    idx = ia->cq_tail;
-    data = h->data;
-    while (off < size && cq[idx] == NULL) {
-        it = (item *) ((uintptr_t) data + off);
-        if (size - off < sizeof(item)) {
-            off = size;
-            break;
-        }
-        if (item_tryref(it)) {
-            cq[idx] = it;
-            idx = (idx + 1) % settings.segcqsize;
-        }
-        off += item_totalsz(it);
-    }
-    ia->cq_tail = idx;
-    ia->clean_offset = off;
-#endif
-    struct segment_header *h, *prev, *next, *cand;
-    item *it,  **cq = ia->cleanup_queue;
-    size_t off, size, idx;
-    double cand_ratio, ratio;
-    void *data;
-
-    /* Check if we can now free some segments? While we're at it, we can also
-     * look for a candidate to be cleaned */
+    __sync_synchronize();
     cand = NULL;
     cand_ratio = 0;
     h = ia->oldest;
     prev = NULL;
+    static count = 0;
+
+    //printf("core_id = %d, h = %p, h->next = %p, ia->oldest = %p, flags = %d\n", h->core_id, h, h->next, h->data, h->flags & SF_INACTIVE);
+
     /* We stop before the last segment in the list, and if we hit any
      * non-inactive segments. This prevents us from having to touch the cur
      * pointers. */
@@ -574,15 +429,23 @@ void ialloc_maintenance(struct item_allocator *ia)
              * necessary */
             ratio = (double) h->freed / h->size;
             if (ratio >= 0.8 && ratio > cand_ratio) {
-	      //printf("EXCEED RATIO h->data = %p, ratio = %f\n", h->data, ratio);
+	      printf("EXCEED RATIO h->data = %p, ratio = %f\n", h->data, ratio);
 	      cand_ratio = ratio;
 	      cand = h;
             }
+	    else {
+	      //printf("ratio: = %f\n", ratio);
+	      count++;
+	      if(1) { //count == 10000) {
+		count = 0;
+		//printf("ratio %p: %f = %ld/%ld\n", h->data, ratio, h->freed, h->size);
+	      }
+	    }
         }
-	/* else if ((h->flags & SF_CLEANED) == SF_CLEANED) { */
-        /*     ratio = (double) h->freed / h->size; */
-	/*     printf("ratio: %f = %ld/%ld\n", ratio, h->freed, h->size); */
-	/* } */
+	else if ((h->flags & SF_CLEANED) == SF_CLEANED) {
+            ratio = (double) h->freed / h->size;
+	    printf("ratio (clean): %f = %ld/%ld\n", ratio, h->freed, h->size);
+	}
 	prev = h;
         h = next;
     }
@@ -626,7 +489,7 @@ void ialloc_maintenance(struct item_allocator *ia)
     }
     ia->cq_tail = idx;
     ia->clean_offset = off;
-
+    __sync_synchronize();
 }
 
 size_t clean_log(struct item_allocator *ia, bool idle)
@@ -672,13 +535,14 @@ size_t clean_log(struct item_allocator *ia, bool idle)
 struct item_allocator iallocs[NUM_THREADS];
 bool init_allocator = false;
 
-/* struct item_allocator* get_item_allocators() { */
-/*     if(!init_allocator) { */
-/*         init_allocator = true; */
-/*         printf("Init item_allocator\n"); */
-/*         for(int i=0; i<NUM_THREADS; i++) { */
-/*             ialloc_init_allocator(&iallocs[i]); */
-/*         } */
-/*     } */
-/*     return iallocs; */
-/* } */
+struct item_allocator* get_item_allocators() {
+    if(!init_allocator) {
+        init_allocator = true;
+        printf("Init item_allocator\n");
+        for(int i=0; i<NUM_THREADS; i++) {
+            ialloc_init_allocator(&iallocs[i], i);
+        }
+    }
+    return iallocs;
+}
+

@@ -2,7 +2,7 @@ from dsl2 import *
 import queue_smart2, net_real
 from compiler import Compiler
 
-n_cores = 9
+n_cores = 4
 
 class protocol_binary_request_header_request(State):
     magic = Field(Uint(8))
@@ -535,17 +535,17 @@ output { out(); }
 
         def impl(self):
             self.run_c(r'''
-struct segment_header* segment = new_segment(this->ia[state.core], false);
+uint32_t core_id = ialloc_nicsegment_full(state.segfull);
+struct segment_header* segment = new_segment(this->ia[core_id], false);
 if(segment == NULL) {
     printf("Fail to allocate new segment.\n");
     //exit(-1);
 } else {
     state.segbase = get_pointer_offset(segment->data);
     state.seglen = segment->size;
-            printf("New segment: segbase = %p.\n", (void*) get_pointer_offset(segment->data));
+    //printf("New segment: segbase = %p.\n", (void*) get_pointer_offset(segment->data));
 
 }
-ialloc_nicsegment_full(state.segfull);
 output switch { case segment: out(); else: null(); }
             ''')  # TODO: maybe we should exit if segment = NULL?
 
@@ -613,7 +613,7 @@ output switch { case segment: out(); else: null(); }
             // Including this is bad is not good because, when tx queue is backed up, CPU will have high number of segment, but NIC will never get anything back.
     
     if(it == NULL && this->next) {
-            //printf("Segment is full.\n");  // including this line will make CPU keep making new segment. Without this line, # of segment will stop under 100.
+            printf("Segment is full. offset = %d\n", this->offset);  // including this line will make CPU keep making new segment. Without this line, # of segment will stop under 100.
 
         full = this->segbase + this->offset;
         this->segbase = this->next->segbase;
@@ -757,7 +757,7 @@ output switch { case segment: out(); else: null(); }
         MemoryRegion('data_region', 2 * 1024 * 1024 * 512) #4 * 1024 * 512)
 
         # Queue
-        RxEnq, RxDeq, RxScan = queue_smart2.smart_queue("rx_queue", 64000, n_cores, 3, enq_output=True, enq_blocking=True)
+        RxEnq, RxDeq, RxScan = queue_smart2.smart_queue("rx_queue", 64000, n_cores, 3, enq_output=True, enq_blocking=True) # TODO: change this to False and make a seperate queue for full segment.
         TxEnq, TxDeq, TxScan = queue_smart2.smart_queue("tx_queue", 64000, n_cores, 4, clean="enq", enq_blocking=True)
         rx_enq = RxEnq()
         rx_deq = RxDeq()
@@ -874,6 +874,7 @@ output switch { case segment: out(); else: null(); }
                 prepare_header = main.PrepareHeader()
                 display = main.PrintMsg()
                 hton = net_real.HTON(configure=['iokvs_message'])
+                drop = main.Drop()
 
                 main.Scheduler() >> tx_deq
 
@@ -893,7 +894,6 @@ output switch { case segment: out(); else: null(); }
                 tx_deq.out[2] >> main.AddLogseg()
 
                 # free net_alloc
-                drop = main.Drop()
                 net_alloc0.oom >> drop  # TODO: reuse drop => No easy way to insert pipeline state
                 net_alloc1.oom >> drop
                 net_alloc3.oom >> drop

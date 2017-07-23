@@ -7,7 +7,7 @@ void run_app(void *threadid) {
   long tid = (long)threadid;
   printf("Worker %ld: segmaxnum = %d\n", tid, settings.segmaxnum);
   struct item_allocator ia;
-  ialloc_init_allocator(&ia);
+  ialloc_init_allocator(&ia, tid);
   iallocs[tid] = &ia;
   init_segment(tid, &ia);
 
@@ -30,7 +30,7 @@ void maintenance()
         for (i = 0; i < NUM_THREADS; i++) {
             ialloc_maintenance(iallocs[i]);
         }
-        usleep(10);
+        usleep(1000000);
     }
 }
 
