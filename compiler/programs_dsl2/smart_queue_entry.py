@@ -95,11 +95,10 @@ class main(Pipeline):
     def impl(self):
         main.run1('run1')
         main.run2('run2')
-        #main.clean('clean')
 
 
 c = Compiler(main)
 #c.testing = "run1(123); run1(42); run2(0); run2(0);"
 c.testing = "run1(123); run1(42); run2(0); run2(0); run1(1); run1(2);"
 #c.generate_code_and_run(['b1', 246, 'a1', 142])
-c.generate_code_and_run(['done', 123, 'done', 42, 'b1', 246, 'a1', 142, 'clean', 'b!', 'done', '1', 'clean', 'a!', 'done', '2'])
+c.generate_code_and_run(['done', 123, 'done', 42, 'b1', 246, 'a1', 142, 'clean', 'b!', 'clean', 'a!', 'done', '1', 'done', '2'])

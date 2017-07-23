@@ -7,54 +7,58 @@ class circular_queue(State):
     len = Field(Size)
     offset = Field(Size)
     queue = Field(Pointer(Void))
+    clean = Field(Size)
 
     def init(self, len=0, queue=0):
         self.len = len
         self.offset = 0
         self.queue = queue
+        self.clean = 0
         self.declare = False
 
 class circular_queue_lock(State):
     len = Field(Size)
     offset = Field(Size)
     queue = Field(Pointer(Void))
-    lock = Field('lock_t')
-    layout = [len, offset, queue, lock]
-
-    def init(self, len=0, queue=0):
-        self.len = len
-        self.offset = 0
-        self.queue = queue
-        self.lock = lambda (x): 'qlock_init(&%s)' % x
-        self.declare = False
-
-class circular_queue_scan(State):
-    len = Field(Size)
-    offset = Field(Size)
-    queue = Field(Pointer(Void))
     clean = Field(Size)
+    lock = Field('lock_t')
+    layout = [len, offset, queue, clean, lock]
 
     def init(self, len=0, queue=0):
         self.len = len
         self.offset = 0
         self.queue = queue
         self.clean = 0
-        self.declare = False
-
-class circular_queue_lock_scan(State):
-    len = Field(Size)
-    offset = Field(Size)
-    queue = Field(Pointer(Void))
-    lock = Field('lock_t')
-    clean = Field(Size)
-
-    def init(self, len=0, queue=0):
-        self.len = len
-        self.offset = 0
-        self.queue = queue
         self.lock = lambda (x): 'qlock_init(&%s)' % x
-        self.clean = 0
         self.declare = False
+
+# class circular_queue_scan(State):
+#     len = Field(Size)
+#     offset = Field(Size)
+#     queue = Field(Pointer(Void))
+#     clean = Field(Size)
+#
+#     def init(self, len=0, queue=0):
+#         self.len = len
+#         self.offset = 0
+#         self.queue = queue
+#         self.clean = 0
+#         self.declare = False
+#
+# class circular_queue_lock_scan(State):
+#     len = Field(Size)
+#     offset = Field(Size)
+#     queue = Field(Pointer(Void))
+#     lock = Field('lock_t')
+#     clean = Field(Size)
+#
+#     def init(self, len=0, queue=0):
+#         self.len = len
+#         self.offset = 0
+#         self.queue = queue
+#         self.lock = lambda (x): 'qlock_init(&%s)' % x
+#         self.clean = 0
+#         self.declare = False
 
 
 def get_field_name(state, field):
@@ -230,10 +234,16 @@ def queue_variable_size(name, size, n_cores, enq_blocking=False, deq_blocking=Fa
             self.inp = Input(q_buffer)
 
         def impl(self):
-            self.run_c(r'''
-            (q_buffer buf) = inp();
-            dequeue_release(buf);
-            ''')
+            if clean:
+                self.run_c(r'''
+                            (q_buffer buf) = inp();
+                            dequeue_release(buf, FLAG_CLEAN);
+                            ''')
+            else:
+                self.run_c(r'''
+                            (q_buffer buf) = inp();
+                            dequeue_release(buf, 0);
+                            ''')
 
     EnqueueAlloc.__name__ = prefix + EnqueueAlloc.__name__
     EnqueueSubmit.__name__ = prefix + EnqueueSubmit.__name__

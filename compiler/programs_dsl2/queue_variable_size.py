@@ -133,4 +133,4 @@ rx_write(14,1);
 
 '''
 
-c.generate_code_and_run([1,"enq",2,"enq", 5, "enq", 1, 5, 2, 0, 11, "enq", 1, "clean", 12, "enq", 5, "clean", 13, "enq", 11, 11, "clean", 14, "enq"])
+c.generate_code_and_run([1,"enq",2,"enq", 5, "enq", 1, 5, 2, 0, 1, "clean", 5, "clean", 11, "enq",  12, "enq", 13, "enq", 11, 11, "clean", 14, "enq"])
