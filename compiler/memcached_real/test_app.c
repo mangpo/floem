@@ -17,8 +17,8 @@ void run_app(void *threadid) {
     //printf(".");
     process_eq(tid);
     clean_log(&ia, true); // TODO: is this frequent enough?
-    bool cleaning = true;
-    while(cleaning) { cleaning = clean_cq(tid); }  // TODO: clean before process_eq
+    //bool cleaning = true;
+    //while(cleaning) { cleaning = clean_cq(tid); }  // TODO: clean before process_eq
   }
 }
 

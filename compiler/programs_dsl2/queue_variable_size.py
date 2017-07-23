@@ -10,8 +10,8 @@ class Entry(State):
     val = Field(Int)
     layout = [flags, len, val]
 
-EnqAlloc, EnqSubmit, DeqGet, DeqRelease, Scan, ScanRelease = \
-    queue2.queue_variable_size("queue", 30, n_cores, blocking=False, enq_atomic=True, deq_atomic=True)
+EnqAlloc, EnqSubmit, DeqGet, DeqRelease, clean = \
+    queue2.queue_variable_size("queue", 30, n_cores, enq_atomic=True, deq_atomic=True, clean=True)
 
 class ComputeCore(Element):
     def configure(self):
@@ -44,6 +44,18 @@ class FillEntry(Element):
         ''')
 
 
+class CleanPrint(Element):
+    def configure(self):
+        self.inp = Input(queue2.q_buffer)
+
+    def impl(self):
+        self.run_c(r'''
+    (q_buffer buff) = inp();
+    Entry* e = (Entry*) buff.entry;
+    if(e->val) printf("%d clean\n", e->val);
+        ''')
+
+
 class rx_write(API):
     def configure(self):
         self.inp  = Input(Int, Size)  # val, core
@@ -55,6 +67,8 @@ class rx_write(API):
         compute_core.out_size_core >> EnqAlloc() >> fill_entry.in_entry
         compute_core.out_val >> fill_entry.in_val
         fill_entry >> EnqSubmit()
+
+        clean >> CleanPrint()
 
 class rx_read(API):
     def configure(self):
@@ -119,4 +133,4 @@ rx_write(14,1);
 
 '''
 
-c.generate_code_and_run([1,"enq",2,"enq", 5, "enq", 1, 5, 2, 0, 11, "enq", 12, "enq", 13, "enq", 11, 14, "enq"])
+c.generate_code_and_run([1,"enq",2,"enq", 5, "enq", 1, 5, 2, 0, 11, "enq", 1, "clean", 12, "enq", 5, "clean", 13, "enq", 11, 11, "clean", 14, "enq"])

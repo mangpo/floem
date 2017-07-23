@@ -829,6 +829,14 @@ output switch { case segment: out(); else: null(); }
                 rx_deq.out[2] >> new_segment >> tx_enq.inp[2]
                 new_segment.null >> main.Drop()
 
+                # cleaning tx queue
+                drop = main.Drop()
+                tx_scan.out[0] >> main.Unref() >> drop
+
+                tx_scan.out[1] >> drop
+                tx_scan.out[2] >> drop
+                tx_scan.out[3] >> drop
+
 
         class init_segment(API):
             def configure(self):
@@ -837,24 +845,24 @@ output switch { case segment: out(); else: null(); }
             def impl(self):
                 self.inp >> main.FirstSegment() >> tx_enq.inp[2]
 
-        class clean_cq(API):
-            def configure(self):
-                self.inp = Input(Size)
-                self.out = Output(Bool)
-                self.default_return = 'false'
-
-            def impl(self):
-                clean = main.Clean(configure=['true'])
-                #unclean = main.Clean(configure=['false'])
-                #ret = main.ForwardBool()
-                self.inp >> tx_scan
-                # get
-                tx_scan.out[0] >> main.Unref() >> clean
-
-                tx_scan.out[1] >> clean
-                tx_scan.out[2] >> clean
-                tx_scan.out[3] >> clean
-                clean >> self.out
+        # class clean_cq(API):
+        #     def configure(self):
+        #         self.inp = Input(Size)
+        #         self.out = Output(Bool)
+        #         self.default_return = 'false'
+        #
+        #     def impl(self):
+        #         clean = main.Clean(configure=['true'])
+        #         #unclean = main.Clean(configure=['false'])
+        #         #ret = main.ForwardBool()
+        #         self.inp >> tx_scan
+        #         # get
+        #         tx_scan.out[0] >> main.Unref() >> clean
+        #
+        #         tx_scan.out[1] >> clean
+        #         tx_scan.out[2] >> clean
+        #         tx_scan.out[3] >> clean
+        #         clean >> self.out
 
         ####################### NIC Tx #######################
         class nic_tx(InternalLoop):
@@ -893,7 +901,7 @@ output switch { case segment: out(); else: null(); }
         nic_rx('nic_rx', process='dpdk', cores=[1])
         process_eq('process_eq', process='app')
         init_segment('init_segment', process='app')
-        clean_cq('clean_cq', process='app')
+        #clean_cq('clean_cq', process='app')
         nic_tx('nic_tx', process='dpdk', cores=[2])
 
 master_process('app')

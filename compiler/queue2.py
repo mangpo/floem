@@ -68,7 +68,7 @@ def get_field_name(state, field):
                 return s
 
 
-def create_queue_states(name, type, size, n_cores, declare=True, enq_lock=False, deq_lock=False, scan=False):
+def create_queue_states(name, type, size, n_cores, declare=True, enq_lock=False, deq_lock=False):
     prefix = "%s_" % name
 
     class Storage(State): data = Field(Array(type, size))
@@ -78,14 +78,14 @@ def create_queue_states(name, type, size, n_cores, declare=True, enq_lock=False,
     storages = [Storage() for i in range(n_cores)]
 
     if enq_lock:
-        enq = circular_queue_lock_scan if scan else circular_queue_lock
+        enq = circular_queue_lock
     else:
-        enq = circular_queue_scan if scan else circular_queue
+        enq = circular_queue
 
     if deq_lock:
-        deq = circular_queue_lock_scan if scan else circular_queue_lock
+        deq = circular_queue_lock
     else:
-        deq = circular_queue_scan if scan else circular_queue
+        deq = circular_queue
 
     enq_infos = [enq(init=[size, storages[i]], declare=declare) for i in range(n_cores)]
     deq_infos = [deq(init=[size, storages[i]], declare=declare) for i in range(n_cores)]
@@ -111,7 +111,7 @@ def create_queue_states(name, type, size, n_cores, declare=True, enq_lock=False,
 
 
 def queue_variable_size(name, size, n_cores, enq_blocking=False, deq_blocking=False, enq_atomic=False, deq_atomic=False,
-                        scan=False, core=False):
+                        clean=False, core=False):
     """
     :param name: queue name
     :param size: number of bytes
@@ -121,9 +121,31 @@ def queue_variable_size(name, size, n_cores, enq_blocking=False, deq_blocking=Fa
     :return:
     """
 
+    prefix = name + "_"
+    clean_name = "clean"
+
+    class Clean(Element):
+        def configure(self):
+            self.inp = Input(q_buffer)
+            self.out = Output(q_buffer)
+            self.special = 'clean'
+
+        def impl(self):
+            self.run_c(r'''
+            (q_buffer buf) = inp();
+            output { out(buf); }
+            ''')
+    Clean.__name__ = prefix + Clean.__name__
+    if clean:
+        clean_inst = Clean(name=clean_name)
+        clean_name = clean_inst.name
+    else:
+        clean_inst = None
+        clean_name = "no_clean"
+
     enq_all, deq_all, EnqQueue, DeqQueue, Storage = \
         create_queue_states(name, Uint(8), size, n_cores,
-                            declare=False, enq_lock=enq_atomic, deq_lock=deq_atomic, scan=scan)
+                            declare=False, enq_lock=enq_atomic, deq_lock=deq_atomic) # TODO: scan => clean
 
     class EnqueueAlloc(Element):
         this = Persistent(enq_all.__class__)
@@ -134,13 +156,13 @@ def queue_variable_size(name, size, n_cores, enq_blocking=False, deq_blocking=Fa
             self.out = Output(q_buffer)
 
         def impl(self):
-            noblock_noatom = "q_buffer buff = enqueue_alloc(q, len);\n"
+            noblock_noatom = "q_buffer buff = enqueue_alloc(q, len, %s);\n" % clean_name
             block_noatom = r'''
                         q_buffer buff = { NULL, 0 };
                         while(buff.entry == NULL) {
-                            buff = enqueue_alloc(q, len);
+                            buff = enqueue_alloc(q, len, %s);
                         }
-                        '''
+                        ''' % clean_name
             noblock_atom = "qlock_lock(&q->lock);\n" + noblock_noatom + "qlock_unlock(&q->lock);\n"
             block_atom = "qlock_lock(&q->lock);\n" + block_noatom + "qlock_unlock(&q->lock);\n"
 
@@ -208,67 +230,20 @@ def queue_variable_size(name, size, n_cores, enq_blocking=False, deq_blocking=Fa
             self.inp = Input(q_buffer)
 
         def impl(self):
-            if scan:
-                self.run_c(r'''
-                            (q_buffer buf) = inp();
-                            dequeue_release(buf, FLAG_CLEAN);
-                            ''')
-            else:
-                self.run_c(r'''
-                            (q_buffer buf) = inp();
-                            dequeue_release(buf, 0);
-                            ''')
-
-    class CleanNext(Element):
-        # For correctness, scan should be executed right before enqueue.
-        # Even then, something bad can happen if the queue is completely full, off = clean; the queue won't get cleaned.
-        this = Persistent(enq_all.__class__) if scan == 'enq' else Persistent(deq_all.__class__)
-
-        def states(self):
-            self.this = enq_all if scan == 'enq' else deq_all
-
-        def configure(self):
-            self.inp = Input(Size)
-            self.out = Output(q_buffer, Size) if core else Output(q_buffer)
-
-        def impl(self):
-            self.run_c(r'''
-                (size_t c) = inp();
-                %s *q = this->cores[c]; ''' % (EnqQueue.__name__ if scan == 'enq' else DeqQueue.__name__)
-                       + r'''
-                q_buffer buff = next_clean(q);
-                output { out(%s); }
-                ''' % ('buff, c' if core else 'buff'))
-
-    class CleanRelease(Element):
-        def configure(self):
-            self.inp = Input(q_buffer)
-
-        def impl(self):
             self.run_c(r'''
             (q_buffer buf) = inp();
-            clean_release(buf);
+            dequeue_release(buf);
             ''')
 
-    prefix = name + "_"
     EnqueueAlloc.__name__ = prefix + EnqueueAlloc.__name__
     EnqueueSubmit.__name__ = prefix + EnqueueSubmit.__name__
     DequeueGet.__name__ = prefix + DequeueGet.__name__
     DequeueRelease.__name__ = prefix + DequeueRelease.__name__
-    CleanNext.__name__ = prefix + CleanNext.__name__
-    CleanRelease.__name__ = prefix + CleanRelease.__name__
 
-    return EnqueueAlloc, EnqueueSubmit, DequeueGet, DequeueRelease, \
-           CleanNext if scan else None, CleanRelease if scan else None
+    return EnqueueAlloc, EnqueueSubmit, DequeueGet, DequeueRelease, clean_inst
 
-# TODO
-# 1. ScanRelease
-# 2. Dequeue & Scan: output(type*, uintptr_t)
-# 3. TxRelease & ScanRelease: input(type*, uintptr_t)
-# 4. Make storm works again
 def queue_custom_owner_bit(name, type, size, n_cores, owner,
-                           enq_blocking=False, deq_blocking=False, enq_atomic=False, deq_atomic=False, scan_atomic=False,
-                           scan=False, enq_output=False):
+                           enq_blocking=False, deq_blocking=False, enq_atomic=False, deq_atomic=False, enq_output=False):
     """
     :param name: queue name
     :param type: entry type
@@ -284,7 +259,7 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
 
     enq_all, deq_all, EnqQueue, DeqQueue, Storage = \
         create_queue_states(name, type, size, n_cores,
-                            declare=True, enq_lock=False, deq_lock=False, scan=scan)
+                            declare=True, enq_lock=False, deq_lock=False)
 
     type = string_type(type)
     type_star = type + "*"
@@ -507,132 +482,7 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
             ''' % (type_star, owner, type))
 
 
-    class Scan(Element):
-        this = Persistent(enq_all.__class__) if scan == 'enq' else Persistent(deq_all.__class__)
-
-        def states(self):
-            self.this = enq_all if scan == 'enq' else deq_all
-
-        def configure(self):
-            self.inp = Input(Size)
-            self.out = Output(type_star, 'uintptr_t')
-
-        def impl(self):
-            atomic_src = r'''
-                (size_t c) = in_core();
-                circular_queue_scan *q = this->cores[c];
-                %s* p = q->queue;
-                %s* entry = NULL;
-
-                while (q->clean != q->offset) {
-                    entry = &p->data[q->clean];
-                    if ((entry->%s) != 0) {
-                        entry = NULL;
-                        break
-                    } else {
-                        size_t old = q->clean;
-                        size_t new = (old + 1) %s q->len;
-                        if(__sync_bool_compare_and_swap(&q->clean, old, new))
-                            break;
-                        else {
-                            entry = NULL;
-                        }
-                    }
-                }
-                output { out(entry, 0); }
-                ''' % (Storage.__name__, type, owner, '%')
-
-            no_atomic_src = r'''
-    (size_t c) = in_core();
-    circular_queue_scan *q = this->cores[c];
-    %s* p = q->queue;
-    %s* entry = NULL;
-    if (q->clean != q->offset) {
-        entry = &p->data[q->clean];
-        if ((entry->%s) != 0) {
-            entry = NULL;
-        } else {
-            q->clean = (q->clean + 1) %s q->len;
-        }
-    }
-    output { out(entry, 0); }
-            ''' % (Storage.__name__, type, owner, '%')
-
-            self.run_c(atomic_src if scan_atomic else no_atomic_src)
-
-
-        def impl_cavium(self):
-            atomic_src = r'''
-    (size_t c) = in_core();
-    circular_queue_scan *q = this->cores[c];
-    %s* p = q->queue;
-    %s* entry = NULL;
-    uintptr_t addr;
-
-    while (q->clean != q->offset) {
-        addr = (uintptr_t) &q->data[q->clean];
-        dma_read(addr, sizeof(%s), (void**) &entry, &read_lock);
-        if ((entry->%s) != 0) {
-            dma_free(entry);
-            entry = NULL;
-            break
-        } else {
-            size_t old = q->clean;
-            size_t new = (old + 1) %s q->len;
-            if(cvmx_atomic_compare_and_store64(&q->clean, old, new))
-                break;
-            else {
-                dma_free(entry);
-                entry = NULL;
-            }
-        }
-    }
-    output { out(entry, addr); }
-    ''' % (Storage.__name__, type, type, owner, '%')
-
-            no_atomic_src = r'''
-    (size_t c) = in_core();
-    circular_queue_scan *q = this->cores[c];
-    %s* p = q->queue;
-    %s* entry = NULL;
-    uintptr_t addr;
-    if (q->clean != q->offset) {
-        addr = (uintptr_t) &q->data[q->clean];
-        dma_read(addr, sizeof(%s), (void**) &entry, &read_lock);
-        if ((entry->%s) != 0) {
-            dma_free(entry);
-            entry = NULL;
-        } else {
-            q->clean = (q->clean + 1) %s q->len;
-        }
-    }
-    output { out(entry, addr); }
-            ''' % (Storage.__name__, type, type, owner, '%')
-
-            self.run_c(atomic_src if scan_atomic else no_atomic_src)
-
-    class ScanRelease(Element):
-        def configure(self):
-            self.inp = Input(type_star, 'uintptr_t')
-
-        def impl(self):
-            self.run_c("")
-
-        def impl_cavium(self):
-            self.run_c(r'''
-            (%s x, uintptr_t addr) = inp();
-            if(x) {
-                dma_free(x);
-            }
-            ''' % (type_star, owner))
-
-    Enqueue.__name__ = prefix + Enqueue.__name__
-    Dequeue.__name__ = prefix + Dequeue.__name__
-    Release.__name__ = prefix + Release.__name__
-    Scan.__name__ = prefix + Scan.__name__
-    ScanRelease.__name__ = prefix + ScanRelease.__name__
-
-    return Enqueue, Dequeue, Release, Scan if scan else None, ScanRelease if scan else None
+    return Enqueue, Dequeue, Release
 
 
 def queue_shared_head_tail(name, type, size, n_cores):

@@ -42,9 +42,8 @@ def smart_queue(name, size, n_cores, n_cases, enq_blocking=False, deq_blocking=F
             Element.__init__(self, name=name, create=create)
             queue.deq = self.instance
 
-    class Scan(Element):
+    class Clean(Element):
         def configure(self):
-            self.inp = Input(Size)  # core
             self.out = [Output() for i in range(n_cases)]
             self.special = queue
 
@@ -56,11 +55,10 @@ def smart_queue(name, size, n_cores, n_cases, enq_blocking=False, deq_blocking=F
 
         def __init__(self, name=None, create=True):
             Element.__init__(self, name=name, create=create)
-            queue.scan = self.instance
-            queue.scan_type = clean
+            queue.clean = self.instance
 
     Enqueue.__name__ = prefix + Enqueue.__name__
     Dequeue.__name__ = prefix + Dequeue.__name__
-    Scan.__name__ = prefix + Scan.__name__
+    Clean.__name__ = prefix + Clean.__name__
 
-    return Enqueue, Dequeue, Scan if clean else None
+    return Enqueue, Dequeue, Clean if clean else None

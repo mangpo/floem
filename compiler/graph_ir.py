@@ -452,6 +452,8 @@ class ElementNode:
     def unused(self):
         if self.core_id:
             return False
+        elif is_queue_clean(self):
+            return False
         elif len(self.element.inports) > 0:
             return len(self.input2ele) == 0
         else:
@@ -529,10 +531,12 @@ class Queue:
         self.n_cases = n_cases
         self.enq = None
         self.deq = None
-        self.scan = None
-        self.scan_type = None
+        self.clean = None
         self.enq_blocking = enq_blocking
         self.deq_blocking = deq_blocking
         self.enq_atomic = enq_atomic
         self.deq_atomic = deq_atomic
         self.enq_output = enq_output
+
+def is_queue_clean(instance):
+    return instance.element.special == 'clean'

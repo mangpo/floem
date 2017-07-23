@@ -1,4 +1,5 @@
 from graph import State
+from graph_ir import is_queue_clean
 from thread_allocation import ThreadAllocator
 from process_handling import annotate_process_info
 from api_handling import *
@@ -262,7 +263,7 @@ def annotate_join_info(g, detail):
 
 def check_pipeline_state_liveness(g):
     for instance in g.instances.values():
-        if len(instance.input2ele) == 0 and instance.liveness:
+        if len(instance.input2ele) == 0 and instance.liveness and is_queue_clean(instance):
             assert len(instance.liveness) == 0, \
                 ("Fields %s of a pipeline state should not be live at the beginning at element instance '%s'." %
                  (instance.liveness, instance.name))

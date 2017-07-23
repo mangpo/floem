@@ -62,7 +62,7 @@ class main(Pipeline):
         def impl(self):
             self.run_c(r'''printf("done %d\n", state.a);''')
 
-    Enq, Deq, Scan = queue_smart2.smart_queue("queue", 100, 2, 2, clean=True, enq_output=True)
+    Enq, Deq, Scan = queue_smart2.smart_queue("queue", 16, 2, 2, clean=True, enq_output=True)
 
     class run1(API):
         def configure(self):
@@ -77,6 +77,10 @@ class main(Pipeline):
             classify.out[1] >> main.B0() >> enq.inp[1]
             enq.done >> main.Display()
 
+            scan = main.Scan()
+            scan.out[0] >> main.Clean(configure=['a'])
+            scan.out[1] >> main.Clean(configure=['b'])
+
     class run2(API):
         def configure(self):
             self.inp = Input(Size)
@@ -88,25 +92,14 @@ class main(Pipeline):
             deq.out[0] >> main.A1()
             deq.out[1] >> main.B1()
 
-    class clean(API):
-        def configure(self):
-            self.inp = Input(Size)
-
-        def impl(self):
-            scan = main.Scan()
-
-            self.inp >> scan
-            scan.out[0] >> main.Clean(configure=['a'])
-            scan.out[1] >> main.Clean(configure=['b'])
-
     def impl(self):
         main.run1('run1')
         main.run2('run2')
-        main.clean('clean')
+        #main.clean('clean')
 
 
 c = Compiler(main)
 #c.testing = "run1(123); run1(42); run2(0); run2(0);"
-c.testing = "run1(123); run1(42); run2(0); run2(0); clean(0); clean(0); clean(0); clean(1);"
+c.testing = "run1(123); run1(42); run2(0); run2(0); run1(1); run1(2);"
 #c.generate_code_and_run(['b1', 246, 'a1', 142])
-c.generate_code_and_run(['done', 123, 'done', 42, 'b1', 246, 'a1', 142, 'clean', 'b!', 'clean', 'a!'])
+c.generate_code_and_run(['done', 123, 'done', 42, 'b1', 246, 'a1', 142, 'clean', 'b!', 'done', '1', 'clean', 'a!', 'done', '2'])

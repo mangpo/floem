@@ -193,8 +193,8 @@ class Graph:
                 e.special.enq = ret
             elif e.special.deq == user_instance:
                 e.special.deq = ret
-            elif e.special.scan == user_instance:
-                e.special.scan = ret
+            elif e.special.clean == user_instance:
+                e.special.clean = ret
             else:
                 raise Exception("Element instance '%s' is link to smart queue '%s', but the queue doesn't link to the instance."
                                 % (user_instance.name, e.special.name))
@@ -393,6 +393,8 @@ class Graph:
             self.state_instance_order.remove(name)
 
     def is_start(self, my):
+        if is_queue_clean(my):
+            return False
         for inst_list in my.input2ele.values():
             for name, port in inst_list:
                 other = self.instances[name]

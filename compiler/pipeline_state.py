@@ -532,7 +532,7 @@ def find_starting(g, name):
 
 def is_valid_start(g, name):
     """
-    Not valid if it rearch dequeue or scan before enqueue
+    Not valid if it reach dequeue or scan before enqueue
     """
     instance = g.instances[name]
 
@@ -597,7 +597,7 @@ def compile_pipeline_states(g, pktstate):
         return
 
     if pktstate:
-        insert_starting_point(g, pktstate)
+        insert_starting_point(g, pktstate)  # TODO: clean
 
     graphviz = False
 

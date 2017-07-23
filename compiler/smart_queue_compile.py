@@ -98,18 +98,15 @@ def find_pipeline_state(g, instance):
             return state
 
 
-def create_queue(name, size, n_cores, enq_blocking, deq_blocking, enq_atomic, deq_atomic, scan, core):
+def create_queue(name, size, n_cores, enq_blocking, deq_blocking, enq_atomic, deq_atomic, clean, core):
     workspace.push_decl()
     workspace.push_scope(name)
-    EnqAlloc, EnqSubmit, DeqGet, DeqRelease, Scan, ScanRelease = \
-        queue2.queue_variable_size(name, size, n_cores, enq_blocking, deq_blocking, enq_atomic, deq_atomic, scan, core)
+    EnqAlloc, EnqSubmit, DeqGet, DeqRelease, clean = \
+        queue2.queue_variable_size(name, size, n_cores, enq_blocking, deq_blocking, enq_atomic, deq_atomic, clean, core)
     EnqAlloc(create=False)
     EnqSubmit(create=False)
     DeqGet(create=False)
     DeqRelease(create=False)
-    if scan:
-        Scan(create=False)
-        ScanRelease(create=False)
 
     decl = workspace.pop_decl()
     scope, collection = workspace.pop_scope()
@@ -117,7 +114,7 @@ def create_queue(name, size, n_cores, enq_blocking, deq_blocking, enq_atomic, de
     dp = desugaring.desugar(p)
     g = program_to_graph_pass(dp, default_process='tmp')
 
-    return g, EnqAlloc, EnqSubmit, DeqGet, DeqRelease, Scan, ScanRelease
+    return g, EnqAlloc, EnqSubmit, DeqGet, DeqRelease, clean
 
 
 def need_byte_reverse(g, t1, t2):
@@ -188,11 +185,15 @@ def get_fill_entry_src(g, deq_thread, enq_thread, live, special, extras,
 
 
 def get_save_state_src(g, deq_thread, enq_thread, live, special, extras,
-                       state_entry, src2fields, mapping, pipeline_state):
+                       state_entry, src2fields, mapping, pipeline_state, core=True):
     byte_reverse, size2convert, htons, htonl, htonp = get_size2convert(g, deq_thread, enq_thread)
 
-    save_src = "(q_buffer buff, size_t core) = in();"
-    if 'core' in extras:
+    if core:
+        save_src = "(q_buffer buff, size_t core) = in();"
+    else:
+        save_src = "(q_buffer buff) = in();"
+
+    if core and 'core' in extras:
         save_src += "  state.core = core;\n"
     save_src += "  state.buffer = buff;\n"
     save_src += "  state.entry = (%s*) buff.entry;\n" % state_entry.name
@@ -221,8 +222,8 @@ def compile_smart_queue(g, q, src2fields):
     pipeline_state = find_pipeline_state(g, q.enq)
     enq_thread = g.get_thread_of(q.enq.name)
     deq_thread = g.get_thread_of(q.deq.name)
-    if q.scan:
-        scan_thread = g.get_thread_of(q.scan.name)
+    if q.clean:
+        clean_thread = g.get_thread_of(q.clean.name)
 
     if re.match("_impl", q.enq.name):
         prefix = "_impl_"
@@ -231,39 +232,40 @@ def compile_smart_queue(g, q, src2fields):
     else:
         prefix = ""
 
-    g_add, enq_alloc, enq_submit, deq_get, deq_release, scan, scan_release = \
+    g_add, enq_alloc, enq_submit, deq_get, deq_release, clean = \
         create_queue(q.name, q.size, q.n_cores, enq_blocking=q.enq_blocking, deq_blocking=q.deq_blocking,
-                     enq_atomic=q.enq_atomic, deq_atomic=q.deq_atomic, scan=q.scan_type, core=True)
+                     enq_atomic=q.enq_atomic, deq_atomic=q.deq_atomic, clean=q.clean, core=True)
     g.merge(g_add)
 
     deq_types = ["q_buffer", "size_t"]
-    deq_src_in = "(q_buffer buff, size_t core) = in();"
-    deq_args_out = "buff,core"
 
     src_cases = ""
     for i in range(q.n_cases):
-        src_cases += "    case (type == %d): out%d(%s);\n" % (i + 1, i, deq_args_out)
-    src_release = "    case (type == 0): release(buff);\n"
+        src_cases += "    case (type == %d): out%d(buff,core);\n" % (i + 1, i)
+    src_cases += "    case (type == 0): release(buff);\n"
     classify_ele = Element(q.deq.name + "_classify", [Port("in", deq_types)],
                            [Port("out" + str(i), deq_types) for i in range(q.n_cases)]
                            + [Port("release", ["q_buffer"])], r'''
-        %s
+       (q_buffer buff, size_t core) = in();
         q_entry* e = buff.entry;
         int type = -1;
         if (e != NULL) type = (e->flags & TYPE_MASK) >> TYPE_SHIFT;
         output switch {
             %s
-        }''' % (deq_src_in, src_cases + src_release))
-    #
-    # scan_classify_ele = Element(q.deq.name + "_scan_classify", [Port("in", deq_types)],
-    #                             [Port("out" + str(i), deq_types) for i in range(q.n_cases)], r'''
-    #     %s
-    #     q_entry* e = buff.entry;
-    #     uint16_t type = 0;
-    #     if (e != NULL) type = (e->flags & TYPE_MASK) >> TYPE_SHIFT;
-    #     output switch {
-    #         %s
-    #     }''' % (deq_src_in, src_cases))
+        }''' % (src_cases))
+
+    src_cases = ""
+    for i in range(q.n_cases):
+        src_cases += "    case (type == %d): out%d(buff);\n" % (i + 1, i)
+    scan_classify_ele = Element(q.name + "_scan_classify", [Port("in", ["q_buffer"])],
+                                [Port("out" + str(i), ["q_buffer"]) for i in range(q.n_cases)], r'''
+        (q_buffer buff) = in();
+        q_entry* e = buff.entry;
+        uint16_t type = 0;
+        if (e != NULL) type = (e->flags & TYPE_MASK) >> TYPE_SHIFT;
+        output switch {
+            %s
+        }''' % (src_cases))
 
     g.addElement(classify_ele)
     deq_get_inst = deq_get(q.deq.name + "_get", create=False).instance
@@ -271,15 +273,12 @@ def compile_smart_queue(g, q, src2fields):
     classify_inst = ElementInstance(classify_ele.name, classify_ele.name + "_inst")
     new_instances = [deq_get_inst, deq_release_inst, classify_inst]
 
-    if scan:
-        #g.addElement(scan_classify_ele)
-        scan_inst = scan(q.name + "_scan", create=False).instance
-        scan_release_inst = scan_release(q.name + "_scan_release", create=False).instance
-        #scan_classify_inst = ElementInstance(scan_classify_ele.name, scan_classify_ele.name + "_scan_inst")
-        scan_classify_inst = ElementInstance(classify_ele.name, classify_ele.name + "_scan_inst")
+    if clean:
+        g.addElement(scan_classify_ele)
+        scan_inst = clean.instance
+        scan_classify_inst = ElementInstance(scan_classify_ele.name, scan_classify_ele.name + "_inst")
         new_instances.append(scan_inst)
         new_instances.append(scan_classify_inst)
-        new_instances.append(scan_release_inst)
 
     for inst in new_instances:
         g.newElementInstance(inst.element, inst.name, inst.args)
@@ -292,18 +291,16 @@ def compile_smart_queue(g, q, src2fields):
     # Connect deq_get -> classify, classify -> release
     g.connect(deq_get_inst.name, classify_inst.name)
     g.connect(classify_inst.name, deq_release_inst.name, "release")
-    if scan:
+    if clean:
         g.connect(scan_inst.name, scan_classify_inst.name)
-        g.connect(scan_classify_inst.name, scan_release_inst.name, "release")
 
     # Resource
     g.set_thread(deq_get_inst.name, deq_thread)
     g.set_thread(classify_inst.name, deq_thread)
     g.set_thread(deq_release_inst.name, deq_thread)
-    if scan:
-        g.set_thread(scan_inst.name, scan_thread)
-        g.set_thread(scan_classify_inst.name, scan_thread)
-        g.set_thread(scan_release_inst.name, scan_thread)
+    if clean:
+        g.set_thread(scan_inst.name, clean_thread)
+        g.set_thread(scan_classify_inst.name, clean_thread)
 
     # Memorize connections
     ins_map = []
@@ -317,15 +314,15 @@ def compile_smart_queue(g, q, src2fields):
         out = q.deq.output2ele["out" + str(i)]
         ins_map.append(ins)
         out_map.append(out)
-        if scan:
-            clean = q.scan.output2ele["out" + str(i)]
-            scan_map.append(clean)
+        if clean:
+            x = q.clean.output2ele["out" + str(i)]
+            scan_map.append(x)
 
     # Delete dummy dequeue and enqueue instances
     g.delete_instance(q.enq.name)
     g.delete_instance(q.deq.name)
-    if scan:
-        g.delete_instance(q.scan.name)
+    if clean:
+        g.delete_instance(q.clean.name)
 
     # Preserve original dequeue connection
     for port in q.deq.input2ele:
@@ -334,10 +331,10 @@ def compile_smart_queue(g, q, src2fields):
             if not prev_inst == q.enq.name:
                 g.connect(prev_inst, deq_get_inst.name, prev_port, port)
 
-    # Preserve original dequeue connection
-    if scan:
-        for port in q.scan.input2ele:
-            l = q.scan.input2ele[port]
+    # Preserve original clean connection
+    if clean:
+        for port in q.clean.input2ele:
+            l = q.clean.input2ele[port]
             for prev_inst, prev_port in l:
                 g.connect(prev_inst, scan_inst.name, prev_port, port)
 
@@ -391,7 +388,7 @@ def compile_smart_queue(g, q, src2fields):
 
         # Create element: save
         save_src = get_save_state_src(g, deq_thread, enq_thread, live, special, extras,
-                                      state_entry, src2fields, mapping, pipeline_state)
+                                      state_entry, src2fields, mapping, pipeline_state, core=True)
         save = Element(q.name + "_save" + str(i), [Port("in", deq_types)], [Port("out", [])], save_src)
         g.addElement(size_core_ele)
         g.addElement(fill_ele)
@@ -463,16 +460,16 @@ def compile_smart_queue(g, q, src2fields):
         #     release_vis.add(node)
         #     g.connect(node.name, deq_release_inst.name, "release")
 
-        if scan:
+        if clean:
             # Create scan save
-            scan_save_src = get_save_state_src(g, scan_thread, enq_thread, live, special, extras,
-                                               state_entry, src2fields, mapping, pipeline_state)
-            scan_save = Element(q.name + "_scan_save" + str(i), [Port("in", deq_types)], [Port("out", [])],
+            scan_save_src = get_save_state_src(g, clean_thread, enq_thread, live, special, extras,
+                                               state_entry, src2fields, mapping, pipeline_state, core=False)
+            scan_save = Element(q.name + "_scan_save" + str(i), [Port("in", ["q_buffer"])], [Port("out", [])],
                                 scan_save_src)
             scan_save_inst = ElementInstance(scan_save.name, prefix + scan_save.name + "_inst")
             g.addElement(scan_save)
             g.newElementInstance(scan_save_inst.element, scan_save_inst.name, scan_save_inst.args)
-            g.set_thread(scan_save_inst.name, scan_thread)
+            g.set_thread(scan_save_inst.name, clean_thread)
 
             scan_save_inst = g.instances[scan_save_inst.name]
             g.add_pipeline_state(scan_save_inst.name, state_pipeline.name)
@@ -485,12 +482,6 @@ def compile_smart_queue(g, q, src2fields):
             g.connect(scan_classify_inst.name, scan_save_inst.name, "out" + str(i))
             g.connect(scan_save_inst.name, clean_inst, "out", clean_port)
 
-            # Scan release connection
-            scan_save_inst_names.append(scan_save_inst.name)
-            # node = get_node_before_release(scan_save_inst.name, g, live, prefix, release_vis)
-            # if node not in release_vis:
-            #     g.connect(node.name, scan_release_inst.name, "release")
-
     # Insert release dequeue
     duplicate_overlapped(g, save_inst_names)
     for i in range(q.n_cases):
@@ -499,12 +490,6 @@ def compile_smart_queue(g, q, src2fields):
             release_vis.add(node)
             g.connect(node.name, deq_release_inst.name, "release")
 
-    if scan:
-        duplicate_overlapped(g, scan_save_inst_names)
-        for i in range(q.n_cases):
-            node = get_node_before_release(scan_save_inst_names[i], g, lives[i], prefix, release_vis)
-            if node not in release_vis:
-                g.connect(node.name, scan_release_inst.name, "release")
 
 def code_change(instance):
     return len(instance.uses) > 0

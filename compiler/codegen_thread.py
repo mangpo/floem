@@ -190,8 +190,9 @@ def generate_internal_triggers_with_process(graph, process, ext, mode):
     no_triggers = [t for t in no_triggers if graph.instances[t].process == process]
     if len(no_triggers) > 0:
         for inst in no_triggers:
+            instance = graph.instances[inst]
             t = graph.instances[inst].thread
-            if t:
+            if t and not is_queue_clean(instance):
                 raise Exception(
                     "Element instance '%s' is assigned to thread '%s', but it is not reachable from the starting element of thread '%s'.\n"
                     % (inst, t, t)
