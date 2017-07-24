@@ -536,7 +536,7 @@ output { out(); }
         def impl(self):
             self.run_c(r'''
 uint32_t core_id = ialloc_nicsegment_full(state.segfull);
-struct segment_header* segment = new_segment(this->ia[core_id], false);
+struct segment_header* segment = ialloc_nicsegment_alloc(this->ia[core_id]);
 if(segment == NULL) {
     printf("Fail to allocate new segment.\n");
     //exit(-1);

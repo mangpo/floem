@@ -10,8 +10,8 @@
 
 
 #define SF_INACTIVE 1
+#define SF_NIC 2
 #define SF_CLEANED 4
-#define DATA_REGION_NAME "mykvs_data"
 
 static struct segment_header *free_segments;
 static rte_spinlock_t segalloc_lock;
@@ -139,6 +139,7 @@ void segment_item_free(struct segment_header *h, size_t total)
 {
   //printf("free: h->data = %p, size = %ld\n", h->data, total);
     if (h->size != __sync_add_and_fetch(&h->freed, total)) {
+        assert(h->freed <= h->size);
         return;
     }
 }
@@ -156,6 +157,7 @@ item *segment_item_alloc(uint64_t thisbase, uint64_t seglen, uint64_t* offset, s
     if (avail == 0) {
         return NULL;
     } else if (avail < total) {
+    // TODO: may need this?
 //        if (avail >= sizeof(item)) {
 //            it->refcount = 0;
 //            /* needed for log scan */
@@ -169,6 +171,7 @@ item *segment_item_alloc(uint64_t thisbase, uint64_t seglen, uint64_t* offset, s
     }
 
     /* Ordering here is important */
+    // TODO: may need this?
     //it->refcount = 1;
 
     *offset += total;
@@ -177,58 +180,63 @@ item *segment_item_alloc(uint64_t thisbase, uint64_t seglen, uint64_t* offset, s
 }
 
 
-struct segment_header *new_segment(struct item_allocator *ia, bool cleanup) {
-  // TODO: ia
-    struct segment_header *h, *old;
+//struct segment_header *new_segment(struct item_allocator *ia, bool cleanup) {
+//  // TODO: ia
+//    struct segment_header *h, *old;
+//
+//    __sync_synchronize();
+//    if ((h = segment_alloc(ia->core_id)) == NULL) {
+//        /* We're currently doing cleanup, and still have the reserved segment
+//         * then that can be used now */
+//        if (cleanup && ia->reserved != NULL) {
+//            h = ia->reserved;
+//            ia->reserved = NULL;
+//        } else {
+//            printf("Fail 2!\n");
+//            return NULL;
+//        }
+//    }
+//    h->next = NULL;
+//    old = ia->cur;
+//    old->next = h;
+//    /* Mark old segment as GC-able */
+//    old->flags |= SF_INACTIVE;
+//    ia->cur = h;
+//    __sync_synchronize();
+//
+////    printf("New segment %ld %ld %ld\n", old->next, old, ia->oldest);
+////    printf("New segment %ld %d\n", ia->oldest->next, (ia->oldest->flags & SF_INACTIVE) == SF_INACTIVE);
+//
+//    return h;
+//}
 
-    __sync_synchronize();
-    if ((h = segment_alloc(ia->core_id)) == NULL) {
-        /* We're currently doing cleanup, and still have the reserved segment
-         * then that can be used now */
-        if (cleanup && ia->reserved != NULL) {
-            h = ia->reserved;
-            ia->reserved = NULL;
-        } else {
-            printf("Fail 2!\n");
-            return NULL;
+
+// TODO: use this instead
+struct segment_header *ialloc_nicsegment_alloc(struct item_allocator *ia)
+{
+    struct segment_header *h;
+    if (ia->reserved == NULL) {
+        if ((ia->reserved = segment_alloc()) == NULL) {
+            return false;
         }
     }
-    h->next = NULL;
-    old = ia->cur;
-    old->next = h;
-    /* Mark old segment as GC-able */
-    old->flags |= SF_INACTIVE;
-    ia->cur = h;
-    __sync_synchronize();
 
-//    printf("New segment %ld %ld %ld\n", old->next, old, ia->oldest);
-//    printf("New segment %ld %d\n", ia->oldest->next, (ia->oldest->flags & SF_INACTIVE) == SF_INACTIVE);
+    if ((h = segment_alloc()) == NULL) {
+        return false;
+    }
+
+    h->flags |= SF_NIC;
+    h->next = NULL;
+    if (ia->cur_nic == NULL) {
+        ia->oldest_nic = h;
+    } else {
+        ia->cur_nic->next = h;
+    }
+    ia->cur_nic = h;
 
     return h;
 }
 
-
-/** Mark NIC log segment as full. */
-uint32_t ialloc_nicsegment_full(uintptr_t last)
-{
-  //printf("ialloc_nicsegment_full\n");
-    uintptr_t it_a = (uintptr_t) seg_base + last;
-    struct segment_header *h = segment_from_part((item *) (it_a - sizeof(item)));
-    size_t off = it_a - (uintptr_t) h->data;
-    printf("nicsegment_full: core_id =%d, h = %p, segment = %p, offset = %ld\n", h->core_id, h, h->data, off);
-
-    /* If segment is not quite full yet, add dummy entry to fill up. */
-    if (off + sizeof(item) <= h->size) {
-        item *it = (item *) it_a;
-        it->refcount = 0;
-        it->keylen = h->size - off - sizeof(item);
-        it->vallen = 0;
-    }
-    segment_item_free(h, h->size - off);
-
-    //h->flags |= SF_INACTIVE;
-    return h->core_id; 
-}
 
 
 item *segment_item_alloc_pointer(struct segment_header *h, size_t total)
@@ -262,6 +270,51 @@ item *segment_item_alloc_pointer(struct segment_header *h, size_t total)
     return it;
 }
 
+/** Mark NIC log segment as full. */
+uint32_t ialloc_nicsegment_full(uintptr_t last)
+{
+  //printf("ialloc_nicsegment_full\n");
+    uintptr_t it_a = (uintptr_t) seg_base + last;
+    struct segment_header *h = segment_from_part((item *) (it_a - sizeof(item)));
+    size_t off = it_a - (uintptr_t) h->data;
+    printf("nicsegment_full: core_id =%d, h = %p, segment = %p, offset = %ld\n", h->core_id, h, h->data, off);
+
+    /* If segment is not quite full yet, add dummy entry to fill up. */
+    if (off + sizeof(item) <= h->size) {
+        item *it = (item *) it_a;
+        it->refcount = 0;
+        it->keylen = h->size - off - sizeof(item);
+        it->vallen = 0;
+    }
+    segment_item_free(h, h->size - off);
+
+    h->flags |= SF_INACTIVE;
+    return h->core_id; 
+}
+
+
+/** Mark NIC log segment as full. */
+//void ialloc_nicsegment_full(struct item_allocator* ia, uintptr_t last)
+//{
+//    uintptr_t it_a = (uintptr_t) seg_base + last;
+//    struct item *it = (struct item *) it_a;
+//    struct segment_header *h = segment_from_part(it);
+//    size_t off = it_a - (uintptr_t) h->data + item_totalsz(it);
+//
+//    /* If segment is not quite full yet, add dummy entry to fill up. */
+//    if (off + sizeof(*it) <= h->size) {
+//        it = (struct item *) ((uintptr_t) h->data + off);
+//        it->refcount = 0;
+//        it->keylen = h->size - off - sizeof(*it);
+//        it->vallen = 0;
+//    }
+//    segment_item_free(h, h->size - off);
+//
+//    h->flags |= SF_INACTIVE;
+//}
+
+
+
 //struct item_allocator *init_allocator() {
 //  struct item_allocator *ia = (struct item_allocator *) malloc(sizeof(struct item_allocator));
 //  ialloc_init_allocator(ia);
@@ -281,21 +334,12 @@ void ialloc_init_allocator(struct item_allocator *ia, uint32_t core_id)
         fprintf(stderr, "Allocating segment failed\n");
         abort();
     }
+
     h->next = NULL;
     ia->cur = h;
+    ia->cur_nic = NULL;
     ia->oldest = h;
-
-    if ((h = segment_alloc(ia->core_id)) == NULL) {
-      printf("Allocating segment failed (2)\n");
-        fprintf(stderr, "Allocating reserved segment failed\n");
-	fflush(stdout);
-        abort();
-    }
-    h->next = NULL;
-    ia->reserved = h;
-
-    printf("Initializing allocator: %lu\n", (unsigned long) (settings.segcqsize *
-            sizeof(*ia->cleanup_queue)));
+    ia->oldest_nic = NULL;
     ia->cleanup_queue = calloc(settings.segcqsize, sizeof(*ia->cleanup_queue));
     ia->cq_head = ia->cq_tail = 0;
     ia->cleaning = NULL;
@@ -391,63 +435,50 @@ void ialloc_maintenance(struct item_allocator *ia)
 {
     struct segment_header *h, *prev, *next, *cand;
     item *it,  **cq = ia->cleanup_queue;
-    size_t off, size, idx;
+    size_t off, size, idx, i;
     double cand_ratio, ratio;
     void *data;
 
     /* Check if we can now free some segments? While we're at it, we can also
      * look for a candidate to be cleaned */
-    __sync_synchronize();
     cand = NULL;
     cand_ratio = 0;
-    h = ia->oldest;
-    prev = NULL;
-    static count = 0;
-
-    //printf("core_id = %d, h = %p, h->next = %p, ia->oldest = %p, flags = %d\n", h->core_id, h, h->next, h->data, h->flags & SF_INACTIVE);
-
-    /* We stop before the last segment in the list, and if we hit any
-     * non-inactive segments. This prevents us from having to touch the cur
-     * pointers. */
-    while (h != NULL && h->next != NULL &&
-            (h->flags & SF_INACTIVE) == SF_INACTIVE)
-    {
-        next = h->next;
-        ratio = (double) h->freed / h->size;
-        /* Done with this segment? */
-        //printf("maintain %p %ld %ld\n", h, h->freed, h->size);
-        if (h->freed == h->size) {
-            if (prev == NULL) {
-                ia->oldest = h->next;
-            } else {
-                prev->next = h->next;
-            }
-            segment_free(h);
-            h = prev;
-        } else if ((h->flags & SF_CLEANED) != SF_CLEANED) {
-            /* Otherwise we also look for the next cleanup candidate if
-             * necessary */
+    for (i = 0; i < 2; i++) {
+        h = (i == 0 ? ia->oldest : ia->oldest_nic);
+        prev = NULL;
+        /* We stop before the last segment in the list, and if we hit any
+         * non-inactive segments. This prevents us from having to touch the cur
+         * pointers. */
+        while (h != NULL && h->next != NULL &&
+                (h->flags & SF_INACTIVE) == SF_INACTIVE)
+        {
+            next = h->next;
             ratio = (double) h->freed / h->size;
-            if (ratio >= 0.8 && ratio > cand_ratio) {
-	      printf("EXCEED RATIO h->data = %p, ratio = %f\n", h->data, ratio);
-	      cand_ratio = ratio;
-	      cand = h;
+            /* Done with this segment? */
+            if (h->freed == h->size) {
+                if (prev == NULL) {
+                    if (i == 0) {
+                        ia->oldest = h->next;
+                    } else {
+                        ia->oldest_nic = h->next;
+                    }
+                } else {
+                    prev->next = h->next;
+                }
+                segment_free(h);
+                h = prev;
+            } else if ((h->flags & SF_CLEANED) != SF_CLEANED) {
+                /* Otherwise we also look for the next cleanup candidate if
+                 * necessary */
+                ratio = (double) h->freed / h->size;
+                if (ratio >= 0.8 && ratio > cand_ratio) {
+                    cand_ratio = ratio;
+                    cand = h;
+                }
             }
-	    else {
-	      //printf("ratio: = %f\n", ratio);
-	      count++;
-	      if(1) { //count == 10000) {
-		count = 0;
-		//printf("ratio %p: %f = %ld/%ld\n", h->data, ratio, h->freed, h->size);
-	      }
-	    }
+            prev = h;
+            h = next;
         }
-	else if ((h->flags & SF_CLEANED) == SF_CLEANED) {
-            ratio = (double) h->freed / h->size;
-	    printf("ratio (clean): %f = %ld/%ld\n", ratio, h->freed, h->size);
-	}
-	prev = h;
-        h = next;
     }
 
     /* Check if we're currently working on cleaning a segment */
@@ -474,22 +505,18 @@ void ialloc_maintenance(struct item_allocator *ia)
     data = h->data;
     while (off < size && cq[idx] == NULL) {
         it = (item *) ((uintptr_t) data + off);
-        if (size - off < sizeof(item)) {
+        if (size - off < sizeof(struct item)) {
             off = size;
             break;
         }
         if (item_tryref(it)) {
             cq[idx] = it;
-	    if(item_totalsz(it) > settings.segsize)
-	      printf("cq: offset = %ld, it = %p, totlen = %ld\n", off, it, item_totalsz(it));
-	    assert(item_totalsz(it) < settings.segsize);
             idx = (idx + 1) % settings.segcqsize;
         }
         off += item_totalsz(it);
     }
     ia->cq_tail = idx;
     ia->clean_offset = off;
-    __sync_synchronize();
 }
 
 size_t clean_log(struct item_allocator *ia, bool idle)

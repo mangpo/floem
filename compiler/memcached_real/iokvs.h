@@ -123,6 +123,8 @@ struct item_allocator {
 
     /* Current segment */
     struct segment_header *cur;
+    /* Current NIC segment */
+    struct segment_header *cur_nic;
     /* Head pointer in cleanup queue */
     size_t cq_head;
     /* Clenanup counter, limits mandatory cleanup per request */
@@ -130,12 +132,14 @@ struct item_allocator {
 
   uint16_t core_id;
 
-  uint8_t pad_1[38]; // [40]
+  uint8_t pad_1[30]; // [32]
     /***********************************************************/
     /* Part 3: Only accessed by maintenance threads */
 
     /* Oldest segment */
     struct segment_header *oldest;
+    /* Oldest NIC segment */
+    struct segment_header *oldest_nic;
     /* Tail pointer for cleanup queue */
     size_t cq_tail;
     /*  */
