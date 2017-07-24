@@ -2,7 +2,7 @@ from dsl2 import *
 import queue_smart2, net_real
 from compiler import Compiler
 
-n_cores = 4
+n_cores = 1
 
 class protocol_binary_request_header_request(State):
     magic = Field(Uint(8))
@@ -197,7 +197,6 @@ state.core = core;
         def impl(self):
             self.run_c(r'''
 state.hash = jenkins_hash(state.key, state.pkt->mcr.request.keylen);
-//printf("hash = %d\n", hash);
 output { out(); }
             ''')
 
@@ -487,12 +486,15 @@ iokvs_message* m = (iokvs_message*) pkt;
 uint8_t *val = m->payload + 4;
 uint8_t opcode = m->mcr.request.opcode;
 
-/*
+static count = 0;
+count++;
+if(count == 10000) {
+count = 0;
 if(opcode == PROTOCOL_BINARY_CMD_GET)
     printf("GET -- status: %d, len: %d, val:%d\n", m->mcr.request.status, m->mcr.request.bodylen, val[0]);
 else if (opcode == PROTOCOL_BINARY_CMD_SET)
     printf("SET -- status: %d, len: %d\n", m->mcr.request.status, m->mcr.request.bodylen);
-*/
+}
 
 output { out(msglen, (void*) m, buff); }
     ''')
@@ -519,9 +521,10 @@ output { out(msglen, (void*) m, buff); }
             self.run_c(r'''
 (size_t core, struct item_allocator* ia) = inp();
 this->ia[core] = ia;
+struct segment_header *h = ialloc_nicsegment_alloc(ia);
 state.core = core;
-state.segbase = get_pointer_offset(ia->cur->data);
-state.seglen = ia->cur->size;
+state.segbase = get_pointer_offset(h->data);
+state.seglen = h->size;
 output { out(); }
             ''')
 
