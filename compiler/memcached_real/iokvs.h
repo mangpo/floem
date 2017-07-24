@@ -206,7 +206,8 @@ void ialloc_cleanup_nextrequest(struct item_allocator *ia);
 void ialloc_maintenance(struct item_allocator *ia);
 
 item *segment_item_alloc(uint64_t thisbase, uint64_t seglen, uint64_t* offset, size_t total);
-struct segment_header *new_segment(struct item_allocator *ia, bool cleanup);
+//struct segment_header *new_segment(struct item_allocator *ia, bool cleanup);
+struct segment_header *ialloc_nicsegment_alloc(struct item_allocator *ia);
 void segment_item_free(struct segment_header *h, size_t total);
 uint64_t get_pointer_offset(void* p);
 void* get_pointer(uint64_t offset);

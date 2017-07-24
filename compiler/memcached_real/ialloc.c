@@ -216,12 +216,12 @@ struct segment_header *ialloc_nicsegment_alloc(struct item_allocator *ia)
 {
     struct segment_header *h;
     if (ia->reserved == NULL) {
-        if ((ia->reserved = segment_alloc()) == NULL) {
+        if ((ia->reserved = segment_alloc(ia->core_id)) == NULL) {
             return false;
         }
     }
 
-    if ((h = segment_alloc()) == NULL) {
+    if ((h = segment_alloc(ia->core_id)) == NULL) {
         return false;
     }
 
@@ -505,7 +505,7 @@ void ialloc_maintenance(struct item_allocator *ia)
     data = h->data;
     while (off < size && cq[idx] == NULL) {
         it = (item *) ((uintptr_t) data + off);
-        if (size - off < sizeof(struct item)) {
+        if (size - off < sizeof(item)) {
             off = size;
             break;
         }

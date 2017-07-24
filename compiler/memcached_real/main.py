@@ -73,8 +73,8 @@ class segments_holder(State):
     next = Field('struct _segments_holder*')
 
 class segments_info(State):
-    head = Field('segments_holder*')
-    last = Field('segments_holder*')
+    head = Field(Pointer(segments_holder))
+    last = Field(Pointer(segments_holder))
 
 class main(Pipeline):
     state = PerPacket(MyState)

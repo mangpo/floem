@@ -77,12 +77,14 @@ static void enqueue_clean(circular_queue* q, void(*clean_func)(q_buffer)) {
     while (1) {
         eqe = (q_entry *) ((uintptr_t) eq + clean);
         //printf("clean: %ld %ld %d\n", clean, off, eqe->flags);
+	__sync_synchronize();
         if ((eqe->flags & FLAG_MASK) != FLAG_CLEAN) {
             break;
         }
         q_buffer temp = { eqe, 0 };
         clean_func(temp);
         eqe->flags = 0;
+	__sync_synchronize();
         clean = (clean + eqe->len) % qlen;
     }
     q->clean = clean;
