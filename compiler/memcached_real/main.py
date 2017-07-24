@@ -71,7 +71,10 @@ class segments_holder(State):
     seglen = Field(Uint(64))
     offset = Field(Uint(64))
     next = Field('struct _segments_holder*')
-    last = Field('struct _segments_holder*')
+
+class segments_info(State):
+    head = Field('segments_holder*')
+    last = Field('segments_holder*')
 
 class main(Pipeline):
     state = PerPacket(MyState)
@@ -549,10 +552,10 @@ if(segment == NULL) {
 output switch { case segment: out(); else: null(); }
             ''')  # TODO: maybe we should exit if segment = NULL?
 
-    segments = segments_holder()
+    segments = segments_info()
 
     class AddLogseg(Element):
-        this = Persistent(segments_holder)
+        this = Persistent(segments_info)
 
         def configure(self):
             self.inp = Input()
@@ -560,39 +563,36 @@ output switch { case segment: out(); else: null(); }
 
         def impl(self):
             self.run_c(r'''
-    if(this->last != NULL) {
-        //printf("this (before): %u, base = %u\n", this, this->segbase);
-        struct _segments_holder* holder = (struct _segments_holder*) malloc(sizeof(struct _segments_holder));
+        segments_holder* holder = (segments_holder*) malloc(sizeof(segments_holder));
         holder->segbase = state.segbase;
         holder->seglen = state.seglen;
         holder->offset = 0;
+        holder->next = NULL;
+    if(this->head == NULL) {
+        this->head = holder;
+        this->last = holder;
+    } else {
         this->last->next = holder;
         this->last = holder;
-        //printf("this (after): %u, base = %u\n", this, this->segbase);
     }
-    else {
-        this->segbase = state.segbase;
-        this->seglen = state.seglen;
-        this->offset = 0;
-        this->last = this;
-    }
+    __sync_synchronize();
 
 // TODO: change to 0 for performance
     int count = 1;
-    segments_holder* p = this;
+    segments_holder* p = this->head;
     while(p->next != NULL) {
         count++;
         p = p->next;
     }
     printf("logseg count = %d\n", count);
-    printf("addlog: new->segbase = %p, cur->segbase = %p\n", (void*) state.segbase, (void*) this->segbase);
+    printf("addlog: new->segbase = %p, cur->segbase = %p\n", (void*) state.segbase, (void*) this->head->segbase);
 
             ''')
 
     ######################## item ########################
 
     class GetItem(Element):
-        this = Persistent(segments_holder)
+        this = Persistent(segments_info)
 
         def states(self):
             self.this = main.segments
@@ -608,20 +608,19 @@ output switch { case segment: out(); else: null(); }
 
     uint64_t full = 0;
     //printf("item_alloc: segbase = %ld\n", this->segbase);
-    item *it = segment_item_alloc(this->segbase, this->seglen, &this->offset, sizeof(item) + totlen);
+    item *it = segment_item_alloc(this->head->segbase, this->head->seglen, &this->head->offset, sizeof(item) + totlen);
             //if(it == NULL) full = this->segbase + this->offset; 
             // Including this is bad is not good because, when tx queue is backed up, CPU will have high number of segment, but NIC will never get anything back.
-    
-    if(it == NULL && this->next) {
-            printf("Segment is full. offset = %d\n", this->offset);  // including this line will make CPU keep making new segment. Without this line, # of segment will stop under 100.
 
-        full = this->segbase + this->offset;
-        this->segbase = this->next->segbase;
-        this->seglen = this->next->seglen;
-        this->offset = this->next->offset;
-        //free(this->next);
-        this->next = this->next->next;
-        it = segment_item_alloc(this->segbase, this->seglen, &this->offset, sizeof(item) + totlen);
+    __sync_synchronize();
+    if(it == NULL && this->head->next) {
+            printf("Segment is full. offset = %d\n", this->head->offset);  // including this line will make CPU keep making new segment. Without this line, # of segment will stop under 100.
+
+        full = this->head->segbase + this->head->offset;
+        segments_holder* old = this->head;
+        this->head = this->head->next;
+        free(old);
+        it = segment_item_alloc(this->head->segbase, this->head->seglen, &this->head->offset, sizeof(item) + totlen);
     }
 
     //printf("it = %p, full = %p\n", it, (void*) full);
@@ -648,16 +647,14 @@ output switch { case segment: out(); else: null(); }
     size_t totlen = state.pkt->mcr.request.bodylen - state.pkt->mcr.request.extlen;
 
     uint64_t full = 0;
-    printf("item_alloc: segbase = %ld\n", this->segbase);
-    void* addr = segment_item_alloc(this->segbase, this->seglen, &this->offset, sizeof(item) + totlen);
-    if(addr == NULL) full = this->segbase + this->offset;
-    if(addr == NULL && this->next) {
-        this->segbase = this->next->segbase;
-        this->seglen = this->next->seglen;
-        this->offset = this->next->offset;
-        //free(this->next);
-        this->next = this->next->next;
-        addr = segment_item_alloc(this->segbase, this->seglen, &this->offset, sizeof(item) + totlen);
+    printf("item_alloc: segbase = %ld\n", this->head->segbase);
+    void* addr = segment_item_alloc(this->head->segbase, this->head->seglen, &this->head->offset, sizeof(item) + totlen);
+    if(addr == NULL && this->head->next) {
+        full = this->head->segbase + this->head->offset;
+        segments_holder* old = this->head;
+        this->head = this->head->next;
+        free(old);
+        addr = segment_item_alloc(this->head->segbase, this->head->seglen, &this->head->offset, sizeof(item) + totlen);
     }
 
     state.segfull = full;
