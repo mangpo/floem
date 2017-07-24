@@ -2,7 +2,7 @@ from dsl2 import *
 import queue_smart2, net_real
 from compiler import Compiler
 
-n_cores = 1
+n_cores = 2
 
 class protocol_binary_request_header_request(State):
     magic = Field(Uint(8))
