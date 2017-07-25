@@ -24,7 +24,7 @@ class Classifier(Element):
             if(((p->dccp.res_type_x >> 1) & 15) == DCCP_TYPE_ACK) type = 1;
             else type = 2;
             state.rx_pkt = p;
-            state.rx_buf = b;
+            state.rx_net_buf = b;
         }
         output switch {
             case type==1: ack(p);
@@ -34,14 +34,14 @@ class Classifier(Element):
 
 class Save(Element):
     def configure(self):
-        self.inp = Input("void *", "void *")
+        self.inp = Input(Size, 'void*', 'void*')
         self.out = Output("struct pkt_dccp_headers*")
 
     def impl(self):
         self.run_c(r'''
-        (void* p, void* b) = inp();
+        (size_t size, void* p, void* b) = inp();
         state.rx_pkt = p;
-        state.rx_buf = b;
+        state.rx_net_buf = b;
         output { out(p); }
         ''')
 
@@ -349,7 +349,7 @@ class Tuple2Pkt(Element):
         self.run_c(r'''
         (void* p, void* b) = inp();
         struct pkt_dccp_headers* header = p;
-        state.tx_buf = b;
+        state.tx_net_buf = b;
         memcpy(header, &dccp->header, sizeof(struct pkt_dccp_headers));
         memcpy(&header[1], state.tuple, sizeof(struct tuple));
 
@@ -391,8 +391,9 @@ class GetBothPkts(Element):
     def impl(self):
         self.run_c(r'''
         (void* tx_pkt, void* tx_buf) = inp();
-        state.tx_buf = tx_buf;
-        output { out(tx_pkt, state.rx_pkt); }
+        state.tx_net_buf = tx_buf;
+        void* rx_pkt = state.rx_pkt;
+        output { out(tx_pkt, rx_pkt); }
         ''')
 
 class GetTxBuf(Element):
@@ -404,7 +405,8 @@ class GetTxBuf(Element):
     def impl(self):
         self.run_c(r'''
         (void* p) = inp();
-        output { out(%s, p, state.tx_buf); }
+        void* net_buf = state.tx_net_buf;
+        output { out(%s, p, net_buf); }
         ''' % self.len)
 
 class GetRxBuf(Element):
@@ -414,7 +416,9 @@ class GetRxBuf(Element):
 
     def impl(self):
         self.run_c(r'''
-        output { out(state.rx_pkt, state.rx_buf); }
+        void* pkt = state.rx_pkt;
+        void* pkt_buf = state.rx_net_buf;
+        output { out(pkt, pkt_buf); }
         ''')
 
 
@@ -487,28 +491,28 @@ class AddNullAddr(Element):
     output { out(t, 0); }
         ''')
 
-class SaveAddr(Element):
+class SaveBuff(Element):
     def configure(self):
-        self.inp = Input("struct tuple*", "uintptr_t")
+        self.inp = Input(queue2.q_buffer)
         self.out = Output("struct tuple*")
 
     def impl(self):
         self.run_c(r'''
-    (struct tuple* t, uintptr_t addr) = inp();
-    state.addr = addr;
-    output { out(t); }
+    (q_buffer buff) = inp();
+    state.q_buf = buff;
+    output { out(buff.entry); }
         ''')
 
-class GetAddr(Element):
+class GetBuff(Element):
     def configure(self):
         self.inp = Input("struct tuple*")
-        self.out = Output("struct tuple*", "uintptr_t")
+        self.out = Output(queue2.q_buffer)
 
     def impl(self):
         self.run_c(r'''
     (struct tuple* t) = inp();
-    uintptr_t addr = state.addr;
-    output { out(t, addr); }
+    q_buffer buff = state.q_buf;
+    output { out(buff); }
         ''')
 
 #################### Connection ####################
@@ -516,18 +520,18 @@ import target
 
 MAX_ELEMS = (4 * 1024)
 
-rx_enq_creator, rx_deq_creator, rx_release_creator, scan, scan_release = \
-    queue2.queue_custom_owner_bit("rx_queue", "struct tuple", MAX_ELEMS, n_cores, "task", blocking=True,
+rx_enq_creator, rx_deq_creator, rx_release_creator = \
+    queue2.queue_custom_owner_bit("rx_queue", "struct tuple", MAX_ELEMS, n_cores, "task", deq_blocking=True,
                                   enq_output=True)
 
-tx_enq_creator, tx_deq_creator, tx_release_creator, scan, scan_release = \
-    queue2.queue_custom_owner_bit("tx_queue", "struct tuple", MAX_ELEMS, n_cores, "task", blocking=False)
+tx_enq_creator, tx_deq_creator, tx_release_creator = \
+    queue2.queue_custom_owner_bit("tx_queue", "struct tuple", MAX_ELEMS, n_cores, "task")
 
 
 class RxState(State):
     rx_pkt = Field("struct pkt_dccp_headers*")
-    rx_buf = Field("void *")
-    tx_buf = Field("void *")
+    rx_net_buf = Field("void *")
+    tx_net_buf = Field("void *")
 
 
 class NicRxPipeline(Pipeline):
@@ -538,16 +542,9 @@ class NicRxPipeline(Pipeline):
         from_net_free = net_real.FromNetFree()
 
         network_alloc = net_real.NetAlloc()
-        to_net = net_real.ToNet(configure=[True])
-        net_alloc_free = net_real.NetAllocFree()
+        to_net = net_real.ToNet(configure=["alloc", True])
 
         class nic_rx(InternalLoop):
-            def configure_dpdk(self):
-                self.process = 'flexstorm'
-
-            def configure(self):
-                self.device = target.CAVIUM
-                self.cores = [0,1,2,3]
 
             def impl(self):
                 # Notice that it's okay to connect non-empty port to an empty port.
@@ -564,7 +561,7 @@ class NicRxPipeline(Pipeline):
 
                 # CASE 1: not ack
                 # send ack
-                classifier.pkt >> size_ack >> network_alloc >> GetBothPkts() >> DccpSendAck() >> tx_buf >> to_net >> net_alloc_free
+                classifier.pkt >> size_ack >> network_alloc >> GetBothPkts() >> DccpSendAck() >> tx_buf >> to_net
                 # process
                 pkt2tuple = Pkt2Tuple()
                 classifier.pkt >> pkt2tuple >> GetCore() >> rx_enq >> GetRxBuf() >> from_net_free
@@ -573,29 +570,27 @@ class NicRxPipeline(Pipeline):
                 # CASE 2: ack
                 classifier.ack >> DccpRecvAck() >> GetRxBuf() >> from_net_free
 
-        nic_rx('nic_rx')
+        nic_rx('nic_rx', process='dpdk')
+        #nic_rx('nic_rx', device=target.CAVIUM, cores=[0,1,2,3])
 
 
 class inqueue_get(API):
     def configure(self):
-        self.process = 'flexstorm'
         self.inp = Input(Size)
-        self.out = Output("struct tuple*")
+        self.out = Output(queue2.q_buffer)
 
-    def impl(self): self.inp >> rx_deq_creator() >> DropAddr() >> self.out
+    def impl(self): self.inp >> rx_deq_creator() >> self.out
 
 
 class inqueue_advance(API):
     def configure(self):
-        self.process = 'flexstorm'
-        self.inp = Input("struct tuple*")
+        self.inp = Input(queue2.q_buffer)
 
-    def impl(self): self.inp >> AddNullAddr() >> rx_release_creator()
+    def impl(self): self.inp >> rx_release_creator()
 
 
 class outqueue_put(API):
     def configure(self):
-        self.process = 'flexstorm'
         self.inp = Input("struct tuple*", Size)
 
     def impl(self): self.inp >> tx_enq_creator()
@@ -603,8 +598,8 @@ class outqueue_put(API):
 class TxState(State):
     tuple = Field("struct tuple*")
     worker = Field(Int)
-    tx_buf = Field("void *")
-    addr = Field("uintptr_t")
+    tx_net_buf = Field("void *")
+    q_buf = Field("uintptr_t")
 
 class NicTxPipeline(Pipeline):
     state = PerPacket(TxState)
@@ -612,8 +607,7 @@ class NicTxPipeline(Pipeline):
     def impl(self):
         tx_release = tx_release_creator()
         network_alloc = net_real.NetAlloc()
-        to_net = net_real.ToNet(configure=[True])
-        net_alloc_free = net_real.NetAllocFree()
+        to_net = net_real.ToNet(configure=["alloc", True])
 
         get_tuple = GetTuple()
         tx_buf = GetTxBuf(configure=['sizeof(struct pkt_dccp_headers) + sizeof(struct tuple)'])
@@ -629,7 +623,7 @@ class NicTxPipeline(Pipeline):
             def impl(self):
                 tuple2pkt = Tuple2Pkt()
 
-                self.inp >> SaveTuple() >> size_pkt >> network_alloc >> tuple2pkt >> tx_buf >> to_net >> net_alloc_free
+                self.inp >> SaveTuple() >> size_pkt >> network_alloc >> tuple2pkt >> tx_buf >> to_net
                 tuple2pkt >> get_tuple >> tx_release
                 #run_order(tuple2pkt, get_tuple)
 
@@ -640,7 +634,7 @@ class NicTxPipeline(Pipeline):
                 self.inp >> SaveTuple() >> GetWorkerID() >> dccp_check
 
                 dccp_check.send >> size_pkt >> network_alloc >> tuple2pkt >> GetWorkerIDPkt() >> DccpSeqTime() \
-                >> tx_buf >> to_net >> net_alloc_free
+                >> tx_buf >> to_net
                 tuple2pkt >> get_tuple >> tx_release
                 #run_order(tuple2pkt, get_tuple)
 
@@ -658,22 +652,23 @@ class NicTxPipeline(Pipeline):
                 tx_deq = tx_deq_creator()
                 rx_enq = rx_enq_creator()
                 local_or_remote = LocalOrRemote()
-                save_addr = SaveAddr()
-                get_addr = GetAddr()
+                save_buff = SaveBuff()
+                get_buff = GetBuff()
 
-                queue_schedule >> tx_deq >> save_addr >> PrintTuple() >> SaveWorkerID() >> local_or_remote
-                save_addr >> batch_inc
+                queue_schedule >> tx_deq >> save_buff >> PrintTuple() >> SaveWorkerID() >> local_or_remote
+                save_buff >> batch_inc
                 # send
                 local_or_remote.out_send >> PreparePkt()
                 # local
-                local_or_remote.out_local >> GetCore() >> rx_enq >> get_addr >> tx_release
+                local_or_remote.out_local >> GetCore() >> rx_enq >> get_buff >> tx_release
 
-        nic_tx('nic_tx')
+        nic_tx('nic_rx', process='dpdk')
+        # nic_tx('nic_rx', device=target.CAVIUM, cores=[4,5,6,7])
 
 
-inqueue_get('inqueue_get')
-inqueue_advance('inqueue_advance')  # TODO: signature change
-outqueue_put('outqueue_put')
+inqueue_get('inqueue_get', process='dpdk')
+inqueue_advance('inqueue_advance', process='dpdk')
+outqueue_put('outqueue_put', process='dpdk')
 
 
 c = Compiler(NicRxPipeline, NicTxPipeline)
@@ -681,10 +676,9 @@ c.include = r'''
 #include <rte_memcpy.h>
 #include "worker.h"
 #include "storm.h"
-#include "dccp.h"
-#include "../net.h"
+//#include "dccp.h"
 '''
-c.depend = {"test_storm": ['list', 'hash', 'hash_table', 'spout', 'count', 'rank', 'worker', 'flexstorm']}
-c.generate_code_as_header("flexstorm")
+c.depend = {"test_storm": ['list', 'hash', 'hash_table', 'spout', 'count', 'rank', 'worker', 'dpdk']}
+c.generate_code_as_header("dpdk")
 #c.compile_and_run([("test_storm", workerid[test])])
 

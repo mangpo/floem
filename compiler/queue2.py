@@ -402,7 +402,7 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
 
         def configure(self):
             self.inp = Input(Size)
-            self.out = Output(type_star, 'uintptr_t')
+            self.out = Output(q_buffer)
 
         def impl(self):
             noblock_noatom = r'''
@@ -435,7 +435,9 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
                         ''' % Storage.__name__
                        #+ debug
                        + src
-                       + "output { out(x, 0); }\n")
+                       + r'''
+                       q_buffer tmp = {x, 0};
+                       output { out(tmp); }''')
 
         def impl_cavium(self):
             noblock_noatom = "size_t old = p->offset;\n" + init_read_cvm + r'''
@@ -469,24 +471,28 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
                         ''' % Storage.__name__
                        #+ debug
                        + src
-                       + "output { out(x, addr); }\n")
+                       + r'''
+                       q_buffer tmp = {x, addr};
+                       output { out(tmp); }''')
 
     class Release(Element):
         def configure(self):
-            self.inp = Input(type_star, 'uintptr_t')
+            self.inp = Input(q_buffer)
 
         def impl(self):
             self.run_c(r'''
-            (%s x, uintptr_t addr) = inp();
+            (q_buffer buff) = inp();
+            %s x = buff.entry;
             if(x) x->%s = 0;
             ''' % (type_star, owner))
 
         def impl_cavium(self):
             self.run_c(r'''
-            (%s x, uintptr_t addr) = inp();
+            (q_buffer buff) = inp();
+            %s x = buff.entry;
             if(x) {
                 x->%s = 0;
-                dma_write(addr, sizeof(%s), x, &write_lock);
+                dma_write(buff.addr, sizeof(%s), x, &write_lock);
                 dma_free(x);
             }
             ''' % (type_star, owner, type))

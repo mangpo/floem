@@ -11,14 +11,15 @@ void executor_thread(void *arg) {
   // Run dispatch loop
   for(;;) {
     if(!self->spout) {
-      struct tuple *t = inqueue_get(tid);
+      q_buffer buff = inqueue_get(tid);
+      struct tuple *t = buff.entry;
       assert(t != NULL);
       //if(t != NULL) {
         uint64_t starttime = rdtsc();
         self->execute(t, self);
         //printf("Tuple %d done\n", t->task);
         uint64_t now = rdtsc();
-        inqueue_advance(t);  // old version: inqueue_advance(tid);
+        inqueue_advance(buff);  // old version: inqueue_advance(tid);
         self->execute_time += now - starttime;
         self->numexecutes++;
       //}

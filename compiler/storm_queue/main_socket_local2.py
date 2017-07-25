@@ -158,7 +158,7 @@ class BatchInc(Element):
 
 ################## Queue addr ####################
 class AddrState(State):
-    addr = Field("uintptr_t")
+    buffer = Field(queue2.q_buffer)
 
 class DropAddr(Element):
     def configure(self):
@@ -182,37 +182,37 @@ class AddNullAddr(Element):
     output { out(t, 0); }
         ''')
 
-class SaveAddr(Element):
+class SaveBuff(Element):
     def configure(self):
-        self.inp = Input("struct tuple*", "uintptr_t")
+        self.inp = Input(queue2.q_buffer)
         self.out = Output("struct tuple*")
 
     def impl(self):
         self.run_c(r'''
-    (struct tuple* t, uintptr_t addr) = inp();
-    state.addr = addr;
-    output { out(t); }
+    (q_buffer buff) = inp();
+    state.buffer = buff;
+    output { out(buff.entry); }
         ''')
 
-class GetAddr(Element):
+class GetBuff(Element):
     def configure(self):
         self.inp = Input("struct tuple*")
-        self.out = Output("struct tuple*", "uintptr_t")
+        self.out = Output(queue2.q_buffer)
 
     def impl(self):
         self.run_c(r'''
     (struct tuple* t) = inp();
-    uintptr_t addr = state.addr;
-    output { out(t, addr); }
+    q_buffer buff = state.buffer;
+    output { out(buff); }
         ''')
 MAX_ELEMS = (4 * 1024)
 
-rx_enq_creator, rx_deq_creator, rx_release_creator, scan, scanrelease = \
-    queue2.queue_custom_owner_bit("rx_queue", "struct tuple", MAX_ELEMS, n_cores, "task", blocking=True,
+rx_enq_creator, rx_deq_creator, rx_release_creator = \
+    queue2.queue_custom_owner_bit("rx_queue", "struct tuple", MAX_ELEMS, n_cores, "task", deq_blocking=True,
                                   enq_output=True)
 
-tx_enq_creator, tx_deq_creator, tx_release_creator, scan, scanrelease = \
-    queue2.queue_custom_owner_bit("tx_queue", "struct tuple", MAX_ELEMS, n_cores, "task", blocking=False)
+tx_enq_creator, tx_deq_creator, tx_release_creator = \
+    queue2.queue_custom_owner_bit("tx_queue", "struct tuple", MAX_ELEMS, n_cores, "task")
 
 class nic_rx(InternalLoop):
     def configure(self): self.process = 'flexstorm'
@@ -227,16 +227,16 @@ class inqueue_get(API):
     def configure(self):
         self.process = 'flexstorm'
         self.inp = Input(Size)
-        self.out = Output("struct tuple*")
+        self.out = Output(queue2.q_buffer)
 
-    def impl(self): self.inp >> rx_deq_creator() >> DropAddr() >> self.out
+    def impl(self): self.inp >> rx_deq_creator() >> self.out
 
 class inqueue_advance(API):
     def configure(self):
         self.process = 'flexstorm'
-        self.inp = Input("struct tuple*")
+        self.inp = Input(queue2.q_buffer)
 
-    def impl(self): self.inp >> AddNullAddr() >> rx_release_creator()
+    def impl(self): self.inp >> rx_release_creator()
 
 class outqueue_put(API):
     def configure(self):
@@ -284,23 +284,23 @@ class nic_tx(InternalLoop):  # TODO: ugly, sol: option to make to_net and enq re
 
         queue_schedule = BatchScheduler(states=[batch_info])
         batch_inc = BatchInc(states=[batch_info])
-        save_addr = SaveAddr()
+        save_buff = SaveBuff()
         print_tuple = PrintTuple()
         choose = Choose(states=[task_master])
         steer_worker = SteerWorker(states=[task_master])
         get_core = GetCore(states=[task_master])
 
         # main connection
-        queue_schedule >> tx_deq >> save_addr >> print_tuple >> choose
-        save_addr >> batch_inc
+        queue_schedule >> tx_deq >> save_buff >> print_tuple >> choose
+        save_buff >> batch_inc
 
         # send
         choose.out_send >> steer_worker
         for i in range(n_workers):
-            steer_worker.out[i] >> to_nets[i] >> GetAddr() >> tx_release
+            steer_worker.out[i] >> to_nets[i] >> GetBuff() >> tx_release
 
         # local
-        choose.out_local >> get_core >> rx_enq >> GetAddr() >> tx_release
+        choose.out_local >> get_core >> rx_enq >> GetBuff() >> tx_release
 
 class TxPipeline(Pipeline):
     state = PerPacket(AddrState)
