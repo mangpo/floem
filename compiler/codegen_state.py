@@ -99,7 +99,12 @@ def init_pointer(state, inits, name):
                     if init[i]:
                         src += "  {0}->{1}[{2}] = {3};\n".format(name, array, i, init_value(init[i]))
         elif isinstance(init, types.LambdaType):
-            src += "  %s;\n" % init("{0}->{1}".format(name, field))
+            m = re.match('([a-zA-Z0-9_]+)\[[0-9]+\]', field)
+            if m:
+                x = m.group(1)
+            else:
+                x = field
+            src += "  %s;\n" % init("{0}->{1}".format(name, x))
         elif init:
             src += "  {0}->{1} = {2};\n".format(name, field, init_value(init))
     return src

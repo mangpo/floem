@@ -60,6 +60,6 @@ def annotate_process_info(g):
                                     + "Consider inserting a smart queue between the sender instance and the receiver instance '%s'."
                                     % state_inst.buffer_for)
                 else:
-                    raise Exception("State instance '%s' is shared between multiple processes, but it contains pointer,\n"
-                                    + "which shouldn't be shared between multiple processes."
-                                    % state_inst.name)
+                    raise Exception("State instance '%s' is shared between multiple processes (%s), but it contains pointer,\n"
+                                    % (state_inst.name, state_inst.processes)
+                                    + "which shouldn't be shared between multiple processes.")

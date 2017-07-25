@@ -79,7 +79,9 @@ class Graph:
 
     @staticmethod
     def merge_list(this, other):
-        this += other
+        for x in other:
+            if x not in this:
+                this.append(x)
 
     @staticmethod
     def merge_set(this, other):
@@ -308,6 +310,18 @@ class Graph:
 
     def get_thread_of(self, name):
         return self.instances[name].thread
+
+    def get_cores_from_thread(self,t):
+        if t in self.thread2device:
+            return self.thread2device[t][1]
+        else:
+            return [0]
+
+    def get_device_from_thread(self, t):
+        if t in self.thread2device:
+            return self.thread2device[t][0]
+        else:
+            return target.CPU
 
     def set_thread(self, name, t):
         self.instances[name].thread = t

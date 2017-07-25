@@ -436,7 +436,7 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
                        #+ debug
                        + src
                        + r'''
-                       q_buffer tmp = {x, 0};
+                       q_buffer tmp = {(void*) x, 0};
                        output { out(tmp); }''')
 
         def impl_cavium(self):
@@ -472,7 +472,7 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
                        #+ debug
                        + src
                        + r'''
-                       q_buffer tmp = {x, addr};
+                       q_buffer tmp = {(void*) x, addr};
                        output { out(tmp); }''')
 
     class Release(Element):
@@ -482,20 +482,20 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
         def impl(self):
             self.run_c(r'''
             (q_buffer buff) = inp();
-            %s x = buff.entry;
+            %s x = (%s) buff.entry;
             if(x) x->%s = 0;
-            ''' % (type_star, owner))
+            ''' % (type_star, type_star, owner))
 
         def impl_cavium(self):
             self.run_c(r'''
             (q_buffer buff) = inp();
-            %s x = buff.entry;
+            %s x = (%s) buff.entry;
             if(x) {
                 x->%s = 0;
                 dma_write(buff.addr, sizeof(%s), x, &write_lock);
                 dma_free(x);
             }
-            ''' % (type_star, owner, type))
+            ''' % (type_star, type_star, owner, type))
 
 
     return Enqueue, Dequeue, Release

@@ -118,8 +118,8 @@ def create_queue(name, size, n_cores, enq_blocking, deq_blocking, enq_atomic, de
 
 
 def need_byte_reverse(g, t1, t2):
-    d1 = (t1 in g.thread2device) and g.thread2device[t1][0]
-    d2 = (t2 in g.thread2device) and g.thread2device[t2][0]
+    d1 = g.get_device_from_thread(t1)
+    d2 = g.get_device_from_thread(t2)
 
     if d1 == target.CAVIUM and d2 == target.CAVIUM:
         raise Exception("Smart queue is not yet support for communicating within Cavium.")

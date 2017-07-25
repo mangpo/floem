@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include "worker.h"
 
 struct executor *task2executor[MAX_TASKS];
@@ -10,7 +11,7 @@ void init_task2executor(struct executor *executor) {
     task2worker[i] = -1;
   }
   for(int i = 0; i < MAX_EXECUTORS && executor[i].execute != NULL; i++) {
-    printf("init: executor[%d] = %u, taskid = %d\n", i, &executor[i], executor[i].taskid);
+    printf("init: executor[%d] = %p, taskid = %d\n", i, &executor[i], executor[i].taskid);
     assert(task2executor[executor[i].taskid] == NULL);
     task2executor[executor[i].taskid] = &executor[i];
     task2executorid[executor[i].taskid] = i;

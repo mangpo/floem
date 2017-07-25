@@ -1,24 +1,22 @@
 #ifndef WORKER_H
 #define WORKER_H
-#ifdef USE_DPDK
-#define ETHARP_HWADDR_LEN     6
-
-struct eth_addr {
-  uint8_t addr[ETHARP_HWADDR_LEN];
-} __attribute__ ((packed));
-#endif
 
 #include <assert.h>
 #include <string.h>
 #include "hash.h"
 #include "storm.h"
 
+#define ETHARP_HWADDR_LEN     6
+
+struct eth_addr {
+  uint8_t addr[ETHARP_HWADDR_LEN];
+} __attribute__ ((packed));
+
+
 struct worker {
   const char		*hostname;
-#ifdef USE_DPDK
   struct eth_addr	mac;
   uint32_t		seq;
-#endif
   uint16_t		port;
   int			sock;
   struct executor 	executors[MAX_EXECUTORS];
@@ -75,7 +73,7 @@ static int shuffle_grouping(const struct tuple *t, struct executor *self)
   return self->outtasks[random() % numtasks];
 }
 
-#define SWINGOUT_LOCAL
+#define SAMPA_LOCAL
 
 static struct worker workers[MAX_WORKERS] = {
 #if defined(LOCAL)
@@ -139,6 +137,54 @@ static struct worker workers[MAX_WORKERS] = {
       { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 2, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
       { .execute = count_execute, .init = count_init, .taskid = 10, .outtasks = { 20, 21, 22, 23 }, .grouper = fields_grouping },
       { .execute = rank_execute, .taskid = 22, .outtasks = { 30 }, .grouper = global_grouping },
+      { .execute = rank_execute, .taskid = 30, .outtasks = { 0 }, .grouper = global_grouping },
+    }
+  },
+#elif defined(SAMPA_LOCAL)
+  {
+    .hostname = "127.0.0.1", .port = 7001,	// sampa1
+    .executors = {
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 1, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 2, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
+      { .execute = count_execute, .init = count_init, .taskid = 10, .outtasks = { 20, 21, 22, 23 }, .grouper = fields_grouping },
+      { .execute = count_execute, .init = count_init, .taskid = 11, .outtasks = { 20, 21, 22, 23 }, .grouper = fields_grouping },
+      { .execute = rank_execute, .taskid = 20, .outtasks = { 30 }, .grouper = global_grouping },
+      { .execute = rank_execute, .taskid = 21, .outtasks = { 30 }, .grouper = global_grouping },
+      { .execute = rank_execute, .taskid = 22, .outtasks = { 30 }, .grouper = global_grouping },
+    }
+  },
+  {
+    .hostname = "127.0.0.1", .port = 7002,	// sampa2
+    .executors = {
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 3, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 4, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
+      { .execute = count_execute, .init = count_init, .taskid = 12, .outtasks = { 20, 21, 22, 23 }, .grouper = fields_grouping },
+      { .execute = count_execute, .init = count_init, .taskid = 13, .outtasks = { 20, 21, 22, 23 }, .grouper = fields_grouping },
+      { .execute = rank_execute, .taskid = 23, .outtasks = { 30 }, .grouper = global_grouping },
+      { .execute = rank_execute, .taskid = 30, .outtasks = { 0 }, .grouper = global_grouping },
+    }
+  },
+#elif defined(SAMPA)
+  {
+    .hostname = "10.3.0.30", .port = 1234,	// sampa1
+    .executors = {
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 1, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 2, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
+      { .execute = count_execute, .init = count_init, .taskid = 10, .outtasks = { 20, 21, 22, 23 }, .grouper = fields_grouping },
+      { .execute = count_execute, .init = count_init, .taskid = 11, .outtasks = { 20, 21, 22, 23 }, .grouper = fields_grouping },
+      { .execute = rank_execute, .taskid = 20, .outtasks = { 30 }, .grouper = global_grouping },
+      { .execute = rank_execute, .taskid = 21, .outtasks = { 30 }, .grouper = global_grouping },
+      { .execute = rank_execute, .taskid = 22, .outtasks = { 30 }, .grouper = global_grouping },
+    }
+  },
+  {
+    .hostname = "10.3.0.33", .port = 1234,	// sampa2
+    .executors = {
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 3, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 4, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
+      { .execute = count_execute, .init = count_init, .taskid = 12, .outtasks = { 20, 21, 22, 23 }, .grouper = fields_grouping },
+      { .execute = count_execute, .init = count_init, .taskid = 13, .outtasks = { 20, 21, 22, 23 }, .grouper = fields_grouping },
+      { .execute = rank_execute, .taskid = 23, .outtasks = { 30 }, .grouper = global_grouping },
       { .execute = rank_execute, .taskid = 30, .outtasks = { 0 }, .grouper = global_grouping },
     }
   },

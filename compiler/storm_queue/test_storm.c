@@ -1,6 +1,7 @@
 #include "storm.h"
 #include "worker.h"
 #include "flexstorm.h"
+//#include "dpdk.h"
 
 struct executor *executor;
 
@@ -12,7 +13,7 @@ void executor_thread(void *arg) {
   for(;;) {
     if(!self->spout) {
       q_buffer buff = inqueue_get(tid);
-      struct tuple *t = buff.entry;
+      struct tuple *t = (struct tuple *) buff.entry;
       assert(t != NULL);
       //if(t != NULL) {
         uint64_t starttime = rdtsc();
@@ -67,7 +68,7 @@ int main(int argc, char *argv[]) {
 
     pthread_t threads[MAX_EXECUTORS];
     for(int i = 0; i < MAX_EXECUTORS && executor[i].execute != NULL; i++) {
-        printf("main: executor[%d] = %u\n", i, &executor[i]);
+        printf("main: executor[%d] = %p\n", i, &executor[i]);
         if(executor[i].init != NULL) {
             executor[i].exe_id = i;
             executor[i].init(&executor[i]);

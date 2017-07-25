@@ -136,7 +136,7 @@ void count_execute(const struct tuple *t, struct executor *self)
     i++;
   }
 */
-  printf("time: %d, %ld, %ld, %ld\n", i, tv.tv_sec, tv.tv_sec, DEFAULT_EMIT_FREQUENCY_IN_SECONDS);
+  printf("time: %d, %ld, %ld, %d\n", i, tv.tv_sec, tv.tv_sec, DEFAULT_EMIT_FREQUENCY_IN_SECONDS);
   i++;
 
   if(tv.tv_sec >= lasttime + DEFAULT_EMIT_FREQUENCY_IN_SECONDS) {
@@ -181,7 +181,7 @@ void count_init(struct executor *self)
   self->state = malloc(sizeof(struct count_state));
   assert(self->state != NULL);
   struct count_state *st = self->state;
-  printf("%d: Creating hash, self = %u\n", self->taskid, self);
+  printf("%d: Creating hash, self = %p\n", self->taskid, self);
   collections_hash_create_with_buckets(&st->counts, BUCKETS, tuple_free);
   assert(st->counts != NULL);
   printf("%d: hash created\n", self->taskid);

@@ -131,10 +131,16 @@ def rename_state(rename, src):
         match = True
         index = 0
         while match:
-            match = re.search('[^a-zA-Z0-9_]('+old+')[^a-zA-Z0-9_]', src[index:])
+            match = re.search('[^a-zA-Z0-9_\.]('+old+')[^a-zA-Z0-9_]', src[index:])
             if match:
-                src = src[:index+match.start(1)] + new + src[index+match.end(1):]
-                index = index + match.start(1) + len(old)
+                start = index+match.start(1)
+                if start >= 2:
+                    if src[start-2] == '-' and src[start-1] == '>':
+                        index = start + len(old)
+                        continue
+                end = index+match.end(1)
+                src = src[:start] + new + src[end:]
+                index = start + len(old)
     return src
 
 
@@ -454,8 +460,9 @@ def generate_header_h(testing, graph):
             src = ""
             for file in target.cpu_include_h:
                 src += "#include %s\n" % file
-            # if target.is_dpdk_proc(process):
-            #     src += "#include %s" % target.dpdk_driver_header
+            if target.is_dpdk_proc(process):
+                for file in target.dpdk_driver_header:
+                    src += "#include %s\n" % file
 
         elif device == target.CAVIUM:
             src = ""

@@ -36,8 +36,8 @@ def hton_instance(g, instance, state_name):
 
 def is_on_CPU(g, instance):
     t = instance.thread
-    d = (t in g.thread2device) and g.thread2device[t][0]
-    return d == target.CPU or d == False
+    d = g.get_device_from_thread(t)
+    return d == target.CPU
 
 
 def hton_pass(g):

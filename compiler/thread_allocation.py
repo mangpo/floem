@@ -197,7 +197,8 @@ class ThreadAllocator:
 
             if t and self.graph.is_start(instance):
                 if t in thread2start:
-                    raise Exception("Resource '%s' has more than one starting element instance." % t)
+                    raise Exception("Resource '%s' has more than one starting element instance: %s, %s." %
+                                    (t, thread2start[t].name, instance.name))
                 thread2start[t] = instance
 
         # Assign call_instance to each API.

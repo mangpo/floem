@@ -21,7 +21,7 @@
 #define MAX_VECTOR	5	// Max. tuple vector
 #define MAX_STR		64
 #define MAX_WORKERS	5
-#define MAX_EXECUTORS	5
+#define MAX_EXECUTORS	7
 #define MAX_TASKS	100
 #define MAX_ELEMS	(4 * 1024)	// Queue elements
 //#define MAX_ELEMS	64	// Queue elements

@@ -1,48 +1,47 @@
 #ifndef DCCP_H
 #define DCCP_H
 
-#include "storm.h"
-
-#define PACK_STRUCT_FIELD(x)	x
+#include "worker.h"
+#include <netinet/in.h>
 
 /** Ethernet header */
 struct eth_hdr {
 #if ETH_PAD_SIZE
-  PACK_STRUCT_FIELD(uint8_t padding[ETH_PAD_SIZE]);
+  uint8_t padding[ETH_PAD_SIZE];
 #endif
-  PACK_STRUCT_FIELD(struct eth_addr dest);
-  PACK_STRUCT_FIELD(struct eth_addr src);
-  PACK_STRUCT_FIELD(uint16_t type);
+  struct eth_addr dest;
+  struct eth_addr src;
+  uint16_t type;
 } __attribute__ ((packed));
 
 #define SIZEOF_ETH_HDR (14 + ETH_PAD_SIZE)
 
 struct ip_addr {
-  PACK_STRUCT_FIELD(uint32_t addr);
+  uint32_t addr;
 } __attribute__ ((packed));
 
 typedef struct ip_addr ip_addr_p_t;
 
 struct ip_hdr {
   /* version / header length */
-  PACK_STRUCT_FIELD(uint8_t _v_hl);
+  uint8_t _v_hl;
   /* type of service */
-  PACK_STRUCT_FIELD(uint8_t _tos);
+  uint8_t _tos;
   /* total length */
-  PACK_STRUCT_FIELD(uint16_t _len);
+  uint16_t _len;
   /* identification */
-  PACK_STRUCT_FIELD(uint16_t _id);
+  uint16_t _id;
   /* fragment offset field */
-  PACK_STRUCT_FIELD(uint16_t _offset);
+  uint16_t _offset;
   /* time to live */
-  PACK_STRUCT_FIELD(uint8_t _ttl);
+  uint8_t _ttl;
   /* protocol*/
-  PACK_STRUCT_FIELD(uint8_t _proto);
+  uint8_t _proto;
   /* checksum */
-  PACK_STRUCT_FIELD(uint16_t _chksum);
+  uint16_t _chksum;
   /* source and destination IP addresses */
-  PACK_STRUCT_FIELD(ip_addr_p_t src);
-  PACK_STRUCT_FIELD(ip_addr_p_t dest);
+  ip_addr_p_t src;
+  ip_addr_p_t dest;
 } __attribute__ ((packed));
 
 #define IPH_V(hdr)  ((hdr)->_v_hl >> 4)
