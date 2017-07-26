@@ -335,13 +335,30 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
                 self.out = Output(type_star)
 
         def impl(self):
-            noblock_noatom = r'''
+
+            stat = r'''
+#ifdef QUEUE_STAT
+    static size_t drop = 0;
+    static struct timeval base, now;
+    gettimeofday(&now, NULL);
+    if(now.tv_sec >= base.tv_sec + 5) {
+        printf("QUEUE DROP: q = %p, drop/5s = %ld\n", q, drop);
+        drop = 0;
+        base = now;
+    }
+#endif
+            '''
+
+            noblock_noatom = stat + r'''
                 __sync_synchronize();
                 if(q->data[p->offset].%s == 0) {
                     rte_memcpy(&q->data[p->offset], x, sizeof(%s));
                     p->offset = (p->offset + 1) %s %d;
                     __sync_synchronize();
                 }
+#ifdef QUEUE_STAT
+                else drop++;
+#endif
                 ''' % (owner, type, '%', size)
 
             block_noatom = "size_t old = p->offset;\n" + wait_then_copy + inc_offset

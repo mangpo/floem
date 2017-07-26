@@ -15,6 +15,7 @@
 #	define NORMAL_QUEUE
 #endif
 
+#define QUEUE_STAT
 //#define DEBUG_DCCP
 //#define THREAD_AFFINITY
 //#define DEBUG_PERF
