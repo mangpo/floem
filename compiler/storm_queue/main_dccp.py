@@ -69,7 +69,7 @@ class GetCore(Element):
         self.run_c(r'''
     struct tuple* t = inp();
     int id = this->task2executorid[t->task];
-    printf("receive: task %d, id %d\n", t->task, id);
+    printf("\nreceive: task %d, id %d\n", t->task, id);
     output { out(t, id); }
         ''')
 
@@ -328,13 +328,14 @@ class Tuple2Pkt(Element):
         (size_t size, void* p, void* b) = inp();
         struct pkt_dccp_headers* header = p;
         state.tx_net_buf = b;
-        void* t = state.q_buf.entry;
+        struct tuple* t = state.q_buf.entry;
         memcpy(header, &dccp->header, sizeof(struct pkt_dccp_headers));
         memcpy(&header[1], t, sizeof(struct tuple));
 
         header->dccp.dst = htons(state.worker);
         header->eth.dest = workers[state.worker].mac;
-
+        
+        printf("PREPARE PKT: task = %d, worker = %d\n", t->task, state.worker);
         output { out(p); }
         ''')
 

@@ -10,8 +10,15 @@ class DisplayPacket(Element):
     def impl(self):
         self.run_c(r'''
         (size_t len, void *pkt, void *buf) = inp();
-        if (pkt != NULL)
+        if (pkt != NULL) {
             printf("Got packet\n");
+            uint8_t* x = (uint8_t*) pkt;
+            for(int i=0; i<len; i++) {
+              if(i%16==0) printf("\n");
+              printf("%x ", x[i]);
+            }
+            printf("\n\n");
+        }
         output { out(pkt, buf); }
         ''')
 

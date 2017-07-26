@@ -1,7 +1,7 @@
 #include "storm.h"
 #include "worker.h"
-#include "flexstorm.h"
-//#include "dpdk.h"
+//#include "flexstorm.h"
+#include "dpdk.h"
 
 struct executor *executor;
 
