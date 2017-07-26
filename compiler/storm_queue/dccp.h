@@ -139,6 +139,8 @@ static void init_header_template(struct pkt_dccp_headers *p) {
 static void init_congestion_control(struct connection* connections) {
   for(int i = 0; i < MAX_WORKERS; i++) {
     connections[i].cwnd = 4;
+    connections[i].acks = 0;
+    connections[i].lastack = 0;
   }
 }
 

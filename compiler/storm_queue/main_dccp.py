@@ -71,7 +71,9 @@ class GetCore(Element):
         self.run_c(r'''
     struct tuple* t = inp();
     int id = this->task2executorid[t->task];
+#ifdef DEBUG_MP
     printf("\nreceive: task %d, id %d\n", t->task, id);
+#endif
     output { out(t, id); }
         ''')
 
@@ -91,7 +93,9 @@ class LocalOrRemote(Element):
     bool local;
     if(t != NULL) {
         local = (state.worker == state.myworker);
+#ifdef DEBUG_MP
         if(local) printf("send to myself!\n");
+#endif
     }
     output switch { case (t && local): out_local(t); case (t && !local): out_send(t, worker); }
         ''')
@@ -106,12 +110,13 @@ class PrintTuple(Element):
         self.run_c(r'''
     (struct tuple* t) = inp();
 
-    //printf("TUPLE = null\n");
+#ifdef DEBUG_MP
     if(t != NULL) {
         printf("TUPLE[0] -- task = %d, fromtask = %d, str = %s, integer = %d\n", t->task, t->fromtask, t->v[0].str, t->v[0].integer);
         //printf("TUPLE[1] -- task = %d, fromtask = %d, str = %s, integer = %d\n", t->task, t->fromtask, t->v[1].str, t->v[1].integer);
         fflush(stdout);
     }
+#endif
     output switch { case t: out(t); }
         ''')
 
@@ -125,6 +130,7 @@ class DccpInfo(State):
     link_rtt = Field(Uint(64))
     global_lock = Field("rte_spinlock_t")
     acks_sent = Field(Size)
+    tuples = Field(Size)
 
     def init(self):
         self.header = lambda(x): "init_header_template(&{0})".format(x)
@@ -133,6 +139,7 @@ class DccpInfo(State):
         self.link_rtt = "LINK_RTT"
         self.global_lock = lambda(x): "rte_spinlock_init(&{0})".format(x)
         self.acks_sent = 0
+        self.tuples = 0
 
 dccp_info = DccpInfo()
 
@@ -197,7 +204,9 @@ class DccpSeqTime(Element):
         uint32_t seq = __sync_fetch_and_add(&dccp->connections[worker].seq, 1);
         header->dccp.seq_high = seq >> 16;
         header->dccp.seq_low = htons(seq & 0xffff);
+#ifdef DEBUG_DCCP
         printf("Send to worker %d: seq = %x, seq_high = %x, seq_low = %x\n", worker, seq, header->dccp.seq_high, header->dccp.seq_low);
+#endif
         rte_spinlock_unlock(&dccp->global_lock);
 
         __sync_fetch_and_add(&dccp->connections[worker].pipe, 1);
@@ -270,9 +279,11 @@ class DccpRecvAck(Element):
 	}
 
 	if((int32_t)ntohl(ack->dccp.ack) > connections[srcworker].lastack + 1) {
+#if 1
 	  printf("Congestion event for %d! ack %u, lastack + 1 = %u\n",
 	 	 srcworker, ntohl(ack->dccp.ack),
 	 	 connections[srcworker].lastack + 1);
+#endif
 	  // Congestion event! Shrink congestion window
 	  uint32_t oldcwnd = connections[srcworker].cwnd, newcwnd;
 	  do {
@@ -284,7 +295,9 @@ class DccpRecvAck(Element):
 	    }
 	  } while(oldcwnd != newcwnd);
 	} else {
+#ifdef DEBUG_DCCP
 	  printf("Increasing congestion window for %d\n", srcworker);
+#endif
 	  // Increase congestion window
 	  /* __sync_fetch_and_add(&connections[srcworker].cwnd, 1); */
 	  connections[srcworker].cwnd++;
@@ -359,15 +372,15 @@ class Tuple2Pkt(Element):
         header->eth.dest = workers[state.worker].mac;
         header->eth.src = workers[state.myworker].mac;
         
-        printf("PREPARE PKT: task = %d, worker = %d\n", t->task, state.worker);
+        //printf("PREPARE PKT: task = %d, worker = %d\n", t->task, state.worker);
         output { out(p); }
         ''')
 
 
 class Pkt2Tuple(Element):
-    this = Persistent(TaskMaster)
+    dccp = Persistent(DccpInfo)
 
-    def states(self): self.this = task_master
+    def states(self): self.dccp = dccp_info
 
     def configure(self):
         self.inp = Input("struct pkt_dccp_headers*")
@@ -377,10 +390,7 @@ class Pkt2Tuple(Element):
         self.run_c(r'''
         (struct pkt_dccp_headers* p) = inp();
         struct tuple* t= (struct tuple*) &p[1];
-        int i = this->task2worker[t->task];
-        int j = this->task2executorid[t->task];
-        workers[i].executors[j].tuples++;
-        __sync_synchronize();
+        __sync_fetch_and_add(&dccp->tuples, 1);
         output { out(t); }
         ''')
 
