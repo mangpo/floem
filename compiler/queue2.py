@@ -357,21 +357,37 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
                     __sync_synchronize();
                 }
 #ifdef QUEUE_STAT
-                else drop++;
+                else __sync_fetch_and_add(&drop, 1);
 #endif
                 ''' % (owner, type, '%', size)
 
+            noblock_atom = stat + r'''
+    __sync_synchronize();
+    bool success = false;
+    size_t old = p->offset;
+    while(q->data[old].%s == 0) {
+        size_t new = (old + 1) %s %d;
+        if(__sync_bool_compare_and_swap(&p->offset, old, new)) {
+            rte_memcpy(&q->data[old], x, sizeof(%s));
+            success = true;
+            break;
+        }
+        old = p->offset;
+        __sync_synchronize();
+    }
+#ifdef QUEUE_STAT
+    if(!success) __sync_fetch_and_add(&drop, 1);
+#endif
+                            ''' % (owner, '%', size, type)
+
             block_noatom = "size_t old = p->offset;\n" + wait_then_copy + inc_offset
 
-            block_atom = atomic_src_cvm + wait_then_copy
+            block_atom = atomic_src + wait_then_copy
 
             if enq_blocking:
                 src = block_atom if enq_atomic else block_noatom
             else:
-                if enq_atomic:
-                    raise Exception("Unimplemented for non-blocking but atomic.")
-                else:
-                    src = noblock_noatom
+                src = noblock_atom if enq_atomic else noblock_noatom
 
             out_src = "output { out(x); }\n" if enq_output else ''
 
@@ -391,6 +407,19 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
                 }
                 ''' % (owner, '%', size)
 
+            noblock_atom = "size_t old = p->offset;\n" + init_read_cvm + r'''
+                while(entry->%s == 0) {
+                    size_t new = (old + 1) %s %d;
+                    if(__sync_bool_compare_and_swap(&p->offset, old, new)) {
+                        dma_write(addr, size, entry, &write_lock);
+                        break;
+                    }
+                    old = p->offset;
+                    addr = (uintptr_t) &q->data[old];
+                    dma_read(addr, size, (void**) &entry, &read_lock);
+                }
+                ''' % (owner, '%', size)
+
             block_noatom = "size_t old = p->offset;\n" + init_read_cvm + wait_then_copy_cvm + inc_offset
 
             block_atom = atomic_src_cvm + init_read_cvm + wait_then_copy_cvm
@@ -398,10 +427,7 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
             if enq_blocking:
                 src = block_atom if enq_atomic else block_noatom
             else:
-                if enq_atomic:
-                    raise Exception("Unimplemented for non-blocking but atomic.")
-                else:
-                    src = noblock_noatom
+                src = noblock_atom if enq_atomic else noblock_noatom
 
             out_src = "dma_free(entry); \noutput { out(x); }\n" if enq_output else 'dma_free(entry);\n'
 
@@ -431,6 +457,22 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
             }
             ''' % (type_star, owner, '%', size)
 
+            noblock_atom = r'''
+            %s x = NULL;
+            __sync_synchronize();
+            size_t old = p->offset;
+            while(q->data[old].%s != 0) {
+                size_t new = (old + 1) %s %d;
+                if(__sync_bool_compare_and_swap(&p->offset, old, new)) {
+                    x = &q->data[old];
+                    success = true;
+                    break;
+                }
+                old = p->offset;
+                __sync_synchronize();
+            }
+            ''' % (type_star, owner, '%', size)
+
             block_noatom = "size_t old = p->offset;\n" + wait_then_get + inc_offset
 
             block_atom = atomic_src + wait_then_get
@@ -438,10 +480,7 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
             if deq_blocking:
                 src = block_atom if deq_atomic else block_noatom
             else:
-                if deq_atomic:
-                    raise Exception("Unimplemented for non-blocking but atomic.")
-                else:
-                    src = noblock_noatom
+                src = noblock_atom if deq_atomic else noblock_noatom
 
             debug = r'''printf("deq %ld\n", c);'''
 
@@ -467,6 +506,23 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
             }
             ''' % (type_star, owner, '%', size)
 
+            noblock_atom = "size_t old = p->offset;\n" + init_read_cvm + r'''
+            %s x = NULL;
+            bool success = false;
+            while(entry->%s != 0) {
+                size_t new = (old + 1) %s %d;
+                if(__sync_bool_compare_and_swap(&p->offset, old, new)) {
+                    x = entry;
+                    success = true;
+                    break;
+                }
+                old = p->offset;
+                addr = (uintptr_t) &q->data[old];
+                dma_read(addr, size, (void**) &entry, &read_lock);
+            }
+            if(!success) dma_free(entry);
+            ''' % (type_star, owner, '%', size)
+
             block_noatom = "size_t old = p->offset;\n" + init_read_cvm + wait_then_get_cvm + inc_offset
 
             block_atom = atomic_src_cvm + init_read_cvm + wait_then_get_cvm
@@ -474,10 +530,7 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
             if deq_blocking:
                 src = block_atom if deq_atomic else block_noatom
             else:
-                if deq_atomic:
-                    raise Exception("Unimplemented for non-blocking but atomic.")
-                else:
-                    src = noblock_noatom
+                src = noblock_atom if deq_atomic else noblock_noatom
 
             debug = r'''printf("deq %ld\n", c);'''
 
