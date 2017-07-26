@@ -4,6 +4,8 @@
 #include "worker.h"
 #include <netinet/in.h>
 
+#define MAX(a,b) ((a) < (b) ? (b) : (a))
+
 /** Ethernet header */
 struct eth_hdr {
 #if ETH_PAD_SIZE

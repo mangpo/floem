@@ -176,7 +176,7 @@ class DccpSeqTime(Element):
         (void* p, int worker) = inp();
         struct pkt_dccp_headers* header = p;
         rte_spinlock_lock(&dccp->global_lock);
-        dccp->retrans_timeout = rdtsc() + link_rtt * PROC_FREQ_MHZ;
+        dccp->retrans_timeout = rdtsc() + dccp->link_rtt * PROC_FREQ_MHZ;
         dccp->link_rtt = LINK_RTT;
         uint32_t seq = __sync_fetch_and_add(&dccp->connections[worker].seq, 1);
         header->dccp.seq_high = seq >> 16;
@@ -220,6 +220,7 @@ class DccpRecvAck(Element):
     def configure(self):
         self.inp = Input("struct pkt_dccp_headers*")
         self.out = Output("struct pkt_dccp_headers*")
+        self.dccp = dccp_info
 
     def impl(self):
         self.run_c(r'''
@@ -229,7 +230,7 @@ class DccpRecvAck(Element):
         assert(srcworker < MAX_WORKERS);
         assert(ntohl(ack->dccp.ack) < (1 << 24));
 
-        struct connections* = dccp->connections;
+        struct connection* connections = dccp->connections;
 
     // Wraparound?
 	if((int32_t)ntohl(ack->dccp.ack) < connections[srcworker].lastack &&
@@ -240,7 +241,7 @@ class DccpRecvAck(Element):
 
 	if(connections[srcworker].lastack < (int32_t)ntohl(ack->dccp.ack)) {
 	  int32_t oldpipe = __sync_sub_and_fetch(&connections[srcworker].pipe,
-						 (int32_t)ntohl(ack->dccp.ack) - connections[srcworker].lastack);
+						 (int)ntohl(ack->dccp.ack) - connections[srcworker].lastack);
 	  if(oldpipe < 0) {
 	    connections[srcworker].pipe = 0;
 	  }
