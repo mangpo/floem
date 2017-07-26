@@ -11,15 +11,15 @@ n_workers = 2
 
 class Classifier(Element):
     def configure(self):
-        self.inp = Input("void*", "void*")
+        self.inp = Input(Size, "void*", "void*")
         self.pkt = Output("struct pkt_dccp_headers*")
         self.ack = Output("struct pkt_dccp_headers*")
         self.drop = Output()
 
     def impl(self):
         self.run_c(r'''
-        (void* p, void* b) = inp();
-        struct pkt_dccp_headers* p = pkt;
+        (size_t size, void* hdr, void* b) = inp();
+        struct pkt_dccp_headers* p = hdr;
         int type = 0;
         if (ntohs(p->eth.type) == ETHTYPE_IP && p->ip._proto == IP_PROTO_DCCP) {
             if(((p->dccp.res_type_x >> 1) & 15) == DCCP_TYPE_ACK) type = 1;
@@ -370,12 +370,12 @@ class SizePkt(Element):
 
 class GetBothPkts(Element):
     def configure(self):
-        self.inp = Input("void*", "void*")
+        self.inp = Input(Size, "void*", "void*")
         self.out = Output("struct pkt_dccp_ack_headers*", "struct pkt_dccp_headers*")
 
     def impl(self):
         self.run_c(r'''
-        (void* tx_pkt, void* tx_buf) = inp();
+        (size_t size, void* tx_pkt, void* tx_buf) = inp();
         state.tx_net_buf = tx_buf;
         void* rx_pkt = state.rx_pkt;
         output { out(tx_pkt, rx_pkt); }
@@ -537,13 +537,13 @@ class NicRxPipeline(Pipeline):
         from_net_free = net_real.FromNetFree()
         class nic_rx(InternalLoop):
 
-            def impl(self):
+            def impl_basic(self):
                 # Notice that it's okay to connect non-empty port to an empty port.
                 rx_enq = rx_enq_creator()
                 from_net >> Save() >> Pkt2Tuple() >> GetCore() >> rx_enq >> GetRxBuf() >> from_net_free
                 from_net.nothing >> Drop()
 
-            def impl_dccp(self):
+            def impl(self):
                 network_alloc = net_real.NetAlloc()
                 to_net = net_real.ToNet(configure=["alloc", True])
                 classifier = Classifier()
@@ -561,7 +561,6 @@ class NicRxPipeline(Pipeline):
                 # process
                 pkt2tuple = Pkt2Tuple()
                 classifier.pkt >> pkt2tuple >> GetCore() >> rx_enq >> rx_buf
-                run_order(to_net, pkt2tuple)
 
                 # CASE 2: ack
                 classifier.ack >> DccpRecvAck() >> rx_buf
@@ -624,14 +623,14 @@ class NicTxPipeline(Pipeline):
                 self.inp = Input("struct tuple*")
                 self.out = Output()
 
-            def impl(self):
+            def impl_basic(self):
                 self.inp >> size_pkt >> network_alloc >> tuple2pkt >> tx_buf >> to_net
 
                 network_alloc.oom >> nop
                 tuple2pkt >> nop
                 nop >> self.out
 
-            def impl_dccp(self):
+            def impl(self):
                 dccp_check = DccpCheckCongestion()
 
                 self.inp >> GetWorkerID() >> dccp_check
