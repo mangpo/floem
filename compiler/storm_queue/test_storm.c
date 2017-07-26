@@ -80,8 +80,28 @@ int main(int argc, char *argv[]) {
         }
     }
 
+    DccpInfo* info = get_dccp_stat();
+
+    size_t sum = 0, lasttuples = 0, tuples;
     run_threads();
-    for(;;) {}
+    while(1) {
+        sleep(1);
+        sum = 0;
+        __sync_synchronize();
+        for(int i = 0; i < MAX_WORKERS; i++) {
+            printf("pipe,cwnd,acks,lastack[%d] = %u, %u, %zu, %d, ", i,
+            connections[i].pipe, connections[i].cwnd, connections[i].acks, connections[i].lastack);
+            for(int j = 0; j < MAX_EXECUTORS && workers[i].executors[j].execute != NULL; j++) {
+                sum += workers[i].executors[j].tuples;
+            }
+        }
+        tuples = sum - lasttuples;
+        lasttuples = tuples;
+        printf("acks sent %zu, rtt %" PRIu64 "\n", info->acks_sent, info->link_rtt);
+        printf("Tuples/s: %zu, Gbits/s: %.2f\n",
+           tuples, (tuples * sizeof(tuple) * 8) / 1000000000.0);
+
+    }
     kill_threads();
 
     return 0;

@@ -5,7 +5,7 @@ def nonempty_to_empty_port_pass(g):
     vis = set()
     for instance in g.instances.values():
         for port in instance.element.inports:
-            if len(port.argtypes) == 0:
+            if len(port.argtypes) == 0 and port.name in instance.input2ele:
                 for prev_name, prev_portname in instance.input2ele[port.name]:
                     prev_inst = g.instances[prev_name]
                     prev_port = [port for port in prev_inst.element.outports if port.name == prev_portname][0]

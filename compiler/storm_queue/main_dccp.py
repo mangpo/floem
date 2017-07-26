@@ -124,6 +124,7 @@ class DccpInfo(State):
     retrans_timeout = Field(Uint(64))
     link_rtt = Field(Uint(64))
     global_lock = Field("rte_spinlock_t")
+    acks_sent = Field(Size)
 
     def init(self):
         self.header = lambda(x): "init_header_template(&{0})".format(x)
@@ -131,8 +132,23 @@ class DccpInfo(State):
         self.retrans_timeout = "LINK_RTT"
         self.link_rtt = "LINK_RTT"
         self.global_lock = lambda(x): "rte_spinlock_init(&{0})".format(x)
+        self.acks_sent = 0
 
 dccp_info = DccpInfo()
+
+class DccpGetStat(Element):
+    dccp = Persistent(DccpInfo)
+
+    def states(self):
+        self.dccp = dccp_info
+
+    def configure(self):
+        self.inp = Input()
+        self.out = Output(Pointer(DccpInfo))
+
+    def impl(self):
+        self.run_c(r'''
+        output { out(dccp); }''')
 
 
 class DccpCheckCongestion(Element):
@@ -181,8 +197,7 @@ class DccpSeqTime(Element):
         uint32_t seq = __sync_fetch_and_add(&dccp->connections[worker].seq, 1);
         header->dccp.seq_high = seq >> 16;
         header->dccp.seq_low = htons(seq & 0xffff);
-        /* printf("seq = %x, seq_high = %x, seq_low = %x\n", seq, header->dccp.seq_high, header->dccp.seq_low); */
-        /* printf("%s: Sending to worker %d, task %d\n", progname, worker, i); */
+        printf("Send to worker %d: seq = %x, seq_high = %x, seq_low = %x\n", worker, seq, header->dccp.seq_high, header->dccp.seq_low);
         rte_spinlock_unlock(&dccp->global_lock);
 
         __sync_fetch_and_add(&dccp->connections[worker].pipe, 1);
@@ -210,6 +225,9 @@ class DccpSendAck(Element):  # TODO
         uint32_t seq = (p->dccp.seq_high << 16) | ntohs(p->dccp.seq_low);
         ack->dccp.ack = htonl(seq);
         ack->dccp.hdr.data_offset = 4;
+
+        dccp->acks_sent++;
+        __sync_synchronize();
 
         output { out(ack); }
         ''')
@@ -252,9 +270,9 @@ class DccpRecvAck(Element):
 	}
 
 	if((int32_t)ntohl(ack->dccp.ack) > connections[srcworker].lastack + 1) {
-	  /* printf("Congestion event for %d! ack %u, lastack + 1 = %u\n", */
-	  /* 	 srcworker, ntohl(ack->dccp.ack), */
-	  /* 	 connections[srcworker].lastack + 1); */
+	  printf("Congestion event for %d! ack %u, lastack + 1 = %u\n",
+	 	 srcworker, ntohl(ack->dccp.ack),
+	 	 connections[srcworker].lastack + 1);
 	  // Congestion event! Shrink congestion window
 	  uint32_t oldcwnd = connections[srcworker].cwnd, newcwnd;
 	  do {
@@ -266,7 +284,7 @@ class DccpRecvAck(Element):
 	    }
 	  } while(oldcwnd != newcwnd);
 	} else {
-	  /* printf("Increasing congestion window for %d\n", srcworker); */
+	  printf("Increasing congestion window for %d\n", srcworker);
 	  // Increase congestion window
 	  /* __sync_fetch_and_add(&connections[srcworker].cwnd, 1); */
 	  connections[srcworker].cwnd++;
@@ -347,6 +365,10 @@ class Tuple2Pkt(Element):
 
 
 class Pkt2Tuple(Element):
+    this = Persistent(TaskMaster)
+
+    def states(self): self.this = task_master
+
     def configure(self):
         self.inp = Input("struct pkt_dccp_headers*")
         self.out = Output("struct tuple*")
@@ -354,7 +376,12 @@ class Pkt2Tuple(Element):
     def impl(self):
         self.run_c(r'''
         (struct pkt_dccp_headers* p) = inp();
-        output { out((struct tuple*) &p[1]); }
+        struct tuple* t= (struct tuple*) &p[1];
+        int i = this->task2worker[t->task];
+        int j = this->task2executorid[t->task];
+        workers[i].executors[j].tuples++;
+        __sync_synchronize();
+        output { out(t); }
         ''')
 
 
@@ -596,6 +623,13 @@ class outqueue_put(API):
 
     def impl(self): self.inp >> tx_enq_creator()
 
+class get_dccp_stat(API):
+    def configure(self):
+        self.inp = Input()
+        self.out = Output(Pointer(DccpInfo))
+
+    def impl(self): self.inp >> DccpGetStat() >> self.out
+
 class TxState(State):
     worker = Field(Int)
     myworker = Field(Int)
@@ -669,6 +703,7 @@ class NicTxPipeline(Pipeline):
 inqueue_get('inqueue_get', process='dpdk')
 inqueue_advance('inqueue_advance', process='dpdk')
 outqueue_put('outqueue_put', process='dpdk')
+get_dccp_stat('get_dccp_stat', process='dpdk')
 
 
 c = Compiler(NicRxPipeline, NicTxPipeline)
