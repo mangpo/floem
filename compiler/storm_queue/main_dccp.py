@@ -14,6 +14,7 @@ class Classifier(Element):
         self.inp = Input("void*", "void*")
         self.pkt = Output("struct pkt_dccp_headers*")
         self.ack = Output("struct pkt_dccp_headers*")
+        self.drop = Output()
 
     def impl(self):
         self.run_c(r'''
@@ -29,6 +30,7 @@ class Classifier(Element):
         output switch {
             case type==1: ack(p);
             case type==2: pkt(p);
+            else: drop();
         }
         ''')
 
@@ -88,7 +90,7 @@ class LocalOrRemote(Element):
     (struct tuple* t) = inp();
     bool local;
     if(t != NULL) {
-        local = (state.worker == this->task2worker[t->fromtask]);
+        local = (state.worker == state.myworker);
         if(local) printf("send to myself!\n");
     }
     output switch { case (t && local): out_local(t); case (t && !local): out_send(t, worker); }
@@ -188,7 +190,7 @@ class DccpSeqTime(Element):
         ''')
 
 
-class DccpSendAck(Element):
+class DccpSendAck(Element):  # TODO
     dccp = Persistent(DccpInfo)
 
     def states(self):
@@ -290,6 +292,7 @@ class SaveWorkerID(Element):
         self.run_c(r'''
         (struct tuple* t) = inp();
         state.worker = this->task2worker[t->task];
+        state.myworker = this->task2worker[t->fromtask];
         output { out(t); }
         ''')
 
@@ -333,7 +336,9 @@ class Tuple2Pkt(Element):
         memcpy(&header[1], t, sizeof(struct tuple));
 
         header->dccp.dst = htons(state.worker);
+        header->dccp.src = htons(state.myworker);
         header->eth.dest = workers[state.worker].mac;
+        header->eth.src = workers[state.myworker].mac;
         
         printf("PREPARE PKT: task = %d, worker = %d\n", t->task, state.worker);
         output { out(p); }
@@ -545,7 +550,9 @@ class NicRxPipeline(Pipeline):
                 rx_enq = rx_enq_creator()
                 tx_buf = GetTxBuf(configure=['sizeof(struct pkt_dccp_ack_headers)'])
                 size_ack = SizePkt(configure=['sizeof(struct pkt_dccp_ack_headers)'])
+                rx_buf = GetRxBuf()
 
+                from_net.nothing >> Drop()
                 from_net >> classifier
 
                 # CASE 1: not ack
@@ -553,16 +560,16 @@ class NicRxPipeline(Pipeline):
                 classifier.pkt >> size_ack >> network_alloc >> GetBothPkts() >> DccpSendAck() >> tx_buf >> to_net
                 # process
                 pkt2tuple = Pkt2Tuple()
-                classifier.pkt >> pkt2tuple >> GetCore() >> rx_enq >> GetRxBuf() >> from_net_free
+                classifier.pkt >> pkt2tuple >> GetCore() >> rx_enq >> rx_buf
                 run_order(to_net, pkt2tuple)
 
                 # CASE 2: ack
-                classifier.ack >> DccpRecvAck() >> GetRxBuf() >> from_net_free
+                classifier.ack >> DccpRecvAck() >> rx_buf
 
                 # Exception
-                drop = Drop()
-                from_net.nothing >> drop
-                network_alloc.oom >> drop
+                classifier.drop >> rx_buf
+                network_alloc.oom >> rx_buf
+                rx_buf >> from_net_free
 
         nic_rx('nic_rx', process='dpdk')
         #nic_rx('nic_rx', device=target.CAVIUM, cores=[0,1,2,3])
@@ -591,6 +598,7 @@ class outqueue_put(API):
 
 class TxState(State):
     worker = Field(Int)
+    myworker = Field(Int)
     tx_net_buf = Field("void *")
     q_buf = Field(queue2.q_buffer)
 
