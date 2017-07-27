@@ -274,6 +274,16 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
     type = string_type(type)
     type_star = type + "*"
 
+    copy = r'''
+    int off = sizeof(x->%s);
+    uintptr_t addr1 = (uintptr_t) &q->data[old] + off;
+    uintptr_t addr2 = (uintptr_t) x + off;
+    rte_memcpy((void*) addr1, (void*) addr2, sizeof(%s) - off);
+    __sync_synchronize();
+    q->data[old].%s = x->%s;
+    __sync_synchronize();
+    ''' % (owner, type, owner, owner)
+
     atomic_src = r'''
     __sync_synchronize();
     size_t old = p->offset;
@@ -295,9 +305,8 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
 
     wait_then_copy = r'''
     while(q->data[old].%s != 0) __sync_synchronize();
-    rte_memcpy(&q->data[old], x, sizeof(%s));
-    __sync_synchronize();
-    ''' % (owner, type)
+    %s
+    ''' % (owner, copy)
 
     init_read_cvm = r'''
         uintptr_t addr = (uintptr_t) &q->data[old];
@@ -310,7 +319,7 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
         while(entry->%s) dma_read_with_buf(addr, size, (void**) &entry, &read_lock);
         memcpy(entry, x, size);
         dma_write(addr, size, entry, &write_lock);
-        ''' % (owner)
+        ''' % (owner)  # TODO: check if dma_write is atomic?
 
     wait_then_get = r'''
     while(q->data[old].%s == 0) __sync_synchronize();
@@ -348,16 +357,6 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
     }
 #endif
             '''
-            
-            copy = r'''
-            int off = sizeof(x->%s);
-            uintptr_t addr1 = (uintptr_t) &q->data[old] + off;
-            uintptr_t addr2 = (uintptr_t) x + off;
-            rte_memcpy((void*) addr1, (void*) addr2, sizeof(%s) - off);
-            __sync_synchronize(); 
-            q->data[old].%s = x->%s;
-            __sync_synchronize(); 
-''' % (owner, type, owner, owner)
 
             noblock_noatom = stat + r'''
                 __sync_synchronize();
@@ -365,7 +364,6 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
                 if(q->data[old].%s == 0) {
                     %s
                     p->offset = (p->offset + 1) %s %d;
-                    __sync_synchronize();
                 }
 #ifdef QUEUE_STAT
                 else __sync_fetch_and_add(&drop, 1);
