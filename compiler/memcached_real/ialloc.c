@@ -127,7 +127,7 @@ static inline struct segment_header *segment_from_part(void *data)
 
 static void segment_free(struct segment_header *h)
 {
-    printf("Free segment!\n");
+  //printf("Free segment!\n");
     rte_spinlock_lock(&segalloc_lock);
     h->offset = 0;
     h->next = free_segments;

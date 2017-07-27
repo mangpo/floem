@@ -186,7 +186,7 @@ out:
       gettimeofday(&now, NULL);
       count++;
       if(now.tv_sec > last.tv_sec + 1) {
-	printf("from_net[%d]: %ld pkts/5s\n", rxq, count);
+	printf("from_net[%d]: %ld pkts/s\n", rxq, count);
 	count = 0;
 	last = now;
       }
@@ -252,7 +252,7 @@ static void dpdk_to_net(size_t size, void *data, void *buf)
     gettimeofday(&now, NULL);
     count++;
     if(now.tv_sec > last.tv_sec + 1) {
-      printf("to_net[%d]: %ld pkts/5s\n", txq, count);
+      printf("to_net[%d]: %ld pkts/s\n", txq, count);
       count = 0;
       last = now;
     }
