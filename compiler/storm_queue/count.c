@@ -60,6 +60,7 @@ static int count_emit(uint64_t key, void *data, void *arg)
   memset(&t, 0, sizeof(struct tuple));
   strcpy(t.v[0].str, b->str);
   t.v[0].integer = sum;
+  printf("Count: %s %ld\n", t.v[0].str, t.v[0].integer);
   tuple_send(&t, myself);
 
   return 1;
@@ -121,8 +122,6 @@ void count_execute(const struct tuple *t, struct executor *self)
   /* lookup_time += before_insert - before_lookup; */
   /* insert_time += now - before_insert; */
   execute_time += now - starttime;
-  self->avglatency += execute_time;
-  self->numexecutes++;
 #endif
 
   struct timeval tv;
@@ -165,9 +164,8 @@ void count_execute(const struct tuple *t, struct executor *self)
 #ifdef DEBUG
   if(tv.tv_sec >= debug_lasttime + 1) {
     debug_lasttime = tv.tv_sec;
-    printf("Count %d executed %zu latency %" PRIu64 ", tuple latency %zu\n",
-	   self->taskid, numexecutes, execute_time / numexecutes,
-	   self->avglatency / self->numexecutes);
+    printf("Count %d executed %zu latency %" PRIu64 "\n",
+	   self->taskid, numexecutes, execute_time / numexecutes);
     //self->avglatency / (self->numexecutes > 0 ? self->numexecutes : 1));
     /* printf("Worker %d executed %zu latency %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 "\n", self->taskid, numexecutes, execute_time / numexecutes, */
     /* 	   before_time / numexecutes, */

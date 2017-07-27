@@ -493,22 +493,30 @@ class BatchScheduler(Element):
         self.run_c(r'''
     (size_t core_id) = inp();
     int n_cores = %d;
-    static __thread int core = (core_id * n_cores)/%d;
+    static __thread int core = -1;
     static __thread int batch_size = 0;
     static __thread size_t start = 0;
+        
+    if(core == -1) {
+        core = (core_id * n_cores)/%d;
+        while(this->executors[core].execute == NULL){
+            core = (core + 1) %s n_cores;
+            start = rdtsc();
+        } 
+    }
 
     if(batch_size >= BATCH_SIZE || rdtsc() - start >= BATCH_DELAY) {
         do {
-            core = core %s n_cores;
+            core = (core + 1) %s n_cores;
         } while(this->executors[core].execute == NULL);
         batch_size = 0;
-        printf("======================= Dequeue core = %s, thread = %s\n", this->core, core_id);
+        //printf("======================= Dequeue core = %s, thread = %s\n", core, core_id);
         start = rdtsc();
     }
 
     batch_size++;
     output { out(core); }
-        ''' % (n_cores, n_nic_tx, '%', '%d', '%d'))
+        ''' % (n_cores, n_nic_tx, '%', '%', '%d', '%d'))
 
 # class BatchInc(Element):
 #     this = Persistent(BatchInfo)
