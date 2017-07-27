@@ -64,7 +64,7 @@ void spout_execute(const struct tuple *t, struct executor *self)
     send = true;
   }
 
-  //usleep(1);
+  usleep(1);
   /* sleep(1); */
 
   memset(&myt, 0, sizeof(struct tuple));

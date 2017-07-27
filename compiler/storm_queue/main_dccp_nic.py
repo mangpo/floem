@@ -774,7 +774,7 @@ c.include = r'''
 #include "dccp.h"
 '''
 c.generate_code_as_header()
-c.depend = {"test_storm_nic": ['list', 'hash', 'hash_table', 'spout', 'count', 'rank', 'worker', 'dpdk'],
-            "test_storm_app": ['worker', 'app']}
+c.depend = {"test_storm_nic": ['hash', 'worker', 'dummy', 'dpdk'],
+            "test_storm_app": ['list', 'hash', 'hash_table', 'spout', 'count', 'rank', 'worker', 'app']}
 c.compile_and_run([("test_storm_app", workerid[test]), ("test_storm_nic", workerid[test])])
 
