@@ -65,7 +65,7 @@ static void dpdk_init(char *argv[], unsigned num_threads,
     memset(&port_conf, 0, sizeof(port_conf));
     port_conf.rxmode.mq_mode = ETH_MQ_RX_RSS;
     port_conf.txmode.mq_mode = ETH_MQ_TX_NONE;
-    port_conf.rx_adv_conf.rss_conf.rss_hf= ETH_RSS_TCP;
+    port_conf.rx_adv_conf.rss_conf.rss_hf= ETH_RSS_TCP | ETH_RSS_UDP;
     ret = rte_eth_dev_configure(dpdk_port_id, num_rx, num_threads, &port_conf);
     if (ret < 0) {
         fprintf(stderr, "dpdk_init: rte_eth_dev_configure failed\n");
@@ -186,7 +186,7 @@ out:
       gettimeofday(&now, NULL);
       count++;
       if(now.tv_sec > last.tv_sec + 1) {
-	printf("from_net[%d]: %ld pkts/5s\n", rxq, count);
+	printf("from_net[%d]: %ld pkts/s\n", rxq, count);
 	count = 0;
 	last = now;
       }
@@ -252,7 +252,7 @@ static void dpdk_to_net(size_t size, void *data, void *buf)
     gettimeofday(&now, NULL);
     count++;
     if(now.tv_sec > last.tv_sec + 1) {
-      printf("to_net[%d]: %ld pkts/5s\n", txq, count);
+      printf("to_net[%d]: %ld pkts/s\n", txq, count);
       count = 0;
       last = now;
     }
