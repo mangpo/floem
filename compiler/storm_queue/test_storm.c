@@ -35,18 +35,33 @@ void executor_thread(void *arg) {
   }
 }
 
+void task_str(struct tuple *t, int task, const char* s) {
+  if(t->task == task) {
+    if(strcmp(t->v[0].str, s))
+      printf("task = %d, str = %s\n", t->task, t->v[0].str);
+    assert(strcmp(t->v[0].str, s) == 0);
+  }
+}
+
 void tuple_send(struct tuple *t, struct executor *self)
 {
   // Set source and destination
   t->fromtask = self->taskid;
-  t->task = self->grouper(t, self);
   t->starttime = rdtsc();
+  t->task = self->grouper(t, self);
 
 
   // Drop?
   if(t->task == 0) {
     return;
   }
+  
+#ifdef DEBUG
+  task_str(t, 10, "golda");
+  task_str(t, 11, "nathan");
+  task_str(t, 12, "jackson");
+  task_str(t, 13, "bertels");
+#endif
 
   /* __sync_fetch_and_add(&target[t->task], 1); */
 
@@ -86,18 +101,18 @@ int main(int argc, char *argv[]) {
     run_threads();
     while(1) {
         sleep(1);
-        sum = 0;
-        __sync_synchronize();
-	struct connection* connections = info->connections;
-        for(int i = 0; i < MAX_WORKERS; i++) {
-            printf("pipe,cwnd,acks,lastack[%d] = %u, %u, %zu, %d\n", i,
-            connections[i].pipe, connections[i].cwnd, connections[i].acks, connections[i].lastack);
-        }
-        tuples = info->tuples - lasttuples;
-        lasttuples = info->tuples;
-        printf("acks sent %zu, rtt %" PRIu64 "\n", info->acks_sent, info->link_rtt);
-        printf("Tuples/s: %zu, Gbits/s: %.2f\n\n",
-           tuples, (tuples * sizeof(struct tuple) * 8) / 1000000000.0);
+        /* sum = 0; */
+        /* __sync_synchronize(); */
+	/* struct connection* connections = info->connections; */
+        /* for(int i = 0; i < MAX_WORKERS; i++) { */
+        /*     printf("pipe,cwnd,acks,lastack[%d] = %u, %u, %zu, %d\n", i, */
+        /*     connections[i].pipe, connections[i].cwnd, connections[i].acks, connections[i].lastack); */
+        /* } */
+        /* tuples = info->tuples - lasttuples; */
+        /* lasttuples = info->tuples; */
+        /* printf("acks sent %zu, rtt %" PRIu64 "\n", info->acks_sent, info->link_rtt); */
+        /* printf("Tuples/s: %zu, Gbits/s: %.2f\n\n", */
+        /*    tuples, (tuples * sizeof(struct tuple) * 8) / 1000000000.0); */
     }
     kill_threads();
 

@@ -348,18 +348,29 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
     }
 #endif
             '''
+            
+            copy = r'''
+            int off = sizeof(x->%s);
+            uintptr_t addr1 = (uintptr_t) &q->data[old] + off;
+            uintptr_t addr2 = (uintptr_t) x + off;
+            rte_memcpy((void*) addr1, (void*) addr2, sizeof(%s) - off);
+            __sync_synchronize(); 
+            q->data[old].%s = x->%s;
+            __sync_synchronize(); 
+''' % (owner, type, owner, owner)
 
             noblock_noatom = stat + r'''
                 __sync_synchronize();
-                if(q->data[p->offset].%s == 0) {
-                    rte_memcpy(&q->data[p->offset], x, sizeof(%s));
+                size_t old = p->offset;
+                if(q->data[old].%s == 0) {
+                    %s
                     p->offset = (p->offset + 1) %s %d;
                     __sync_synchronize();
                 }
 #ifdef QUEUE_STAT
                 else __sync_fetch_and_add(&drop, 1);
 #endif
-                ''' % (owner, type, '%', size)
+                ''' % (owner, copy, '%', size)
 
             noblock_atom = stat + r'''
     __sync_synchronize();
@@ -368,7 +379,7 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
     while(q->data[old].%s == 0) {
         size_t new = (old + 1) %s %d;
         if(__sync_bool_compare_and_swap(&p->offset, old, new)) {
-            rte_memcpy(&q->data[old], x, sizeof(%s));
+            %s
             success = true;
             break;
         }
@@ -378,7 +389,7 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
 #ifdef QUEUE_STAT
     if(!success) __sync_fetch_and_add(&drop, 1);
 #endif
-                            ''' % (owner, '%', size, type)
+                            ''' % (owner, '%', size, copy)
 
             block_noatom = "size_t old = p->offset;\n" + wait_then_copy + inc_offset
 

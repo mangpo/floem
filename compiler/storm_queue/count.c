@@ -61,7 +61,7 @@ static int count_emit(uint64_t key, void *data, void *arg)
   strcpy(t.v[0].str, b->str);
   t.v[0].integer = sum;
   tuple_send(&t, myself);
-
+  printf("Count: %s %d!!!!!!!!!!!!!!!\n", t.v[0].str, t.v[0].integer);
   return 1;
 }
 #endif
@@ -76,6 +76,12 @@ void count_execute(const struct tuple *t, struct executor *self)
   static __thread time_t debug_lasttime = 0;
   static __thread size_t numexecutes = 0;
   static __thread uint64_t execute_time = 0;
+
+  if(strcmp(t->v[0].str, "nathan") && strcmp(t->v[0].str, "golda")) {
+    printf("Receive: %s, tast = %d\n", t->v[0].str, t->task);
+    assert(strcmp(t->v[0].str, "nathan") == 0 || strcmp(t->v[0].str, "golda"));
+    exit(1);
+  }
  /* before_time = 0, hash_time = 0, lookup_time = 0, insert_time = 0; */
 
   uint64_t starttime = rdtsc();

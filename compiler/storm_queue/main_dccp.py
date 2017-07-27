@@ -463,18 +463,22 @@ class BatchScheduler(Element):
     def states(self, batch_info): self.this = batch_info
 
     def configure(self):
+        self.inp = Input(Size)
         self.out = Output(Size)
 
     def impl(self):
         self.run_c(r'''
-    if(this->batch_size >= BATCH_SIZE || rdtsc() - this->start >= BATCH_DELAY) {
         this->core = (this->core + 1) %s %d;
+
+/*
+    if(this->batch_size >= BATCH_SIZE || rdtsc() - this->start >= BATCH_DELAY) {
         this->batch_size = 0;
         this->start = rdtsc();
-        printf("======================= Dequeue core = %d\n", this->core);
+        //printf("======================= Dequeue core = %s\n", this->core);
     }
+*/
     output { out(this->core); }
-        ''' % ('%', n_cores))
+        ''' % ('%', n_cores, '%d'))
 
 class BatchInc(Element):
     this = Persistent(BatchInfo)
@@ -699,7 +703,7 @@ class NicTxPipeline(Pipeline):
                 save_buff = SaveBuff()
                 get_buff = GetBuff()
 
-                queue_schedule >> tx_deq >> save_buff >> PrintTuple() >> SaveWorkerID() >> local_or_remote
+                self.core_id >> queue_schedule >> tx_deq >> save_buff >> PrintTuple() >> SaveWorkerID() >> local_or_remote
                 save_buff >> batch_inc
                 # send
                 local_or_remote.out_send >> PreparePkt() >> get_buff
