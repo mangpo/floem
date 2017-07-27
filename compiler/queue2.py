@@ -342,7 +342,7 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
     static struct timeval base, now;
     gettimeofday(&now, NULL);
     if(now.tv_sec >= base.tv_sec + 5) {
-        printf("QUEUE DROP: q = %p, drop/5s = %ld\n", q, drop);
+        printf("\n\n>>>>>>>>>>>>>>>>>>>>>>>> QUEUE DROP[''' + name + r''']: q = %p, drop/5s = %ld\n\n", q, drop);
         drop = 0;
         base = now;
     }
@@ -465,7 +465,6 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
                 size_t new = (old + 1) %s %d;
                 if(__sync_bool_compare_and_swap(&p->offset, old, new)) {
                     x = &q->data[old];
-                    success = true;
                     break;
                 }
                 old = p->offset;
