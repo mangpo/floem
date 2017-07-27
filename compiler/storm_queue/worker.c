@@ -4,8 +4,11 @@
 struct executor *task2executor[MAX_TASKS];
 int task2executorid[MAX_TASKS];
 int task2worker[MAX_TASKS];
+struct executor *my_executors;
 
 void init_task2executor(struct executor *executor) {
+  my_executors = executor;
+
   for(int i = 0; i < MAX_TASKS; i++) {
     task2executorid[i] = -1;
     task2worker[i] = -1;
@@ -29,6 +32,10 @@ int *get_task2executorid() {
 
 int *get_task2worker() {
   return task2worker;
+}
+
+struct executor *get_executors() {
+  return my_executors;
 }
 
 struct tuple* random_spout(size_t i) {

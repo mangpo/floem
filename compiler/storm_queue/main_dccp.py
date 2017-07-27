@@ -8,6 +8,7 @@ workerid = {"spout": 0, "count": 1, "rank": 2}
 
 n_cores = 7
 n_workers = 2
+n_nic_tx = 1
 
 class Classifier(Element):
     def configure(self):
@@ -51,10 +52,12 @@ class Save(Element):
 class TaskMaster(State):
     task2executorid = Field(Pointer(Int))
     task2worker = Field(Pointer(Int))
+    executors = Field('struct executor*')
 
     def init(self):
         self.task2executorid = "get_task2executorid()"
         self.task2worker = "get_task2worker()"
+        self.executors = "get_executors()"
 
 task_master = TaskMaster('task_master')
 
@@ -446,51 +449,87 @@ class GetRxBuf(Element):
 
 
 ############################### Queue #################################
-class BatchInfo(State):
-    core = Field(Int)
-    batch_size = Field(Int)
-    start = Field(Uint(64))
-
-    def init(self):
-        self.core = 0
-        self.batch_size = 0
-        self.start = 0
-
-batch_info = BatchInfo()
+# class BatchInfo(State):
+#     core = Field(Int)
+#     batch_size = Field(Int)
+#     start = Field(Uint(64))
+#
+#     def init(self):
+#         self.core = 0
+#         self.batch_size = 0
+#         self.start = 0
+#
+# batch_info = BatchInfo()
+#
+# class BatchScheduler(Element):
+#     this = Persistent(BatchInfo)
+#     def states(self):
+#         self.this = batch_info
+#
+#     def configure(self):
+#         self.out = Output(Size)
+#
+#     def impl(self):
+#         self.run_c(r'''
+#     if(this->batch_size >= BATCH_SIZE || rdtsc() - this->start >= BATCH_DELAY) {
+#         this->core = (this->core + 1) %s %d;
+#         this->batch_size = 0;
+#         this->start = rdtsc();
+#         printf("======================= Dequeue core = %d\n", this->core);
+#     }
+#     output { out(this->core); }
+#         ''' % ('%', n_cores))
 
 class BatchScheduler(Element):
-    this = Persistent(BatchInfo)
-    def states(self, batch_info): self.this = batch_info
+    this = Persistent(TaskMaster)
+
+    def states(self): self.this = task_master
 
     def configure(self):
+        self.inp = Input(Size)
         self.out = Output(Size)
 
     def impl(self):
         self.run_c(r'''
-    if(this->batch_size >= BATCH_SIZE || rdtsc() - this->start >= BATCH_DELAY) {
-        this->core = (this->core + 1) %s %d;
-        this->batch_size = 0;
-        this->start = rdtsc();
-        printf("======================= Dequeue core = %d\n", this->core);
+    (size_t core_id) = inp();
+    int n_cores = %d;
+    static __thread int core = (core_id * n_cores)/%d;
+    static __thread int batch_size = 0;
+    static __thread size_t start = 0;
+
+    if(batch_size >= BATCH_SIZE || rdtsc() - start >= BATCH_DELAY) {
+        do {
+            core = core %s n_cores;
+        } while(this->executors[core].execute == NULL);
+        batch_size = 0;
+        printf("======================= Dequeue core = %s, thread = %s\n", this->core, core_id);
+        start = rdtsc();
     }
-    output { out(this->core); }
-        ''' % ('%', n_cores))
+
+    batch_size++;
+    output { out(core); }
+        ''' % (n_cores, n_nic_tx, '%', '%d', '%d'))
+
+# class BatchInc(Element):
+#     this = Persistent(BatchInfo)
+#
+#     def states(self): self.this = batch_info
+#
+#     def configure(self):
+#         self.inp = Input("struct tuple*")
+#
+#     def impl(self):
+#         self.run_c(r'''
+#         (struct tuple* t) = inp();
+#         if(t) this->batch_size++;
+#         ''')
 
 class BatchInc(Element):
-    this = Persistent(BatchInfo)
-
-    def states(self, batch_info): self.this = batch_info
-
     def configure(self):
-        self.inp = Input("struct tuple*")
-        #self.out = Output("struct tuple*")
+        self.inp = Input()
 
     def impl(self):
-        self.run_c(r'''
-        (struct tuple* t) = inp();
-        if(t) this->batch_size++;
-        // output switch { case t: out(t); };
-        ''')
+        self.run_c("")
 
 ################## Queue addr ####################
 class DropAddr(Element):
@@ -659,8 +698,8 @@ class NicTxPipeline(Pipeline):
         tx_buf = GetTxBuf(configure=['sizeof(struct pkt_dccp_headers) + sizeof(struct tuple)'])
         size_pkt = SizePkt(configure=['sizeof(struct pkt_dccp_headers) + sizeof(struct tuple)'])
 
-        queue_schedule = BatchScheduler(states=[batch_info])
-        batch_inc = BatchInc(states=[batch_info])
+        queue_schedule = BatchScheduler()
+        batch_inc = BatchInc()
 
         tuple2pkt = Tuple2Pkt()
         nop = Identity()
@@ -699,7 +738,7 @@ class NicTxPipeline(Pipeline):
                 save_buff = SaveBuff()
                 get_buff = GetBuff()
 
-                queue_schedule >> tx_deq >> save_buff >> PrintTuple() >> SaveWorkerID() >> local_or_remote
+                self.core_id >> queue_schedule >> tx_deq >> save_buff >> PrintTuple() >> SaveWorkerID() >> local_or_remote
                 save_buff >> batch_inc
                 # send
                 local_or_remote.out_send >> PreparePkt() >> get_buff
@@ -708,7 +747,7 @@ class NicTxPipeline(Pipeline):
 
                 get_buff >> tx_release
 
-        nic_tx('nic_tx', process='dpdk')
+        nic_tx('nic_tx', process='dpdk', cores=range(n_nic_tx))
         # nic_tx('nic_tx', device=target.CAVIUM, cores=[4,5,6,7])
 
 
