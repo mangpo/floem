@@ -178,6 +178,19 @@ out:
 
     *pdata = data;
     *pbuf = mb;
+    
+    static __thread size_t count = 0;
+    static __thread struct timeval last, now;
+
+    if(data) {
+      gettimeofday(&now, NULL);
+      count++;
+      if(now.tv_sec > last.tv_sec + 1) {
+	printf("from_net[%d]: %ld pkts/5s\n", rxq, count);
+	count = 0;
+	last = now;
+      }
+    }
 }
 
 static void dpdk_net_free(void *data, void *buf)
@@ -232,6 +245,18 @@ static void dpdk_to_net(size_t size, void *data, void *buf)
     if (rte_eth_tx_burst(dpdk_port_id, txq, &mb, 1) != 1) {
         rte_pktmbuf_free(mb);
     }
+
+    static __thread size_t count = 0;
+    static __thread struct timeval last, now;
+
+    gettimeofday(&now, NULL);
+    count++;
+    if(now.tv_sec > last.tv_sec + 1) {
+      printf("to_net[%d]: %ld pkts/5s\n", txq, count);
+      count = 0;
+      last = now;
+    }
+
 }
 
 #define nic_htons(x) x

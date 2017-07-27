@@ -77,11 +77,6 @@ void count_execute(const struct tuple *t, struct executor *self)
   static __thread size_t numexecutes = 0;
   static __thread uint64_t execute_time = 0;
 
-  if(strcmp(t->v[0].str, "nathan") && strcmp(t->v[0].str, "golda")) {
-    printf("Receive: %s, tast = %d\n", t->v[0].str, t->task);
-    assert(strcmp(t->v[0].str, "nathan") == 0 || strcmp(t->v[0].str, "golda"));
-    exit(1);
-  }
  /* before_time = 0, hash_time = 0, lookup_time = 0, insert_time = 0; */
 
   uint64_t starttime = rdtsc();
@@ -169,8 +164,8 @@ void count_execute(const struct tuple *t, struct executor *self)
 #ifdef DEBUG
   if(tv.tv_sec >= debug_lasttime + 1) {
     debug_lasttime = tv.tv_sec;
-    printf("Count %d executed %zu latency %" PRIu64 "\n",
-	   self->taskid, numexecutes, execute_time / numexecutes);
+    /* printf("Count %d executed %zu latency %" PRIu64 "\n", */
+    /* 	   self->taskid, numexecutes, execute_time / numexecutes); */
     //self->avglatency / (self->numexecutes > 0 ? self->numexecutes : 1));
     /* printf("Worker %d executed %zu latency %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 "\n", self->taskid, numexecutes, execute_time / numexecutes, */
     /* 	   before_time / numexecutes, */

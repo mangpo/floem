@@ -8,7 +8,7 @@ workerid = {"spout": 0, "count": 1, "rank": 2}
 
 n_cores = 7
 n_workers = 2
-n_nic_tx = 1
+n_nic_tx = 4
 
 class Classifier(Element):
     def configure(self):
@@ -96,6 +96,7 @@ class LocalOrRemote(Element):
     bool local;
     if(t != NULL) {
         local = (state.worker == state.myworker);
+        if(local && t->task == 30) printf("30: send to myself!\n");
 #ifdef DEBUG_MP
         if(local) printf("send to myself!\n");
 #endif
@@ -282,7 +283,7 @@ class DccpRecvAck(Element):
 	}
 
 	if((int32_t)ntohl(ack->dccp.ack) > connections[srcworker].lastack + 1) {
-#if 1
+#if DEBUG_DCCP
 	  printf("Congestion event for %d! ack %u, lastack + 1 = %u\n",
 	 	 srcworker, ntohl(ack->dccp.ack),
 	 	 connections[srcworker].lastack + 1);

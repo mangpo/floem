@@ -263,7 +263,7 @@ def dpdk_init_call(graph, process):
     for t in graph.threads_internal:
         process = graph.thread2process[t.name]
         if target.is_dpdk_proc(process):
-            n = len(graph.get_cores_from_thread(t))
+            n = len(graph.get_cores_from_thread(t.name))
             num_threads += n
 
             subgraph = set()

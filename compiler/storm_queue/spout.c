@@ -42,6 +42,9 @@ void spout_execute(const struct tuple *t, struct executor *self)
   static __thread int i = 0;
 #endif
 
+  struct timeval start;
+  r = gettimeofday(&start, NULL);
+
 #ifndef TWITTER_FEED
   if(!init) {
     r = initstate_r(self->taskid, statebuf, 256, &mybuf);
@@ -61,7 +64,7 @@ void spout_execute(const struct tuple *t, struct executor *self)
     send = true;
   }
 
-  /* usleep(100000); */
+  //usleep(1);
   /* sleep(1); */
 
   memset(&myt, 0, sizeof(struct tuple));
@@ -77,6 +80,21 @@ void spout_execute(const struct tuple *t, struct executor *self)
   /*   printf("%d: Wrapped around!\n", self->taskid); */
   /* } */
 #endif
+
+  /* struct timeval now; */
+  /* r = gettimeofday(&now, NULL); */
+  /* static __thread long int total_time = 0; */
+  /* static __thread size_t total_count = 0; */
+
+  /* total_time += (now.tv_sec*1000000 + now.tv_usec) - (start.tv_sec*1000000 + start.tv_usec); */
+  /* total_count++; */
+  
+  /* if(total_count == 100000) { */
+  /*   printf("Spout latency %ld\n", total_time/total_count); */
+  /*   total_time = 0; */
+  /*   total_count = 0; */
+  /* } */
+  
 }
 
 void spout_init(struct executor *self)
