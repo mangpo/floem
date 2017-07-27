@@ -127,8 +127,6 @@ void count_execute(const struct tuple *t, struct executor *self)
   /* lookup_time += before_insert - before_lookup; */
   /* insert_time += now - before_insert; */
   execute_time += now - starttime;
-  self->avglatency += execute_time;
-  self->numexecutes++;
 #endif
 
   struct timeval tv;
@@ -171,9 +169,8 @@ void count_execute(const struct tuple *t, struct executor *self)
 #ifdef DEBUG
   if(tv.tv_sec >= debug_lasttime + 1) {
     debug_lasttime = tv.tv_sec;
-    printf("Count %d executed %zu latency %" PRIu64 ", tuple latency %zu\n",
-	   self->taskid, numexecutes, execute_time / numexecutes,
-	   self->avglatency / self->numexecutes);
+    printf("Count %d executed %zu latency %" PRIu64 "\n",
+	   self->taskid, numexecutes, execute_time / numexecutes);
     //self->avglatency / (self->numexecutes > 0 ? self->numexecutes : 1));
     /* printf("Worker %d executed %zu latency %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 "\n", self->taskid, numexecutes, execute_time / numexecutes, */
     /* 	   before_time / numexecutes, */

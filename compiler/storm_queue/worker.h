@@ -417,11 +417,12 @@ static struct worker workers[MAX_WORKERS] = {
 void init_task2executor(struct executor *executor);
 int *get_task2executorid();
 int *get_task2worker();
+struct executor *get_executors();
 struct tuple* random_spout(size_t i);
 struct tuple* random_count(size_t i);
 struct tuple* random_rank(size_t i);
 
-#if defined(BIGFISH) || defined(BIGFISH_FLEXNIC)
+#if defined(BIGFISH) || defined(BIGFISH_FLEXNIC) || defined(SAMPA)
 #	define PROC_FREQ	1600000.0	// bigfish
 #else
 #	define PROC_FREQ	2200000.0	// swingout
