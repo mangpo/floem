@@ -16,6 +16,7 @@ class Compiler:
 
         # Extra code
         self.include = None
+        self.include_h = None
         self.testing = None
         self.depend = None
 
@@ -71,17 +72,20 @@ class Compiler:
 
         return original
 
+    def get_compiler_option(self):
+        return codegen.CompilerOption(self.desugar_mode, self.include, self.include_h, self.testing, self.depend)
+
     def generate_code(self):
-        codegen.generate_code_only(self.generate_graph(), self.testing, self.desugar_mode, self.include)
+        codegen.generate_code_only(self.generate_graph(), self.get_compiler_option())
 
     def generate_code_and_run(self, expect=None):
-        codegen.generate_code_and_run(self.generate_graph(), self.testing, self.desugar_mode, expect, self.include, self.depend)
+        codegen.generate_code_and_run(self.generate_graph(), self.get_compiler_option(), expect)
 
     def generate_code_and_compile(self):
-        codegen.generate_code_and_compile(self.generate_graph(), self.testing, self.desugar_mode, self.include, self.depend)
+        codegen.generate_code_and_compile(self.generate_graph(), self.get_compiler_option())
 
     def generate_code_as_header(self, header='tmp'):
-        codegen.generate_code_as_header(self.generate_graph(header), self.testing, self.desugar_mode, self.include)
+        codegen.generate_code_as_header(self.generate_graph(header), self.get_compiler_option())
 
     def compile_and_run(self, name):
-        codegen.compile_and_run(name, self.depend)
+        codegen.compile_and_run(name, self.get_compiler_option())

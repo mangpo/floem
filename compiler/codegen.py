@@ -460,7 +460,8 @@ def generate_header_h(testing, graph):
             src = ""
             for file in target.cpu_include_h:
                 src += "#include %s\n" % file
-            if target.is_dpdk_proc(process):
+
+            if target.dpdk in graph.processes:
                 for file in target.dpdk_driver_header:
                     src += "#include %s\n" % file
 
@@ -481,7 +482,8 @@ def generate_header_c(testing, graph):
             src = ""
             for file in target.cpu_include_c:
                 src += "#include %s\n" % file
-            if target.is_dpdk_proc(process):
+
+            if target.dpdk in graph.processes:
                 for file in target.dpdk_driver_header:
                     src += "#include %s\n" % file
 
@@ -597,19 +599,27 @@ def remove_files(graph, ext):
         name = process + ext
         os.system("rm " + name)
 
-def generate_code_only(graph, testing, mode, include=None):
-    remove_files(graph, ".c")
-    generate_code(graph, ".c", testing, include)
-    generate_inject_probe_code(graph, ".c")
-    generate_internal_triggers(graph, ".c", mode)
+class CompilerOption(object):
+    def __init__(self, mode, include, include_h, testing, depend):
+        self.desugar_mode = mode
+        self.include = include
+        self.include_h = include_h
+        self.testing = testing
+        self.depend = depend
 
-def generate_code_as_header(graph, testing, mode, include=None):
+def generate_code_only(graph, opt):
+    remove_files(graph, ".c")
+    generate_code(graph, ".c", opt.testing, opt.include)
+    generate_inject_probe_code(graph, ".c")
+    generate_internal_triggers(graph, ".c", opt.desugar_mode)
+
+def generate_code_as_header(graph, opt):
     remove_files(graph, ".h")
     remove_files(graph, ".c")
     define_header(graph)
-    generate_code(graph, ".h", testing, include)
+    generate_code(graph, ".h", opt.testing, opt.include)
     generate_inject_probe_code(graph, ".h")
-    generate_internal_triggers(graph, ".h", mode)
+    generate_internal_triggers(graph, ".h", opt.desugar_mode)
     end_header(graph)
 
 
@@ -645,16 +655,15 @@ def get_compile_object_command(process):
 
 
 
-def generate_code_and_compile(graph, testing, mode, include=None, depend=None):
+def generate_code_and_compile(graph, opt):
     remove_files(graph, ".c")
-    generate_code(graph, ".c", testing, include)
+    generate_code(graph, ".c", opt.testing, opt.include)
     generate_inject_probe_code(graph, ".c")
-    generate_internal_triggers(graph, ".c", mode)
-    generate_testing_code(graph, testing, ".c")
+    generate_internal_triggers(graph, ".c", opt.desugar_mode)
+    generate_testing_code(graph, opt.testing, ".c")
 
-    extra = ""
-    if depend:
-        compile_object_file(depend)
+    if opt.depend:
+        compile_object_file(opt.depend)
 
     for process in graph.processes:
         cmd = get_compile_command(process)
@@ -663,8 +672,8 @@ def generate_code_and_compile(graph, testing, mode, include=None, depend=None):
             raise Exception("Compile error: " + cmd)
 
 
-def generate_code_and_run(graph, testing, mode, expect=None, include=None, depend=None):
-    generate_code_and_compile(graph, testing, mode, include, depend)
+def generate_code_and_run(graph, opt, expect=None):
+    generate_code_and_compile(graph, opt)
 
     if expect:
         assert (len(graph.processes) == 1 and graph.processes == set(["tmp"])), \
@@ -727,11 +736,11 @@ def compile_object_file(f):
         compile_object_file([si for si in s])
 
 
-def compile_and_run(name, depend):
-    compile_object_file(depend)
+def compile_and_run(name, opt):
+    compile_object_file(opt.depend)
 
     if isinstance(name, str):
-        cmd = get_compile_command(name, depend)
+        cmd = get_compile_command(name, opt.depend)
         print cmd
         status = os.system(cmd)
         if not status == 0:

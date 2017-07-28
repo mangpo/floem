@@ -96,8 +96,6 @@ run('run', process='app')
 
 c = Compiler()
 c.include = r'''
-#include <rte_memcpy.h>
-
 struct tuple {
   int		task, id;
 };
