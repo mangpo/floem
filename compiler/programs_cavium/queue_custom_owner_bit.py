@@ -42,7 +42,8 @@ class Display(Element):
         self.run_c(r'''
     (q_buffer buff) = inp();
     if(buff.entry) {
-        printf("t: %d %d\n", buff.entry->task, buff.entry->id);
+        struct tuple* t = (struct tuple*) buff.entry;
+        printf("t: %d %d\n", t->task, t->id);
     }
     output { out(buff); }
         ''')
