@@ -79,6 +79,9 @@ class Element:
         self.outports += [Port(name, []) for name in port_names]
         for name in port_names:
             self.output_code[name] = name + "()"
+        if self.output_code_cavium:
+            for name in port_names:
+                self.output_code_cavium[name] = name + "()"
 
     def add_empty_inports(self, port_names):
         self.inports += [Port(name, []) for name in port_names]

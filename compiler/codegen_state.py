@@ -228,16 +228,8 @@ int main() {
             print kernal_src
 
     src_cpu = "void init_state_instances(char *argv[]) {\n"
-    if len(shared) == 0:
-        src_cavium = "void init_state_instances() {\n"
-        src_cavium += "  int corenum = cvmx_get_core_num();\n"
-    else:
-        src_cavium = "void init_state_instances() {\n"
-        src_cavium += "  int corenum = cvmx_get_core_num();\n"
-
-        src_cavium += "  if(corenum == 0) {\n"
-        src_cavium += "    init_dma_global_locks();\n"
-        src_cavium += "  }\n"
+    src_cavium = "void init_state_instances() {\n"
+    src_cavium += "  int corenum = cvmx_get_core_num();\n"
 
     # Create shared memory
     if len(shared) > 0:

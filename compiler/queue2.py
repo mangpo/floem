@@ -312,13 +312,13 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
         uintptr_t addr = (uintptr_t) &q->data[old];
         %s* entry;
         int size = sizeof(%s);
-        dma_read(addr, size, (void**) &entry, &read_lock);
+        dma_read(addr, size, (void**) &entry);
         ''' % (type, type)
 
     wait_then_copy_cvm = r'''
-        while(entry->%s) dma_read_with_buf(addr, size, (void**) &entry, &read_lock);
+        while(entry->%s) dma_read_with_buf(addr, size, (void**) &entry);
         memcpy(entry, x, size);
-        dma_write(addr, size, entry, &write_lock);
+        dma_write(addr, size, entry);
         ''' % (owner)  # TODO: check if dma_write is atomic?
 
     wait_then_get = r'''
@@ -327,7 +327,7 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
     ''' % (owner, type_star)
 
     wait_then_get_cvm = r'''
-        while(entry->%s == 0) dma_read_with_buf(addr, size, (void**) &entry, &read_lock);
+        while(entry->%s == 0) dma_read_with_buf(addr, size, (void**) &entry);
         %s* x = entry;
         ''' % (owner, type)
 
@@ -411,7 +411,7 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
             noblock_noatom = "size_t old = p->offset;\n" + init_read_cvm + r'''
                 if(entry->%s == 0) {
                     memcpy(entry, x, size);
-                    dma_write(addr, size, entry, &write_lock);
+                    dma_write(addr, size, entry);
                     p->offset = (p->offset + 1) %s %d;
                 }
                 ''' % (owner, '%', size)
@@ -420,12 +420,12 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
                 while(entry->%s == 0) {
                     size_t new = (old + 1) %s %d;
                     if(__sync_bool_compare_and_swap(&p->offset, old, new)) {
-                        dma_write(addr, size, entry, &write_lock);
+                        dma_write(addr, size, entry);
                         break;
                     }
                     old = p->offset;
                     addr = (uintptr_t) &q->data[old];
-                    dma_read(addr, size, (void**) &entry, &read_lock);
+                    dma_read(addr, size, (void**) &entry);
                 }
                 ''' % (owner, '%', size)
 
@@ -526,7 +526,7 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
                 }
                 old = p->offset;
                 addr = (uintptr_t) &q->data[old];
-                dma_read(addr, size, (void**) &entry, &read_lock);
+                dma_read(addr, size, (void**) &entry);
             }
             if(!success) dma_free(entry);
             ''' % (type_star, owner, '%', size)
@@ -570,7 +570,7 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
             %s x = (%s) buff.entry;
             if(x) {
                 x->%s = 0;
-                dma_write(buff.addr, sizeof(%s), x, &write_lock);
+                dma_write(buff.addr, sizeof(%s), x);
                 dma_free(x);
             }
             ''' % (type_star, type_star, owner, type))

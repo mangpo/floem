@@ -44,9 +44,8 @@ class Add(Element):
 
 
 class Drop(Element):
-    def configure(self, data_type):
-        self.data_type = data_type
-        self.inp = Input(data_type)
+    def configure(self):
+        self.inp = Input()
 
     def impl(self):
         self.run_c("")

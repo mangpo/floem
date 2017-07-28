@@ -51,17 +51,17 @@ inline uint64_t nic_htonp(uint64_t x)
 }
 
 inline uint64_t nic_ntohp(uint64_t x) {
-  return nic_htonp(x);
+  return nic_htonp(x); 
 }
 
 
-CVMX_SHARED cvmx_spinlock_t dma_read_lock;
-CVMX_SHARED cvmx_spinlock_t dma_write_lock;
+/* CVMX_SHARED cvmx_spinlock_t dma_read_lock; */
+/* CVMX_SHARED cvmx_spinlock_t dma_write_lock; */
 
-void init_dma_global_locks() {
-  cvmx_spinlock_init(&dma_read_lock);
-  cvmx_spinlock_init(&dma_write_lock);
-}
+/* void init_dma_global_locks() { */
+/*   cvmx_spinlock_init(&dma_read_lock); */
+/*   cvmx_spinlock_init(&dma_write_lock); */
+/* } */
 
 int network_send(size_t len, uint8_t *pkt_ptr, int sending_port) {
   int pko_port, corenum, queue, ret;
@@ -172,7 +172,7 @@ int dma_read_with_buf(uintptr_t addr, size_t len, void **buf) {
   rptr.s.size = len;
   CVMX_SYNCWS;
 
-  cvmx_spinlock_lock(&dma_read_lock);
+  //cvmx_spinlock_lock(&dma_read_lock);
   if (octeon_has_feature(OCTEON_FEATURE_PKI))
     retval = cvm_pci_dma_recv_data_o3(&pci_cmd, (cvmx_buf_ptr_pki_t *)&lptr, &rptr);
   else
@@ -192,7 +192,7 @@ int dma_read_with_buf(uintptr_t addr, size_t len, void **buf) {
   //int* p = (int*) *buf;
   //printf("success: int = %d\n", *p);
  no_read_test:
-  cvmx_spinlock_unlock(&dma_read_lock);
+  //cvmx_spinlock_unlock(&dma_read_lock);
   return 0;
 }
 
@@ -248,11 +248,11 @@ int dma_write(uintptr_t addr, size_t len, void *buf) {
   lptr.u64 = 0;
   bls = (cvmx_buf_ptr_pki_t *)&lptr;
   bls->size = rptr.s.size;
-  cvmx_spinlock_lock(&dma_write_lock);
+  //cvmx_spinlock_lock(&dma_write_lock);
   bls->addr = CVM_DRV_GET_PHYS(buf);
   
   // Issue the command via OCTEON3 DMA engine
-  cvm_pci_dma_send_data_o3(&cmd, bls, &rptr, NULL, 1);
-  cvmx_spinlock_unlock(&dma_write_lock);
+  cvm_pci_dma_send_data_o3(&cmd, bls, &rptr, NULL, 0);
+  //cvmx_spinlock_unlock(&dma_write_lock);
   return 0;
 }
