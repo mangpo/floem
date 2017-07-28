@@ -1050,7 +1050,7 @@ class Compiler:
         return g
 
     def generate_code(self):
-        codegen.generate_code(self.generate_graph(), ".c", self.testing, self.include)
+        codegen.generate_code(self.generate_graph(), ".c", self.testing, self.include, opt.include_h)
 
     def generate_code_and_run(self, expect=None):
         codegen.generate_code_and_run(self.generate_graph(), self.testing, self.desugar_mode, expect, self.include, self.depend)

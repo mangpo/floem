@@ -95,20 +95,10 @@ nic_rx('nic_rx', device=target.CAVIUM, cores=range(4))
 run('run', process='app')
 
 c = Compiler()
-c.include = r'''
+c.include_h = r'''
 struct tuple {
   int		task, id;
 };
-
-struct tuple* random_count(size_t i) {
-  struct tuple* t = (struct tuple*) malloc(sizeof(struct tuple));
-  t->task = 10;
-  t->id = i;
-  return t;
-}
-'''
-c.testing = r'''
-sleep(10);
 '''
 c.generate_code_as_header()
 c.depend = ['app']

@@ -511,7 +511,7 @@ def generate_include(include, processes, ext):
                 print include
 
 
-def generate_code(graph, ext, testing=None, include=None):
+def generate_code(graph, ext, testing=None, include=None, include_h=None):
     """
     Display C code to stdout
     :param graph: data-flow graph
@@ -521,6 +521,7 @@ def generate_code(graph, ext, testing=None, include=None):
         generate_header_h(testing, graph)
     generate_header_c(testing, graph)
     if ext == '.h':
+        generate_include(include_h, graph.processes, '.h')
         generate_include(include, graph.processes, '.h')
     generate_include(include, graph.processes, '.c')
 
@@ -609,7 +610,7 @@ class CompilerOption(object):
 
 def generate_code_only(graph, opt):
     remove_files(graph, ".c")
-    generate_code(graph, ".c", opt.testing, opt.include)
+    generate_code(graph, ".c", opt.testing, opt.include, opt.include_h)
     generate_inject_probe_code(graph, ".c")
     generate_internal_triggers(graph, ".c", opt.desugar_mode)
 
@@ -617,7 +618,7 @@ def generate_code_as_header(graph, opt):
     remove_files(graph, ".h")
     remove_files(graph, ".c")
     define_header(graph)
-    generate_code(graph, ".h", opt.testing, opt.include)
+    generate_code(graph, ".h", opt.testing, opt.include, opt.include_h)
     generate_inject_probe_code(graph, ".h")
     generate_internal_triggers(graph, ".h", opt.desugar_mode)
     end_header(graph)
@@ -657,7 +658,7 @@ def get_compile_object_command(process):
 
 def generate_code_and_compile(graph, opt):
     remove_files(graph, ".c")
-    generate_code(graph, ".c", opt.testing, opt.include)
+    generate_code(graph, ".c", opt.testing, opt.include, opt.include_h)
     generate_inject_probe_code(graph, ".c")
     generate_internal_triggers(graph, ".c", opt.desugar_mode)
     generate_testing_code(graph, opt.testing, ".c")
