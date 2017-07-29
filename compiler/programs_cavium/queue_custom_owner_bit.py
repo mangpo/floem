@@ -19,7 +19,7 @@ class MakeTuple(Element):
     static int count = 0;
     struct tuple* t = (struct tuple*) malloc(sizeof(struct tuple));
     t->id = count;
-    t->task = count;
+    t->task = 1;
     __sync_fetch_and_add(&count, 1);
     output { out(t, 0); }
         ''')
@@ -43,7 +43,7 @@ class Display(Element):
     (q_buffer buff) = inp();
     if(buff.entry) {
         struct tuple* t = (struct tuple*) buff.entry;
-        printf("t: %d %d\n", t->task, t->id);
+        printf("t: %d %d\n", htonl(t->task), htonl(t->id));
     }
     output { out(buff); }
         ''')

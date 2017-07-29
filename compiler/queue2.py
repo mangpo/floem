@@ -420,6 +420,7 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
                 while(entry->%s == 0) {
                     size_t new = (old + 1) %s %d;
                     if(__sync_bool_compare_and_swap(&p->offset, old, new)) {
+                        memcpy(entry, x, size);
                         dma_write(addr, size, entry);
                         break;
                     }
