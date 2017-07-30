@@ -1,7 +1,8 @@
 #ifndef LINUX_HUGEPAGE_H
 #define LINUX_HUGEPAGE_H
 
-#define _LARGEFILE64_SOURCE
+//#define _LARGEFILE64_SOURCE
+//#include <sys/types.h>
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
@@ -11,8 +12,6 @@
 #include <inttypes.h>
 #include <stdint.h>
 #include <stdbool.h>
-
-#include <linux_hugepage.h>
 
 #define HUGE_PGSIZE (2 * 1024 * 1024)
 

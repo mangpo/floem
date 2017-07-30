@@ -1,6 +1,7 @@
 #ifndef SHM_H
 #define SHM_H
 
+#include <linux_hugepage.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -11,7 +12,6 @@
 #include <sys/mman.h>
 #include <fcntl.h>
 #include <errno.h>
-#include <linux_hugepage.h>
 
 /* create and map a shared memory region, returns address */
 static void *util_create_shmsiszed(const char *name, size_t size)
