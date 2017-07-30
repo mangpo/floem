@@ -11,6 +11,7 @@
 #include <sys/mman.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <linux_hugepage.h>
 
 /* create and map a shared memory region, returns address */
 static void *util_create_shmsiszed(const char *name, size_t size)
@@ -68,6 +69,19 @@ static void *util_map_shm(const char *name, size_t size)
   return p;
 }
 
+static void* util_map_dma() {
+    void* virt;
+    uint64_t phys;
+    size_t size;
+    bool s;
+    s = huge_alloc_phys(&virt, &phys, &size);
+    if(!s) exit(1);
+    printf("physical address = %p, size = %ld\n", (void*) phys, size);
+    printf("logical address = %p\n", virt);
+    return virt;
+}
+
+/*
 #define UIO_DEV "/dev/uio0"  
 #define UIO_ADDR "/sys/class/uio/uio0/maps/map0/addr"  
 #define UIO_SIZE "/sys/class/uio/uio0/maps/map0/size"  
@@ -81,7 +95,7 @@ static void* util_map_dma()
     int uio_size;  
     void* uio_addr, *access_address;  
 
-    uio_fd = open(UIO_DEV, /*O_RDONLY*/O_RDWR);  
+    uio_fd = open(UIO_DEV, O_RDWR);
     addr_fd = open(UIO_ADDR, O_RDONLY);  
     size_fd = open(UIO_SIZE, O_RDONLY);  
     if( addr_fd < 0 || size_fd < 0 || uio_fd < 0) {  
@@ -111,6 +125,7 @@ static void util_unmap_dma() {
     close(addr_fd);
     close(size_fd);
 }
+*/
 
 
 #endif
