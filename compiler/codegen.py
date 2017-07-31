@@ -453,7 +453,7 @@ def get_element_port_avail(func, port):
     return "_%s_%s_avail" % (func, port)
 
 
-def generate_header_h(testing, graph):
+def generate_header_h(graph):
     for process in graph.processes:
         device = graph.process2device[process]
         if device == target.CPU:
@@ -461,7 +461,7 @@ def generate_header_h(testing, graph):
             for file in target.cpu_include_h:
                 src += "#include %s\n" % file
 
-            if target.dpdk in graph.processes:
+            if target.dpdk in graph.processes or target.CAVIUM in graph.processes:
                 for file in target.dpdk_driver_header:
                     src += "#include %s\n" % file
 
@@ -483,7 +483,7 @@ def generate_header_c(testing, graph):
             for file in target.cpu_include_c:
                 src += "#include %s\n" % file
 
-            if target.dpdk in graph.processes:
+            if target.dpdk in graph.processes or target.CAVIUM in graph.processes:
                 for file in target.dpdk_driver_header:
                     src += "#include %s\n" % file
 
@@ -518,7 +518,7 @@ def generate_code(graph, ext, testing=None, include=None, include_h=None, init=N
     """
 
     if ext == '.h':
-        generate_header_h(testing, graph)
+        generate_header_h(graph)
     generate_header_c(testing, graph)
     if ext == '.h':
         generate_include(include_h, graph.processes, '.h')
