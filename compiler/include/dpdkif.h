@@ -16,7 +16,7 @@
 
 typedef rte_spinlock_t spinlock_t;
 
-#define spinlock_init(x) rte_spinlock_init(x, NULL)
+#define spinlock_init(x) rte_spinlock_init(x)
 #define spinlock_lock(x) rte_spinlock_lock(x)
 #define spinlock_unlock(x) rte_spinlock_unlock(x)
 

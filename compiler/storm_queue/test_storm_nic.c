@@ -13,12 +13,12 @@ int main(int argc, char *argv[]) {
     //init_task2executor(executor);
 
     init(argv);
+    run_threads();
     while(1) dccp_print_stat();
 /*
     DccpInfo* info = get_dccp_stat();
 
     size_t lasttuples = 0, tuples;
-    run_threads();
     while(1) {
         sleep(1);
         __sync_synchronize();
