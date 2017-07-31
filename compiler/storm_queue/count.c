@@ -79,7 +79,7 @@ void count_execute(const struct tuple *t, struct executor *self)
 
  /* before_time = 0, hash_time = 0, lookup_time = 0, insert_time = 0; */
 
-  uint64_t starttime = rdtsc();
+  uint64_t starttime = rdtsc(); // TODO: cavium
 
   numexecutes++;
 #endif

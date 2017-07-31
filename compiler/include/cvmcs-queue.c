@@ -23,18 +23,6 @@
 #include "cvmcs-dma.h"
 #include "cvmcs-queue.h"
 
-inline void qlock_init(lock_t* lock) {
-  cvmx_spinlock_init(lock);
-}
-
-inline void qlock_lock(lock_t* lock) {
-  cvmx_spinlock_lock(lock);
-}
-
-inline void qlock_unlock(lock_t* lock) {
-  cvmx_spinlock_unlock(lock);
-}
-
 q_buffer enqueue_alloc(circular_queue* q, size_t len) {
     printf("enq: queue = %p\n", q->queue);
     uint16_t flags, elen;

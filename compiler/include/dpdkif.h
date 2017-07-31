@@ -14,6 +14,15 @@
 #include <rte_mempool.h>
 #include <rte_mbuf.h>
 
+typedef rte_spinlock_t spinlock_t;
+
+#define spinlock_init(x) rte_spinlock_init(x, NULL)
+#define spinlock_lock(x) rte_spinlock_lock(x)
+#define spinlock_unlock(x) rte_spinlock_unlock(x)
+
+#define __sync_fetch_and_add32(ptr, inc) __sync_fetch_and_add(ptr, inc)
+#define __sync_fetch_and_add64(ptr, inc) __sync_fetch_and_add(ptr, inc)
+
 /* these are non-static on purpose! */
 uint8_t dpdk_port_id;
 uint8_t dpdk_thread_num;

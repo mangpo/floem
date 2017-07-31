@@ -19,6 +19,7 @@ class Compiler:
         self.include_h = None
         self.testing = None
         self.depend = None
+        self.init = None
 
         # Compiler option
         self.pipelines = pipelines
@@ -73,7 +74,8 @@ class Compiler:
         return original
 
     def get_compiler_option(self):
-        return codegen.CompilerOption(self.desugar_mode, self.include, self.include_h, self.testing, self.depend)
+        return codegen.CompilerOption(self.desugar_mode, self.include, self.include_h,
+                                      self.testing, self.depend, self.init)
 
     def generate_code(self):
         codegen.generate_code_only(self.generate_graph(), self.get_compiler_option())

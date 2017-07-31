@@ -511,7 +511,7 @@ def generate_include(include, processes, ext):
                 print include
 
 
-def generate_code(graph, ext, testing=None, include=None, include_h=None):
+def generate_code(graph, ext, testing=None, include=None, include_h=None, init=None):
     """
     Display C code to stdout
     :param graph: data-flow graph
@@ -601,25 +601,26 @@ def remove_files(graph, ext):
         os.system("rm " + name)
 
 class CompilerOption(object):
-    def __init__(self, mode, include, include_h, testing, depend):
+    def __init__(self, mode, include, include_h, testing, depend, init):
         self.desugar_mode = mode
         self.include = include
         self.include_h = include_h
         self.testing = testing
         self.depend = depend
+        self.init = init
 
 def generate_code_only(graph, opt):
     remove_files(graph, ".c")
-    generate_code(graph, ".c", opt.testing, opt.include, opt.include_h)
-    generate_inject_probe_code(graph, ".c")
+    generate_code(graph, ".c", opt.testing, opt.include, opt.include_h, opt.init)
+    generate_inject_probe_code(graph, ".c", opt.init)
     generate_internal_triggers(graph, ".c", opt.desugar_mode)
 
 def generate_code_as_header(graph, opt):
     remove_files(graph, ".h")
     remove_files(graph, ".c")
     define_header(graph)
-    generate_code(graph, ".h", opt.testing, opt.include, opt.include_h)
-    generate_inject_probe_code(graph, ".h")
+    generate_code(graph, ".h", opt.testing, opt.include, opt.include_h, opt.init)
+    generate_inject_probe_code(graph, ".h", opt.init)
     generate_internal_triggers(graph, ".h", opt.desugar_mode)
     end_header(graph)
 
@@ -654,12 +655,10 @@ def get_compile_object_command(process):
           (compilerdir, target.dpdk_include, L, process, dpdk_libs)
     return cmd
 
-
-
 def generate_code_and_compile(graph, opt):
     remove_files(graph, ".c")
-    generate_code(graph, ".c", opt.testing, opt.include, opt.include_h)
-    generate_inject_probe_code(graph, ".c")
+    generate_code(graph, ".c", opt.testing, opt.include, opt.include_h, opt.init)
+    generate_inject_probe_code(graph, ".c", opt.init)
     generate_internal_triggers(graph, ".c", opt.desugar_mode)
     generate_testing_code(graph, opt.testing, ".c")
 

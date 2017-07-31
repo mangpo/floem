@@ -11,6 +11,35 @@
 #define TYPE_MASK  0xFF00
 
 typedef cvmx_spinlock_t lock_t;
+#define qlock_init(x) cvmx_spinlock_init(x)
+#define qlock_lock(x) cvmx_spinlock_lock(x)
+#define qlock_unlock(x) cvmx_spinlock_unlock(x)
+
+typedef cvmx_spinlock_t spin_lock_t;
+#define spinlock_init(x) cvmx_spinlock_init(x)
+#define spinlock_lock(x) cvmx_spinlock_lock(x)
+#define spinlock_unlock(x) cvmx_spinlock_unlock(x)
+
+#define __sync_fetch_and_add32(ptr, inc) cvmx_atomic_fetch_and_add32(ptr, inc)
+#define __sync_fetch_and_add64(ptr, inc) cvmx_atomic_fetch_and_add64(ptr, inc)
+
+/* Functions to measure time using core clock in nanoseconds */
+unsigned long long core_time_now_ns(void)
+{
+        unsigned long long t;
+        t = cvmx_clock_get_count(CVMX_CLOCK_CORE);
+        t = 1000000000ULL * t / cvmx_clock_get_rate(CVMX_CLOCK_CORE);
+	return t;
+}
+
+/* Functions to measure time using core clock in microseconds */
+uint64_t core_time_now_us(void)
+{
+        unsigned long long t;
+        t = cvmx_clock_get_count(CVMX_CLOCK_CORE);
+        t = 1000000ULL * t / cvmx_clock_get_rate(CVMX_CLOCK_CORE);
+	return t;
+}
 
 typedef struct {
     size_t len;
@@ -49,11 +78,6 @@ typedef struct {
     q_entry* entry;
     uintptr_t addr;
 } q_buffer;
-
-
-inline void qlock_init(lock_t* lock);
-inline void qlock_lock(lock_t* lock);
-inline void qlock_unlock(lock_t* lock);
 
 q_buffer enqueue_alloc(circular_queue* q, size_t len);
 void enqueue_submit(q_buffer buf);

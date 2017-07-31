@@ -419,7 +419,7 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
             noblock_atom = "size_t old = p->offset;\n" + init_read_cvm + r'''
                 while(entry->%s == 0) {
                     size_t new = (old + 1) %s %d;
-                    if(__sync_bool_compare_and_swap(&p->offset, old, new)) {
+                    if(cvmx_atomic_compare_and_store64(&p->offset, old, new)) {
                         memcpy(entry, x, size);
                         dma_write(addr, size, entry);
                         break;

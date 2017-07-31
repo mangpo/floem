@@ -73,9 +73,9 @@ class GetCore(Element):
     def impl(self):
         self.run_c(r'''
     struct tuple* t = inp();
-    int id = this->task2executorid[t->task];
+    int id = this->task2executorid[nic_htonl(t->task)];
 #ifdef DEBUG_MP
-    printf("\nreceive: task %d, id %d\n", t->task, id);
+    printf("\nreceive: task %d, id %d\n", nic_htonl(t->task), id);
 #endif
     output { out(t, id); }
         ''')
@@ -96,7 +96,7 @@ class LocalOrRemote(Element):
     bool local;
     if(t != NULL) {
         local = (state.worker == state.myworker);
-        if(local && t->task == 30) printf("30: send to myself!\n");
+        if(local && nic_htonl(t->task) == 30) printf("30: send to myself!\n");
 #ifdef DEBUG_MP
         if(local) printf("send to myself!\n");
 #endif
@@ -116,8 +116,8 @@ class PrintTuple(Element):
 
 #ifdef DEBUG_MP
     if(t != NULL) {
-        printf("TUPLE[0] -- task = %d, fromtask = %d, str = %s, integer = %d\n", t->task, t->fromtask, t->v[0].str, t->v[0].integer);
-        //printf("TUPLE[1] -- task = %d, fromtask = %d, str = %s, integer = %d\n", t->task, t->fromtask, t->v[1].str, t->v[1].integer);
+        printf("TUPLE[0] -- task = %d, fromtask = %d, str = %s, integer = %d\n", nic_htonl(t->task), nic_htonl(t->fromtask), t->v[0].str, t->v[0].integer);
+        //printf("TUPLE[1] -- task = %d, fromtask = %d, str = %s, integer = %d\n", nic_htonl(t->task), nic_htonl(t->fromtask), t->v[1].str, t->v[1].integer);
         fflush(stdout);
     }
 #endif
@@ -132,7 +132,7 @@ class DccpInfo(State):
     connections = Field(Array("struct connection", n_workers))
     retrans_timeout = Field(Uint(64))
     link_rtt = Field(Uint(64))
-    global_lock = Field("rte_spinlock_t")
+    global_lock = Field("spinlock_t")
     acks_sent = Field(Size)
     tuples = Field(Size)
 
@@ -141,7 +141,7 @@ class DccpInfo(State):
         self.connections = lambda(x): "init_congestion_control({0})".format(x)
         self.retrans_timeout = "LINK_RTT"
         self.link_rtt = "LINK_RTT"
-        self.global_lock = lambda(x): "rte_spinlock_init(&{0})".format(x)
+        self.global_lock = lambda(x): "spinlock_init(&{0})".format(x)
         self.acks_sent = 0
         self.tuples = 0
 
@@ -162,6 +162,34 @@ class DccpGetStat(Element):
         output { out(dccp); }''')
 
 
+class DccpPrintStat(Element):
+    info = Persistent(DccpInfo)
+
+    def states(self):
+        self.dccp = dccp_info
+
+    def impl(self):
+        self.run_c(r'''
+#ifndef CAVIUM
+        sleep(1);
+#else
+        __cvmx_wait_usec_internal__(1000000);
+#endif
+        static size_t lasttuples = 0;
+        size_t tuples;
+        __sync_synchronize();
+	    struct connection* connections = info->connections;
+        /* for(int i = 0; i < MAX_WORKERS; i++) { */
+        /*     printf("pipe,cwnd,acks,lastack[%d] = %u, %u, %zu, %d\n", i, */
+        /*     connections[i].pipe, connections[i].cwnd, connections[i].acks, connections[i].lastack); */
+        /* } */
+        tuples = info->tuples - lasttuples;
+        lasttuples = info->tuples;
+        printf("acks sent %zu, rtt %" PRIu64 "\n", info->acks_sent, info->link_rtt);
+        printf("Tuples/s: %zu, Gbits/s: %.2f\n\n",
+           tuples, (tuples * sizeof(struct tuple) * 8) / 1000000000.0);
+        ''')
+
 class DccpCheckCongestion(Element):
     dccp = Persistent(DccpInfo)
 
@@ -177,7 +205,11 @@ class DccpCheckCongestion(Element):
         self.run_c(r'''
         (int worker) = inp();
 
+#ifndef CAVIUM
         if(rdtsc() >= dccp->retrans_timeout) {
+#else
+        if(core_time_now_us() >= dccp->retrans_timeout) {
+#endif
             dccp->connections[worker].pipe = 0;
             __sync_fetch_and_add(&dccp->link_rtt, dccp->link_rtt);
         }
@@ -202,8 +234,12 @@ class DccpSeqTime(Element):
         self.run_c(r'''
         (void* p, int worker) = inp();
         struct pkt_dccp_headers* header = p;
-        rte_spinlock_lock(&dccp->global_lock);
+        spinlock_lock(&dccp->global_lock);
+#ifndef CAVIUM
         dccp->retrans_timeout = rdtsc() + dccp->link_rtt * PROC_FREQ_MHZ;
+#else
+        dccp->retrans_timeout = core_time_now_us() + dccp->link_rtt;
+#endif
         dccp->link_rtt = LINK_RTT;
         uint32_t seq = __sync_fetch_and_add(&dccp->connections[worker].seq, 1);
         header->dccp.seq_high = seq >> 16;
@@ -211,9 +247,9 @@ class DccpSeqTime(Element):
 #ifdef DEBUG_DCCP
         printf("Send to worker %d: seq = %x, seq_high = %x, seq_low = %x\n", worker, seq, header->dccp.seq_high, header->dccp.seq_low);
 #endif
-        rte_spinlock_unlock(&dccp->global_lock);
+        spinlock_unlock(&dccp->global_lock);
 
-        __sync_fetch_and_add(&dccp->connections[worker].pipe, 1);
+        __sync_fetch_and_add32(&dccp->connections[worker].pipe, 1);
         output { out(p); }
         ''')
 
@@ -278,7 +314,11 @@ class DccpRecvAck(Element):
 	  }
 
 	  // Reset RTO
-	  dccp->retrans_timeout = rdtsc() + dccp->link_rtt * PROC_FREQ_MHZ;
+#ifndef CAVIUM
+    dccp->retrans_timeout = rdtsc() + dccp->link_rtt * PROC_FREQ_MHZ;
+#else
+    dccp->retrans_timeout = core_time_now_us() + dccp->link_rtt;
+#endif
 	  dccp->link_rtt = LINK_RTT;
 	}
 
@@ -327,8 +367,8 @@ class SaveWorkerID(Element):
     def impl(self):
         self.run_c(r'''
         (struct tuple* t) = inp();
-        state.worker = this->task2worker[t->task];
-        state.myworker = this->task2worker[t->fromtask];
+        state.worker = this->task2worker[nic_htonl(t->task)];
+        state.myworker = this->task2worker[nic_htonl(t->fromtask)];
         output { out(t); }
         ''')
 
@@ -376,7 +416,7 @@ class Tuple2Pkt(Element):
         header->eth.dest = workers[state.worker].mac;
         header->eth.src = workers[state.myworker].mac;
         
-        //printf("PREPARE PKT: task = %d, worker = %d\n", t->task, state.worker);
+        //printf("PREPARE PKT: task = %d, worker = %d\n", nic_hotnl(t->task), state.worker);
         output { out(p); }
         ''')
 
@@ -394,7 +434,7 @@ class Pkt2Tuple(Element):
         self.run_c(r'''
         (struct pkt_dccp_headers* p) = inp();
         struct tuple* t= (struct tuple*) &p[1];
-        __sync_fetch_and_add(&dccp->tuples, 1);
+        __sync_fetch_and_add64(&dccp->tuples, 1);
         output { out(t); }
         ''')
 
@@ -502,17 +542,29 @@ class BatchScheduler(Element):
         core = (core_id * n_cores)/%d;
         while(this->executors[core].execute == NULL){
             core = (core + 1) %s n_cores;
+#ifndef CAVIUM
             start = rdtsc();
+#else
+            state = core_time_now_us();
+#endif
         } 
     }
 
-    if(batch_size >= BATCH_SIZE || rdtsc() - start >= BATCH_DELAY) {
+#ifndef CAVIUM
+    if(batch_size >= BATCH_SIZE || rdtsc() - start >= BATCH_DELAY * PROC_FREQ_MHZ) {
+#else
+    if(batch_size >= BATCH_SIZE || core_time_now_us() - start >= BATCH_DELAY) {
+#endif
         do {
             core = (core + 1) %s n_cores;
         } while(this->executors[core].execute == NULL);
         batch_size = 0;
         //printf("======================= Dequeue core = %s, thread = %s\n", core, core_id);
+#idndef CAVIUM
         start = rdtsc();
+#else
+        start = core_time_now_us();
+#endif
     }
 
     batch_size++;
@@ -683,13 +735,6 @@ class outqueue_put(API):
 
     def impl(self): self.inp >> tx_enq_creator()
 
-class get_dccp_stat(API):
-    def configure(self):
-        self.inp = Input()
-        self.out = Output(Pointer(DccpInfo))
-
-    def impl(self): self.inp >> DccpGetStat() >> self.out
-
 class TxState(State):
     worker = Field(Int)
     myworker = Field(Int)
@@ -759,12 +804,29 @@ class NicTxPipeline(Pipeline):
         nic_tx('nic_tx', process='dpdk', cores=range(n_nic_tx))
         # nic_tx('nic_tx', device=target.CAVIUM, cores=[4,5,6,7])
 
-get_dccp_stat('get_dccp_stat', process='dpdk')
+
+class get_dccp_stat(API):
+    def configure(self):
+        self.inp = Input()
+        self.out = Output(Pointer(DccpInfo))
+
+    def impl(self): self.inp >> DccpGetStat() >> self.out
+
+#class dccp_print_stat(InternalLoop):
+class dccp_print_stat(API):
+    def impl(self):
+        DccpPrintStat()
+
+#get_dccp_stat('get_dccp_stat', process='dpdk')
+dccp_print_stat('dccp_print_stat', process='dpdk')
+#dccp_print_stat('dccp_print_stat', device=target.CAVIUM, cores=[8])
 
 inqueue_get('inqueue_get', process='app')
 inqueue_advance('inqueue_advance', process='app')
 outqueue_put('outqueue_put', process='app')
 master_process('app')
+
+
 
 c = Compiler(NicRxPipeline, NicTxPipeline)
 c.include = r'''
@@ -773,8 +835,12 @@ c.include = r'''
 #include "storm.h"
 #include "dccp.h"
 '''
+c.init = r'''
+int workerid = atoi(argv[1]);
+executor = workers[workerid].executors;
+init_task2executor(executor);
+'''
 c.generate_code_as_header()
 c.depend = {"test_storm_nic": ['hash', 'worker', 'dummy', 'dpdk'],
             "test_storm_app": ['list', 'hash', 'hash_table', 'spout', 'count', 'rank', 'worker', 'app']}
 c.compile_and_run([("test_storm_app", workerid[test]), ("test_storm_nic", workerid[test])])
-

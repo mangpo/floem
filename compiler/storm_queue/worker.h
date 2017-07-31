@@ -423,15 +423,15 @@ struct tuple* random_count(size_t i);
 struct tuple* random_rank(size_t i);
 
 #if defined(BIGFISH) || defined(BIGFISH_FLEXNIC) || defined(SAMPA)
-#	define PROC_FREQ	1600000.0	// bigfish
+#	define PROC_FREQ	1600000.0	// bigfish (Khz)
 #else
-#	define PROC_FREQ	2200000.0	// swingout
+#	define PROC_FREQ	2200000.0	// swingout (Khz)
 #endif
 
 #define PROC_FREQ_MHZ	(uint64_t)(PROC_FREQ / 1000)
 
 #define BATCH_SIZE	64			// in tuples
-#define BATCH_DELAY	(2 * PROC_FREQ)		// (2 * PROC_FREQ) in cycles
-#define LINK_RTT	(130)			// in us
+#define BATCH_DELAY	2000		// in us = (2000 * PROC_FREQ_MHZ) in cycles
+#define LINK_RTT	(130)		// in us
 
 #endif

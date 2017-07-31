@@ -77,7 +77,7 @@ int main(int argc, char *argv[]) {
     assert(argc > 1);
     int workerid = atoi(argv[1]);
     executor = workers[workerid].executors;
-    init_task2executor(executor);
+    //init_task2executor(executor);
 
     init(argv);
     printf("main: workerid = %d\n", workerid);

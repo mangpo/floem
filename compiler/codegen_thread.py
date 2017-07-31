@@ -275,7 +275,7 @@ def dpdk_init_call(graph, process):
 
     return "  dpdk_init(argv, %d, %d);\n" % (num_threads, num_rx)
 
-def generate_inject_probe_code_with_process(graph, process, ext):
+def generate_inject_probe_code_with_process(graph, process, ext, init_code):
     injects = graph.inject_populates
     probes = graph.probe_compares
     src = ""
@@ -300,7 +300,8 @@ def generate_inject_probe_code_with_process(graph, process, ext):
         inject_src = ""
         probe_src = ""
 
-    src += "void init(char *argv[]) {\n" if graph.process2device[process] == target.CPU else "void init() {\n"
+    src += "void init(char *argv[]) {\n" #if graph.process2device[process] == target.CPU else "void init() {\n"
+    src += init_code
     if target.is_dpdk_proc(process):
         src += dpdk_init_call(graph, process)
     #src += "  init_memory_regions();\n"
@@ -316,16 +317,16 @@ def generate_inject_probe_code_with_process(graph, process, ext):
 
     if ext == '.h':
         with open(process + '.h', 'a') as f, redirect_stdout(f):
-            print "void init(char *argv[]);" if graph.process2device[process] == target.CPU else "void init();\n"
+            print "void init(char *argv[]);" #if graph.process2device[process] == target.CPU else "void init();\n"
             print "void finalize_and_check();"
 
     with open(process + '.c', 'a') as f, redirect_stdout(f):
         print src
 
 
-def generate_inject_probe_code(graph, ext):
+def generate_inject_probe_code(graph, ext, init):
     for process in graph.processes:
-        generate_inject_probe_code_with_process(graph, process, ext)
+        generate_inject_probe_code_with_process(graph, process, ext, init)
 
 
 def generate_testing_code(graph, code, ext):
