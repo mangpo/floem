@@ -363,12 +363,13 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
                 size_t old = p->offset;
                 if(q->data[old].%s == 0) {
                     %s
+            //printf("enqueue[%s]: offset = %s\n", c, p->offset);
                     p->offset = (p->offset + 1) %s %d;
                 }
 #ifdef QUEUE_STAT
                 else __sync_fetch_and_add(&drop, 1);
 #endif
-                ''' % (owner, copy, '%', size)
+                ''' % (owner, copy, '%d', '%ld','%', size)
 
             noblock_atom = stat + r'''
     __sync_synchronize();
@@ -379,6 +380,7 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
         if(__sync_bool_compare_and_swap(&p->offset, old, new)) {
             %s
             success = true;
+            printf("enqueue[%s]: offset = %s\n", c, old);
             break;
         }
         old = p->offset;
@@ -387,7 +389,7 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
 #ifdef QUEUE_STAT
     if(!success) __sync_fetch_and_add(&drop, 1);
 #endif
-                            ''' % (owner, '%', size, copy)
+                            ''' % (owner, '%', size, copy, '%d', '%ld')
 
             block_noatom = "size_t old = p->offset;\n" + wait_then_copy + inc_offset
 
@@ -475,12 +477,13 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
                 size_t new = (old + 1) %s %d;
                 if(__sync_bool_compare_and_swap(&p->offset, old, new)) {
                     x = &q->data[old];
+                    //printf("dequeue[%s]: got entry offset = %s.\n", c, old);
                     break;
                 }
                 old = p->offset;
                 __sync_synchronize();
             }
-            ''' % (type_star, owner, '%', size)
+            ''' % (type_star, owner, '%', size, '%d', '%ld')
 
             block_noatom = "size_t old = p->offset;\n" + wait_then_get + inc_offset
 

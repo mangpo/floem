@@ -755,7 +755,7 @@ def compile_and_run(name, opt):
         for f in name:
             if isinstance(f, tuple):
                 f = f[0]
-            cmd = get_compile_command(f, depend[f])
+            cmd = get_compile_command(f, opt.depend[f])
             print cmd
             status = os.system(cmd)
             if not status == 0:

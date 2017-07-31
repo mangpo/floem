@@ -8,7 +8,7 @@ workerid = {"spout": 0, "count": 1, "rank": 2}
 
 n_cores = 7
 n_workers = 2
-n_nic_tx = 4
+n_nic_tx = 1
 
 class Classifier(Element):
     def configure(self):
@@ -166,7 +166,7 @@ class DccpPrintStat(Element):
     info = Persistent(DccpInfo)
 
     def states(self):
-        self.dccp = dccp_info
+        self.info = dccp_info
 
     def impl(self):
         self.run_c(r'''
@@ -178,7 +178,7 @@ class DccpPrintStat(Element):
         static size_t lasttuples = 0;
         size_t tuples;
         __sync_synchronize();
-	    struct connection* connections = info->connections;
+	struct connection* connections = info->connections;
         /* for(int i = 0; i < MAX_WORKERS; i++) { */
         /*     printf("pipe,cwnd,acks,lastack[%d] = %u, %u, %zu, %d\n", i, */
         /*     connections[i].pipe, connections[i].cwnd, connections[i].acks, connections[i].lastack); */
@@ -545,7 +545,7 @@ class BatchScheduler(Element):
 #ifndef CAVIUM
             start = rdtsc();
 #else
-            state = core_time_now_us();
+            start = core_time_now_us();
 #endif
         } 
     }
@@ -560,7 +560,7 @@ class BatchScheduler(Element):
         } while(this->executors[core].execute == NULL);
         batch_size = 0;
         //printf("======================= Dequeue core = %s, thread = %s\n", core, core_id);
-#idndef CAVIUM
+#ifndef CAVIUM
         start = rdtsc();
 #else
         start = core_time_now_us();
@@ -837,8 +837,7 @@ c.include = r'''
 '''
 c.init = r'''
 int workerid = atoi(argv[1]);
-executor = workers[workerid].executors;
-init_task2executor(executor);
+init_task2executor(workers[workerid].executors);
 '''
 c.generate_code_as_header()
 c.depend = {"test_storm_nic": ['hash', 'worker', 'dummy', 'dpdk'],
