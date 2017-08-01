@@ -105,39 +105,13 @@ struct pkt_dccp_ack_headers {
 } __attribute__ ((packed));
 
 struct connection {
-  uint32_t cwnd, pipe;
-  uint32_t seq;
+  int32_t cwnd, pipe;
+  int32_t seq;
   int32_t lastack;
   size_t acks;
 } __attribute__ ((aligned (64)));
 
-
-static void init_header_template(struct pkt_dccp_headers *p) {
-    //memcpy(&p->eth.src, l2fwd_ports_eth_addr[0].addr_bytes, ETHARP_HWADDR_LEN);
-    p->eth.type = htons(ETHTYPE_IP);
-
-    // Initialize IP header
-    p->ip._v_hl = 69;
-    p->ip._tos = 0;
-    p->ip._id = htons(3);
-    p->ip._offset = 0;
-    p->ip._ttl = 0xff;
-    p->ip._proto = IP_PROTO_DCCP;
-    p->ip._chksum = 0;
-    //p->ip.src.addr = 0; // arranet_myip
-    p->ip._len = htons(sizeof(struct tuple) + sizeof(struct dccp_hdr) + IP_HLEN);
-
-    p->dccp.data_offset = 3;
-    p->dccp.res_type_x = DCCP_TYPE_DATA << 1;
-    p->dccp.ccval_cscov = 1;
-}
-
-static void init_congestion_control(struct connection* connections) {
-  for(int i = 0; i < MAX_WORKERS; i++) {
-    connections[i].cwnd = 4;
-    connections[i].acks = 0;
-    connections[i].lastack = 0;
-  }
-}
+void init_header_template(struct pkt_dccp_headers *p);
+void init_congestion_control(struct connection* connections);
 
 #endif

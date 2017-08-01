@@ -11,8 +11,13 @@ Size = 'size_t'
 Void = 'void'
 Uintptr = 'uintptr_t'
 
+
 def Uint(bits):
     return 'uint%d_t' % bits
+
+
+def Sint(bits):
+    return 'int%d_t' % bits
 
 
 def Pointer(x):

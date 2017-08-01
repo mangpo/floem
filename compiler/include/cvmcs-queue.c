@@ -23,6 +23,26 @@
 #include "cvmcs-dma.h"
 #include "cvmcs-queue.h"
 
+
+/* Functions to measure time using core clock in nanoseconds */
+unsigned long long core_time_now_ns()
+{
+        unsigned long long t;
+        t = cvmx_clock_get_count(CVMX_CLOCK_CORE);
+        t = 1000000000ULL * t / cvmx_clock_get_rate(CVMX_CLOCK_CORE);
+	return t;
+}
+
+/* Functions to measure time using core clock in microseconds */
+uint64_t core_time_now_us()
+{
+        unsigned long long t;
+        t = cvmx_clock_get_count(CVMX_CLOCK_CORE);
+        t = 1000000ULL * t / cvmx_clock_get_rate(CVMX_CLOCK_CORE);
+	return t;
+}
+
+
 q_buffer enqueue_alloc(circular_queue* q, size_t len) {
     printf("enq: queue = %p\n", q->queue);
     uint16_t flags, elen;

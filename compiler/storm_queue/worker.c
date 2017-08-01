@@ -1,42 +1,6 @@
-#include <stdio.h>
 #include "worker.h"
-
-struct executor *task2executor[MAX_TASKS];
-int task2executorid[MAX_TASKS];
-int task2worker[MAX_TASKS];
-struct executor *my_executors;
-
-void init_task2executor(struct executor *executor) {
-  my_executors = executor;
-
-  for(int i = 0; i < MAX_TASKS; i++) {
-    task2executorid[i] = -1;
-    task2worker[i] = -1;
-  }
-  for(int i = 0; i < MAX_EXECUTORS && executor[i].execute != NULL; i++) {
-    printf("init: executor[%d] = %p, taskid = %d\n", i, &executor[i], executor[i].taskid);
-    assert(task2executor[executor[i].taskid] == NULL);
-    task2executor[executor[i].taskid] = &executor[i];
-    task2executorid[executor[i].taskid] = i;
-  }
-  for(int i = 0; i < MAX_WORKERS && workers[i].hostname != NULL; i++) {
-    for(int j = 0; j < MAX_EXECUTORS && workers[i].executors[j].execute != NULL; j++) {
-      task2worker[workers[i].executors[j].taskid] = i;
-    }
-  }
-}
-
-int *get_task2executorid() {
-  return task2executorid;
-}
-
-int *get_task2worker() {
-  return task2worker;
-}
-
-struct executor *get_executors() {
-  return my_executors;
-}
+#include "dccp.h"
+#include <stdio.h>
 
 struct tuple* random_spout(size_t i) {
   return NULL;
@@ -80,4 +44,465 @@ struct tuple* random_rank(size_t i) {
     strcpy(t->v[0].str, "pom");
   }
   return t;
+}
+
+void init_header_template(struct pkt_dccp_headers *p) {
+  //memcpy(&p->eth.src, l2fwd_ports_eth_addr[0].addr_bytes, ETHARP_HWADDR_LEN);                         
+  p->eth.type = htons(ETHTYPE_IP);
+
+  // Initialize IP header                                                                               
+  p->ip._v_hl = 69;
+  p->ip._tos = 0;
+  p->ip._id = htons(3);
+  p->ip._offset = 0;
+  p->ip._ttl = 0xff;
+  p->ip._proto = IP_PROTO_DCCP;
+  p->ip._chksum = 0;
+  //p->ip.src.addr = 0; // arranet_myip
+  p->ip._len = htons(sizeof(struct tuple) + sizeof(struct dccp_hdr) + IP_HLEN);
+
+  p->dccp.data_offset = 3;
+  p->dccp.res_type_x = DCCP_TYPE_DATA << 1;
+  p->dccp.ccval_cscov = 1;
+}
+
+void init_congestion_control(struct connection* connections) {
+  int i;
+  for(i = 0; i < MAX_WORKERS; i++) {
+    connections[i].cwnd = 4;
+    connections[i].acks = 0;
+    connections[i].lastack = 0;
+  }
+}
+
+//__attribute__ ((unused))
+int fields_grouping(const struct tuple *t, struct executor *self)
+{
+  static __thread int numtasks = 0;
+
+  if(numtasks == 0) {
+    // Remember number of tasks
+    for(numtasks = 0; numtasks < MAX_TASKS; numtasks++) {
+      if(self->outtasks[numtasks] == 0) {
+	break;
+      }
+    }
+    assert(numtasks > 0);
+  }
+
+  return self->outtasks[hash(t->v[0].str, strlen(t->v[0].str), 0) % numtasks];
+}
+
+//__attribute__ ((unused))
+int global_grouping(const struct tuple *t, struct executor *self)
+{
+  return self->outtasks[0];
+}
+
+#define SAMPA_DPDK_CAVIUM
+
+struct worker workers[MAX_WORKERS] = {
+#if defined(LOCAL)
+  {
+    .hostname = "127.0.0.1", .port = 7001,
+    .executors = {
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 1, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 2, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 3, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 4, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
+    }
+  },
+  {
+    .hostname = "127.0.0.1", .port = 7002,
+    .executors = {
+      { .execute = count_execute, .init = count_init, .taskid = 10, .outtasks = { 20, 21, 22, 23 }, .grouper = fields_grouping },
+      { .execute = count_execute, .init = count_init, .taskid = 11, .outtasks = { 20, 21, 22, 23 }, .grouper = fields_grouping },
+      { .execute = count_execute, .init = count_init, .taskid = 12, .outtasks = { 20, 21, 22, 23 }, .grouper = fields_grouping },
+      { .execute = count_execute, .init = count_init, .taskid = 13, .outtasks = { 20, 21, 22, 23 }, .grouper = fields_grouping },
+    }
+  },
+  {
+    .hostname = "127.0.0.1", .port = 7003,
+    .executors = {
+      { .execute = rank_execute, .taskid = 20, .outtasks = { 30 }, .grouper = global_grouping },
+      { .execute = rank_execute, .taskid = 21, .outtasks = { 30 }, .grouper = global_grouping },
+      { .execute = rank_execute, .taskid = 22, .outtasks = { 30 }, .grouper = global_grouping },
+      { .execute = rank_execute, .taskid = 23, .outtasks = { 30 }, .grouper = global_grouping },
+    }
+  },
+  {
+    .hostname = "127.0.0.1", .port = 7004,
+    .executors = {
+      { .execute = rank_execute, .taskid = 30, .outtasks = { 0 }, .grouper = global_grouping },
+      /* { .execute = print_execute, .taskid = 40 }, */
+    }
+  },
+#elif defined(SWINGOUT_LOCAL)
+  {
+    .hostname = "127.0.0.1", .port = 7001,	// swingout1
+    .executors = {
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 3, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
+      { .execute = count_execute, .init = count_init, .taskid = 12, .outtasks = { 20, 21, 22, 23 }, .grouper = fields_grouping },
+      { .execute = rank_execute, .taskid = 20, .outtasks = { 30 }, .grouper = global_grouping },
+      { .execute = rank_execute, .taskid = 23, .outtasks = { 30 }, .grouper = global_grouping },
+    }
+  },
+  {
+    .hostname = "127.0.0.1", .port = 7002,	// swingout4
+    .executors = {
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 1, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 4, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
+      { .execute = count_execute, .init = count_init, .taskid = 11, .outtasks = { 20, 21, 22, 23 }, .grouper = fields_grouping },
+      { .execute = count_execute, .init = count_init, .taskid = 13, .outtasks = { 20, 21, 22, 23 }, .grouper = fields_grouping },
+      { .execute = rank_execute, .taskid = 21, .outtasks = { 30 }, .grouper = global_grouping },
+    }
+  },
+  {
+    .hostname = "127.0.0.1", .port = 7003,	// swingout3
+    .executors = {
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 2, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
+      { .execute = count_execute, .init = count_init, .taskid = 10, .outtasks = { 20, 21, 22, 23 }, .grouper = fields_grouping },
+      { .execute = rank_execute, .taskid = 22, .outtasks = { 30 }, .grouper = global_grouping },
+      { .execute = rank_execute, .taskid = 30, .outtasks = { 0 }, .grouper = global_grouping },
+    }
+  },
+#elif defined(SAMPA_LOCAL)
+  {
+    .hostname = "127.0.0.1", .port = 7001,	// sampa1
+    .executors = {
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 1, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 2, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
+      { .execute = count_execute, .init = count_init, .taskid = 10, .outtasks = { 20, 21, 22, 23 }, .grouper = fields_grouping },
+      { .execute = count_execute, .init = count_init, .taskid = 11, .outtasks = { 20, 21, 22, 23 }, .grouper = fields_grouping },
+      { .execute = rank_execute, .taskid = 20, .outtasks = { 30 }, .grouper = global_grouping },
+      { .execute = rank_execute, .taskid = 21, .outtasks = { 30 }, .grouper = global_grouping },
+      { .execute = rank_execute, .taskid = 22, .outtasks = { 30 }, .grouper = global_grouping },
+    }
+  },
+  {
+    .hostname = "127.0.0.1", .port = 7002,	// sampa2
+    .executors = {
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 3, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 4, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
+      { .execute = count_execute, .init = count_init, .taskid = 12, .outtasks = { 20, 21, 22, 23 }, .grouper = fields_grouping },
+      { .execute = count_execute, .init = count_init, .taskid = 13, .outtasks = { 20, 21, 22, 23 }, .grouper = fields_grouping },
+      { .execute = rank_execute, .taskid = 23, .outtasks = { 30 }, .grouper = global_grouping },
+      { .execute = rank_execute, .taskid = 30, .outtasks = { 0 }, .grouper = global_grouping },
+    }
+  },
+#elif defined(SAMPA_TEST)
+  {
+    .hostname = "10.3.0.30", .port = 1234, .mac.addr = "\x68\x05\xca\x33\x13\x41",	// sampa1
+    .executors = {
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 1, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 2, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
+      { .execute = count_execute, .init = count_init, .taskid = 10, .outtasks = { 20, 21, 22, 23 }, .grouper = fields_grouping },
+      { .execute = count_execute, .init = count_init, .taskid = 11, .outtasks = { 20, 21, 22, 23 }, .grouper = fields_grouping },
+      { .execute = count_execute, .init = count_init, .taskid = 12, .outtasks = { 20, 21, 22, 23 }, .grouper = fields_grouping },
+      { .execute = count_execute, .init = count_init, .taskid = 13, .outtasks = { 20, 21, 22, 23 }, .grouper = fields_grouping },
+    }
+  },
+  {
+    .hostname = "10.3.0.33", .port = 1234, .mac.addr = "\x68\x05\xca\x33\x11\x3d",	// sampa2
+    .executors = {
+      { .execute = rank_execute, .taskid = 20, .outtasks = { 30 }, .grouper = global_grouping },
+      { .execute = rank_execute, .taskid = 21, .outtasks = { 30 }, .grouper = global_grouping },
+      { .execute = rank_execute, .taskid = 22, .outtasks = { 30 }, .grouper = global_grouping },
+      { .execute = rank_execute, .taskid = 23, .outtasks = { 30 }, .grouper = global_grouping },
+      { .execute = rank_execute, .taskid = 30, .outtasks = { 0 }, .grouper = global_grouping },
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 3, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 4, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
+    }
+  },
+#elif defined(SAMPA)
+  {
+    .hostname = "10.3.0.30", .port = 1234, .mac.addr = "\x68\x05\xca\x33\x13\x41",	// sampa1
+    .executors = {
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 1, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 2, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
+      { .execute = count_execute, .init = count_init, .taskid = 10, .outtasks = { 20, 21, 22, 23 }, .grouper = fields_grouping },
+      { .execute = count_execute, .init = count_init, .taskid = 11, .outtasks = { 20, 21, 22, 23 }, .grouper = fields_grouping },
+      { .execute = rank_execute, .taskid = 20, .outtasks = { 30 }, .grouper = global_grouping },
+      { .execute = rank_execute, .taskid = 21, .outtasks = { 30 }, .grouper = global_grouping },
+      { .execute = rank_execute, .taskid = 22, .outtasks = { 30 }, .grouper = global_grouping },
+    }
+  },
+  {
+    .hostname = "10.3.0.33", .port = 1234, .mac.addr = "\x68\x05\xca\x33\x11\x3d",	// sampa2
+    .executors = {
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 3, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 4, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
+      { .execute = count_execute, .init = count_init, .taskid = 12, .outtasks = { 20, 21, 22, 23 }, .grouper = fields_grouping },
+      { .execute = count_execute, .init = count_init, .taskid = 13, .outtasks = { 20, 21, 22, 23 }, .grouper = fields_grouping },
+      { .execute = rank_execute, .taskid = 23, .outtasks = { 30 }, .grouper = global_grouping },
+      { .execute = rank_execute, .taskid = 30, .outtasks = { 0 }, .grouper = global_grouping },
+    }
+  },
+#elif defined(SAMPA_DPDK_CAVIUM)
+  {
+    .hostname = "10.3.0.30", .ip.addr = "\x0a\x03\x00\x1e", .port = 1234, .mac.addr = "\x68\x05\xca\x33\x13\x41",	// sampa1
+    .executors = {
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 1, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 2, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
+      { .execute = count_execute, .init = count_init, .taskid = 10, .outtasks = { 20, 21, 22, 23 }, .grouper = fields_grouping },
+      { .execute = count_execute, .init = count_init, .taskid = 11, .outtasks = { 20, 21, 22, 23 }, .grouper = fields_grouping },
+      { .execute = rank_execute, .taskid = 20, .outtasks = { 30 }, .grouper = global_grouping },
+      { .execute = rank_execute, .taskid = 21, .outtasks = { 30 }, .grouper = global_grouping },
+      { .execute = rank_execute, .taskid = 22, .outtasks = { 30 }, .grouper = global_grouping },
+    }
+  },
+  {
+    .hostname = "10.3.0.35", .ip.addr = "\x0a\x03\x00\x23", .port = 1234,  .mac.addr = "\x00\x0f\xb7\x30\x3f\x58", // 00:0f:b7:30:3f:58
+    .executors = {
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 3, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 4, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
+      { .execute = count_execute, .init = count_init, .taskid = 12, .outtasks = { 20, 21, 22, 23 }, .grouper = fields_grouping },
+      { .execute = count_execute, .init = count_init, .taskid = 13, .outtasks = { 20, 21, 22, 23 }, .grouper = fields_grouping },
+      { .execute = rank_execute, .taskid = 23, .outtasks = { 30 }, .grouper = global_grouping },
+      { .execute = rank_execute, .taskid = 30, .outtasks = { 0 }, .grouper = global_grouping },
+    }
+  },
+#elif defined(BIGFISH)
+  {
+    .hostname = "128.208.6.106", .port = 7001,
+    .executors = {
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 3, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
+      { .execute = count_execute, .init = count_init, .taskid = 12, .outtasks = { 20, 21, 22, 23 }, .grouper = fields_grouping },
+      { .execute = rank_execute, .taskid = 20, .outtasks = { 30 }, .grouper = global_grouping },
+      { .execute = rank_execute, .taskid = 23, .outtasks = { 30 }, .grouper = global_grouping },
+    }
+  },
+  {
+    .hostname = "128.208.6.106", .port = 7002,
+    .executors = {
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 1, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 4, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
+      { .execute = count_execute, .init = count_init, .taskid = 11, .outtasks = { 20, 21, 22, 23 }, .grouper = fields_grouping },
+      { .execute = count_execute, .init = count_init, .taskid = 13, .outtasks = { 20, 21, 22, 23 }, .grouper = fields_grouping },
+      { .execute = rank_execute, .taskid = 21, .outtasks = { 30 }, .grouper = global_grouping },
+    }
+  },
+  {
+    .hostname = "128.208.6.106", .port = 7003,
+    .executors = {
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 2, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
+      { .execute = count_execute, .init = count_init, .taskid = 10, .outtasks = { 20, 21, 22, 23 }, .grouper = fields_grouping },
+      { .execute = rank_execute, .taskid = 22, .outtasks = { 30 }, .grouper = global_grouping },
+      { .execute = rank_execute, .taskid = 30, .outtasks = { 0 }, .grouper = global_grouping },
+    }
+  },
+#elif defined(BIGFISH_FLEXNIC)
+  {
+    /* .hostname = "128.208.6.106", .port = 7001, */
+    .hostname = "192.168.26.22", .port = 7001,
+    .executors = {
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 3, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
+      { .execute = count_execute, .init = count_init, .taskid = 12, .outtasks = { 20, 21, 22, 23 }, .grouper = fields_grouping },
+      { .execute = rank_execute, .taskid = 20, .outtasks = { 30 }, .grouper = global_grouping },
+      { .execute = rank_execute, .taskid = 23, .outtasks = { 30 }, .grouper = global_grouping },
+    }
+  },
+  {
+    /* .hostname = "128.208.6.106", .port = 7002, */
+    .hostname = "192.168.26.22", .port = 7002,
+    .executors = {
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 1, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 4, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
+      { .execute = count_execute, .init = count_init, .taskid = 11, .outtasks = { 20, 21, 22, 23 }, .grouper = fields_grouping },
+      { .execute = count_execute, .init = count_init, .taskid = 13, .outtasks = { 20, 21, 22, 23 }, .grouper = fields_grouping },
+      { .execute = rank_execute, .taskid = 21, .outtasks = { 30 }, .grouper = global_grouping },
+    }
+  },
+  {
+    /* .hostname = "128.208.6.106", .port = 7003, */
+    .hostname = "192.168.26.22", .port = 7003,
+    .executors = {
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 2, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
+      { .execute = count_execute, .init = count_init, .taskid = 10, .outtasks = { 20, 21, 22, 23 }, .grouper = fields_grouping },
+      { .execute = rank_execute, .taskid = 22, .outtasks = { 30 }, .grouper = global_grouping },
+      { .execute = rank_execute, .taskid = 30, .outtasks = { 0 }, .grouper = global_grouping },
+    }
+  },
+#elif defined(BIGFISH_FLEXNIC_DPDK)
+  {
+    .hostname = "128.208.6.236", .port = 7001, .mac.addr = "\xa0\x36\x9f\x0f\xfb\xe0",	// swingout3
+    /* .hostname = "192.168.26.8", .port = 7001, .mac.addr = "\xa0\x36\x9f\x0f\xfb\xe0",	// swingout3 */
+    .executors = {
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 3, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
+      { .execute = count_execute, .init = count_init, .taskid = 12, .outtasks = { 20, 21, 22, 23 }, .grouper = fields_grouping },
+      { .execute = rank_execute, .taskid = 20, .outtasks = { 30 }, .grouper = global_grouping },
+      { .execute = rank_execute, .taskid = 23, .outtasks = { 30 }, .grouper = global_grouping },
+    }
+  },
+  {
+    .hostname = "128.208.6.106", .port = 7002, .mac.addr = "\xa0\x36\x9f\x10\x03\x20",	// bigfish
+    /* .hostname = "192.168.26.22", .port = 7002, .mac.addr = "\xa0\x36\x9f\x10\x03\x20",	// bigfish */
+    .executors = {
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 1, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 4, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
+      { .execute = count_execute, .init = count_init, .taskid = 11, .outtasks = { 20, 21, 22, 23 }, .grouper = fields_grouping },
+      { .execute = count_execute, .init = count_init, .taskid = 13, .outtasks = { 20, 21, 22, 23 }, .grouper = fields_grouping },
+      { .execute = rank_execute, .taskid = 21, .outtasks = { 30 }, .grouper = global_grouping },
+    }
+  },
+  {
+    .hostname = "128.208.6.130", .port = 7003, .mac.addr = "\xa0\x36\x9f\x10\x00\xa0",	// swingout5
+    /* .hostname = "192.168.26.20", .port = 7003, .mac.addr = "\xa0\x36\x9f\x10\x00\xa0",	// swingout5 */
+    .executors = {
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 2, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
+      { .execute = count_execute, .init = count_init, .taskid = 10, .outtasks = { 20, 21, 22, 23 }, .grouper = fields_grouping },
+      { .execute = rank_execute, .taskid = 22, .outtasks = { 30 }, .grouper = global_grouping },
+      { .execute = rank_execute, .taskid = 30, .outtasks = { 0 }, .grouper = global_grouping },
+    }
+  },
+#elif defined(BIGFISH_FLEXNIC_DPDK2)
+  {
+    .hostname = "128.208.6.236", .port = 7001, .mac.addr = "\xa0\x36\x9f\x0f\xfb\xe0",	// swingout3
+    /* .hostname = "192.168.26.8", .port = 7001, .mac.addr = "\xa0\x36\x9f\x0f\xfb\xe0",	// swingout3 */
+    .executors = {
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 1, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 2, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
+      { .execute = rank_execute, .taskid = 20, .outtasks = { 30 }, .grouper = global_grouping },
+      { .execute = rank_execute, .taskid = 21, .outtasks = { 30 }, .grouper = global_grouping },
+    }
+  },
+  {
+    .hostname = "128.208.6.106", .port = 7002, .mac.addr = "\xa0\x36\x9f\x10\x03\x20",	// bigfish
+    /* .hostname = "192.168.26.22", .port = 7002, .mac.addr = "\xa0\x36\x9f\x10\x03\x20",	// bigfish */
+    .executors = {
+      { .execute = count_execute, .init = count_init, .taskid = 10, .outtasks = { 20, 21, 22, 23 }, .grouper = fields_grouping },
+      { .execute = count_execute, .init = count_init, .taskid = 11, .outtasks = { 20, 21, 22, 23 }, .grouper = fields_grouping },
+      { .execute = count_execute, .init = count_init, .taskid = 12, .outtasks = { 20, 21, 22, 23 }, .grouper = fields_grouping },
+      { .execute = count_execute, .init = count_init, .taskid = 13, .outtasks = { 20, 21, 22, 23 }, .grouper = fields_grouping },
+    }
+  },
+  {
+    .hostname = "128.208.6.130", .port = 7003, .mac.addr = "\xa0\x36\x9f\x10\x00\xa0",	// swingout5
+    /* .hostname = "192.168.26.20", .port = 7003, .mac.addr = "\xa0\x36\x9f\x10\x00\xa0",	// swingout5 */
+    .executors = {
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 3, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 4, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
+      { .execute = rank_execute, .taskid = 22, .outtasks = { 30 }, .grouper = global_grouping },
+      { .execute = rank_execute, .taskid = 23, .outtasks = { 30 }, .grouper = global_grouping },
+      { .execute = rank_execute, .taskid = 30, .outtasks = { 0 }, .grouper = global_grouping },
+    }
+  },
+#elif defined(SWINGOUT_BALANCED)
+  {
+    .hostname = "128.208.6.67", .port = 7001,	// swingout1
+    .executors = {
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 3, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
+      { .execute = count_execute, .init = count_init, .taskid = 12, .outtasks = { 20, 21, 22, 23 }, .grouper = fields_grouping },
+      { .execute = rank_execute, .taskid = 20, .outtasks = { 30 }, .grouper = global_grouping },
+      { .execute = rank_execute, .taskid = 23, .outtasks = { 30 }, .grouper = global_grouping },
+    }
+  },
+  {
+    .hostname = "128.208.6.129", .port = 7002,	// swingout4
+    .executors = {
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 1, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 4, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
+      { .execute = count_execute, .init = count_init, .taskid = 11, .outtasks = { 20, 21, 22, 23 }, .grouper = fields_grouping },
+      { .execute = count_execute, .init = count_init, .taskid = 13, .outtasks = { 20, 21, 22, 23 }, .grouper = fields_grouping },
+      { .execute = rank_execute, .taskid = 21, .outtasks = { 30 }, .grouper = global_grouping },
+    }
+  },
+  {
+    .hostname = "128.208.6.236", .port = 7003,	// swingout3
+    .executors = {
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 2, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
+      { .execute = count_execute, .init = count_init, .taskid = 10, .outtasks = { 20, 21, 22, 23 }, .grouper = fields_grouping },
+      { .execute = rank_execute, .taskid = 22, .outtasks = { 30 }, .grouper = global_grouping },
+      { .execute = rank_execute, .taskid = 30, .outtasks = { 0 }, .grouper = global_grouping },
+    }
+  },
+  /* { */
+  /*   .hostname = "128.208.6.236", .port = 7004,	// swingout3 */
+  /*   .executors = { */
+  /*     /\* { .execute = print_execute, .taskid = 40 }, *\/ */
+  /*   } */
+  /* }, */
+#elif defined(SWINGOUT_GROUPED)
+  {
+    .hostname = "128.208.6.67", .port = 7001,	// swingout1
+    .executors = {
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 1, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 2, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 3, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 4, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
+    }
+  },
+  {
+    .hostname = "128.208.6.106", .port = 7002,	// bigfish
+    /* .hostname = "128.208.6.129", .port = 7002,	// swingout4 */
+    .executors = {
+      { .execute = count_execute, .init = count_init, .taskid = 10, .outtasks = { 20, 21, 22, 23 }, .grouper = fields_grouping },
+      { .execute = count_execute, .init = count_init, .taskid = 11, .outtasks = { 20, 21, 22, 23 }, .grouper = fields_grouping },
+      { .execute = count_execute, .init = count_init, .taskid = 12, .outtasks = { 20, 21, 22, 23 }, .grouper = fields_grouping },
+      { .execute = count_execute, .init = count_init, .taskid = 13, .outtasks = { 20, 21, 22, 23 }, .grouper = fields_grouping },
+    }
+  },
+  {
+    .hostname = "128.208.6.236", .port = 7003,	// swingout3
+    .executors = {
+      { .execute = rank_execute, .taskid = 20, .outtasks = { 30 }, .grouper = global_grouping },
+      { .execute = rank_execute, .taskid = 21, .outtasks = { 30 }, .grouper = global_grouping },
+      { .execute = rank_execute, .taskid = 22, .outtasks = { 30 }, .grouper = global_grouping },
+      { .execute = rank_execute, .taskid = 23, .outtasks = { 30 }, .grouper = global_grouping },
+    }
+  },
+  {
+    .hostname = "128.208.6.236", .port = 7004,	// swingout3
+    .executors = {
+      { .execute = rank_execute, .taskid = 30, .outtasks = { 0 }, .grouper = global_grouping },
+      /* { .execute = print_execute, .taskid = 40 }, */
+    }
+  },
+#else
+#	error Need to define a topology!
+#endif
+  { .hostname = NULL }
+};
+
+struct worker* get_workers() { 
+  return workers; }
+
+
+struct executor *task2executor[MAX_TASKS];
+int task2executorid[MAX_TASKS];
+int task2worker[MAX_TASKS];
+struct executor *my_executors;
+
+int *get_task2executorid() {
+  return task2executorid;
+}
+
+int *get_task2worker() {
+  return task2worker;
+}
+
+struct executor *get_executors() {
+  printf("get: executors = %p\n", my_executors);
+  return my_executors;
+}
+
+void init_task2executor(struct executor *executor) {
+  my_executors = executor;
+  int i, j;
+  for(i = 0; i < MAX_TASKS; i++) {
+    task2executorid[i] = -1;
+    task2worker[i] = -1;
+  }
+  for(i = 0; i < MAX_EXECUTORS && executor[i].execute != NULL; i++) {
+    printf("init: executor[%d] = %p, taskid = %d\n", i, &executor[i], executor[i].taskid);
+    assert(task2executor[executor[i].taskid] == NULL);
+    task2executor[executor[i].taskid] = &executor[i];
+    task2executorid[executor[i].taskid] = i;
+  }
+  for(i = 0; i < MAX_WORKERS && workers[i].hostname != NULL; i++) {
+    for(j = 0; j < MAX_EXECUTORS && workers[i].executors[j].execute != NULL; j++) {
+      task2worker[workers[i].executors[j].taskid] = i;
+    }
+  }
+  printf("init: executors = %p\n", my_executors);
 }

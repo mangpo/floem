@@ -132,10 +132,10 @@ class DccpInfo(State):
     header = Field("struct pkt_dccp_headers")
     connections = Field(Array("struct connection", n_workers))
     retrans_timeout = Field(Uint(64))
-    link_rtt = Field(Uint(64))
-    global_lock = Field("spinlock_t")
-    acks_sent = Field(Size)
-    tuples = Field(Size)
+    link_rtt = Field(Sint(64))
+    global_lock = Field("spinlock_t")  # TODO: Cavium doesn't lock inside strct.
+    acks_sent = Field(Sint(64))
+    tuples = Field(Sint(64))
 
     def init(self):
         self.header = lambda(x): "init_header_template(&{0})".format(x)
@@ -179,7 +179,7 @@ class DccpPrintStat(Element):
         static size_t lasttuples = 0;
         size_t tuples;
         __sync_synchronize();
-	struct connection* connections = info->connections;
+	    //struct connection* connections = info->connections;
         /* for(int i = 0; i < MAX_WORKERS; i++) { */
         /*     printf("pipe,cwnd,acks,lastack[%d] = %u, %u, %zu, %d\n", i, */
         /*     connections[i].pipe, connections[i].cwnd, connections[i].acks, connections[i].lastack); */
@@ -212,7 +212,7 @@ class DccpCheckCongestion(Element):
         if(core_time_now_us() >= dccp->retrans_timeout) {
 #endif
             dccp->connections[worker].pipe = 0;
-            __sync_fetch_and_add(&dccp->link_rtt, dccp->link_rtt);
+            __sync_fetch_and_add64(&dccp->link_rtt, dccp->link_rtt);
         }
         if(dccp->connections[worker].pipe >= dccp->connections[worker].cwnd)
             worker = -1;
@@ -242,7 +242,7 @@ class DccpSeqTime(Element):
         dccp->retrans_timeout = core_time_now_us() + dccp->link_rtt;
 #endif
         dccp->link_rtt = LINK_RTT;
-        uint32_t seq = __sync_fetch_and_add(&dccp->connections[worker].seq, 1);
+        uint32_t seq = __sync_fetch_and_add32(&dccp->connections[worker].seq, 1);
         header->dccp.seq_high = seq >> 16;
         header->dccp.seq_low = htons(seq & 0xffff);
 #ifdef DEBUG_DCCP
@@ -408,7 +408,7 @@ class Tuple2Pkt(Element):
         (size_t size, void* p, void* b) = inp();
         struct pkt_dccp_headers* header = p;
         state.tx_net_buf = b;
-        struct tuple* t = state.q_buf.entry;
+        struct tuple* t = (struct tuple*) state.q_buf.entry;
         memcpy(header, &dccp->header, sizeof(struct pkt_dccp_headers));
         memcpy(&header[1], t, sizeof(struct tuple));
 
@@ -568,6 +568,9 @@ class BatchScheduler(Element):
 #endif
     }
 
+#ifdef DEBUG_MP
+    assert(core < n_cores);
+#endif
     batch_size++;
     output { out(core); }
         ''' % (n_cores, n_nic_tx, '%', '%', '%d', '%d'))

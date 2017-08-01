@@ -15,7 +15,7 @@ typedef cvmx_spinlock_t lock_t;
 #define qlock_lock(x) cvmx_spinlock_lock(x)
 #define qlock_unlock(x) cvmx_spinlock_unlock(x)
 
-typedef cvmx_spinlock_t spin_lock_t;
+typedef cvmx_spinlock_t spinlock_t;
 #define spinlock_init(x) cvmx_spinlock_init(x)
 #define spinlock_lock(x) cvmx_spinlock_lock(x)
 #define spinlock_unlock(x) cvmx_spinlock_unlock(x)
@@ -23,23 +23,8 @@ typedef cvmx_spinlock_t spin_lock_t;
 #define __sync_fetch_and_add32(ptr, inc) cvmx_atomic_fetch_and_add32(ptr, inc)
 #define __sync_fetch_and_add64(ptr, inc) cvmx_atomic_fetch_and_add64(ptr, inc)
 
-/* Functions to measure time using core clock in nanoseconds */
-unsigned long long core_time_now_ns(void)
-{
-        unsigned long long t;
-        t = cvmx_clock_get_count(CVMX_CLOCK_CORE);
-        t = 1000000000ULL * t / cvmx_clock_get_rate(CVMX_CLOCK_CORE);
-	return t;
-}
-
-/* Functions to measure time using core clock in microseconds */
-uint64_t core_time_now_us(void)
-{
-        unsigned long long t;
-        t = cvmx_clock_get_count(CVMX_CLOCK_CORE);
-        t = 1000000ULL * t / cvmx_clock_get_rate(CVMX_CLOCK_CORE);
-	return t;
-}
+unsigned long long core_time_now_ns();
+uint64_t core_time_now_us();
 
 typedef struct {
     size_t len;

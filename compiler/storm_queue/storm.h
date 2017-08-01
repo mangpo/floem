@@ -49,33 +49,8 @@ struct tuple {
   } v[MAX_VECTOR];
 };
 
-struct queue {
-  sem_t		hsem, tsem;
-  struct tuple 	elems[MAX_ELEMS];
-  int		head, tail;
-#ifdef DEBUG_PERF
-  size_t	full, empty;
-#endif
-};
-
-struct flexnic_queue {
-  __attribute__ ((aligned (64))) volatile int head;
-  __attribute__ ((aligned (64))) volatile int tail;
-  __attribute__ ((aligned (64))) struct tuple	elems[MAX_ELEMS];
-#ifdef DEBUG_PERF
-  __attribute__ ((aligned (64))) volatile size_t full;
-  __attribute__ ((aligned (64))) volatile size_t empty;
-#endif
-};
-
 struct executor {
-  pthread_t	tid;
   int		taskid, outtasks[MAX_TASKS];
-#if !defined(FLEXNIC) || (defined(NORMAL_QUEUE) && !defined(FLEXNIC_EMULATION))
-  struct queue	inqueue, outqueue;
-#else
-  struct flexnic_queue *inqueue, *outqueue;
-#endif
   WorkerExecute	execute;
   WorkerInit	init;
   void		*state;
