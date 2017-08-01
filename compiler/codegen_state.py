@@ -93,13 +93,13 @@ def init_pointer(state, inits, name):
             if init == [0]:
                 pass  # Default is all zeros
             else:
-                m = re.match('([a-zA-Z0-9_]+)\[[0-9]+\]', field)
+                m = re.match('([a-zA-Z0-9_]+)\[[a-zA-Z0-9_]+\]', field)
                 array = m.group(1)
                 for i in range(len(init)):
                     if init[i]:
                         src += "  {0}->{1}[{2}] = {3};\n".format(name, array, i, init_value(init[i]))
         elif isinstance(init, types.LambdaType):
-            m = re.match('([a-zA-Z0-9_]+)\[[0-9]+\]', field)
+            m = re.match('([a-zA-Z0-9_]+)\[[a-zA-Z0-9_]+\]', field)
             if m:
                 x = m.group(1)
             else:
