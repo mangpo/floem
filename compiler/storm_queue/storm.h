@@ -17,7 +17,7 @@
 
 //#define QUEUE_STAT
 #define DEBUG_MP
-//#define DEBUG_DCCP
+#define DEBUG_DCCP
 //#define THREAD_AFFINITY
 //#define DEBUG_PERF
 

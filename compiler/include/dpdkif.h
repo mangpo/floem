@@ -222,14 +222,14 @@ static void dpdk_net_alloc(size_t len, void **pdata, void **pbuf)
 static void dpdk_to_net(size_t size, void *data, void *buf)
 {
 
-  /* printf("to_net: size = %ld\n", size); */
-  /* int i; */
-  /* uint8_t* x = (uint8_t*) data; */
-  /* for(i=0; i<size; i++) { */
-  /*   if(i%16==0) printf("\n"); */
-  /*   printf("%x ", x[i]); */
-  /* } */
-  /* printf("\n\n"); */
+  printf("to_net: size = %ld\n", size);
+  int i;
+  uint8_t* x = (uint8_t*) data;
+  for(i=0; i<size; i++) {
+    if(i%16==0) printf("\n");
+    printf("%x ", x[i]);
+  }
+  printf("\n\n");
 
     static volatile uint16_t tx_queue_alloc = 0;
     static __thread uint16_t tx_queue_id;

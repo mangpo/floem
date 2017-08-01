@@ -18,10 +18,6 @@ struct eth_hdr {
 
 #define SIZEOF_ETH_HDR (14 + ETH_PAD_SIZE)
 
-struct ip_addr {
-  uint32_t addr;
-} __attribute__ ((packed));
-
 typedef struct ip_addr ip_addr_p_t;
 
 struct ip_hdr {
@@ -128,7 +124,7 @@ static void init_header_template(struct pkt_dccp_headers *p) {
     p->ip._ttl = 0xff;
     p->ip._proto = IP_PROTO_DCCP;
     p->ip._chksum = 0;
-    p->ip.src.addr = 0; // arranet_myip
+    //p->ip.src.addr = 0; // arranet_myip
     p->ip._len = htons(sizeof(struct tuple) + sizeof(struct dccp_hdr) + IP_HLEN);
 
     p->dccp.data_offset = 3;

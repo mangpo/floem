@@ -283,7 +283,7 @@ class DccpRecvAck(Element):
 	}
 
 	if((int32_t)ntohl(ack->dccp.ack) > connections[srcworker].lastack + 1) {
-#if DEBUG_DCCP
+#ifdef DEBUG_DCCP
 	  printf("Congestion event for %d! ack %u, lastack + 1 = %u\n",
 	 	 srcworker, ntohl(ack->dccp.ack),
 	 	 connections[srcworker].lastack + 1);
@@ -374,7 +374,9 @@ class Tuple2Pkt(Element):
         header->dccp.dst = htons(state.worker);
         header->dccp.src = htons(state.myworker);
         header->eth.dest = workers[state.worker].mac;
+        header->ip.dest = workers[state.worker].ip;
         header->eth.src = workers[state.myworker].mac;
+        header->ip.src = workers[state.myworker].ip;
         
         //printf("PREPARE PKT: task = %d, worker = %d\n", t->task, state.worker);
         output { out(p); }

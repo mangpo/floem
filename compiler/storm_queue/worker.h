@@ -12,10 +12,16 @@ struct eth_addr {
   uint8_t addr[ETHARP_HWADDR_LEN];
 } __attribute__ ((packed));
 
+struct ip_addr {
+  //uint32_t addr;
+  uint8_t addr[4];
+} __attribute__ ((packed));
+
 
 struct worker {
   const char		*hostname;
   struct eth_addr	mac;
+  struct ip_addr        ip;
   uint32_t		seq;
   uint16_t		port;
   int			sock;
@@ -73,7 +79,7 @@ static int shuffle_grouping(const struct tuple *t, struct executor *self)
   return self->outtasks[random() % numtasks];
 }
 
-#define SAMPA
+#define SAMPA_DPDK_CAVIUM
 
 static struct worker workers[MAX_WORKERS] = {
 #if defined(LOCAL)
@@ -203,6 +209,30 @@ static struct worker workers[MAX_WORKERS] = {
   },
   {
     .hostname = "10.3.0.33", .port = 1234, .mac.addr = "\x68\x05\xca\x33\x11\x3d",	// sampa2
+    .executors = {
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 3, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 4, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
+      { .execute = count_execute, .init = count_init, .taskid = 12, .outtasks = { 20, 21, 22, 23 }, .grouper = fields_grouping },
+      { .execute = count_execute, .init = count_init, .taskid = 13, .outtasks = { 20, 21, 22, 23 }, .grouper = fields_grouping },
+      { .execute = rank_execute, .taskid = 23, .outtasks = { 30 }, .grouper = global_grouping },
+      { .execute = rank_execute, .taskid = 30, .outtasks = { 0 }, .grouper = global_grouping },
+    }
+  },
+#elif defined(SAMPA_DPDK_CAVIUM)
+  {
+    .hostname = "10.3.0.30", .ip.addr = "\x0a\x03\x00\x1e", .port = 1234, .mac.addr = "\x68\x05\xca\x33\x13\x41",	// sampa1
+    .executors = {
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 1, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 2, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
+      { .execute = count_execute, .init = count_init, .taskid = 10, .outtasks = { 20, 21, 22, 23 }, .grouper = fields_grouping },
+      { .execute = count_execute, .init = count_init, .taskid = 11, .outtasks = { 20, 21, 22, 23 }, .grouper = fields_grouping },
+      { .execute = rank_execute, .taskid = 20, .outtasks = { 30 }, .grouper = global_grouping },
+      { .execute = rank_execute, .taskid = 21, .outtasks = { 30 }, .grouper = global_grouping },
+      { .execute = rank_execute, .taskid = 22, .outtasks = { 30 }, .grouper = global_grouping },
+    }
+  },
+  {
+    .hostname = "10.3.0.35", .ip.addr = "\x0a\x03\x00\x23", .port = 1234, .mac.addr = "\x00\x0f\xb7\x30\x3f\x58",	// sampa2
     .executors = {
       { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 3, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
       { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 4, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
