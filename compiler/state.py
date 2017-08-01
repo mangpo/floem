@@ -181,6 +181,8 @@ class State(object):
                     size = '[]'
                 elif isinstance(o.type.size, int):
                     size = '[%d]' % o.type.size
+                elif isinstance(o.type.size, str):
+                    size = '[%s]' % o.type.size
                 elif isinstance(o.type.size, list):
                     size = ''
                     for v in o.type.size:

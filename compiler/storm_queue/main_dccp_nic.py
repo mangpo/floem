@@ -7,8 +7,9 @@ inject_func = "random_" + test
 workerid = {"spout": 0, "count": 1, "rank": 2}
 
 n_cores = 7
-n_workers = 2
-n_nic_tx = 1
+n_workers = 'MAX_WORKERS'
+n_nic_tx = 4
+n_nic_rx = 4
 
 class Classifier(Element):
     def configure(self):
@@ -542,12 +543,12 @@ class BatchScheduler(Element):
         core = (core_id * n_cores)/%d;
         while(this->executors[core].execute == NULL){
             core = (core + 1) %s n_cores;
+        }  
 #ifndef CAVIUM
             start = rdtsc();
 #else
             start = core_time_now_us();
 #endif
-        } 
     }
 
 #ifndef CAVIUM
@@ -652,7 +653,7 @@ class Drop(Element):
 #################### Connection ####################
 import target
 
-MAX_ELEMS = (4 * 1024)
+MAX_ELEMS = 256 #(4 * 1024)
 
 rx_enq_creator, rx_deq_creator, rx_release_creator = \
     queue2.queue_custom_owner_bit("rx_queue", "struct tuple", MAX_ELEMS, n_cores, "task",
@@ -710,8 +711,8 @@ class NicRxPipeline(Pipeline):
                 network_alloc.oom >> rx_buf
                 rx_buf >> from_net_free
 
-        nic_rx('nic_rx', process='dpdk')
-        #nic_rx('nic_rx', device=target.CAVIUM, cores=[0,1,2,3])
+        #nic_rx('nic_rx', process='dpdk')
+        nic_rx('nic_rx', device=target.CAVIUM, cores=[n_nic_tx + x for x in range(n_nic_rx)])
 
 
 class inqueue_get(API):
@@ -801,25 +802,17 @@ class NicTxPipeline(Pipeline):
 
                 get_buff >> tx_release
 
-        nic_tx('nic_tx', process='dpdk', cores=range(n_nic_tx))
-        # nic_tx('nic_tx', device=target.CAVIUM, cores=[4,5,6,7])
+        #nic_tx('nic_tx', process='dpdk', cores=range(n_nic_tx))
+        nic_tx('nic_tx', device=target.CAVIUM, cores=range(n_nic_tx))
 
 
-class get_dccp_stat(API):
-    def configure(self):
-        self.inp = Input()
-        self.out = Output(Pointer(DccpInfo))
-
-    def impl(self): self.inp >> DccpGetStat() >> self.out
-
-#class dccp_print_stat(InternalLoop):
-class dccp_print_stat(API):
+class dccp_print_stat(InternalLoop):
+#class dccp_print_stat(API):
     def impl(self):
         DccpPrintStat()
 
-#get_dccp_stat('get_dccp_stat', process='dpdk')
-dccp_print_stat('dccp_print_stat', process='dpdk')
-#dccp_print_stat('dccp_print_stat', device=target.CAVIUM, cores=[8])
+#dccp_print_stat('dccp_print_stat', process='dpdk')
+dccp_print_stat('dccp_print_stat', device=target.CAVIUM, cores=[8])
 
 inqueue_get('inqueue_get', process='app')
 inqueue_advance('inqueue_advance', process='app')
@@ -830,7 +823,6 @@ master_process('app')
 
 c = Compiler(NicRxPipeline, NicTxPipeline)
 c.include = r'''
-#include <rte_memcpy.h>
 #include "worker.h"
 #include "storm.h"
 #include "dccp.h"
@@ -842,4 +834,5 @@ init_task2executor(workers[workerid].executors);
 c.generate_code_as_header()
 c.depend = {"test_storm_nic": ['hash', 'worker', 'dummy', 'dpdk'],
             "test_storm_app": ['list', 'hash', 'hash_table', 'spout', 'count', 'rank', 'worker', 'app']}
-c.compile_and_run([("test_storm_app", workerid[test]), ("test_storm_nic", workerid[test])])
+c.compile_and_run([("test_storm_app", workerid[test])])
+#c.compile_and_run([("test_storm_app", workerid[test]), ("test_storm_nic", workerid[test])])

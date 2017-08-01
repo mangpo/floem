@@ -200,32 +200,32 @@ def generate_state_instances_cpu_only(graph, ext, all_processes, shared):
 
 
 def generate_state_instances_cpu_cavium(graph, ext, all_processes, shared):
-    if len(shared) > 0:
-        # Kernel code
-        os.system('rm uio_size.c')
-        process = [p for p in all_processes if not (p == target.CAVIUM)][0]
-        kernal_src = '#include "%s.h"\n' % process
-        kernal_src += 'size_t get_shared_size() {\n'
-        kernal_src += '  size_t shm_size = 0;\n'
-        for name in shared:
-            inst = graph.state_instances[name]
-            kernal_src += '  shm_size += sizeof(%s);\n' % inst.state.name
-        for region in graph.memory_regions:
-            kernal_src += "  shm_size += %d;\n" % region.size
-        kernal_src += '  return shm_size;\n}\n'
+#     if len(shared) > 0:
+#         # Kernel code
+#         os.system('rm uio_size.c')
+#         process = [p for p in all_processes if not (p == target.CAVIUM)][0]
+#         kernal_src = '#include "%s.h"\n' % process
+#         kernal_src += 'size_t get_shared_size() {\n'
+#         kernal_src += '  size_t shm_size = 0;\n'
+#         for name in shared:
+#             inst = graph.state_instances[name]
+#             kernal_src += '  shm_size += sizeof(%s);\n' % inst.state.name
+#         for region in graph.memory_regions:
+#             kernal_src += "  shm_size += %d;\n" % region.size
+#         kernal_src += '  return shm_size;\n}\n'
 
-        kernal_src += r'''
-int main() {
-  FILE *f = fopen("uio_simple.h", "w");
-  fprintf(f, "#define SIZE %ld\n", get_shared_size());
+#         kernal_src += r'''
+# int main() {
+#   FILE *f = fopen("uio_simple.h", "w");
+#   fprintf(f, "#define SIZE %ld\n", get_shared_size());
 
-  fclose(f);
-  return 0;
-}
-        '''
+#   fclose(f);
+#   return 0;
+# }
+#         '''
 
-        with open('uio_size.c', 'a') as f, redirect_stdout(f):
-            print kernal_src
+#         with open('uio_size.c', 'a') as f, redirect_stdout(f):
+#             print kernal_src
 
     src_cpu = "void init_state_instances(char *argv[]) {\n"
     src_cavium = "void init_state_instances() {\n"
@@ -245,12 +245,15 @@ int main() {
     for name in shared:
         inst = graph.state_instances[name]
         map_src += map_shared_state(name, inst)
+    map_src_cpu = '  memset((void *) shm_start, 0, shm_p - shm_start);\n'
+    map_src_cpu += '  printf("shared memory size = %ld\\n", shm_p - shm_start);\n'
+    map_src_cpu += '  assert(shm_p - shm_start <= HUGE_PGSIZE);\n'
 
     for process in graph.processes:
         name = process + ext
         with open(name, 'a') as f, redirect_stdout(f):
             if graph.process2device[process] == target.CPU:
-                print src_cpu + map_src
+                print src_cpu + map_src + map_src_cpu
             else:
                 print src_cavium + map_src
 
@@ -259,13 +262,6 @@ int main() {
         inst = graph.state_instances[name]
         if name not in shared:
             allocate_state(name, inst, ext)
-
-    src_cpu = '  memset((void *) shm_start, 0, shm_p - shm_start);\n'
-    for process in graph.processes:
-        name = process + ext
-        with open(name, 'a') as f, redirect_stdout(f):
-            if graph.process2device[process] == target.CPU:
-                print src_cpu
 
     for name in graph.state_instance_order:
         inst = graph.state_instances[name]
