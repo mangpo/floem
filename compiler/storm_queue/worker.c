@@ -99,7 +99,7 @@ int global_grouping(const struct tuple *t, struct executor *self)
   return self->outtasks[0];
 }
 
-#define SAMPA_DPDK_CAVIUM
+#define SAMPA_DPDK
 
 struct worker workers[MAX_WORKERS] = {
 #if defined(LOCAL)
@@ -214,7 +214,7 @@ struct worker workers[MAX_WORKERS] = {
       { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 4, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
     }
   },
-#elif defined(SAMPA)
+#elif defined(SAMPA_DPDK)
   {
     .hostname = "10.3.0.30", .port = 1234, .mac.addr = "\x68\x05\xca\x33\x13\x41",	// sampa1
     .executors = {

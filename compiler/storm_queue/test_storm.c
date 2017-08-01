@@ -73,10 +73,10 @@ void tuple_send(struct tuple *t, struct executor *self)
 }
 
 int main(int argc, char *argv[]) {
-  //printf("size  = %d\n", sizeof(struct tuple));
-  //exit(1);
+
     assert(argc > 1);
     int workerid = atoi(argv[1]);
+    struct worker* workers = get_workers();
     executor = workers[workerid].executors;
     init_task2executor(executor);
 

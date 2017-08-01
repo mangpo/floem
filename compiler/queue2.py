@@ -380,7 +380,7 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
         if(__sync_bool_compare_and_swap(&p->offset, old, new)) {
             %s
             success = true;
-            printf("enqueue[%s]: offset = %s\n", c, old);
+            //printf("enqueue[%s]: offset = %s\n", c, old);
             break;
         }
         old = p->offset;

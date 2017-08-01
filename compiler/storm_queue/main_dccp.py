@@ -371,6 +371,7 @@ class Tuple2Pkt(Element):
         memcpy(header, &dccp->header, sizeof(struct pkt_dccp_headers));
         memcpy(&header[1], t, sizeof(struct tuple));
 
+        struct worker* workers = get_workers();
         header->dccp.dst = htons(state.worker);
         header->dccp.src = htons(state.myworker);
         header->eth.dest = workers[state.worker].mac;

@@ -2,6 +2,7 @@ import queue2, net_real
 from dsl2 import *
 from compiler import Compiler
 
+nic = 'dpdk'
 test = "spout"
 inject_func = "random_" + test
 workerid = {"spout": 0, "count": 1, "rank": 2}
@@ -9,7 +10,7 @@ workerid = {"spout": 0, "count": 1, "rank": 2}
 n_cores = 7
 n_workers = 'MAX_WORKERS'
 n_nic_tx = 4
-n_nic_rx = 4
+n_nic_rx = 1
 
 class Classifier(Element):
     def configure(self):
@@ -324,7 +325,7 @@ class DccpRecvAck(Element):
 	}
 
 	if((int32_t)ntohl(ack->dccp.ack) > connections[srcworker].lastack + 1) {
-#if DEBUG_DCCP
+#ifdef DEBUG_DCCP
 	  printf("Congestion event for %d! ack %u, lastack + 1 = %u\n",
 	 	 srcworker, ntohl(ack->dccp.ack),
 	 	 connections[srcworker].lastack + 1);
@@ -412,6 +413,7 @@ class Tuple2Pkt(Element):
         memcpy(header, &dccp->header, sizeof(struct pkt_dccp_headers));
         memcpy(&header[1], t, sizeof(struct tuple));
 
+        struct worker *workers = get_workers();
         header->dccp.dst = htons(state.worker);
         header->dccp.src = htons(state.myworker);
         header->eth.dest = workers[state.worker].mac;
@@ -534,6 +536,7 @@ class BatchScheduler(Element):
     def impl(self):
         self.run_c(r'''
     (size_t core_id) = inp();
+        //printf("schedele begin: core_id = %s\n", core_id);
     int n_cores = %d;
     static __thread int core = -1;
     static __thread int batch_size = 0;
@@ -572,8 +575,9 @@ class BatchScheduler(Element):
     assert(core < n_cores);
 #endif
     batch_size++;
+    //printf("schedule: core = %s\n", core);
     output { out(core); }
-        ''' % (n_cores, n_nic_tx, '%', '%', '%d', '%d'))
+        ''' % ('%d', n_cores, n_nic_tx, '%', '%', '%d', '%d', '%d'))
 
 # class BatchInc(Element):
 #     this = Persistent(BatchInfo)
@@ -713,9 +717,11 @@ class NicRxPipeline(Pipeline):
                 classifier.drop >> rx_buf
                 network_alloc.oom >> rx_buf
                 rx_buf >> from_net_free
-
-        #nic_rx('nic_rx', process='dpdk')
-        nic_rx('nic_rx', device=target.CAVIUM, cores=[n_nic_tx + x for x in range(n_nic_rx)])
+                
+        if nic == 'dpdk':
+            nic_rx('nic_rx', process='dpdk')
+        else:
+            nic_rx('nic_rx', device=target.CAVIUM, cores=[n_nic_tx + x for x in range(n_nic_rx)])
 
 
 class inqueue_get(API):
@@ -805,23 +811,26 @@ class NicTxPipeline(Pipeline):
 
                 get_buff >> tx_release
 
-        #nic_tx('nic_tx', process='dpdk', cores=range(n_nic_tx))
-        nic_tx('nic_tx', device=target.CAVIUM, cores=range(n_nic_tx))
+        if nic == 'dpdk':
+            nic_tx('nic_tx', process='dpdk', cores=range(n_nic_tx))
+        else:
+            nic_tx('nic_tx', device=target.CAVIUM, cores=range(n_nic_tx))
 
-
-class dccp_print_stat(InternalLoop):
-#class dccp_print_stat(API):
-    def impl(self):
-        DccpPrintStat()
-
-#dccp_print_stat('dccp_print_stat', process='dpdk')
-dccp_print_stat('dccp_print_stat', device=target.CAVIUM, cores=[8])
+if nic == 'dpdk':
+    class dccp_print_stat(API):
+        def impl(self):
+            DccpPrintStat()
+    dccp_print_stat('dccp_print_stat', process='dpdk') 
+else:
+    class dccp_print_stat(InternalLoop):
+        def impl(self):
+            DccpPrintStat()
+    dccp_print_stat('dccp_print_stat', device=target.CAVIUM, cores=[8])
 
 inqueue_get('inqueue_get', process='app')
 inqueue_advance('inqueue_advance', process='app')
 outqueue_put('outqueue_put', process='app')
 master_process('app')
-
 
 
 c = Compiler(NicRxPipeline, NicTxPipeline)
@@ -832,10 +841,14 @@ c.include = r'''
 '''
 c.init = r'''
 int workerid = atoi(argv[1]);
+struct worker* workers = get_workers();
 init_task2executor(workers[workerid].executors);
 '''
 c.generate_code_as_header()
 c.depend = {"test_storm_nic": ['hash', 'worker', 'dummy', 'dpdk'],
             "test_storm_app": ['list', 'hash', 'hash_table', 'spout', 'count', 'rank', 'worker', 'app']}
-c.compile_and_run([("test_storm_app", workerid[test])])
-#c.compile_and_run([("test_storm_app", workerid[test]), ("test_storm_nic", workerid[test])])
+
+if nic == 'dpdk':
+    c.compile_and_run([("test_storm_app", workerid[test]), ("test_storm_nic", workerid[test])])
+else:
+    c.compile_and_run([("test_storm_app", workerid[test])])
