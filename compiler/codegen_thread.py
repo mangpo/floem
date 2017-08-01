@@ -301,7 +301,10 @@ def generate_inject_probe_code_with_process(graph, process, ext, init_code):
         probe_src = ""
 
     src += "void init(char *argv[]) {\n" #if graph.process2device[process] == target.CPU else "void init() {\n"
-    src += init_code
+    print "init_code", init_code
+    if init_code:
+        print "here"
+        src += init_code
     if target.is_dpdk_proc(process):
         src += dpdk_init_call(graph, process)
     #src += "  init_memory_regions();\n"
