@@ -94,4 +94,4 @@ for(i=0; i<64; i++) {
 }
 '''
 c.generate_code_as_header()
-c.compile_and_run("varsize_deq")
+c.compile_and_run("cavium_varsize_deq_test")
