@@ -30,29 +30,16 @@ typedef struct {
     size_t len;
     size_t offset;
     void* queue;
+    size_t clean;
 } circular_queue;
 
 typedef struct {
     size_t len;
     size_t offset;
     void* queue;
+    size_t clean;
     lock_t lock;
 } circular_queue_lock;
-
-typedef struct {
-    size_t len;
-    size_t offset;
-    void* queue;
-    size_t clean;
-} circular_queue_scan;
-
-typedef struct {
-    size_t len;
-    size_t offset;
-    void* queue;
-    lock_t lock;
-    size_t clean;
-} circular_queue_lock_scan;
 
 typedef struct {
     uint16_t flags;
@@ -67,7 +54,5 @@ typedef struct {
 q_buffer enqueue_alloc(circular_queue* q, size_t len);
 void enqueue_submit(q_buffer buf);
 q_buffer dequeue_get(circular_queue* q);
-void dequeue_release(q_buffer buf);
-q_buffer next_clean(circular_queue_scan* q);
-void clean_release(q_buffer buf);
+void dequeue_release(q_buffer buf, uint8_t flag_clean);
 #endif

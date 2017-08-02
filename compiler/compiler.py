@@ -18,7 +18,7 @@ class Compiler:
         self.include = None
         self.include_h = None
         self.testing = None
-        self.depend = None
+        self.depend = []
         self.init = None
 
         # Compiler option

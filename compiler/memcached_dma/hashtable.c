@@ -11,7 +11,7 @@
 #define HASHTABLE_POWER 15
 #define TABLESZ(p) (1ULL << (p))
 
-static_assert(sizeof(rte_spinlock_t) == 4, "Bad spinlock size");
+//static_assert(sizeof(rte_spinlock_t) == 4, "Bad spinlock size");
 
 #define BUCKET_NITEMS 5
 
@@ -23,7 +23,7 @@ struct hash_bucket {
     rte_spinlock_t lock;
 } __attribute__((packed));
 
-static_assert(sizeof(struct hash_bucket) == 64, "Bad hash bucket size");
+//static_assert(sizeof(struct hash_bucket) == 64, "Bad hash bucket size");
 
 /******************************************************************************/
 /* Hashtable */

@@ -51,7 +51,17 @@ class main(Pipeline):
             dma_free(x);
             ''')
 
-    Enq, Deq, Scan = queue_smart2.smart_queue("queue", 256, 2, 1, blocking=True)
+    class DisplayClean(Element):
+        def configure(self):
+            self.inp = Input()
+
+        def impl(self):
+            self.run_c(r'''
+            printf("clean: %d %d %d %d\n", state.keylen, state.key[0], state.key[state.keylen-1], *state.p);
+            fflush(stdout);
+            ''')
+
+    Enq, Deq, Scan = queue_smart2.smart_queue("queue", 16, 2, 1, enq_blocking=True, clean=True)
 
     class push(API):
         def configure(self):
@@ -59,6 +69,8 @@ class main(Pipeline):
 
         def impl(self):
             self.inp >> main.Save() >> main.Enq()
+
+            main.Scan() >> main.DisplayClean()
 
     class pop(InternalLoop):
         # def configure(self):
@@ -75,4 +87,11 @@ class main(Pipeline):
 master_process("varsize_deq")
 
 c = Compiler(main)
+c.testing = r'''
+int i;
+for(i=0; i<64; i++) {
+  push(i,i);
+}
+'''
 c.generate_code_as_header()
+c.compile_and_run("varsize_deq")

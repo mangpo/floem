@@ -1,6 +1,15 @@
 #ifndef PROTOCOL_BINARY_H
 #define PROTOCOL_BINARY_H
 
+    #define UDP_HEADER_SIZE 8
+
+    typedef struct {
+      uint16_t req_id;
+      uint16_t seq_id;
+      uint16_t n_data;
+      uint16_t extras;
+    } memcached_udp_header;
+
     /**
      * Definition of the legal "magic" values used in a packet.
      * See section 3.1 Magic byte
@@ -9,6 +18,26 @@
         PROTOCOL_BINARY_REQ = 0x80,
         PROTOCOL_BINARY_RES = 0x81
     } protocol_binary_magic;
+
+
+    /**
+     * Definition of the valid response status numbers.
+     * See section 3.2 Response Status
+     */
+    typedef enum {
+        PROTOCOL_BINARY_RESPONSE_SUCCESS = 0x00,
+        PROTOCOL_BINARY_RESPONSE_KEY_ENOENT = 0x01,
+        PROTOCOL_BINARY_RESPONSE_KEY_EEXISTS = 0x02,
+        PROTOCOL_BINARY_RESPONSE_E2BIG = 0x03,
+        PROTOCOL_BINARY_RESPONSE_EINVAL = 0x04,
+        PROTOCOL_BINARY_RESPONSE_NOT_STORED = 0x05,
+        PROTOCOL_BINARY_RESPONSE_DELTA_BADVAL = 0x06,
+        PROTOCOL_BINARY_RESPONSE_AUTH_ERROR = 0x20,
+        PROTOCOL_BINARY_RESPONSE_AUTH_CONTINUE = 0x21,
+        PROTOCOL_BINARY_RESPONSE_UNKNOWN_COMMAND = 0x81,
+        PROTOCOL_BINARY_RESPONSE_ENOMEM = 0x82
+    } protocol_binary_response_status;
+
 
         /**
      * Defintion of the different command opcodes.

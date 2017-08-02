@@ -9,6 +9,8 @@
 #include <assert.h>
 #include "protocol_binary.h"
 
+#define NUM_THREADS     4
+
 /******************************************************************************/
 /* Settings */
 
@@ -20,6 +22,10 @@ struct settings {
     size_t segmaxnum;
     /** Size of seqment clean queue */
     size_t segcqsize;
+    /** Local IP */
+    uint32_t localip;
+    /** Local IP */
+    uint64_t localmac;
     /** UDP port to listen on */
     uint16_t udpport;
     /** Verbosity for log messages. */
@@ -27,10 +33,19 @@ struct settings {
 };
 
 /** Global settings */
-struct settings settings;
+extern struct settings settings;
+void settings_init(int argc, char *argv[]);
 
-/** Initialize global settings from command-line. */
-void settings_init();
+/*
+static struct settings settings = {
+  .udpport = 11211,
+  .verbose = 1,
+  .segsize = 2 * 1024 * 1024, //  4 * 1024
+  .segmaxnum = 512,
+  .segcqsize = 32 * 1024 // 1024
+};
+*/
+
 
 /**
  * Item.
@@ -50,6 +65,7 @@ typedef struct _item {
     uint16_t keylen;
     /** Flags (currently unused, but provides padding) */
     uint32_t flags;
+    uint64_t addr;
 } item;
 
 /******************************************************************************/
@@ -83,12 +99,14 @@ void hasht_put(item *it, item *cas);
 
 struct segment_header {
     void *data;
+    uint64_t addr;
     struct segment_header *next;
     struct segment_header *prev;
     uint32_t offset;
     uint32_t freed;
     uint32_t size;
     uint32_t flags;
+    uint32_t core_id;
 };
 
 
@@ -107,17 +125,23 @@ struct item_allocator {
 
     /* Current segment */
     struct segment_header *cur;
+    /* Current NIC segment */
+    struct segment_header *cur_nic;
     /* Head pointer in cleanup queue */
     size_t cq_head;
     /* Clenanup counter, limits mandatory cleanup per request */
     size_t cleanup_count;
 
-    uint8_t pad_1[40];
+  uint16_t core_id;
+
+  uint8_t pad_1[30]; // [32]
     /***********************************************************/
     /* Part 3: Only accessed by maintenance threads */
 
     /* Oldest segment */
     struct segment_header *oldest;
+    /* Oldest NIC segment */
+    struct segment_header *oldest_nic;
     /* Tail pointer for cleanup queue */
     size_t cq_tail;
     /*  */
@@ -132,10 +156,13 @@ struct item_allocator {
 //void ialloc_init_slave(void);
 //void ialloc_finalize(void);
 //void ialloc_finalize_slave(void);
+uint64_t get_pointer_offset(void* p);
+struct item_allocator* get_item_allocators();
 void ialloc_init(void*);
 
 /** Initialize an item allocator instance. */
-void ialloc_init_allocator(struct item_allocator *ia);
+void ialloc_init_allocator(struct item_allocator *ia, uint32_t core_id);
+size_t clean_log(struct item_allocator *ia, bool idle);
 
 /**
  * Allocate an item.
@@ -181,11 +208,12 @@ void ialloc_cleanup_nextrequest(struct item_allocator *ia);
 void ialloc_maintenance(struct item_allocator *ia);
 
 item *segment_item_alloc(uint64_t thisbase, uint64_t seglen, uint64_t* offset, size_t total);
-struct segment_header *new_segment(struct item_allocator *ia, bool cleanup);
+//struct segment_header *new_segment(struct item_allocator *ia, bool cleanup);
+struct segment_header *ialloc_nicsegment_alloc(struct item_allocator *ia);
 void segment_item_free(struct segment_header *h, size_t total);
 uint64_t get_pointer_offset(void* p);
 void* get_pointer(uint64_t offset);
-void ialloc_nicsegment_full(uintptr_t last);
+uint32_t ialloc_nicsegment_full(uintptr_t last);
 
 /******************************************************************************/
 /* Items */
@@ -241,8 +269,10 @@ static inline void item_unref(item *it)
 {
     uint16_t c;
     assert(it->refcount > 0);
+    //if(it->refcount > 30) printf("refcount = %d\n", it->refcount);
     if ((c = __sync_sub_and_fetch(&it->refcount, 1)) == 0) {
-        ialloc_free(it, item_totalsz(it));
+      //printf("ialloc_free!!!!!!!!!!!!!!!!!!\n");
+      ialloc_free(it, item_totalsz(it));
     }
 }
 
@@ -252,11 +282,30 @@ static inline void myt_item_release(void *it)
     item_unref(it);
 }
 
+#include <rte_ether.h>
+#include <rte_ip.h>
+#include <rte_udp.h>
+#include <rte_arp.h>
+#include <rte_ethdev.h>
+
 typedef struct {
+    struct ether_hdr ether;
+#if DPDK_IPV6
+    struct ipv6_hdr ipv6;
+#else
+    struct ipv4_hdr ipv4;
+#endif
+    struct udp_hdr udp;
+    memcached_udp_header mcudp;
     protocol_binary_request_header mcr;
     uint8_t payload[];
 } __attribute__ ((packed)) iokvs_message;
 
+static iokvs_message iokvs_template = {
+ .ether = { .ether_type = 0x0008 },
+ .ipv4 = { .version_ihl = 0x45, .time_to_live = 0x40, .next_proto_id = 0x11},
+ .mcudp = { .n_data = 0x0100 }
+};
 
 uint32_t jenkins_hash(const void *key, size_t length);
 void populate_hasht();
@@ -357,7 +406,7 @@ static void cmp_func(int spec_n, iokvs_message **spec_data, int impl_n, iokvs_me
     for(int j=0; j<impl_n; j++) {
         iokvs_message *my = impl_data[j];
         if(ref->mcr.request.opcode == PROTOCOL_BINARY_CMD_GET && my->mcr.request.opcode == PROTOCOL_BINARY_CMD_GET) {
-            if(ref->mcr.request.magic == my->mcr.request.magic
+            if(ref->mcr.request.opaque == my->mcr.request.opaque
             && ref->mcr.request.extlen == my->mcr.request.extlen
             && ref->mcr.request.bodylen == my->mcr.request.bodylen) {
               int vallen = ref->mcr.request.bodylen - 4;
@@ -377,7 +426,7 @@ static void cmp_func(int spec_n, iokvs_message **spec_data, int impl_n, iokvs_me
             }
         }
         else if (ref->mcr.request.opcode == PROTOCOL_BINARY_CMD_SET && my->mcr.request.opcode == PROTOCOL_BINARY_CMD_SET) {
-            if(ref->mcr.request.magic == my->mcr.request.magic
+            if(ref->mcr.request.opaque == my->mcr.request.opaque
             && ref->mcr.request.extlen == my->mcr.request.extlen
             && ref->mcr.request.bodylen == my->mcr.request.bodylen) {
                 found = true;
@@ -387,7 +436,7 @@ static void cmp_func(int spec_n, iokvs_message **spec_data, int impl_n, iokvs_me
           // TODO: continue
     }
     if(!found) {
-        printf("Impl doesn't have a response for %d, %d, %ld, %ld.\n", ref->mcr.request.opcode, ref->mcr.request.magic, ref->mcr.request.extlen, ref->mcr.request.bodylen);
+        printf("Impl doesn't have a response for %d, %d, %d, %d.\n", ref->mcr.request.opcode, ref->mcr.request.opaque, ref->mcr.request.extlen, ref->mcr.request.bodylen);
         //printf("Impl doesn't have some responses.");
         exit(-1);
     }
