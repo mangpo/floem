@@ -12,6 +12,26 @@ n_workers = 'MAX_WORKERS'
 n_nic_tx = 4
 n_nic_rx = 1
 
+class DccpInfo(State):
+    header = Field("struct pkt_dccp_headers")
+    connections = Field(Array("struct connection", n_workers))
+    retrans_timeout = Field(Uint(64))
+    link_rtt = Field(Sint(64))
+    global_lock = Field("spinlock_t")  # TODO: Cavium doesn't lock inside strct.
+    acks_sent = Field(Sint(64))
+    tuples = Field(Sint(64))
+
+    def init(self):
+        self.header = lambda(x): "init_header_template(&{0})".format(x)
+        self.connections = lambda(x): "init_congestion_control({0})".format(x)
+        self.retrans_timeout = "LINK_RTT"
+        self.link_rtt = "LINK_RTT"
+        self.global_lock = lambda(x): "spinlock_init(&{0})".format(x)
+        self.acks_sent = 0
+        self.tuples = 0
+
+dccp_info = DccpInfo()
+
 class Classifier(Element):
     def configure(self):
         self.inp = Input(Size, "void*", "void*")
@@ -108,13 +128,17 @@ class LocalOrRemote(Element):
 
 
 class PrintTuple(Element):
+    dccp = Persistent(DccpInfo)
+
     def configure(self):
+        self.dccp = dccp_info
         self.inp = Input("struct tuple*")
         self.out = Output("struct tuple*")
 
     def impl(self):
         self.run_c(r'''
     (struct tuple* t) = inp();
+    __sync_fetch_and_add64(&dccp->tuples, 1);
 
 #ifdef DEBUG_MP
     if(t != NULL) {
@@ -129,25 +153,6 @@ class PrintTuple(Element):
 
 
 ############################### DCCP #################################
-class DccpInfo(State):
-    header = Field("struct pkt_dccp_headers")
-    connections = Field(Array("struct connection", n_workers))
-    retrans_timeout = Field(Uint(64))
-    link_rtt = Field(Sint(64))
-    global_lock = Field("spinlock_t")  # TODO: Cavium doesn't lock inside strct.
-    acks_sent = Field(Sint(64))
-    tuples = Field(Sint(64))
-
-    def init(self):
-        self.header = lambda(x): "init_header_template(&{0})".format(x)
-        self.connections = lambda(x): "init_congestion_control({0})".format(x)
-        self.retrans_timeout = "LINK_RTT"
-        self.link_rtt = "LINK_RTT"
-        self.global_lock = lambda(x): "spinlock_init(&{0})".format(x)
-        self.acks_sent = 0
-        self.tuples = 0
-
-dccp_info = DccpInfo()
 
 class DccpGetStat(Element):
     dccp = Persistent(DccpInfo)
