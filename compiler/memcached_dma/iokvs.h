@@ -1,6 +1,7 @@
 #ifndef IOKVS_H_
 #define IOKVS_H_
 
+
 #include <stdio.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -46,7 +47,6 @@ static struct settings settings = {
 };
 */
 
-
 /**
  * Item.
  * The item struct is immediately followed by first the key, and then the
@@ -65,7 +65,6 @@ typedef struct _item {
     uint16_t keylen;
     /** Flags (currently unused, but provides padding) */
     uint32_t flags;
-    uint64_t addr;
 } item;
 
 /******************************************************************************/
@@ -99,7 +98,6 @@ void hasht_put(item *it, item *cas);
 
 struct segment_header {
     void *data;
-    uint64_t addr;
     struct segment_header *next;
     struct segment_header *prev;
     uint32_t offset;
@@ -282,19 +280,11 @@ static inline void myt_item_release(void *it)
     item_unref(it);
 }
 
-#include <rte_ether.h>
-#include <rte_ip.h>
-#include <rte_udp.h>
-#include <rte_arp.h>
 #include <rte_ethdev.h>
 
 typedef struct {
     struct ether_hdr ether;
-#if DPDK_IPV6
-    struct ipv6_hdr ipv6;
-#else
-    struct ipv4_hdr ipv4;
-#endif
+    struct ip_hdr ipv4;
     struct udp_hdr udp;
     memcached_udp_header mcudp;
     protocol_binary_request_header mcr;
