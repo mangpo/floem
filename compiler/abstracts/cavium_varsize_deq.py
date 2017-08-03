@@ -88,12 +88,6 @@ class main(Pipeline):
 master_process("varsize_deq")
 
 c = Compiler(main)
-c.testing = r'''
-int i;
-for(i=0; i<64; i++) {
-  push(i,i);
-}
-'''
 c.generate_code_as_header()
 c.depend = ["varsize_deq"]
 c.compile_and_run("cavium_varsize_deq_test")

@@ -96,7 +96,7 @@ class main(Pipeline):
             output { out(pkt, buf); }
             ''')
 
-    Enq, Deq, Scan = queue_smart2.smart_queue("queue", 256, 2, 1, blocking=True)
+    Enq, Deq, Scan = queue_smart2.smart_queue("queue", 256, 2, 1, enq_blocking=True)
 
     class push(InternalLoop):
         def impl(self):
@@ -115,10 +115,12 @@ class main(Pipeline):
 
     def impl(self):
         MemoryRegion("data_region", 4 * 100)
-        main.push('push', process="dpdk") #device=target.CAVIUM)
+        main.push('push', device=target.CAVIUM)
         main.pop('pop', process="varsize_enq")
 
 master_process("varsize_enq")
 
 c = Compiler(main)
 c.generate_code_as_header()
+c.depend = ["varsize_enq"]
+c.compile_and_run("cavium_varsize_enq_test")
