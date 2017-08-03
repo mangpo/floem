@@ -30,7 +30,7 @@ int parse_mac(char *arg, uint64_t *out)
     return 0;
 }
 
-void settings_init(int argc, char *argv[])
+void settings_init(char *argv[])
 {
   settings.udpport = 11211;
   settings.verbose = 1;
@@ -38,10 +38,12 @@ void settings_init(int argc, char *argv[])
   settings.segmaxnum = 512;
   settings.segcqsize = 8 * 1024;
 
+/*
   if (argc != 2) {
     fprintf(stderr, "Usage: flexkvs LOCAL-IP LOCAL-MAC\n");
     exit(1);
   }
+*/
 
   if (inet_pton(AF_INET, argv[1], &settings.localip) != 1) {
     fprintf(stderr, "Parsing ip failed\n");

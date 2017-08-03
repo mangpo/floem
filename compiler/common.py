@@ -128,6 +128,8 @@ sizeof_dict = {
     "uint64_t": 8,
     "size_t": 8,
     "uintptr_t": 8,
+    "struct ether_addr": 1, # array
+    "struct ip_addr": 1, # array
 }
 
 class UnkownType(Exception):

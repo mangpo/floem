@@ -58,7 +58,7 @@ class MyState(State):
     vallen = Field(Uint(32))
     src_mac = Field('struct ether_addr')
     dst_mac = Field('struct ether_addr')
-    src_ip = Field(Uint(32))
+    src_ip = Field('struct ip_addr')
     src_port = Field(Uint(16))
 
 class Schedule(State):
@@ -93,9 +93,9 @@ class main(Pipeline):
 iokvs_message* m = (iokvs_message*) pkt;
 state.pkt = m;
 state.pkt_buff = buff;
-state.src_mac = m->ether.s_addr;
-state.dst_mac = m->ether.d_addr;
-state.src_ip = m->ipv4.src_addr;
+state.src_mac = m->ether.src;
+state.dst_mac = m->ether.dest;
+state.src_ip = m->ipv4.src;
 state.src_port = m->udp.src_port;
 output { out(); }
             ''')
@@ -127,9 +127,9 @@ iokvs_message* m = (iokvs_message*) pkt;
 int type; // 0 = normal, 1 = slow, 2 = drop
 
 if (m->ether.ether_type == htons(ETHER_TYPE_IPv4) &&
-    m->ipv4.next_proto_id == 17 &&
-    m->ipv4.dst_addr == settings.localip &&
-    m->udp.dst_port == htons(11211) &&
+    m->ipv4._proto == 17 &&
+    m->ipv4.dest == settings.localip &&
+    m->udp.dest_port == htons(11211) &&
     msglen >= sizeof(iokvs_message))
 {
     uint32_t blen = m->mcr.request.bodylen;
@@ -418,19 +418,19 @@ output { out(msglen, m, pkt_buff); }
             self.run_c(r'''
         (size_t msglen, iokvs_message* m, void* buff) = inp();
 
-        m->ether.d_addr = state.src_mac;
-        m->ether.s_addr = state.dst_mac; //settings.localmac;
-        m->ipv4.dst_addr = state.src_ip;
-        m->ipv4.src_addr = settings.localip;
-        m->ipv4.total_length = htons(msglen - offsetof(iokvs_message, ipv4));
-        m->ipv4.time_to_live = 64;
-        m->ipv4.hdr_checksum = 0;
-        //m->ipv4.hdr_checksum = rte_ipv4_cksum(&m->ipv4);  // TODO
+        m->ether.dest = state.src_mac;
+        m->ether.src = state.dst_mac; //settings.localmac;
+        m->ipv4.dest = state.src_ip;
+        m->ipv4.src = settings.localip;
+        m->ipv4._len = htons(msglen - offsetof(iokvs_message, ipv4));
+        m->ipv4._ttl = 64;
+        m->ipv4._chksum = 0;
+        //m->ipv4._chksum = rte_ipv4_cksum(&m->ipv4);  // TODO
 
-        m->udp.dst_port = state.src_port;
+        m->udp.dest_port = state.src_port;
         m->udp.src_port = htons(11211);
-        m->udp.dgram_len = htons(msglen - offsetof(iokvs_message, udp));
-        m->udp.dgram_cksum = 0;
+        m->udp.len = htons(msglen - offsetof(iokvs_message, udp));
+        m->udp.cksum = 0;
 
         output { out(msglen, (void*) m, buff); }
             ''')
@@ -449,21 +449,21 @@ output { out(msglen, m, pkt_buff); }
     int resp = 0;
 
     /* Currently we're only handling ARP here */
-    if (msg->ether.ether_type == htons(ETHER_TYPE_ARP) &&
-            arp->arp_hrd == htons(ARP_HRD_ETHER) && arp->arp_pln == 4 &&
-            arp->arp_op == htons(ARP_OP_REQUEST) && arp->arp_hln == 6 &&
-            arp->arp_data.arp_tip == settings.localip)
+    if (msg->ether.ether_type == htons(ETHERTYPE_ARP) &&
+            arp->arp_hrd == htons(ARPHRD_ETHER) && arp->arp_pln == 4 &&
+            arp->arp_op == htons(ARPOP_REQUEST) && arp->arp_hln == 6 &&
+            arp->arp_tip == settings.localip)
     {
         printf("Responding to ARP\n");
         resp = 1;
-        struct ether_addr mymac = msg->ether.d_addr;
-        msg->ether.d_addr = msg->ether.s_addr;
-        msg->ether.s_addr = mymac; // TODO
+        struct ether_addr mymac = msg->ether.dest;
+        msg->ether.dest = msg->ether.src;
+        msg->ether.src = mymac; // TODO
         arp->arp_op = htons(ARP_OP_REPLY);
-        arp->arp_data.arp_tha = arp->arp_data.arp_sha;
-        arp->arp_data.arp_sha = mymac;
-        arp->arp_data.arp_tip = arp->arp_data.arp_sip;
-        arp->arp_data.arp_sip = settings.localip;
+        arp->arp_tha = arp->arp_sha;
+        arp->arp_sha = mymac;
+        arp->arp_tip = arp->arp_sip;
+        arp->arp_sip = settings.localip;
 
         //rte_mbuf_refcnt_update(mbuf, 1);  // TODO
 
@@ -626,7 +626,7 @@ output switch { case segment: out(); else: null(); }
     if(it == NULL && this->head->next) {
             printf("Segment is full. offset = %d\n", this->head->offset);  // including this line will make CPU keep making new segment. Without this line, # of segment will stop under 100.
 
-        full = this->head->segbase + this->head->offset;
+        full = this->head->segaddr + this->head->offset;
         segments_holder* old = this->head;
         this->head = this->head->next;
         free(old);
@@ -660,7 +660,7 @@ output switch { case segment: out(); else: null(); }
     printf("item_alloc: segaddr = %ld\n", this->head->segaddr);
     uintptr_t addr = segment_item_alloc(this->head->segaddr, this->head->seglen, &this->head->offset, sizeof(item) + totlen);
     if(addr == 0 && this->head->next) {
-        full = this->head->segbase + this->head->offset;
+        full = this->head->segaddr + this->head->offset;
         segments_holder* old = this->head;
         this->head = this->head->next;
         free(old);
@@ -853,25 +853,6 @@ output switch { case segment: out(); else: null(); }
             def impl(self):
                 self.inp >> main.FirstSegment() >> tx_enq.inp[2]
 
-        # class clean_cq(API):
-        #     def configure(self):
-        #         self.inp = Input(Size)
-        #         self.out = Output(Bool)
-        #         self.default_return = 'false'
-        #
-        #     def impl(self):
-        #         clean = main.Clean(configure=['true'])
-        #         #unclean = main.Clean(configure=['false'])
-        #         #ret = main.ForwardBool()
-        #         self.inp >> tx_scan
-        #         # get
-        #         tx_scan.out[0] >> main.Unref() >> clean
-        #
-        #         tx_scan.out[1] >> clean
-        #         tx_scan.out[2] >> clean
-        #         tx_scan.out[3] >> clean
-        #         clean >> self.out
-
         ####################### NIC Tx #######################
         class nic_tx(InternalLoop):
             def impl(self):
@@ -906,16 +887,12 @@ output switch { case segment: out(); else: null(); }
                 net_alloc1.oom >> drop
                 net_alloc3.oom >> drop
 
-        nic_rx('nic_rx', process='dpdk', cores=[1])
+        nic_rx('nic_rx', device=target.CAVIUM, cores=[1])
         process_eq('process_eq', process='app')
         init_segment('init_segment', process='app')
-        #clean_cq('clean_cq', process='app')
-        nic_tx('nic_tx', process='dpdk', cores=[2])
+        nic_tx('nic_tx', device=target.CAVIUM, cores=[2])
 
 master_process('app')
-
-# NIC: ['jenkins_hash', 'ialloc', 'settings']
-# APP: ['jenkins_hash', 'hashtable', 'ialloc', 'settings']
 
 
 ######################## Run test #######################
@@ -925,10 +902,10 @@ c.include = r'''
 #include "iokvs.h"
 #include "protocol_binary.h"
 '''
+c.init = r'''
+  settings_init(argv);
+  ialloc_init();
+  '''
 c.generate_code_as_header()
-c.depend = {"test_app": ['jenkins_hash', 'hashtable', 'ialloc', 'settings', 'app'],
-            "test_nic": ['jenkins_hash', 'hashtable', 'ialloc', 'settings', 'dpdk']}
-c.compile_and_run(["test_app", "test_nic"])
-
-
-# TODO: spec
+c.depend = {"test_app": ['jenkins_hash', 'hashtable', 'ialloc', 'settings', 'app']}
+c.compile_and_run(["test_app"])

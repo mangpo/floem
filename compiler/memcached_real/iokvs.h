@@ -1,6 +1,7 @@
 #ifndef IOKVS_H_
 #define IOKVS_H_
 
+
 #include <stdio.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -45,7 +46,6 @@ static struct settings settings = {
   .segcqsize = 32 * 1024 // 1024
 };
 */
-
 
 /**
  * Item.
@@ -280,19 +280,11 @@ static inline void myt_item_release(void *it)
     item_unref(it);
 }
 
-#include <rte_ether.h>
-#include <rte_ip.h>
-#include <rte_udp.h>
-#include <rte_arp.h>
 #include <rte_ethdev.h>
 
 typedef struct {
     struct ether_hdr ether;
-#if DPDK_IPV6
-    struct ipv6_hdr ipv6;
-#else
-    struct ipv4_hdr ipv4;
-#endif
+    struct ip_hdr ipv4;
     struct udp_hdr udp;
     memcached_udp_header mcudp;
     protocol_binary_request_header mcr;

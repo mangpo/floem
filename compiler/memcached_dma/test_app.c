@@ -35,9 +35,9 @@ void maintenance()
 }
 
 int main(int argc, char *argv[]) {
-  settings_init(argc, argv);
+  //settings_init(argv);
+  //ialloc_init();
   init(argv);
-  ialloc_init(data_region);
   hasht_init();
   iallocs = calloc(NUM_THREADS, sizeof(*iallocs));
   printf("main: segmaxnum = %d\n", settings.segmaxnum);

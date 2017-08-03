@@ -32,9 +32,7 @@ void* get_pointer(uint64_t offset) {
     return (void *) ((uintptr_t) seg_base + offset);
 }
 
-void ialloc_init(void* p) {
-  seg_base = p;
-  printf("seg_base = %p\n", seg_base);
+void ialloc_init() {
   if ((seg_headers = calloc(settings.segmaxnum, sizeof(*seg_headers))) ==
             NULL)
     {
@@ -129,11 +127,25 @@ init_h:
     return h;
 }
 
+/*
 static inline struct segment_header *segment_from_part(void *data)
 {
     size_t i = ((uintptr_t) data - (uintptr_t) seg_base) / settings.segsize;
     assert(i < settings.segmaxnum);
     return seg_headers[i];
+}
+*/
+
+static inline struct segment_header *segment_from_part(uint64_t addr) {
+    int i;
+    for(i=0;i<seg_alloced;i++) {
+        struct segment_header *h = seg_headers[i];
+        if(addr >= h->addr && addr < h->addr + h->size)
+            return h;
+    }
+    printf("Cannot find segment at addr %p." % (void*) addr);
+    abort();
+    return NULL;
 }
 
 static void segment_free(struct segment_header *h)
@@ -287,14 +299,13 @@ item *segment_item_alloc_pointer(struct segment_header *h, size_t total)
 uint32_t ialloc_nicsegment_full(uintptr_t last)
 {
   //printf("ialloc_nicsegment_full\n");
-    uintptr_t it_a = (uintptr_t) seg_base + last;
-    struct segment_header *h = segment_from_part((item *) (it_a - sizeof(item)));
-    size_t off = it_a - (uintptr_t) h->data;
+    struct segment_header *h = segment_from_part(last);
+    size_t off = last - h->addr;
     printf("nicsegment_full: core_id =%d, h = %p, segment = %p, offset = %ld\n", h->core_id, h, h->data, off);
 
     /* If segment is not quite full yet, add dummy entry to fill up. */
     if (off + sizeof(item) <= h->size) {
-        item *it = (item *) it_a;
+        item *it = (item *) ((uintptr_t) h->data + off);
         it->refcount = 0;
         it->keylen = h->size - off - sizeof(item);
         it->vallen = 0;
@@ -304,35 +315,6 @@ uint32_t ialloc_nicsegment_full(uintptr_t last)
     h->flags |= SF_INACTIVE;
     return h->core_id; 
 }
-
-
-/** Mark NIC log segment as full. */
-//void ialloc_nicsegment_full(struct item_allocator* ia, uintptr_t last)
-//{
-//    uintptr_t it_a = (uintptr_t) seg_base + last;
-//    struct item *it = (struct item *) it_a;
-//    struct segment_header *h = segment_from_part(it);
-//    size_t off = it_a - (uintptr_t) h->data + item_totalsz(it);
-//
-//    /* If segment is not quite full yet, add dummy entry to fill up. */
-//    if (off + sizeof(*it) <= h->size) {
-//        it = (struct item *) ((uintptr_t) h->data + off);
-//        it->refcount = 0;
-//        it->keylen = h->size - off - sizeof(*it);
-//        it->vallen = 0;
-//    }
-//    segment_item_free(h, h->size - off);
-//
-//    h->flags |= SF_INACTIVE;
-//}
-
-
-
-//struct item_allocator *init_allocator() {
-//  struct item_allocator *ia = (struct item_allocator *) malloc(sizeof(struct item_allocator));
-//  ialloc_init_allocator(ia);
-//  return ia;
-//}
 
 
 void ialloc_init_allocator(struct item_allocator *ia, uint32_t core_id)
@@ -407,7 +389,7 @@ item *ialloc_alloc(struct item_allocator *ia, size_t total, bool cleanup)
 
 void ialloc_free(item *it, size_t total)
 {
-    struct segment_header *h = segment_from_part(it);
+    struct segment_header *h = segment_from_part(it->addr);
     //printf("free: segment = %p, it = %p, size = %ld\n", h->data, it, total);
     segment_item_free(h, total);
 }
