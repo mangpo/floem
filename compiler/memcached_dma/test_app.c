@@ -36,7 +36,7 @@ void maintenance()
 
 int main(int argc, char *argv[]) {
   //settings_init(argv);
-  //ialloc_init();
+  ialloc_init();
   init(argv);
   hasht_init();
   iallocs = calloc(NUM_THREADS, sizeof(*iallocs));

@@ -24,9 +24,9 @@ struct settings {
     /** Size of seqment clean queue */
     size_t segcqsize;
     /** Local IP */
-    uint32_t localip;
+    struct ip_addr localip;
     /** Local IP */
-    uint64_t localmac;
+    struct eth_addr localmac;
     /** UDP port to listen on */
     uint16_t udpport;
     /** Verbosity for log messages. */
@@ -142,7 +142,6 @@ struct item_allocator {
 
 
 /** Initialize item allocation. Prepares memory regions etc. */
-uint64_t get_pointer_offset(void* p);
 struct item_allocator* get_item_allocators();
 void ialloc_init();
 
@@ -197,8 +196,6 @@ item *segment_item_alloc(uint64_t thisbase, uint64_t seglen, uint64_t* offset, s
 //struct segment_header *new_segment(struct item_allocator *ia, bool cleanup);
 struct segment_header *ialloc_nicsegment_alloc(struct item_allocator *ia);
 void segment_item_free(struct segment_header *h, size_t total);
-uint64_t get_pointer_offset(void* p);
-void* get_pointer(uint64_t offset);
 uint32_t ialloc_nicsegment_full(uintptr_t last);
 
 /******************************************************************************/

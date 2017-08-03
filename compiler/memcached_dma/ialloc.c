@@ -25,14 +25,6 @@ void *mem_base;
 uint64_t mem_base_phys;
 #endif
 
-uint64_t get_pointer_offset(void* p) {
-    return (uintptr_t) p - (uintptr_t) seg_base;
-}
-
-void* get_pointer(uint64_t offset) {
-    return (void *) ((uintptr_t) seg_base + offset);
-}
-
 void ialloc_init() {
   if ((seg_headers = calloc(settings.segmaxnum, sizeof(*seg_headers))) ==
             NULL)

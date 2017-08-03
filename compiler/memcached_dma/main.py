@@ -259,7 +259,7 @@ output { out(this->core); }''' % ('%', n_cores))
             self.run_c(r'''
     uint32_t* vallen;
     item* it = (item*) state.it_addr;
-    dma_read(&it_addr->vallen, sizeof(uint32_t), (void**) &vallen);
+    dma_read(&it->vallen, sizeof(uint32_t), (void**) &vallen);
     size_t msglen = sizeof(iokvs_message) + 4 + *vallen;
     state.vallen = *vallen;
     dma_free(vallen);
@@ -299,7 +299,6 @@ output { out(msglen, m, pkt_buff); }
         (size_t msglen, void* pkt, void* pkt_buff) = inp();
         iokvs_message *m = pkt;
         memcpy(m, &iokvs_template, sizeof(iokvs_message));
-        int msglen = sizeof(iokvs_message) + 4;
         item* it = (item*) state.it_addr;
 
         m->mcr.request.magic = PROTOCOL_BINARY_RES;
@@ -315,7 +314,7 @@ m->mcr.request.bodylen = 4 + state.vallen;
 
 void* value;
 dma_read(item_value(it), state.vallen, (void**) &value);
-rte_memcpy(m->payload + 4, value, state.vallen);
+memcpy(m->payload + 4, value, state.vallen);
 dma_free(value);
 
 output { out(msglen, m, pkt_buff); }
@@ -364,7 +363,6 @@ output { out(msglen, m, pkt_buff); }
 
         def impl(self):
             self.run_c(r'''
-//printf("size set\n");
             size_t msglen = sizeof(iokvs_message) + 4;
             output { out(msglen); }
             ''')
@@ -492,7 +490,7 @@ iokvs_message* m = (iokvs_message*) pkt;
 uint8_t *val = m->payload + 4;
 uint8_t opcode = m->mcr.request.opcode;
 
-static count = 0;
+static int count = 0;
 count++;
 if(count == 10000) {
 count = 0;
@@ -904,7 +902,7 @@ c.include = r'''
 '''
 c.init = r'''
   settings_init(argv);
-  ialloc_init();
+  //ialloc_init();
   '''
 c.generate_code_as_header()
 c.depend = {"test_app": ['jenkins_hash', 'hashtable', 'ialloc', 'settings', 'app']}
