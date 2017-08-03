@@ -908,4 +908,4 @@ c.init = r'''
   '''
 c.generate_code_as_header()
 c.depend = {"test_app": ['jenkins_hash', 'hashtable', 'ialloc', 'settings', 'app']}
-c.compile_and_run(["test_app"])
+c.compile_and_run([("test_app", "10.3.0.35")])
