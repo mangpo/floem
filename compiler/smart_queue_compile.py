@@ -232,6 +232,8 @@ def compile_smart_queue(g, q, src2fields):
     else:
         prefix = ""
 
+    byte_reverse, size2convert, htons, htonl, htonp = get_size2convert(g, deq_thread, enq_thread)
+
     g_add, enq_alloc, enq_submit, deq_get, deq_release, clean = \
         create_queue(q.name, q.size, q.n_cores, enq_blocking=q.enq_blocking, deq_blocking=q.deq_blocking,
                      enq_atomic=q.enq_atomic, deq_atomic=q.deq_atomic, clean=q.clean, core=True)
@@ -249,10 +251,10 @@ def compile_smart_queue(g, q, src2fields):
        (q_buffer buff, size_t core) = in();
         q_entry* e = buff.entry;
         int type = -1;
-        if (e != NULL) type = (e->flags & TYPE_MASK) >> TYPE_SHIFT;
+        if (e != NULL) type = (%s(e->flags) & TYPE_MASK) >> TYPE_SHIFT;
         output switch {
             %s
-        }''' % (src_cases))
+        }''' % (htons, src_cases))
 
     src_cases = ""
     for i in range(q.n_cases):
@@ -262,10 +264,10 @@ def compile_smart_queue(g, q, src2fields):
         (q_buffer buff) = in();
         q_entry* e = buff.entry;
         uint16_t type = 0;
-        if (e != NULL) type = (e->flags & TYPE_MASK) >> TYPE_SHIFT;
+        if (e != NULL) type = (%s(e->flags) & TYPE_MASK) >> TYPE_SHIFT;
         output switch {
             %s
-        }''' % (src_cases))
+        }''' % (htons, src_cases))
 
     g.addElement(classify_ele)
     deq_get_inst = deq_get(q.deq.name + "_get", create=False).instance
