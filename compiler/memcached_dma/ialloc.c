@@ -82,7 +82,7 @@ static struct segment_header *segment_alloc(uint32_t core_id)
         return NULL;
     }
 
-    printf("segment alloc: data = %p, i = %d\n", data, i);
+    printf("segment alloc: data = %p, addr = %p, i = %d\n", data, (void*) phys, i);
     fflush(stdout);
 
     h = malloc(sizeof(*h));
@@ -135,10 +135,10 @@ void segment_item_free(struct segment_header *h, size_t total)
     }
 }
 
-item *segment_item_alloc(uint64_t thisbase, uint64_t seglen, uint64_t* offset, size_t total)
+uint64_t segment_item_alloc(uint64_t thisbase, uint64_t seglen, uint64_t* offset, size_t total)
 {
     //printf("segment_header = %ld\n", h);
-    item *it = (item *) (thisbase + *offset);
+    uint64_t it = thisbase + *offset;
     size_t avail;
 
     /* Not enough room in this segment */

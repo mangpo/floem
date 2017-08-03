@@ -172,7 +172,7 @@ output switch {
         def impl(self):
             self.run_c(r'''
 uint8_t cmd = state.pkt->mcr.request.opcode;
-//printf("receive: %d\n", cmd);
+printf("classify: %d\n", cmd);
 
 output switch{
   case (cmd == PROTOCOL_BINARY_CMD_GET): out_get();
@@ -192,7 +192,7 @@ output { out(); }''')
             self.run_c(r'''
 int core = state.hash %s %d;;
 state.core = core;
-//printf("hash = %s, core = %s\n", state.hash, core);
+printf("hash = %s, core = %s\n", state.hash, core);
             output { out(); }''' % ('%', n_cores, '%d', '%d'))
 
     ######################## hash ########################
@@ -213,7 +213,7 @@ output { out(); }
         def impl(self):
             self.run_c(r'''
 item* it = hasht_get(state.key, state.pkt->mcr.request.keylen, state.hash);
-//printf("hash get\n");
+printf("hash get\n");
 state.it = it;
 state.it_addr = it->addr;
 output switch { case it: out(); else: null(); }
@@ -222,7 +222,7 @@ output switch { case it: out(); else: null(); }
     class HashPut(ElementOneInOut):
         def impl(self):
             self.run_c(r'''
-//printf("hash put\n");
+printf("hash put\n");
 hasht_put(state.it, NULL);
 output { out(); }
             ''')
@@ -614,8 +614,9 @@ output switch { case segment: out(); else: null(); }
     size_t totlen = state.pkt->mcr.request.bodylen - state.pkt->mcr.request.extlen;
 
     uint64_t full = 0;
-    //printf("item_alloc: segbase = %ld\n", this->segbase);
-    item *it = segment_item_alloc(this->head->segbase, this->head->seglen, &this->head->offset, sizeof(item) + totlen);
+    item *it = NULL;
+    if(this->head) {
+            it = segment_item_alloc(this->head->segbase, this->head->seglen, &this->head->offset, sizeof(item) + totlen);
             //if(it == NULL) full = this->segbase + this->offset; 
             // Including this is bad is not good because, when tx queue is backed up, CPU will have high number of segment, but NIC will never get anything back.
 
@@ -628,6 +629,7 @@ output switch { case segment: out(); else: null(); }
         this->head = this->head->next;
         free(old);
         it = segment_item_alloc(this->head->segbase, this->head->seglen, &this->head->offset, sizeof(item) + totlen);
+    }
     }
 
     //printf("it = %p, full = %p\n", it, (void*) full);
@@ -654,14 +656,17 @@ output switch { case segment: out(); else: null(); }
     size_t totlen = state.pkt->mcr.request.bodylen - state.pkt->mcr.request.extlen;
 
     uint64_t full = 0;
-    printf("item_alloc: segaddr = %ld\n", this->head->segaddr);
-    uintptr_t addr = segment_item_alloc(this->head->segaddr, this->head->seglen, &this->head->offset, sizeof(item) + totlen);
+    uint64_t addr = 0;
+    if(this->head) {
+      printf("item_alloc: segaddr = %ld\n", this->head->segaddr);
+      addr = segment_item_alloc(this->head->segaddr, this->head->seglen, &this->head->offset, sizeof(item) + totlen);
     if(addr == 0 && this->head->next) {
         full = this->head->segaddr + this->head->offset;
         segments_holder* old = this->head;
         this->head = this->head->next;
         free(old);
         addr = segment_item_alloc(this->head->segaddr, this->head->seglen, &this->head->offset, sizeof(item) + totlen);
+    }
     }
 
     state.segfull = full;
@@ -671,7 +676,7 @@ output switch { case segment: out(); else: null(); }
         dma_read(addr, sizeof(item), (void**) &it);
         it->refcount = nic_ntohs(1);
 
-        printf("get_item keylen: %ld, totlen: %ld, item: %p\n",
+        printf("get_item keylen: %d, totlen: %ld, item: %p\n",
             state.pkt->mcr.request.keylen, totlen, (void*) it);
         it->hv = nic_ntohl(state.hash);
         it->vallen = nic_ntohl(totlen - state.pkt->mcr.request.keylen);
@@ -748,12 +753,14 @@ output switch { case segment: out(); else: null(); }
         def impl(self):
             self.run_c(r'''
         static uint8_t v = 0;
-        iokvs_message* m = random_request(v);
-        v++;
-        if(v>=256) v = 0;
+        iokvs_message* m = NULL;
+        if(v < 100) {
+            m = random_request(v);
+            v++;
+        }
 
         output switch {
-            case m != NULL: out(0, m, NULL);
+            case m != NULL: out(sizeof(iokvs_message) + m->mcr.request.bodylen, m, NULL);
             case m == NULL: nothing();
         }
             ''')
@@ -952,4 +959,4 @@ c.init = r'''
   '''
 c.generate_code_as_header()
 c.depend = {"test_app": ['jenkins_hash', 'hashtable', 'ialloc', 'settings', 'app']}
-c.compile_and_run([("test_app", "10.3.0.35")])
+c.compile_and_run(["test_app"])

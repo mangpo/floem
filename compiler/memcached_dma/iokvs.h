@@ -276,7 +276,7 @@ typedef struct {
 iokvs_message* iokvs_template();
 
 uint32_t jenkins_hash(const void *key, size_t length);
-void populate_hasht();
+//void populate_hasht();
 
 iokvs_message* random_get_request(uint8_t v, uint8_t id);
 iokvs_message* random_set_request(uint8_t v, uint8_t id);
