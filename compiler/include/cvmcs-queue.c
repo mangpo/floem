@@ -44,7 +44,7 @@ uint64_t core_time_now_us()
 
 
 void enqueue_clean(circular_queue* q, void(*clean_func)(q_buffer)) {
-    size_t off, clean, qlen;
+    size_t clean, qlen;
     q_entry *eqe;
     void *eq;
     uintptr_t addr;
@@ -53,7 +53,7 @@ void enqueue_clean(circular_queue* q, void(*clean_func)(q_buffer)) {
     qlen = q->len;
     eq = q->queue;
     while (1) {
-        addr = (uintptr_t) eq + off;
+        addr = (uintptr_t) eq + clean;
         dma_read(addr, sizeof(q_entry), (void**) &eqe);
 	    //check_flag(eqe, clean, "clean");
         //printf("clean: %ld %ld %d\n", clean, off, eqe->flags);
@@ -167,7 +167,7 @@ q_buffer dequeue_get(circular_queue* q) {
     dma_read(addr, sizeof(q_entry), (void**) &eqe);
     //__sync_synchronize();
     //if(eqe->flags)
-    //  printf("get: flags = %x\n", eqe->flags);
+    //printf("get: addr = %p, flags = %x\n", (void*) addr, eqe->flags);
     if(nic_htons(eqe->flags) & FLAG_OWN) {
       uint16_t elen = nic_htons(eqe->len);
       printf("dequeue_get (before): addr = %p, entry = %p, len = %d\n", (void*) addr, eqe, elen);
@@ -189,7 +189,7 @@ void dequeue_release(q_buffer buf, uint8_t flag_clean)
 {
     q_entry *e = buf.entry;
     uintptr_t addr = buf.addr;
-    e->flags = (e->flags & nic_ntohs(~FLAG_OWN) | nic_ntohs(flag_clean));
+    e->flags = (e->flags & nic_ntohs(~FLAG_OWN)) | nic_ntohs(flag_clean);
     dma_write(addr, sizeof(uint16_t), e);
     dma_free(e);
     //printf("release: entry=%ld\n", e);

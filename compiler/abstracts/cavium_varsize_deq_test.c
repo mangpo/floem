@@ -5,7 +5,7 @@ int main(int argc, char *argv[]) {
     run_threads();
     int i;
     for(i=0; i<64; i++) {
-        push(i,i);
+      push((i%4)+1,i);
     }
     kill_threads();
     return 0;

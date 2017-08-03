@@ -6,6 +6,8 @@
 
 #define ALIGN 8U
 #define FLAG_OWN 1
+#define FLAG_MASK 3
+#define FLAG_CLEAN 2
 #define TYPE_NOP 0
 #define TYPE_SHIFT 8
 #define TYPE_MASK  0xFF00
@@ -51,7 +53,7 @@ typedef struct {
     uintptr_t addr;
 } q_buffer;
 
-q_buffer enqueue_alloc(circular_queue* q, size_t len);
+q_buffer enqueue_alloc(circular_queue* q, size_t len, void(*clean)(q_buffer));
 void enqueue_submit(q_buffer buf);
 q_buffer dequeue_get(circular_queue* q);
 void dequeue_release(q_buffer buf, uint8_t flag_clean);

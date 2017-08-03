@@ -29,6 +29,7 @@ class main(Pipeline):
     int* p = data_region;
     p[data] = 100 + data;
     state.p = &p[data];
+            printf("push: data = %d, len = %d\n", data, len);
     output { out(); }
             ''')
 
@@ -61,7 +62,7 @@ class main(Pipeline):
             fflush(stdout);
             ''')
 
-    Enq, Deq, Scan = queue_smart2.smart_queue("queue", 16, 2, 1, enq_blocking=True, clean=True)
+    Enq, Deq, Scan = queue_smart2.smart_queue("queue", 256, 2, 1, enq_blocking=True, clean=True)
 
     class push(API):
         def configure(self):
@@ -94,4 +95,5 @@ for(i=0; i<64; i++) {
 }
 '''
 c.generate_code_as_header()
+c.depend = ["varsize_deq"]
 c.compile_and_run("cavium_varsize_deq_test")
