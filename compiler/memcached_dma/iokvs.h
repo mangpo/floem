@@ -35,17 +35,7 @@ struct settings {
 
 /** Global settings */
 extern struct settings settings;
-void settings_init(int argc, char *argv[]);
-
-/*
-static struct settings settings = {
-  .udpport = 11211,
-  .verbose = 1,
-  .segsize = 2 * 1024 * 1024, //  4 * 1024
-  .segmaxnum = 512,
-  .segcqsize = 32 * 1024 // 1024
-};
-*/
+void settings_init(char *argv[]);
 
 /**
  * Item.
@@ -65,6 +55,7 @@ typedef struct _item {
     uint16_t keylen;
     /** Flags (currently unused, but provides padding) */
     uint32_t flags;
+    uint64_t addr;
 } item;
 
 /******************************************************************************/
@@ -98,6 +89,7 @@ void hasht_put(item *it, item *cas);
 
 struct segment_header {
     void *data;
+    uint64_t addr;
     struct segment_header *next;
     struct segment_header *prev;
     uint32_t offset;
@@ -150,13 +142,9 @@ struct item_allocator {
 
 
 /** Initialize item allocation. Prepares memory regions etc. */
-//void ialloc_init(void);
-//void ialloc_init_slave(void);
-//void ialloc_finalize(void);
-//void ialloc_finalize_slave(void);
 uint64_t get_pointer_offset(void* p);
 struct item_allocator* get_item_allocators();
-void ialloc_init(void*);
+void ialloc_init();
 
 /** Initialize an item allocator instance. */
 void ialloc_init_allocator(struct item_allocator *ia, uint32_t core_id);
@@ -280,10 +268,8 @@ static inline void myt_item_release(void *it)
     item_unref(it);
 }
 
-#include <rte_ethdev.h>
-
 typedef struct {
-    struct ether_hdr ether;
+    struct eth_hdr ether;
     struct ip_hdr ipv4;
     struct udp_hdr udp;
     memcached_udp_header mcudp;
@@ -292,8 +278,8 @@ typedef struct {
 } __attribute__ ((packed)) iokvs_message;
 
 static iokvs_message iokvs_template = {
- .ether = { .ether_type = 0x0008 },
- .ipv4 = { .version_ihl = 0x45, .time_to_live = 0x40, .next_proto_id = 0x11},
+ .ether = { .type = 0x0008 },
+ .ipv4 = { ._v_hl = 0x45, ._ttl = 0x40, ._proto = 0x11},
  .mcudp = { .n_data = 0x0100 }
 };
 

@@ -134,7 +134,7 @@ struct eth_addr {
   uint8_t addr[ETH_ALEN];
 } __attribute__ ((packed));
 
-struct ether_hdr {
+struct eth_hdr {
 #if ETH_PAD_SIZE
   uint8_t padding[ETH_PAD_SIZE];
 #endif
