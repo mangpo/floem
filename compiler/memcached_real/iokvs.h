@@ -65,7 +65,6 @@ typedef struct _item {
     uint16_t keylen;
     /** Flags (currently unused, but provides padding) */
     uint32_t flags;
-    uint64_t addr;
 } item;
 
 /******************************************************************************/
@@ -99,7 +98,6 @@ void hasht_put(item *it, item *cas);
 
 struct segment_header {
     void *data;
-    uint64_t addr;
     struct segment_header *next;
     struct segment_header *prev;
     uint32_t offset;
