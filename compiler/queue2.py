@@ -204,11 +204,11 @@ def queue_variable_size(name, size, n_cores, enq_blocking=False, deq_blocking=Fa
             self.out = Output(q_buffer, Size) if core else Output(q_buffer)
 
         def impl(self):
-            noblock_noatom = "q_buffer buff = dequeue_get(q);\n"
+            noblock_noatom = "q_buffer buff = dequeue_get((circular_queue*) q);\n"
             block_noatom = r'''
             q_buffer buff = { NULL, 0 };
             while(buff.entry == NULL) {
-                buff = dequeue_get(q);
+                buff = dequeue_get((circular_queue*) q);
             }
             '''
             noblock_atom = "qlock_lock(&q->lock);\n" + noblock_noatom + "qlock_unlock(&q->lock);\n"
