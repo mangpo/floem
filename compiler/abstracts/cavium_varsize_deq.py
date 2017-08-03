@@ -62,7 +62,16 @@ class main(Pipeline):
             fflush(stdout);
             ''')
 
-    Enq, Deq, Scan = queue_smart2.smart_queue("queue", 256, 2, 1, enq_blocking=True, clean=True)
+    Enq, Deq, Scan = queue_smart2.smart_queue("queue", 256, 2, 1, enq_blocking=True, clean=True, deq_atomic=True)
+
+    class Zero(Element):
+        def configure(self):
+            self.out = Output(Size)
+
+        def impl(self):
+            self.run_c(r'''
+            output { out(0); }
+            ''')
 
     class push(API):
         def configure(self):
@@ -74,16 +83,13 @@ class main(Pipeline):
             main.Scan() >> main.DisplayClean()
 
     class pop(InternalLoop):
-        # def configure(self):
-        #     self.inp = Input(Size)
-
         def impl(self):
-            self.core_id >> main.Deq() >> main.Display()
+            main.Zero() >> main.Deq() >> main.Display()
 
     def impl(self):
         MemoryRegion("data_region", 4 * 100)
         main.push('push', process="varsize_deq")
-        main.pop('pop', device=target.CAVIUM) # process="queue_shared_data2")
+        main.pop('pop', device=target.CAVIUM, cores=range(4)) # process="queue_shared_data2")
 
 master_process("varsize_deq")
 

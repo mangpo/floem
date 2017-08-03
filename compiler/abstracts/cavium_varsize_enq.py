@@ -96,7 +96,7 @@ class main(Pipeline):
             output { out(pkt, buf); }
             ''')
 
-    Enq, Deq, Scan = queue_smart2.smart_queue("queue", 256, 2, 1, enq_blocking=True)
+    Enq, Deq, Scan = queue_smart2.smart_queue("queue", 256, 2, 1, enq_blocking=False)
 
     class push(InternalLoop):
         def impl(self):

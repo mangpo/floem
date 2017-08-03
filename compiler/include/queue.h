@@ -168,7 +168,8 @@ static void enqueue_submit(q_buffer buff)
 static q_buffer dequeue_get(circular_queue* q) {
     q_entry* eqe = q->queue + q->offset;
     __sync_synchronize();
-    if(eqe->flags & FLAG_MASK == FLAG_OWN) {
+    //if(eqe->flags) printf("dequeue_get: flags = %d\n", eqe->flags);
+    if((eqe->flags & FLAG_MASK) == FLAG_OWN) {
         eqe->flags |= FLAG_INUSE;
       	check_flag(eqe, q->offset, "dequeue_get");
         //printf("dequeue_get (before): entry = %p, len = %ld, mod = %ld\n", eqe, eqe->len, q->len);
