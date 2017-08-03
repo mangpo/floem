@@ -177,8 +177,12 @@ struct udp_hdr{
     uint16_t cksum;
 } __attribute__((packed));
 
+/* Eternet protocal type. */
+#define ETHERTYPE_PUP    0x0200/* PUP protocol */
+#define ETHERTYPE_IPv4   0x0800/* IP protocol */
+#define ETHERTYPE_ARP    0x0806/* Addr. resolution protocol */
+
 /* ARP protocol opcodes. */
-#define ETHERTYPE_ARP	0x0806		/* Addr. resolution protocol */
 #define	ARPOP_REQUEST	1		/* ARP request.  */
 #define	ARPOP_REPLY	2		/* ARP reply.  */
 #define	ARPOP_RREQUEST	3		/* RARP request.  */

@@ -163,9 +163,13 @@ def get_fill_entry_src(g, deq_thread, enq_thread, live, special, extras,
                 fill_src += "    memcpy(e->%s, state.%s, %s);\n" % (field, var, info)
         else:
             try:
-                size = common.sizeof(mapping[var])
+                t = mapping[var]
+                size = common.sizeof(t)
                 convert = size2convert[size]
-                fill_src += "    e->%s = %s(state.%s);\n" % (field, convert, var)
+                if common.is_pointer(t):
+                    fill_src += "    e->%s = (%s) %s((uint64_t) state.%s);\n" % (field, t, convert, var)
+                else:
+                    fill_src += "    e->%s = %s(state.%s);\n" % (field, convert, var)
             except common.UnkownType:
                 fill_src += "    e->%s = state.%s;\n" % (field, var)
 
@@ -210,9 +214,16 @@ def get_save_state_src(g, deq_thread, enq_thread, live, special, extras,
                     (field, pipeline_state)
                 save_src += "  state.{0} = state.entry->{0};\n".format(name)
         elif byte_reverse:
-            size = common.sizeof(mapping[var])
-            convert = size2convert[size]
-            save_src += "  state.{0} = {1}(state.{0});".format(var, convert)
+            try:
+                t = mapping[var]
+                size = common.sizeof(t)
+                convert = size2convert[size]
+                if common.is_pointer(t):
+                    save_src += "  state.{0} = ({2}) {1}((uint64_t) state.{0});\n".format(var, convert, t)
+                else:
+                    save_src += "  state.{0} = {1}(state.{0});\n".format(var, convert)
+            except common.UnkownType:
+                pass
 
     save_src += "  output { out(); }\n"
     return save_src

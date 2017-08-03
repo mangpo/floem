@@ -126,9 +126,10 @@ iokvs_message* m = (iokvs_message*) pkt;
 
 int type; // 0 = normal, 1 = slow, 2 = drop
 
-if (m->ether.type == htons(ETHER_TYPE_IPv4) &&
+if (m->ether.type == htons(ETHERTYPE_IPv4) &&
     m->ipv4._proto == 17 &&
-    m->ipv4.dest == settings.localip &&
+    memcmp(m->ipv4.dest.addr, settings.localip.addr, sizeof(struct ip_addr)) == 0 &&
+    //m->ipv4.dest == settings.localip &&
     m->udp.dest_port == htons(11211) &&
     msglen >= sizeof(iokvs_message))
 {
@@ -259,7 +260,7 @@ output { out(this->core); }''' % ('%', n_cores))
             self.run_c(r'''
     uint32_t* vallen;
     item* it = (item*) state.it_addr;
-    dma_read(&it->vallen, sizeof(uint32_t), (void**) &vallen);
+    dma_read((uintptr_t) &it->vallen, sizeof(uint32_t), (void**) &vallen);
     size_t msglen = sizeof(iokvs_message) + 4 + *vallen;
     state.vallen = *vallen;
     dma_free(vallen);
@@ -276,7 +277,7 @@ output { out(this->core); }''' % ('%', n_cores))
         (size_t msglen, void* pkt, void* pkt_buff) = inp();
 
         iokvs_message *m = pkt;
-        memcpy(m, &iokvs_template, sizeof(iokvs_message));
+        memcpy(m, iokvs_template(), sizeof(iokvs_message));
         item* it = state.it;
 
         m->mcr.request.magic = PROTOCOL_BINARY_RES;
@@ -298,7 +299,7 @@ output { out(msglen, m, pkt_buff); }
             self.run_c(r'''
         (size_t msglen, void* pkt, void* pkt_buff) = inp();
         iokvs_message *m = pkt;
-        memcpy(m, &iokvs_template, sizeof(iokvs_message));
+        memcpy(m, iokvs_template(), sizeof(iokvs_message));
         item* it = (item*) state.it_addr;
 
         m->mcr.request.magic = PROTOCOL_BINARY_RES;
@@ -313,7 +314,7 @@ m->mcr.request.bodylen = 4;
 m->mcr.request.bodylen = 4 + state.vallen;
 
 void* value;
-dma_read(item_value(it), state.vallen, (void**) &value);
+dma_read((uintptr_t) item_value(it), state.vallen, (void**) &value);
 memcpy(m->payload + 4, value, state.vallen);
 dma_free(value);
 
@@ -341,7 +342,7 @@ output { out(msglen, m, pkt_buff); }
             self.run_c(r'''
             (size_t msglen, void* pkt, void* pkt_buff) = inp();
             iokvs_message *m = pkt;
-            memcpy(m, &iokvs_template, sizeof(iokvs_message));
+            memcpy(m, iokvs_template(), sizeof(iokvs_message));
 
             m->mcr.request.magic = PROTOCOL_BINARY_RES;
             m->mcr.request.opcode = PROTOCOL_BINARY_CMD_GET;
@@ -392,7 +393,7 @@ output { out(msglen, m, pkt_buff); }
             self.run_c(r'''
 (size_t msglen, void* pkt, void* pkt_buff) = inp();
 iokvs_message *m = pkt;
-memcpy(m, &iokvs_template, sizeof(iokvs_message));
+memcpy(m, iokvs_template(), sizeof(iokvs_message));
 
 m->mcr.request.magic = PROTOCOL_BINARY_RES;
 m->mcr.request.opcode = PROTOCOL_BINARY_CMD_SET;
@@ -450,14 +451,17 @@ output { out(msglen, m, pkt_buff); }
     if (msg->ether.type == htons(ETHERTYPE_ARP) &&
             arp->arp_hrd == htons(ARPHRD_ETHER) && arp->arp_pln == 4 &&
             arp->arp_op == htons(ARPOP_REQUEST) && arp->arp_hln == 6 &&
-            arp->arp_tip == settings.localip)
+            memcmp(arp->arp_tip.addr, settings.localip.addr, sizeof(struct ip_addr)) == 0
+            //arp->arp_tip == settings.localip
+            )
     {
         printf("Responding to ARP\n");
         resp = 1;
         struct eth_addr mymac = msg->ether.dest;
         msg->ether.dest = msg->ether.src;
         msg->ether.src = mymac; // TODO
-        arp->arp_op = htons(ARP_OP_REPLY);
+
+        arp->arp_op = htons(ARPOP_REPLY);
         arp->arp_tha = arp->arp_sha;
         arp->arp_sha = mymac;
         arp->arp_tip = arp->arp_sip;
@@ -490,15 +494,10 @@ iokvs_message* m = (iokvs_message*) pkt;
 uint8_t *val = m->payload + 4;
 uint8_t opcode = m->mcr.request.opcode;
 
-static int count = 0;
-count++;
-if(count == 10000) {
-count = 0;
 if(opcode == PROTOCOL_BINARY_CMD_GET)
     printf("GET -- status: %d, len: %d, val:%d\n", m->mcr.request.status, m->mcr.request.bodylen, val[0]);
 else if (opcode == PROTOCOL_BINARY_CMD_SET)
     printf("SET -- status: %d, len: %d\n", m->mcr.request.status, m->mcr.request.bodylen);
-}
 
 output { out(msglen, (void*) m, buff); }
     ''')
@@ -672,8 +671,8 @@ output switch { case segment: out(); else: null(); }
         dma_read(addr, sizeof(item), (void**) &it);
         it->refcount = nic_ntohs(1);
 
-        printf("get_item keylen: %ld, totlen: %ld, item: %ld\n",
-            state.pkt->mcr.request.keylen, totlen, it);
+        printf("get_item keylen: %ld, totlen: %ld, item: %p\n",
+            state.pkt->mcr.request.keylen, totlen, (void*) it);
         it->hv = nic_ntohl(state.hash);
         it->vallen = nic_ntohl(totlen - state.pkt->mcr.request.keylen);
         it->keylen = nic_ntohs(state.pkt->mcr.request.keylen);
@@ -740,24 +739,60 @@ output switch { case segment: out(); else: null(); }
             output { out(x); }
             ''')
 
+    ########################### Fake net elements ###############################
+    class FromNet(Element):
+        def configure(self):
+            self.out = Output(Size, "void *", "void *")  # packet, buffer
+            self.nothing = Output()
 
-    ########################## program #########################
-    # def spec(self):
-    #     class nic(InternalLoop):
-    #         def impl(self):
-    #             from_net = net_real.FromNet('from_net')
-    #             classifier = main.Classifer()
-    #             display = main.PrintMsg()
-    #
-    #             from_net.out >> main.SaveState() >> main.GetKey() >> main.JenkinsHash() >> classifier
-    #             from_net.nothing >> main.Drop()
-    #             # get
-    #             classifier.out_get >> main.HashGet() >> main.PrepareGetResp() >> main.Probe() >> display
-    #             # set
-    #             classifier.out_set >> main.GetItemSpec() >> main.HashPut() >> main.PrepareSetResp() >> main.Probe() \
-    #             >> display
-    #
-    #     nic('nic', process='nic')
+        def impl(self):
+            self.run_c(r'''
+        static uint8_t v = 0;
+        iokvs_message* m = random_request(v);
+        v++;
+        if(v>=256) v = 0;
+
+        output switch {
+            case m != NULL: out(0, m, NULL);
+            case m == NULL: nothing();
+        }
+            ''')
+
+    class FromNetFree(Element):
+        def configure(self):
+            self.inp = Input("void *", "void *")  # packet, buffer
+
+        def impl(self):
+            self.run_c(r'''
+        (void* p, void* buf) = inp();
+        free(p);
+            ''')
+
+    class ToNet(Element):
+        def configure(self):
+            self.inp = Input(Size, "void *", "void *")  # size, packet, buffer
+
+        def impl(self):
+            self.run_c(r'''
+        (size_t len, void* p, void* buf) = inp();
+        free(p);
+            ''')
+
+    class NetAlloc(Element):
+        def configure(self):
+            self.inp = Input(Size)
+            self.out = Output(Size, "void *", "void *")  # packet, buffer
+            self.oom = Output()
+
+        def impl(self):
+            self.run_c(r'''
+        (size_t len) = inp();
+        void *data = malloc(len);
+        output switch {
+            case data != NULL: out(len, data, NULL);
+            else: oom();
+        }
+            ''')
 
     def impl(self):
         #MemoryRegion('data_region', 2 * 1024 * 1024 * 512) #4 * 1024 * 512)
@@ -774,9 +809,14 @@ output switch { case segment: out(); else: null(); }
         ######################## NIC Rx #######################
         class nic_rx(InternalLoop):
             def impl(self):
-                from_net = net_real.FromNet('from_net')
-                from_net_free = net_real.FromNetFree('from_net_free')
-                to_net = net_real.ToNet('to_net', configure=['alloc'])
+                #from_net = net_real.FromNet('from_net')
+                #from_net_free = net_real.FromNetFree('from_net_free')
+                #to_net = net_real.ToNet('to_net', configure=['alloc'])
+
+                from_net = main.FromNet()
+                from_net_free = main.FromNetFree()
+                to_net = main.ToNet()
+
                 classifier = main.Classifer()
                 check_packet = main.CheckPacket()
                 hton1 = net_real.HTON(configure=['iokvs_message'])
@@ -854,10 +894,16 @@ output switch { case segment: out(); else: null(); }
         ####################### NIC Tx #######################
         class nic_tx(InternalLoop):
             def impl(self):
-                to_net = net_real.ToNet('to_net', configure=['alloc'])
-                net_alloc0 = net_real.NetAlloc('net_alloc0')
-                net_alloc1 = net_real.NetAlloc('net_alloc1')
-                net_alloc3 = net_real.NetAlloc('net_alloc3')
+                # to_net = net_real.ToNet('to_net', configure=['alloc'])
+                # net_alloc0 = net_real.NetAlloc('net_alloc0')
+                # net_alloc1 = net_real.NetAlloc('net_alloc1')
+                # net_alloc3 = net_real.NetAlloc('net_alloc3')
+
+                to_net = main.ToNet()
+                net_alloc0 = main.NetAlloc()
+                net_alloc1 = main.NetAlloc()
+                net_alloc3 = main.NetAlloc()
+
                 prepare_header = main.PrepareHeader()
                 display = main.PrintMsg()
                 hton = net_real.HTON(configure=['iokvs_message'])
@@ -906,4 +952,4 @@ c.init = r'''
   '''
 c.generate_code_as_header()
 c.depend = {"test_app": ['jenkins_hash', 'hashtable', 'ialloc', 'settings', 'app']}
-c.compile_and_run(["test_app"])
+c.compile_and_run([("test_app", "10.3.0.35")])

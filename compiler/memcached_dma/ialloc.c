@@ -16,14 +16,8 @@
 
 static struct segment_header *free_segments;
 static rte_spinlock_t segalloc_lock;
-static void *seg_base;
 static struct segment_header **seg_headers;
 static size_t seg_alloced;
-
-#ifdef BARRELFISH
-void *mem_base;
-uint64_t mem_base_phys;
-#endif
 
 void ialloc_init() {
   if ((seg_headers = calloc(settings.segmaxnum, sizeof(*seg_headers))) ==
@@ -88,18 +82,7 @@ static struct segment_header *segment_alloc(uint32_t core_id)
         return NULL;
     }
 
-    //data = (void *) ((uintptr_t) seg_base + segsz * i);
-    printf("segment alloc: seg_base = %p, data = %p, i = %d\n", seg_base, data, i);
-    //#ifndef BARRELFISH
-#ifdef BARRELFISH
-    if (mprotect(data, settings.segsize, PROT_READ | PROT_WRITE) != 0) {
-	    printf("mprotect failed\n");
-	    fflush(stdout);
-        perror("mprotect failed");
-        /* TODO: check what to do here */
-        return NULL;
-    }
-#endif
+    printf("segment alloc: data = %p, i = %d\n", data, i);
     fflush(stdout);
 
     h = malloc(sizeof(*h));
@@ -120,15 +103,7 @@ init_h:
     return h;
 }
 
-/*
-static inline struct segment_header *segment_from_part(void *data)
-{
-    size_t i = ((uintptr_t) data - (uintptr_t) seg_base) / settings.segsize;
-    assert(i < settings.segmaxnum);
-    return seg_headers[i];
-}
-*/
-
+// TODO: This function is quite expensive!
 static inline struct segment_header *segment_from_part(uint64_t addr) {
     int i;
     for(i=0;i<seg_alloced;i++) {
@@ -164,7 +139,6 @@ item *segment_item_alloc(uint64_t thisbase, uint64_t seglen, uint64_t* offset, s
 {
     //printf("segment_header = %ld\n", h);
     item *it = (item *) (thisbase + *offset);
-    //printf("item: seg_base = %p, thisbase = %ld, offset = %ld, total = %ld\n", seg_base, thisbase, *offset, total);
     size_t avail;
 
     /* Not enough room in this segment */
@@ -195,39 +169,6 @@ item *segment_item_alloc(uint64_t thisbase, uint64_t seglen, uint64_t* offset, s
     return it;
 }
 
-
-//struct segment_header *new_segment(struct item_allocator *ia, bool cleanup) {
-//  // TODO: ia
-//    struct segment_header *h, *old;
-//
-//    __sync_synchronize();
-//    if ((h = segment_alloc(ia->core_id)) == NULL) {
-//        /* We're currently doing cleanup, and still have the reserved segment
-//         * then that can be used now */
-//        if (cleanup && ia->reserved != NULL) {
-//            h = ia->reserved;
-//            ia->reserved = NULL;
-//        } else {
-//            printf("Fail 2!\n");
-//            return NULL;
-//        }
-//    }
-//    h->next = NULL;
-//    old = ia->cur;
-//    old->next = h;
-//    /* Mark old segment as GC-able */
-//    old->flags |= SF_INACTIVE;
-//    ia->cur = h;
-//    __sync_synchronize();
-//
-////    printf("New segment %ld %ld %ld\n", old->next, old, ia->oldest);
-////    printf("New segment %ld %d\n", ia->oldest->next, (ia->oldest->flags & SF_INACTIVE) == SF_INACTIVE);
-//
-//    return h;
-//}
-
-
-// TODO: use this instead
 struct segment_header *ialloc_nicsegment_alloc(struct item_allocator *ia)
 {
     struct segment_header *h;
