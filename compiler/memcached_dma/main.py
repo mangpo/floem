@@ -24,7 +24,7 @@ class protocol_binary_request_header(State):
     def init(self): self.declare = False
 
 class iokvs_message(State):
-    ether = Field('struct ether_hdr')
+    ether = Field('struct ehter_hdr')
     ipv4 = Field('struct ipv4_hdr')
     dup = Field('struct udp_hdr')
     mcudp = Field('memcached_udp_header')
@@ -56,8 +56,8 @@ class MyState(State):
     seglen = Field(Uint(64))
     core = Field(Uint(16))
     vallen = Field(Uint(32))
-    src_mac = Field('struct ether_addr')
-    dst_mac = Field('struct ether_addr')
+    src_mac = Field('struct eth_addr')
+    dst_mac = Field('struct eth_addr')
     src_ip = Field('struct ip_addr')
     src_port = Field(Uint(16))
 
@@ -126,7 +126,7 @@ iokvs_message* m = (iokvs_message*) pkt;
 
 int type; // 0 = normal, 1 = slow, 2 = drop
 
-if (m->ether.ether_type == htons(ETHER_TYPE_IPv4) &&
+if (m->ether.type == htons(ETHER_TYPE_IPv4) &&
     m->ipv4._proto == 17 &&
     m->ipv4.dest == settings.localip &&
     m->udp.dest_port == htons(11211) &&
@@ -449,14 +449,14 @@ output { out(msglen, m, pkt_buff); }
     int resp = 0;
 
     /* Currently we're only handling ARP here */
-    if (msg->ether.ether_type == htons(ETHERTYPE_ARP) &&
+    if (msg->ether.type == htons(ETHERTYPE_ARP) &&
             arp->arp_hrd == htons(ARPHRD_ETHER) && arp->arp_pln == 4 &&
             arp->arp_op == htons(ARPOP_REQUEST) && arp->arp_hln == 6 &&
             arp->arp_tip == settings.localip)
     {
         printf("Responding to ARP\n");
         resp = 1;
-        struct ether_addr mymac = msg->ether.dest;
+        struct eth_addr mymac = msg->ether.dest;
         msg->ether.dest = msg->ether.src;
         msg->ether.src = mymac; // TODO
         arp->arp_op = htons(ARP_OP_REPLY);
@@ -474,7 +474,7 @@ output { out(msglen, m, pkt_buff); }
     }
 
     output switch { 
-      case resp: out(sizeof(struct ether_hdr) + sizeof(struct arp_hdr), pkt, buff); 
+      case resp: out(sizeof(struct eth_hdr) + sizeof(struct arp_hdr), pkt, buff); 
             else: drop(pkt, buff);
     }
             ''')
@@ -555,7 +555,7 @@ if(segment == NULL) {
     //exit(-1);
 } else {
     state.segbase = segment->data;
-    state.segaddr = h->addr;
+    state.segaddr = segment->addr;
     state.seglen = segment->size;
 }
 output switch { case segment: out(); else: null(); }

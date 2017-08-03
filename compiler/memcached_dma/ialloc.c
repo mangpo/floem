@@ -3,6 +3,7 @@
 #include <string.h>
 #include <sys/mman.h>
 #include <fcntl.h>
+#include <linux_hugepage.h>
 
 #include <rte_spinlock.h>
 
@@ -143,7 +144,7 @@ static inline struct segment_header *segment_from_part(uint64_t addr) {
         if(addr >= h->addr && addr < h->addr + h->size)
             return h;
     }
-    printf("Cannot find segment at addr %p." % (void*) addr);
+    printf("Cannot find segment at addr %p.", (void*) addr);
     abort();
     return NULL;
 }
@@ -540,7 +541,7 @@ size_t clean_log(struct item_allocator *ia, bool idle)
             nit->hv = it->hv;
             nit->vallen = it->vallen;
             nit->keylen = it->keylen;
-            rte_memcpy(item_key(nit), item_key(it), it->keylen + it->vallen);
+            memcpy(item_key(nit), item_key(it), it->keylen + it->vallen);
             hasht_put(nit, it);
             item_unref(nit);
 	    m++;
