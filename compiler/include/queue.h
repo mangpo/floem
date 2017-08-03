@@ -7,7 +7,8 @@
 #include <pthread.h>
 
 #define ALIGN 8U
-#define FLAG_MASK 3
+#define FLAG_MASK 7
+#define FLAG_INUSE 4
 #define FLAG_CLEAN 2
 #define FLAG_OWN 1
 #define TYPE_NOP 0
@@ -102,8 +103,8 @@ static q_buffer enqueue_alloc(circular_queue* q, size_t len, void(*clean)(q_buff
     do {
         flags = (volatile uint16_t *) ((uintptr_t) eq + off);
         __sync_synchronize();
-	check_flag(eqe, off, "enqueue_alloc");
-        if ((*flags & FLAG_OWN) != 0) {
+	    check_flag(eqe, off, "enqueue_alloc");  // TODO: wrong
+        if ((*flags & (FLAG_OWN | FLAG_INUSE)) != 0) {
             q->offset = eqe_off;
             //printf("enq_alloc (NULL): queue = %ld, entry = %ld, flag = %ld\n", q->queue, eqe, *flags);
             q_buffer buff = { NULL, 0 };
@@ -142,7 +143,7 @@ static q_buffer enqueue_alloc(circular_queue* q, size_t len, void(*clean)(q_buff
         dummy->len = total - len;
     }
     eqe->len = len;
-    eqe->flags = 0;
+    eqe->flags = FLAG_INUSE;
 
     //printf("enq_alloc (before): offset = %ld, len = %ld, mod = %ld\n", eqe_off, len, qlen);
     q->offset = (eqe_off + len) % qlen;
@@ -157,7 +158,7 @@ static void enqueue_submit(q_buffer buff)
     if(e) {
       	check_flag(e, -1, "enqueue_submit");
 
-        e->flags |= FLAG_OWN;
+        e->flags = (e->flags & TYPE_MASK) | FLAG_OWN;
         //printf("enq_submit: entry = %p, len = %d\n", e, e->len);
         //__sync_fetch_and_or(&e->flags, FLAG_OWN);
         __sync_synchronize();
@@ -167,7 +168,8 @@ static void enqueue_submit(q_buffer buff)
 static q_buffer dequeue_get(circular_queue* q) {
     q_entry* eqe = q->queue + q->offset;
     __sync_synchronize();
-    if(eqe->flags & FLAG_OWN) {
+    if(eqe->flags & FLAG_MASK == FLAG_OWN) {
+        eqe->flags |= FLAG_INUSE;
       	check_flag(eqe, q->offset, "dequeue_get");
         //printf("dequeue_get (before): entry = %p, len = %ld, mod = %ld\n", eqe, eqe->len, q->len);
         q->offset = (q->offset + eqe->len) % q->len;
@@ -186,7 +188,7 @@ static void dequeue_release(q_buffer buff, uint8_t flag_clean)
     q_entry *e = buff.entry;
     check_flag(e, -1, "dequeue_release");
 
-    e->flags = (e->flags & ~FLAG_OWN) | flag_clean;
+    e->flags = (e->flags & TYPE_MASK) | flag_clean;
     check_flag(e, -1, "enqueue_release");
     //printf("release: entry=%p\n", e);
     //__sync_fetch_and_and(&e->flags, ~FLAG_OWN);
