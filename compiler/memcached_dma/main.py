@@ -68,16 +68,20 @@ class Schedule(State):
 class ItemAllocators(State):
     ia = Field(Array('struct item_allocator*', n_cores))
 
-class segments_holder(State):
+class segment(State):
     segbase = Field(Uint(64))
     segaddr = Field(Uint(64))
     seglen = Field(Uint(64))
     offset = Field(Uint(64))
-    next = Field('struct _segments_holder*')
 
-class segments_info(State):
-    head = Field(Pointer(segments_holder))
-    last = Field(Pointer(segments_holder))
+class segment_holders(State):
+    segments = Field(Array(segment, 16))
+    head = Field(Int)
+    tail = Field(Int)
+    len = Field(Int)
+
+    def init(self):
+        self.len = 16
 
 class main(Pipeline):
     state = PerPacket(MyState)
@@ -558,10 +562,10 @@ if(segment == NULL) {
 output switch { case segment: out(); else: null(); }
             ''')
 
-    segments = segments_info()
+    segments = segment_holders()
 
-    class AddLogseg(Element):
-        this = Persistent(segments_info)
+    class AddLogseg(Element):  # TODO: concurency version
+        this = Persistent(segment_holders)
 
         def configure(self):
             self.inp = Input()
@@ -569,37 +573,27 @@ output switch { case segment: out(); else: null(); }
 
         def impl(self):
             self.run_c(r'''
-        segments_holder* holder = (segments_holder*) malloc(sizeof(segments_holder));
-        holder->segbase = state.segbase;
-        holder->segaddr = state.segaddr;
-        holder->seglen = state.seglen;
-        holder->offset = 0;
-        holder->next = NULL;
-    if(this->head == NULL) {
-        this->head = holder;
-        this->last = holder;
-    } else {
-        this->last->next = holder;
-        this->last = holder;
-    }
-    __sync_synchronize();
+        segment* h = &this->segments[this->tail];
+        h->segbase = state.segbase;
+        h->segaddr = state.segaddr;
+        h->seglen = state.seglen;
+        h->offset = 0;
+        this->tail = (this->tail + 1) % this->len;
 
-// TODO: change to 0 for performance
-    int count = 1;
-    segments_holder* p = this->head;
-    while(p->next != NULL) {
-        count++;
-        p = p->next;
-    }
-    printf("logseg count = %d\n", count);
-    printf("addlog: new->segbase = %p, cur->segbase = %p\n", (void*) state.segbase, (void*) this->head->segbase);
+        if(this->head == this->tail) {
+            printf("NIC segment holder is full.\n");
+            abort();
+        }
+
+    printf("addlog: new->segaddr = %p, cur->segaddr = %p\n", (void*) h->segaddr, (void*) this->head->segbase);
+    printf("holder: head = %d, tail = %d\n", this->head, this->tail);
 
             ''')
 
     ######################## item ########################
 
-    class GetItem(Element):
-        this = Persistent(segments_info)
+    class GetItem(Element):  # TODO: concurency version
+        this = Persistent(segment_holders)
 
         def states(self):
             self.this = main.segments
@@ -615,21 +609,22 @@ output switch { case segment: out(); else: null(); }
 
     uint64_t full = 0;
     item *it = NULL;
-    if(this->head) {
-            it = segment_item_alloc(this->head->segbase, this->head->seglen, &this->head->offset, sizeof(item) + totlen);
-            //if(it == NULL) full = this->segbase + this->offset; 
-            // Including this is bad is not good because, when tx queue is backed up, CPU will have high number of segment, but NIC will never get anything back.
+    if(this->head != this->tail) {
+        segment* h = &this->segments[this->head];
+        it = segment_item_alloc(h->segaddr, h->seglen, &h->offset, sizeof(item) + totlen);
 
-    __sync_synchronize();
-    if(it == NULL && this->head->next) {
-            printf("Segment is full. offset = %d\n", this->head->offset);  // including this line will make CPU keep making new segment. Without this line, # of segment will stop under 100.
-
-        full = this->head->segaddr + this->head->offset;
-        segments_holder* old = this->head;
-        this->head = this->head->next;
-        free(old);
-        it = segment_item_alloc(this->head->segbase, this->head->seglen, &this->head->offset, sizeof(item) + totlen);
-    }
+        __sync_synchronize();
+        if(it == NULL) {
+            int old = this->head;
+            this->head = (this->head + 1) % this->len;
+            if(this->head != this->tail) {
+                printf("Segment is full. offset = %d\n", this->head->offset);  // including this line will make CPU keep making new segment. Without this line, # of segment will stop under 100.
+                full = h->segaddr + h->offset;
+                // when tx queue is backed up, CPU will have high number of segment, but NIC will never get anything back.
+                h = &this->segments[this->head];
+                it = segment_item_alloc(h->segaddr, h->seglen, &h->offset, sizeof(item) + totlen);
+            }
+        }
     }
 
     //printf("it = %p, full = %p\n", it, (void*) full);
@@ -651,22 +646,28 @@ output switch { case segment: out(); else: null(); }
     output switch { case it: out();  else: nothing(); }
                 ''')
 
-        def impl_cavium(self):
+        def impl_cavium(self):  # TODO: concurrent version -- each thread maintain current segment.
             self.run_c(r'''
     size_t totlen = state.pkt->mcr.request.bodylen - state.pkt->mcr.request.extlen;
 
     uint64_t full = 0;
     uint64_t addr = 0;
-    if(this->head) {
-      printf("item_alloc: segaddr = %ld\n", this->head->segaddr);
-      addr = segment_item_alloc(this->head->segaddr, this->head->seglen, &this->head->offset, sizeof(item) + totlen);
-    if(addr == 0 && this->head->next) {
-        full = this->head->segaddr + this->head->offset;
-        segments_holder* old = this->head;
-        this->head = this->head->next;
-        free(old);
-        addr = segment_item_alloc(this->head->segaddr, this->head->seglen, &this->head->offset, sizeof(item) + totlen);
-    }
+
+    if(this->head != this->tail) {
+        segment* h = &this->segments[this->head];
+        addr = segment_item_alloc(h->segaddr, h->seglen, &h->offset, sizeof(item) + totlen);  // TODO: concurrent
+
+        if(addr == 0) {
+            int old = this->head;
+            this->head = (this->head + 1) % this->len;
+            if(this->head != this->tail) {
+                printf("Segment is full. offset = %d\n", this->head->offset);  // including this line will make CPU keep making new segment. Without this line, # of segment will stop under 100.
+                full = h->segaddr + h->offset;
+                // when tx queue is backed up, CPU will have high number of segment, but NIC will never get anything back.
+                h = &this->segments[this->head];
+                addr = segment_item_alloc(h->segaddr, h->seglen, &h->offset, sizeof(item) + totlen);
+            }
+        }
     }
 
     state.segfull = full;
