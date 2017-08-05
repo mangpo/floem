@@ -80,9 +80,11 @@ class segment_holders(State):
     head = Field(Int)
     tail = Field(Int)
     len = Field(Int)
+    lock = Field('spinlock_t')
 
     def init(self):
         self.len = 16
+        self.lock = lambda x: 'spinlock_init(&%s)' % x
 
 class main(Pipeline):
     state = PerPacket(MyState)
@@ -575,6 +577,7 @@ output switch { case segment: out(); else: null(); }
 
         def impl(self):
             self.run_c(r'''
+        spinlock_lock(&this->lock);
         segment* h = &this->segments[this->tail];
         h->segbase = state.segbase;
         h->segaddr = state.segaddr;
@@ -589,6 +592,7 @@ output switch { case segment: out(); else: null(); }
 
         printf("addlog: new->segaddr = %p, cur->segaddr = %p\n", (void*) h->segaddr, (void*) this->segments[this->head].segaddr);
         printf("holder: head = %d, tail = %d\n", this->head, this->tail);
+        spinlock_unlock(&this->lock);
 
             ''')
 
@@ -607,25 +611,39 @@ output switch { case segment: out(); else: null(); }
 
         def impl(self):
             self.run_c(r'''
+    static segment* h = NULL;
+    while(h == NULL && this->head != this->tail) {
+        int old = this->head;
+        int new = (old + 1) % this->len;
+        if(__sync_bool_compare_and_swap(&this->head, old, new)) {
+            h = &this->segments[old];
+            break;
+        }
+    }
+
     size_t totlen = state.pkt->mcr.request.bodylen - state.pkt->mcr.request.extlen;
 
     uint64_t full = 0;
     item *it = NULL;
-    segment* h = NULL;
-    if(this->head != this->tail) {
-        h = &this->segments[this->head];
+    if(h) {
         it = segment_item_alloc(h->segaddr, h->seglen, &h->offset, sizeof(item) + totlen);
 
-        __sync_synchronize();
         if(it == NULL) {
-            int old = this->head;
-            this->head = (this->head + 1) % this->len;
-            if(this->head != this->tail) {
-                printf("Segment is full. offset = %dd\n", h->offset);  // including this line will make CPU keep making new segment. Without this line, # of segment will stop under 100.
+            printf("Segment is full. offset = %dd\n", h->offset);  // including this line will make CPU keep making new segment. Without this line, # of segment will stop under 100.
+            full = h->segaddr + h->offset;
+            // when tx queue is backed up, CPU will have high number of segment, but NIC will never get anything back.
+            h = NULL;
 
-                full = h->segaddr + h->offset;
-                // when tx queue is backed up, CPU will have high number of segment, but NIC will never get anything back.
-                h = &this->segments[this->head];
+            while(h == NULL && this->head != this->tail) {
+                int old = this->head;
+                int new = (old + 1) % this->len;
+                if(__sync_bool_compare_and_swap(&this->head, old, new)) {
+                    h = &this->segments[old];
+                    break;
+                }
+            }
+
+            if(h) {
                 it = segment_item_alloc(h->segaddr, h->seglen, &h->offset, sizeof(item) + totlen);
             }
         }
@@ -652,24 +670,40 @@ output switch { case segment: out(); else: null(); }
 
         def impl_cavium(self):  # TODO: concurrent version -- each thread maintain current segment.
             self.run_c(r'''
-     size_t totlen = state.pkt->mcr.request.bodylen - state.pkt->mcr.request.extlen;
+    static segment* h = NULL;
+    while(h == NULL && this->head != this->tail) {
+        int old = this->head;
+        int new = (old + 1) % this->len;
+        if(cvmx_atomic_compare_and_store32(&this->head, old, new)) {
+            h = &this->segments[old];
+            break;
+        }
+    }
+
+    size_t totlen = state.pkt->mcr.request.bodylen - state.pkt->mcr.request.extlen;
 
     uint64_t full = 0;
     uint64_t addr = 0;
 
-    segment* h = NULL;
-    if(this->head != this->tail) {
-        h = &this->segments[this->head];
+    if(h) {
         addr = segment_item_alloc(h->segaddr, h->seglen, &h->offset, sizeof(item) + totlen);  // TODO: concurrent
 
         if(addr == 0) {
-            this->head = (this->head + 1) % this->len;
-            if(this->head != this->tail) {
-                printf("Segment is full. offset = %ld\n", h->offset);  // including this line will make CPU keep making new segment. Without this line, # of segment will stop under 100.
+            printf("Segment is full. offset = %ld\n", h->offset);  // including this line will make CPU keep making new segment. Without this line, # of segment will stop under 100.
+            full = h->segaddr + h->offset;
+            // when tx queue is backed up, CPU will have high number of segment, but NIC will never get anything back.
+            h = NULL;
 
-                full = h->segaddr + h->offset;
-                // when tx queue is backed up, CPU will have high number of segment, but NIC will never get anything back.
-                h = &this->segments[this->head];
+            while(this->head != this->tail) {
+                int old = this->head;
+                int new = (old + 1) % this->len;
+                if(cvmx_atomic_compare_and_store32(&this->head, old, new)) {
+                    h = &this->segments[old];
+                    break;
+                }
+            }
+
+            if(h) {
                 addr = segment_item_alloc(h->segaddr, h->seglen, &h->offset, sizeof(item) + totlen);
             }
         }
