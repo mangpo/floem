@@ -199,12 +199,22 @@ out:
 	count = 0;
 	last = now;
       }
+      /*
+      printf("from_net: size = %ld\n", *sz);
+      int i;
+      uint8_t* x = (uint8_t*) data;
+      for(i=0; i<*sz; i++) {
+	if(i%16==0) printf("\n");
+	printf("%x ", x[i]);
+      }
+      printf("\n\n");
+      */
     }
 }
 
 static void dpdk_net_free(void *data, void *buf)
 {
-    rte_pktmbuf_free(buf);
+  rte_pktmbuf_free(buf);
 }
 
 static void dpdk_net_alloc(size_t len, void **pdata, void **pbuf)

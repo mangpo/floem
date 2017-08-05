@@ -68,7 +68,6 @@ class ItemAllocators(State):
 
 class segment(State):
     segbase = Field(Uint(64))
-    segaddr = Field(Uint(64))
     seglen = Field(Uint(64))
     offset = Field(Uint(64))
 
@@ -77,9 +76,11 @@ class segment_holders(State):
     head = Field(Int)
     tail = Field(Int)
     len = Field(Int)
+    lock = Field('lock_t')
 
     def init(self):
         self.len = 16
+        self.lock = lambda x: 'qlock_init(&%s)' % x
 
 class main(Pipeline):
     state = PerPacket(MyState)
@@ -99,6 +100,7 @@ state.src_mac = m->ether.s_addr;
 state.dst_mac = m->ether.d_addr;
 state.src_ip = m->ipv4.src_addr;
 state.src_port = m->udp.src_port;
+
 output { out(); }
             ''')
 
@@ -415,7 +417,7 @@ output { out(msglen, m, pkt_buff); }
         def impl(self):
             self.run_c(r'''
         (size_t msglen, iokvs_message* m, void* buff) = inp();
-
+            
         m->ether.d_addr = state.src_mac;
         m->ether.s_addr = state.dst_mac; //settings.localmac;
         m->ipv4.dst_addr = state.src_ip;
@@ -490,6 +492,7 @@ iokvs_message* m = (iokvs_message*) pkt;
 uint8_t *val = m->payload + 4;
 uint8_t opcode = m->mcr.request.opcode;
 
+/*
 static count = 0;
 count++;
 if(count == 10000) {
@@ -499,7 +502,7 @@ if(opcode == PROTOCOL_BINARY_CMD_GET)
 else if (opcode == PROTOCOL_BINARY_CMD_SET)
     printf("SET -- status: %d, len: %d\n", m->mcr.request.status, m->mcr.request.bodylen);
 }
-
+*/
 output { out(msglen, (void*) m, buff); }
     ''')
 
@@ -570,10 +573,12 @@ output switch { case segment: out(); else: null(); }
 
         def impl(self):
             self.run_c(r'''
+        qlock_lock(&this->lock);
         segment* h = &this->segments[this->tail];
         h->segbase = state.segbase;
         h->seglen = state.seglen;
         h->offset = 0;
+        __sync_synchronize();
         this->tail = (this->tail + 1) % this->len;
 
         if(this->head == this->tail) {
@@ -581,9 +586,9 @@ output switch { case segment: out(); else: null(); }
             abort();
         }
 
-        printf("addlog: new->segaddr = %p, cur->segaddr = %p\n", (void*) h->segaddr, (void*) this->segments[this->head].segaddr);
+            printf("addlog: new->segaddr = %p, cur->segaddr = %p\n", (void*) h->segbase, (void*) this->segments[this->head].segbase);
         printf("holder: head = %d, tail = %d\n", this->head, this->tail);
-
+        qlock_unlock(&this->lock);
             ''')
 
     ######################## item ########################
@@ -601,25 +606,39 @@ output switch { case segment: out(); else: null(); }
 
         def impl(self):
             self.run_c(r'''
+    static segment* h = NULL;
+    while(h == NULL && this->head != this->tail) {
+        uint32_t old = this->head;
+        uint32_t new = (old + 1) % this->len;
+        if(__sync_bool_compare_and_swap(&this->head, old, new)) {
+            h = &this->segments[old];
+            break;
+        }
+    }
+
     size_t totlen = state.pkt->mcr.request.bodylen - state.pkt->mcr.request.extlen;
 
     uint64_t full = 0;
     item *it = NULL;
-    segment* h = NULL;
-    if(this->head != this->tail) {
-        h = &this->segments[this->head];
+    if(h) {
         it = segment_item_alloc(h->segbase, h->seglen, &h->offset, sizeof(item) + totlen);
 
-        __sync_synchronize();
         if(it == NULL) {
-            int old = this->head;
-            this->head = (this->head + 1) % this->len;
-            if(this->head != this->tail) {
-                printf("Segment is full. offset = %dd\n", h->offset);  // including this line will make CPU keep making new segment. Without this line, # of segment will stop under 100.
+            printf("Segment is full. offset = %dd\n", h->offset);  // including this line will make CPU keep making new segment. Without this line, # of segment will stop under 100.
+            full = (uintptr_t) h->segbase + h->offset;
+            // when tx queue is backed up, CPU will have high number of segment, but NIC will never get anything back.
+            h = NULL;
 
-                full = h->segaddr + h->offset;
-                // when tx queue is backed up, CPU will have high number of segment, but NIC will never get anything back.
-                h = &this->segments[this->head];
+            while(h == NULL && this->head != this->tail) {
+                int old = this->head;
+                int new = (old + 1) % this->len;
+                if(__sync_bool_compare_and_swap(&this->head, old, new)) {
+                    h = &this->segments[old];
+                    break;
+                }
+            }
+
+            if(h) {
                 it = segment_item_alloc(h->segbase, h->seglen, &h->offset, sizeof(item) + totlen);
             }
         }
@@ -642,6 +661,7 @@ output switch { case segment: out(); else: null(); }
     }
 
     output switch { case it: out();  else: nothing(); }
+
                 ''')
 
     class GetItemSpec(ElementOneInOut):
@@ -721,7 +741,7 @@ output switch { case segment: out(); else: null(); }
 
         # Queue
         RxEnq, RxDeq, RxScan = queue_smart2.smart_queue("rx_queue", 1024, n_cores, 3, enq_output=True, enq_blocking=True) # TODO: change this to False and make a seperate queue for full segment.
-        TxEnq, TxDeq, TxScan = queue_smart2.smart_queue("tx_queue", 1024, n_cores, 4, clean="enq", enq_blocking=True)
+        TxEnq, TxDeq, TxScan = queue_smart2.smart_queue("tx_queue", 1024, n_cores, 4, clean="enq", enq_blocking=True)  # real: size = 64 KB
         rx_enq = RxEnq()
         rx_deq = RxDeq()
         tx_enq = TxEnq()

@@ -324,10 +324,10 @@ uint32_t ialloc_nicsegment_full(uintptr_t last)
 
 void ialloc_init_allocator(struct item_allocator *ia, uint32_t core_id)
 {
-  printf("init allocator %p (%d)\n", ia, ia->core_id);
+    ia->core_id = core_id;
+    printf("init allocator %p (%d)\n", ia, ia->core_id);
     struct segment_header *h;
     memset(ia, 0, sizeof(*ia));
-    ia->core_id = core_id;
 
     if ((h = segment_alloc(ia->core_id)) == NULL) {
       printf("Allocating segment failed (1)\n");
