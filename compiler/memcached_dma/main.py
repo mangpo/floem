@@ -56,6 +56,7 @@ class MyState(State):
     seglen = Field(Uint(64))
     core = Field(Uint(16))
     vallen = Field(Uint(32))
+    keylen = Field(Uint(16))
     src_mac = Field('struct eth_addr')
     dst_mac = Field('struct eth_addr')
     src_ip = Field('struct ip_addr')
@@ -219,7 +220,7 @@ output { out(); }
 item* it = hasht_get(state.key, state.pkt->mcr.request.keylen, state.hash);
 printf("hash get\n");
 state.it = it;
-state.it_addr = it->addr;
+if(it) state.it_addr = it->addr;
 output switch { case it: out(); else: null(); }
             ''')
 
@@ -256,18 +257,20 @@ output { out(this->core); }''' % ('%', n_cores))
 //printf("size get\n");
     size_t msglen = sizeof(iokvs_message) + 4 + state.it->vallen;
     state.vallen = state.it->vallen;
+    state.keylen = state.it->keylen;
     state.it_addr;  // to make state.addr live.
     output { out(msglen); }
             ''')
 
         def impl_cavium(self):
             self.run_c(r'''
-    uint32_t* vallen;
-    item* it = (item*) state.it_addr;
-    dma_read((uintptr_t) &it->vallen, sizeof(uint32_t), (void**) &vallen);
-    size_t msglen = sizeof(iokvs_message) + 4 + *vallen;
-    state.vallen = *vallen;
-    dma_free(vallen);
+    item* it;
+    dma_read(state.it_addr, sizeof(item), (void**) &it);
+    state.keylen = nic_htons(it->keylen);
+    state.vallen = nic_htonl(it->vallen);
+    dma_free(it);
+    size_t msglen = sizeof(iokvs_message) + 4 + state.vallen;
+
     output { out(msglen); }
                         ''')
 
@@ -304,7 +307,6 @@ output { out(msglen, m, pkt_buff); }
         (size_t msglen, void* pkt, void* pkt_buff) = inp();
         iokvs_message *m = pkt;
         memcpy(m, iokvs_template(), sizeof(iokvs_message));
-        item* it = (item*) state.it_addr;
 
         m->mcr.request.magic = PROTOCOL_BINARY_RES;
         m->mcr.request.opcode = PROTOCOL_BINARY_CMD_GET;
@@ -317,8 +319,8 @@ m->mcr.request.bodylen = 4;
 *((uint32_t *)m->payload) = 0;
 m->mcr.request.bodylen = 4 + state.vallen;
 
-void* value;
-dma_read((uintptr_t) item_value(it), state.vallen, (void**) &value);
+uint8_t* value;
+dma_read(state.it_addr + sizeof(item) + state.keylen, state.vallen, (void**) &value);
 memcpy(m->payload + 4, value, state.vallen);
 dma_free(value);
 
@@ -585,8 +587,8 @@ output switch { case segment: out(); else: null(); }
             abort();
         }
 
-    printf("addlog: new->segaddr = %p, cur->segaddr = %p\n", (void*) h->segaddr, (void*) this->head->segbase);
-    printf("holder: head = %d, tail = %d\n", this->head, this->tail);
+        printf("addlog: new->segaddr = %p, cur->segaddr = %p\n", (void*) h->segaddr, (void*) this->se
+        printf("holder: head = %d, tail = %d\n", this->head, this->tail);
 
             ''')
 
@@ -609,8 +611,9 @@ output switch { case segment: out(); else: null(); }
 
     uint64_t full = 0;
     item *it = NULL;
+    segment* h = NULL;
     if(this->head != this->tail) {
-        segment* h = &this->segments[this->head];
+        h = &this->segments[this->head];
         it = segment_item_alloc(h->segaddr, h->seglen, &h->offset, sizeof(item) + totlen);
 
         __sync_synchronize();
@@ -618,7 +621,8 @@ output switch { case segment: out(); else: null(); }
             int old = this->head;
             this->head = (this->head + 1) % this->len;
             if(this->head != this->tail) {
-                printf("Segment is full. offset = %d\n", this->head->offset);  // including this line will make CPU keep making new segment. Without this line, # of segment will stop under 100.
+                printf("Segment is full. offset = %dd\n", h->offset);  // including this line will make CPU keep making new segment. Without this line, # of segment will stop under 100.
+
                 full = h->segaddr + h->offset;
                 // when tx queue is backed up, CPU will have high number of segment, but NIC will never get anything back.
                 h = &this->segments[this->head];
@@ -648,20 +652,21 @@ output switch { case segment: out(); else: null(); }
 
         def impl_cavium(self):  # TODO: concurrent version -- each thread maintain current segment.
             self.run_c(r'''
-    size_t totlen = state.pkt->mcr.request.bodylen - state.pkt->mcr.request.extlen;
+     size_t totlen = state.pkt->mcr.request.bodylen - state.pkt->mcr.request.extlen;
 
     uint64_t full = 0;
     uint64_t addr = 0;
 
+    segment* h = NULL;
     if(this->head != this->tail) {
-        segment* h = &this->segments[this->head];
+        h = &this->segments[this->head];
         addr = segment_item_alloc(h->segaddr, h->seglen, &h->offset, sizeof(item) + totlen);  // TODO: concurrent
 
         if(addr == 0) {
-            int old = this->head;
             this->head = (this->head + 1) % this->len;
             if(this->head != this->tail) {
-                printf("Segment is full. offset = %d\n", this->head->offset);  // including this line will make CPU keep making new segment. Without this line, # of segment will stop under 100.
+                printf("Segment is full. offset = %ld\n", h->offset);  // including this line will make CPU keep making new segment. Without this line, # of segment will stop under 100.
+
                 full = h->segaddr + h->offset;
                 // when tx queue is backed up, CPU will have high number of segment, but NIC will never get anything back.
                 h = &this->segments[this->head];
@@ -682,11 +687,11 @@ output switch { case segment: out(); else: null(); }
         it->hv = nic_ntohl(state.hash);
         it->vallen = nic_ntohl(totlen - state.pkt->mcr.request.keylen);
         it->keylen = nic_ntohs(state.pkt->mcr.request.keylen);
-        it->addr = addr;
+        it->addr = nic_ntohp(addr);
         memcpy(item_key(it), state.key, totlen);
         dma_write(addr, sizeof(item) + totlen, it);
         dma_free(it);
-        state.it = (item*) addr - this->head->segaddr + this->head->segbase;
+        state.it = (item*) (addr - h->segaddr + h->segbase);
     }
 
     output switch { case addr: out();  else: nothing(); }
@@ -714,7 +719,7 @@ output switch { case segment: out(); else: null(); }
     class Unref(ElementOneInOut):
         def impl(self):
             self.run_c(r'''
-        item_unref(state.it);
+        if(state.it) item_unref(state.it);
         output { out(); }
             ''')
 
@@ -756,6 +761,7 @@ output switch { case segment: out(); else: null(); }
         static uint8_t v = 0;
         iokvs_message* m = NULL;
         if(v < 100) {
+            printf("\n");
             m = random_request(v);
             v++;
         }
@@ -955,8 +961,8 @@ c.include = r'''
 #include "protocol_binary.h"
 '''
 c.init = r'''
-  settings_init(argv);
-  //ialloc_init();
+  settings_init(argv);  // TODO: settings_init must be called before other inits.
+  ialloc_init();
   '''
 c.generate_code_as_header()
 c.depend = {"test_app": ['jenkins_hash', 'hashtable', 'ialloc', 'settings', 'app']}
