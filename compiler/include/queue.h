@@ -67,6 +67,7 @@ static void enqueue_clean(circular_queue* q, void(*clean_func)(q_buffer)) {
     clean = q->clean;
     qlen = q->len;
     eq = q->queue;
+    assert(clean < qlen);
     while (1) {
         eqe = (q_entry *) ((uintptr_t) eq + clean);
 	    check_flag(eqe, clean, "clean");
@@ -80,6 +81,7 @@ static void enqueue_clean(circular_queue* q, void(*clean_func)(q_buffer)) {
         eqe->flags = 0;
 	    __sync_synchronize();
         clean = (clean + eqe->len) % qlen;
+        assert(clean < qlen);
     }
     q->clean = clean;
 }

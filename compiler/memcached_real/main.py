@@ -66,15 +66,20 @@ class Schedule(State):
 class ItemAllocators(State):
     ia = Field(Array('struct item_allocator*', n_cores))
 
-class segments_holder(State):
+class segment(State):
     segbase = Field(Uint(64))
+    segaddr = Field(Uint(64))
     seglen = Field(Uint(64))
     offset = Field(Uint(64))
-    next = Field('struct _segments_holder*')
 
-class segments_info(State):
-    head = Field(Pointer(segments_holder))
-    last = Field(Pointer(segments_holder))
+class segment_holders(State):
+    segments = Field(Array(segment, 16))
+    head = Field(Int)
+    tail = Field(Int)
+    len = Field(Int)
+
+    def init(self):
+        self.len = 16
 
 class main(Pipeline):
     state = PerPacket(MyState)
@@ -293,7 +298,6 @@ output { out(msglen, m, pkt_buff); }
         (size_t msglen, void* pkt, void* pkt_buff) = inp();
         iokvs_message *m = pkt;
         memcpy(m, &iokvs_template, sizeof(iokvs_message));
-        int msglen = sizeof(iokvs_message) + 4;
         item* it = state.it;
 
         m->mcr.request.magic = PROTOCOL_BINARY_RES;
@@ -555,10 +559,10 @@ if(segment == NULL) {
 output switch { case segment: out(); else: null(); }
             ''')  # TODO: maybe we should exit if segment = NULL?
 
-    segments = segments_info()
+    segments = segment_holders()
 
     class AddLogseg(Element):
-        this = Persistent(segments_info)
+        this = Persistent(segment_holders)
 
         def configure(self):
             self.inp = Input()
@@ -566,36 +570,26 @@ output switch { case segment: out(); else: null(); }
 
         def impl(self):
             self.run_c(r'''
-        segments_holder* holder = (segments_holder*) malloc(sizeof(segments_holder));
-        holder->segbase = state.segbase;
-        holder->seglen = state.seglen;
-        holder->offset = 0;
-        holder->next = NULL;
-    if(this->head == NULL) {
-        this->head = holder;
-        this->last = holder;
-    } else {
-        this->last->next = holder;
-        this->last = holder;
-    }
-    __sync_synchronize();
+        segment* h = &this->segments[this->tail];
+        h->segbase = state.segbase;
+        h->seglen = state.seglen;
+        h->offset = 0;
+        this->tail = (this->tail + 1) % this->len;
 
-// TODO: change to 0 for performance
-    int count = 1;
-    segments_holder* p = this->head;
-    while(p->next != NULL) {
-        count++;
-        p = p->next;
-    }
-    printf("logseg count = %d\n", count);
-    printf("addlog: new->segbase = %p, cur->segbase = %p\n", (void*) state.segbase, (void*) this->head->segbase);
+        if(this->head == this->tail) {
+            printf("NIC segment holder is full.\n");
+            abort();
+        }
+
+        printf("addlog: new->segaddr = %p, cur->segaddr = %p\n", (void*) h->segaddr, (void*) this->segments[this->head].segaddr);
+        printf("holder: head = %d, tail = %d\n", this->head, this->tail);
 
             ''')
 
     ######################## item ########################
 
     class GetItem(Element):
-        this = Persistent(segments_info)
+        this = Persistent(segment_holders)
 
         def states(self):
             self.this = main.segments
@@ -610,20 +604,25 @@ output switch { case segment: out(); else: null(); }
     size_t totlen = state.pkt->mcr.request.bodylen - state.pkt->mcr.request.extlen;
 
     uint64_t full = 0;
-    //printf("item_alloc: segbase = %ld\n", this->segbase);
-    item *it = segment_item_alloc(this->head->segbase, this->head->seglen, &this->head->offset, sizeof(item) + totlen);
-            //if(it == NULL) full = this->segbase + this->offset; 
-            // Including this is bad is not good because, when tx queue is backed up, CPU will have high number of segment, but NIC will never get anything back.
+    item *it = NULL;
+    segment* h = NULL;
+    if(this->head != this->tail) {
+        h = &this->segments[this->head];
+        it = segment_item_alloc(h->segbase, h->seglen, &h->offset, sizeof(item) + totlen);
 
-    __sync_synchronize();
-    if(it == NULL && this->head->next) {
-            printf("Segment is full. offset = %d\n", this->head->offset);  // including this line will make CPU keep making new segment. Without this line, # of segment will stop under 100.
+        __sync_synchronize();
+        if(it == NULL) {
+            int old = this->head;
+            this->head = (this->head + 1) % this->len;
+            if(this->head != this->tail) {
+                printf("Segment is full. offset = %dd\n", h->offset);  // including this line will make CPU keep making new segment. Without this line, # of segment will stop under 100.
 
-        full = this->head->segbase + this->head->offset;
-        segments_holder* old = this->head;
-        this->head = this->head->next;
-        free(old);
-        it = segment_item_alloc(this->head->segbase, this->head->seglen, &this->head->offset, sizeof(item) + totlen);
+                full = h->segaddr + h->offset;
+                // when tx queue is backed up, CPU will have high number of segment, but NIC will never get anything back.
+                h = &this->segments[this->head];
+                it = segment_item_alloc(h->segbase, h->seglen, &h->offset, sizeof(item) + totlen);
+            }
+        }
     }
 
     //printf("it = %p, full = %p\n", it, (void*) full);
@@ -644,42 +643,6 @@ output switch { case segment: out(); else: null(); }
 
     output switch { case it: out();  else: nothing(); }
                 ''')
-
-        def impl_cavium(self):
-            self.run_c(r'''
-    size_t totlen = state.pkt->mcr.request.bodylen - state.pkt->mcr.request.extlen;
-
-    uint64_t full = 0;
-    printf("item_alloc: segbase = %ld\n", this->head->segbase);
-    void* addr = segment_item_alloc(this->head->segbase, this->head->seglen, &this->head->offset, sizeof(item) + totlen);
-    if(addr == NULL && this->head->next) {
-        full = this->head->segbase + this->head->offset;
-        segments_holder* old = this->head;
-        this->head = this->head->next;
-        free(old);
-        addr = segment_item_alloc(this->head->segbase, this->head->seglen, &this->head->offset, sizeof(item) + totlen);
-    }
-
-    state.segfull = full;
-
-    if(addr) {
-        item *it;
-        dma_read((uintptr_t) addr, sizeof(item), (void**) &it);
-        it->refcount = nic_ntohs(1);
-
-        printf("get_item keylen: %ld, totlen: %ld, item: %ld\n",
-            state.pkt->mcr.request.keylen, totlen, it);
-        it->hv = nic_ntohl(state.hash);
-        it->vallen = nic_ntohl(totlen - state.pkt->mcr.request.keylen);
-        it->keylen = nic_ntohs(state.pkt->mcr.request.keylen);
-        memcpy(item_key(it), state.key, totlen);
-        dma_write((uintptr_t) addr, sizeof(item) + totlen, it);
-        dma_free(it);
-        state.it = addr;
-    }
-
-    output switch { case addr: out();  else: nothing(); }
-            ''')
 
     class GetItemSpec(ElementOneInOut):
         def impl(self):
@@ -703,7 +666,7 @@ output switch { case segment: out(); else: null(); }
     class Unref(ElementOneInOut):
         def impl(self):
             self.run_c(r'''
-        item_unref(state.it);
+        if(state.it) item_unref(state.it);
         output { out(); }
             ''')
 
