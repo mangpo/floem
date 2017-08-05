@@ -77,9 +77,9 @@ class segment(State):
 
 class segment_holders(State):
     segments = Field(Array(segment, 16))
-    head = Field(Int)
-    tail = Field(Int)
-    len = Field(Int)
+    head = Field(Uint(32))
+    tail = Field(Uint(32))
+    len = Field(Uint(32))
     lock = Field('spinlock_t')
 
     def init(self):
@@ -583,6 +583,7 @@ output switch { case segment: out(); else: null(); }
         h->segaddr = state.segaddr;
         h->seglen = state.seglen;
         h->offset = 0;
+        __sync_synchronize();
         this->tail = (this->tail + 1) % this->len;
 
         if(this->head == this->tail) {
@@ -613,8 +614,8 @@ output switch { case segment: out(); else: null(); }
             self.run_c(r'''
     static segment* h = NULL;
     while(h == NULL && this->head != this->tail) {
-        int old = this->head;
-        int new = (old + 1) % this->len;
+        uint32_t old = this->head;
+        uint32_t new = (old + 1) % this->len;
         if(__sync_bool_compare_and_swap(&this->head, old, new)) {
             h = &this->segments[old];
             break;
