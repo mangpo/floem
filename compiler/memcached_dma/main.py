@@ -501,7 +501,7 @@ uint8_t *val = m->payload + 4;
 uint8_t opcode = m->mcr.request.opcode;
 
 if(opcode == PROTOCOL_BINARY_CMD_GET)
-    printf("GET -- status: %d, len: %d, val:%d\n", m->mcr.request.status, m->mcr.request.bodylen, val[0]);
+    printf("GET -- status: %d, val:%d, len: %d\n", m->mcr.request.status, val[0], m->mcr.request.bodylen);
 else if (opcode == PROTOCOL_BINARY_CMD_SET)
     printf("SET -- status: %d, len: %d\n", m->mcr.request.status, m->mcr.request.bodylen);
 
@@ -587,7 +587,7 @@ output switch { case segment: out(); else: null(); }
             abort();
         }
 
-        printf("addlog: new->segaddr = %p, cur->segaddr = %p\n", (void*) h->segaddr, (void*) this->se
+        printf("addlog: new->segaddr = %p, cur->segaddr = %p\n", (void*) h->segaddr, (void*) this->segments[this->head].segaddr);
         printf("holder: head = %d, tail = %d\n", this->head, this->tail);
 
             ''')
@@ -962,7 +962,7 @@ c.include = r'''
 '''
 c.init = r'''
   settings_init(argv);  // TODO: settings_init must be called before other inits.
-  ialloc_init();
+  //ialloc_init();
   '''
 c.generate_code_as_header()
 c.depend = {"test_app": ['jenkins_hash', 'hashtable', 'ialloc', 'settings', 'app']}
