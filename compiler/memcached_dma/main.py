@@ -80,11 +80,11 @@ class segment_holders(State):
     head = Field(Uint(32))
     tail = Field(Uint(32))
     len = Field(Uint(32))
-    lock = Field('spinlock_t')
+    lock = Field('lock_t')
 
     def init(self):
         self.len = 16
-        self.lock = lambda x: 'spinlock_init(&%s)' % x
+        self.lock = lambda x: 'qlock_init(&%s)' % x
 
 class main(Pipeline):
     state = PerPacket(MyState)
@@ -583,7 +583,7 @@ output switch { case segment: out(); else: null(); }
         h->segaddr = state.segaddr;
         h->seglen = state.seglen;
         h->offset = 0;
-        __sync_synchronize();
+        __sync_synchronize(); // CVMX_SYNCWS for cavium
         this->tail = (this->tail + 1) % this->len;
 
         if(this->head == this->tail) {
