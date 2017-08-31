@@ -3,7 +3,7 @@ import queue_smart2, net_real
 from compiler import Compiler
 import library_dsl2
 
-n_cores = 4
+n_cores = 2
 
 class protocol_binary_request_header_request(State):
     magic = Field(Uint(8))
@@ -518,7 +518,9 @@ output { out(msglen, (void*) m, buff); }
 
     class FilterFull(ElementOneInOut):
         def impl(self):
-            self.run_c(r'''output switch { case state.segfull: out(); }''')
+            self.run_c(r'''
+state.core = 0;
+output switch { case state.segfull: out(); }''')
 
 
     class FirstSegment(Element):
@@ -791,7 +793,7 @@ output switch { case segment: out(); else: null(); }
                 >> main.PrintMsg() >> hton2 >> to_net
 
                 # full
-                filter_full = main.FilterFull()  # state.core = 0
+                filter_full = main.FilterFull()  # TODO: impose order of state.core assignment: how to make sure that FilterFull doesn't run before rx_enq
                 get_item.out >> filter_full
                 get_item.nothing >> filter_full
                 filter_full >> log_in_enq.inp[0]
@@ -821,11 +823,6 @@ output switch { case segment: out(); else: null(); }
                 hash_get.null >> tx_enq.inp[2]
                 # set
                 rx_deq.out[1] >> main.HashPut() >> main.Unref() >> tx_enq.inp[1]
-
-                # full
-                # new_segment = main.NewSegment()
-                # rx_deq.out[2] >> new_segment >> tx_enq.inp[2]
-                # new_segment.null >> main.Drop()
 
                 # cleaning tx queue
                 drop = main.Drop()
@@ -864,7 +861,6 @@ output switch { case segment: out(); else: null(); }
                 scheduler >> tx_deq
                 scheduler.log >> log_out_deq
 
-                # TODO: tx_deq.out[x] >> calc_size >> net_alloc >> main.PrepareGetResp() >> prepare_header
                 # get
                 tx_deq.out[0] >> main.SizeGetResp() >> net_alloc0 >> main.PrepareGetResp() >> prepare_header
                 tx_deq.out[2] >> main.SizeGetNullResp() >> net_alloc3 >> main.PrepareGetNullResp() >> prepare_header
@@ -878,7 +874,7 @@ output switch { case segment: out(); else: null(); }
 
 
                 # free net_alloc
-                net_alloc0.oom >> drop  # TODO: reuse drop => No easy way to insert pipeline state
+                net_alloc0.oom >> drop
                 net_alloc1.oom >> drop
                 net_alloc3.oom >> drop
 

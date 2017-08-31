@@ -89,7 +89,7 @@ static void enqueue_clean(circular_queue* q, void(*clean_func)(q_buffer)) {
 
 static q_buffer enqueue_alloc(circular_queue* q, size_t len, void(*clean)(q_buffer)) {
 
-    //printf("enq: queue = %ld\n", q->queue);
+  //printf("enq: queue = %p\n", q->queue);
     volatile uint16_t *flags;
     q_entry *eqe, *dummy;
     size_t off, qlen, total, elen, eqe_off;
@@ -103,6 +103,7 @@ static q_buffer enqueue_alloc(circular_queue* q, size_t len, void(*clean)(q_buff
     eqe = (q_entry *) ((uintptr_t) eq + off);
     total = 0;
     
+    if(off >= qlen) printf("off = %ld, qlen = %ld\n", off, qlen);
     assert(off < qlen);
 
     do {
