@@ -162,9 +162,23 @@ def queue_variable_size(name, size, n_cores, enq_blocking=False, deq_blocking=Fa
         def impl(self):
             noblock_noatom = "q_buffer buff = enqueue_alloc(q, len, %s);\n" % clean_name
             block_noatom = r'''
+#ifdef QUEUE_STAT
+    static size_t full = 0;
+    static struct timeval base, now;
+    gettimeofday(&now, NULL);
+    if(now.tv_sec >= base.tv_sec + 5) {
+        printf("\n>>>>>>>>>>>>>>>>>>>>>>>> QUEUE FULL[''' + name + r''']: q = %p, full/5s = %ld\n", q, full);
+        full = 0;
+        base = now;
+    }
+#endif
+''' + r'''
                         q_buffer buff = { NULL, 0 };
                         while(buff.entry == NULL) {
                             buff = enqueue_alloc(q, len, %s);
+#ifdef QUEUE_STAT
+                            if(buff.entry == NULL) full++;
+#endif
                         }
                         ''' % clean_name
             noblock_atom = "qlock_lock(&q->lock);\n" + noblock_noatom + "qlock_unlock(&q->lock);\n"
@@ -218,6 +232,23 @@ def queue_variable_size(name, size, n_cores, enq_blocking=False, deq_blocking=Fa
                 src = block_atom if deq_atomic else block_noatom
             else:
                 src = noblock_atom if deq_atomic else noblock_noatom
+
+            src = r'''
+#ifdef QUEUE_STAT
+    static size_t empty = 0;
+    static struct timeval base, now;
+    gettimeofday(&now, NULL);
+    if(now.tv_sec >= base.tv_sec + 5) {
+        printf("\n>>>>>>>>>>>>>>>>>>>>>>>> QUEUE EMPTY[''' + name + r''']: q = %p, empty/5s = %ld\n", q, empty);
+        full = 0;
+        base = now;
+    }
+#endif
+''' + src + r'''
+#ifdef QUEUE_STAT
+    if(buff.entry == NULL) empty++;
+#endif
+'''
 
             self.run_c(r'''
                     (size_t c) = inp();
