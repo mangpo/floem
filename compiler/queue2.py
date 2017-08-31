@@ -240,7 +240,7 @@ def queue_variable_size(name, size, n_cores, enq_blocking=False, deq_blocking=Fa
     gettimeofday(&now, NULL);
     if(now.tv_sec >= base.tv_sec + 5) {
         printf("\n>>>>>>>>>>>>>>>>>>>>>>>> QUEUE EMPTY[''' + name + r''']: q = %p, empty/5s = %ld\n", q, empty);
-        full = 0;
+        empty = 0;
         base = now;
     }
 #endif
