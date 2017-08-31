@@ -53,10 +53,12 @@ typedef pthread_mutex_t lock_t;
 static void no_clean(q_buffer buff) {}
 
 static inline void check_flag(q_entry* e, int offset, const char *s) {
+  /*
   if(e->flags & 0xf0f0) {
     printf("%s: offset = %d, e = %p, e->flags = %d, e->len = %d\n", s, offset, e, e->flags, e->len);
   }
   assert((e->flags & 0xf0f0) == 0);
+  */
 }
 
 static void enqueue_clean(circular_queue* q, void(*clean_func)(q_buffer)) {

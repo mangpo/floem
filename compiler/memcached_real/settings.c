@@ -34,7 +34,7 @@ void settings_init(int argc, char *argv[])
 {
   settings.udpport = 11211;
   settings.verbose = 1;
-  settings.segsize = 2048; // debug: 2048, real: 2MB
+  settings.segsize = 2 * 1024 * 1024; // debug: 2048, real: 2MB
   settings.segmaxnum = 512;
   settings.segcqsize = 8 * 1024;
 

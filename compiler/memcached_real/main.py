@@ -3,7 +3,7 @@ import queue_smart2, net_real
 from compiler import Compiler
 import library_dsl2
 
-n_cores = 2
+n_cores = 4
 
 class protocol_binary_request_header_request(State):
     magic = Field(Uint(8))
@@ -749,9 +749,9 @@ output switch { case segment: out(); else: null(); }
         MemoryRegion('data_region', 2 * 1024 * 1024 * 512) #4 * 1024 * 512)
 
         # Queue
-        RxEnq, RxDeq, RxScan = queue_smart2.smart_queue("rx_queue", 1024, n_cores, 2, enq_output=True, enq_blocking=True)
+        RxEnq, RxDeq, RxScan = queue_smart2.smart_queue("rx_queue", 64*1024, n_cores, 2, enq_output=True, enq_blocking=True)
         # ^ if enq_blocking = false, need to call item_unref if queue is full on set_request.
-        TxEnq, TxDeq, TxScan = queue_smart2.smart_queue("tx_queue", 1024, n_cores, 3, clean="enq", enq_blocking=True)  # real: size = 64 KB
+        TxEnq, TxDeq, TxScan = queue_smart2.smart_queue("tx_queue", 64*1024, n_cores, 3, clean="enq", enq_blocking=True)  # debug: size = 1 KB, real: size = 64 KB
         rx_enq = RxEnq()
         rx_deq = RxDeq()
         tx_enq = TxEnq()
