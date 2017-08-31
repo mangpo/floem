@@ -1,6 +1,7 @@
 from dsl2 import *
 import queue_smart2, net_real
 from compiler import Compiler
+import library_dsl2
 
 n_cores = 4
 
@@ -237,12 +238,16 @@ output { out(); }
 
         def configure(self):
             self.out = Output(Size)
+            self.log = Output(Size)
             self.this = Schedule()
 
         def impl(self):
             self.run_c(r'''
-this->core = (this->core + 1) %s %s;
-output { out(this->core); }''' % ('%', n_cores))
+this->core = (this->core + 1) %s %d;
+output switch {
+  case(this->core < %d): out(this->core);
+  else: log(0);
+  }''' % ('%', n_cores + 1, n_cores))
 
     class SizeGetResp(Element):
         def configure(self):
@@ -529,7 +534,8 @@ output { out(msglen, (void*) m, buff); }
 (size_t core, struct item_allocator* ia) = inp();
 this->ia[core] = ia;
 struct segment_header *h = ialloc_nicsegment_alloc(ia);
-state.core = core;
+//state.core = core;
+state.core = 0;
 state.segbase = get_pointer_offset(h->data);
 state.seglen = h->size;
 output { out(); }
@@ -556,6 +562,7 @@ if(segment == NULL) {
 } else {
     state.segbase = get_pointer_offset(segment->data);
     state.seglen = segment->size;
+    state.core = 0;
     //printf("New segment: segbase = %p.\n", (void*) get_pointer_offset(segment->data));
 
 }
@@ -740,13 +747,21 @@ output switch { case segment: out(); else: null(); }
         MemoryRegion('data_region', 2 * 1024 * 1024 * 512) #4 * 1024 * 512)
 
         # Queue
-        RxEnq, RxDeq, RxScan = queue_smart2.smart_queue("rx_queue", 1024, n_cores, 3, enq_output=True, enq_blocking=True) # TODO: change this to False and make a seperate queue for full segment.
-        TxEnq, TxDeq, TxScan = queue_smart2.smart_queue("tx_queue", 1024, n_cores, 4, clean="enq", enq_blocking=True)  # real: size = 64 KB
+        RxEnq, RxDeq, RxScan = queue_smart2.smart_queue("rx_queue", 1024, n_cores, 2, enq_output=True, enq_blocking=True)
+        # ^ if enq_blocking = false, need to call item_unref if queue is full on set_request.
+        TxEnq, TxDeq, TxScan = queue_smart2.smart_queue("tx_queue", 1024, n_cores, 3, clean="enq", enq_blocking=True)  # real: size = 64 KB
         rx_enq = RxEnq()
         rx_deq = RxDeq()
         tx_enq = TxEnq()
         tx_deq = TxDeq()
         tx_scan = TxScan()
+
+        LogInEnq, LogInDeq, LogInScan = queue_smart2.smart_queue("log_in_queue", 1024, 1, 1, enq_blocking=True)
+        LogOutEnq, LogOutDeq, LogOutScan = queue_smart2.smart_queue("log_out_queue", 1024, 1, 1, enq_blocking=True)
+        log_in_enq = LogInEnq()
+        log_in_deq = LogInDeq()
+        log_out_enq = LogOutEnq()
+        log_out_deq = LogOutDeq()
 
         ######################## NIC Rx #######################
         class nic_rx(InternalLoop):
@@ -776,10 +791,10 @@ output switch { case segment: out(); else: null(); }
                 >> main.PrintMsg() >> hton2 >> to_net
 
                 # full
-                filter_full = main.FilterFull()
+                filter_full = main.FilterFull()  # state.core = 0
                 get_item.out >> filter_full
                 get_item.nothing >> filter_full
-                filter_full >> rx_enq.inp[2]
+                filter_full >> log_in_enq.inp[0]
 
                 # exception
                 arp = main.HandleArp()
@@ -803,14 +818,14 @@ output switch { case segment: out(); else: null(); }
                 hash_get = main.HashGet()
                 rx_deq.out[0] >> hash_get
                 hash_get.out >> tx_enq.inp[0]
-                hash_get.null >> tx_enq.inp[3]
+                hash_get.null >> tx_enq.inp[2]
                 # set
                 rx_deq.out[1] >> main.HashPut() >> main.Unref() >> tx_enq.inp[1]
 
                 # full
-                new_segment = main.NewSegment()
-                rx_deq.out[2] >> new_segment >> tx_enq.inp[2]
-                new_segment.null >> main.Drop()
+                # new_segment = main.NewSegment()
+                # rx_deq.out[2] >> new_segment >> tx_enq.inp[2]
+                # new_segment.null >> main.Drop()
 
                 # cleaning tx queue
                 drop = main.Drop()
@@ -818,38 +833,25 @@ output switch { case segment: out(); else: null(); }
 
                 tx_scan.out[1] >> drop
                 tx_scan.out[2] >> drop
-                tx_scan.out[3] >> drop
-
 
         class init_segment(API):
             def configure(self):
                 self.inp = Input(Size)
 
             def impl(self):
-                self.inp >> main.FirstSegment() >> tx_enq.inp[2]
+                self.inp >> main.FirstSegment() >> log_out_enq.inp[0]
 
-        # class clean_cq(API):
-        #     def configure(self):
-        #         self.inp = Input(Size)
-        #         self.out = Output(Bool)
-        #         self.default_return = 'false'
-        #
-        #     def impl(self):
-        #         clean = main.Clean(configure=['true'])
-        #         #unclean = main.Clean(configure=['false'])
-        #         #ret = main.ForwardBool()
-        #         self.inp >> tx_scan
-        #         # get
-        #         tx_scan.out[0] >> main.Unref() >> clean
-        #
-        #         tx_scan.out[1] >> clean
-        #         tx_scan.out[2] >> clean
-        #         tx_scan.out[3] >> clean
-        #         clean >> self.out
+        class create_segment(API):
+            def impl(self):
+                new_segment = main.NewSegment()
+                library_dsl2.Constant(configure=[0]) >> log_in_deq
+                log_in_deq.out[0] >> new_segment >> log_out_enq.inp[0]
+                new_segment.null >> main.Drop()
 
         ####################### NIC Tx #######################
         class nic_tx(InternalLoop):
             def impl(self):
+                scheduler = main.Scheduler()
                 to_net = net_real.ToNet('to_net', configure=['alloc'])
                 net_alloc0 = net_real.NetAlloc('net_alloc0')
                 net_alloc1 = net_real.NetAlloc('net_alloc1')
@@ -859,12 +861,13 @@ output switch { case segment: out(); else: null(); }
                 hton = net_real.HTON(configure=['iokvs_message'])
                 drop = main.Drop()
 
-                main.Scheduler() >> tx_deq
+                scheduler >> tx_deq
+                scheduler.log >> log_out_deq
 
                 # TODO: tx_deq.out[x] >> calc_size >> net_alloc >> main.PrepareGetResp() >> prepare_header
                 # get
                 tx_deq.out[0] >> main.SizeGetResp() >> net_alloc0 >> main.PrepareGetResp() >> prepare_header
-                tx_deq.out[3] >> main.SizeGetNullResp() >> net_alloc3 >> main.PrepareGetNullResp() >> prepare_header
+                tx_deq.out[2] >> main.SizeGetNullResp() >> net_alloc3 >> main.PrepareGetNullResp() >> prepare_header
 
                 # set
                 set_response = main.PrepareSetResp(configure=['PROTOCOL_BINARY_RESPONSE_SUCCESS'])
@@ -873,18 +876,19 @@ output switch { case segment: out(); else: null(); }
                 # send
                 prepare_header >> display >> hton >> to_net
 
-                # full
-                tx_deq.out[2] >> main.AddLogseg()
 
                 # free net_alloc
                 net_alloc0.oom >> drop  # TODO: reuse drop => No easy way to insert pipeline state
                 net_alloc1.oom >> drop
                 net_alloc3.oom >> drop
 
+                # full
+                log_out_deq.out[0] >> main.AddLogseg()
+
         nic_rx('nic_rx', process='dpdk', cores=[1])
         process_eq('process_eq', process='app')
         init_segment('init_segment', process='app')
-        #clean_cq('clean_cq', process='app')
+        create_segment('create_segment', process='app')
         nic_tx('nic_tx', process='dpdk', cores=[2])
 
 master_process('app')

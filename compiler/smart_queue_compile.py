@@ -92,7 +92,7 @@ def find_pipeline_state(g, instance):
     for start_name in g.pipeline_states:
         state = g.pipeline_states[start_name]
         subgraph = set()
-        g.find_subgraph(start_name, subgraph)
+        g.find_subgraph_with_queue(start_name, subgraph)
 
         if instance.name in subgraph:
             return state

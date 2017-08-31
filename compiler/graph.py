@@ -365,6 +365,17 @@ class Graph:
                 self.find_subgraph(inst, subgraph)
         return subgraph
 
+    def find_subgraph_with_queue(self, root, subgraph):
+        instance = self.instances[root]
+        if instance.name not in subgraph:
+            subgraph.add(root)
+            for inst, port in instance.output2ele.values():
+                self.find_subgraph_with_queue(inst, subgraph)
+            if isinstance(instance.element.special, Queue):
+                if instance == instance.element.special.enq:
+                    self.find_subgraph(instance.element.special.deq.name, subgraph)
+        return subgraph
+
     def find_subgraph_same_thread(self, root, subgraph, thread):
         instance = self.instances[root]
         if instance.name not in subgraph and instance.thread == thread:

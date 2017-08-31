@@ -49,3 +49,13 @@ class Drop(Element):
 
     def impl(self):
         self.run_c("")
+
+class Constant(Element):
+    def configure(self, c):
+        self.out = Output(Size)
+        self.c = c
+
+    def impl(self):
+        self.run_c(r'''
+        output { out(%d); }
+        ''' % self.c)

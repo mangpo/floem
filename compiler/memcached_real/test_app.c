@@ -14,11 +14,8 @@ void run_app(void *threadid) {
   printf("Worker %ld starting\n", tid);
 
   while(true) {
-    //printf(".");
     process_eq(tid);
-    clean_log(&ia, true); // TODO: is this frequent enough?
-    //bool cleaning = true;
-    //while(cleaning) { cleaning = clean_cq(tid); }  // TODO: clean before process_eq
+    clean_log(&ia, true); // TODO: always true
   }
 }
 
@@ -27,10 +24,11 @@ void maintenance()
     size_t i;
     usleep(100000);
     while (1) {
+        create_segment();
         for (i = 0; i < NUM_THREADS; i++) {
             ialloc_maintenance(iallocs[i]);
         }
-        usleep(1000000);
+        //usleep(10);
     }
 }
 
