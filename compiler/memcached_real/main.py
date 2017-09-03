@@ -4,6 +4,7 @@ from compiler import Compiler
 import library_dsl2
 
 n_cores = 4
+nic_tx_threads = 2
 
 class protocol_binary_request_header_request(State):
     magic = Field(Uint(8))
@@ -237,17 +238,25 @@ output { out(); }
         this = Persistent(Schedule)
 
         def configure(self):
+            self.inp = Input(Size)
             self.out = Output(Size)
             self.log = Output(Size)
             self.this = Schedule()
 
         def impl(self):
             self.run_c(r'''
-this->core = (this->core + 1) %s %d;
+size_t id = inp();
+size_t n_cores = %d;
+size_t mod = %d;
+
+static __thread int core = -1;
+if(core == -1) core = (core_id * mod)/%d;
+
+core = (core + 1) %s mod;
 output switch {
-  case(this->core < %d): out(this->core);
+  case(this->core < n_cores): out(this->core);
   else: log(0);
-  }''' % ('%', n_cores + 1, n_cores))
+  }''' % (n_cores, n_cores+1, nic_tx_threads, '%'))
 
     class SizeGetResp(Element):
         def configure(self):
@@ -751,7 +760,8 @@ output switch { case segment: out(); else: null(); }
         # Queue
         RxEnq, RxDeq, RxScan = queue_smart2.smart_queue("rx_queue", 64*1024, n_cores, 2, enq_output=True, enq_blocking=True)
         # ^ if enq_blocking = false, need to call item_unref if queue is full on set_request.
-        TxEnq, TxDeq, TxScan = queue_smart2.smart_queue("tx_queue", 64*1024, n_cores, 3, clean="enq", enq_blocking=True)  # debug: size = 1 KB, real: size = 64 KB
+        TxEnq, TxDeq, TxScan = queue_smart2.smart_queue("tx_queue", 64*1024, n_cores, 3, clean="enq",
+                                                        enq_blocking=True, deq_atomic=True)  # debug: size = 1 KB, real: size = 64 KB
         rx_enq = RxEnq()
         rx_deq = RxDeq()
         tx_enq = TxEnq()
@@ -759,7 +769,8 @@ output switch { case segment: out(); else: null(); }
         tx_scan = TxScan()
 
         LogInEnq, LogInDeq, LogInScan = queue_smart2.smart_queue("log_in_queue", 1024, 1, 1, enq_blocking=True)
-        LogOutEnq, LogOutDeq, LogOutScan = queue_smart2.smart_queue("log_out_queue", 1024, 1, 1, enq_blocking=True)
+        LogOutEnq, LogOutDeq, LogOutScan = queue_smart2.smart_queue("log_out_queue", 1024, 1, 1,
+                                                                    enq_blocking=True, deq_atomic=True)
         log_in_enq = LogInEnq()
         log_in_deq = LogInDeq()
         log_out_enq = LogOutEnq()
@@ -858,7 +869,7 @@ output switch { case segment: out(); else: null(); }
                 hton = net_real.HTON(configure=['iokvs_message'])
                 drop = main.Drop()
 
-                scheduler >> tx_deq
+                self.core_id >> scheduler >> tx_deq
                 scheduler.log >> log_out_deq
 
                 # get
@@ -881,11 +892,11 @@ output switch { case segment: out(); else: null(); }
                 # full
                 log_out_deq.out[0] >> main.AddLogseg()
 
-        nic_rx('nic_rx', process='dpdk', cores=[1])
+        nic_rx('nic_rx', process='dpdk', cores=[nic_tx_threads])
         process_eq('process_eq', process='app')
         init_segment('init_segment', process='app')
         create_segment('create_segment', process='app')
-        nic_tx('nic_tx', process='dpdk', cores=[2])
+        nic_tx('nic_tx', process='dpdk', cores=range(nic_tx_threads))
 
 master_process('app')
 
