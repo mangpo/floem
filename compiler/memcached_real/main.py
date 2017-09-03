@@ -4,7 +4,7 @@ from compiler import Compiler
 import library_dsl2
 
 n_cores = 4
-nic_tx_threads = 2
+nic_tx_threads = 3
 
 class protocol_binary_request_header_request(State):
     magic = Field(Uint(8))
@@ -245,7 +245,7 @@ output { out(); }
 
         def impl(self):
             self.run_c(r'''
-size_t id = inp();
+size_t core_id = inp();
 size_t n_cores = %d;
 size_t mod = %d;
 
@@ -254,7 +254,7 @@ if(core == -1) core = (core_id * mod)/%d;
 
 core = (core + 1) %s mod;
 output switch {
-  case(this->core < n_cores): out(this->core);
+  case(core < n_cores): out(core);
   else: log(0);
   }''' % (n_cores, n_cores+1, nic_tx_threads, '%'))
 

@@ -187,7 +187,8 @@ out:
 
     *pdata = data;
     *pbuf = mb;
-    
+
+#if 0    
     static __thread size_t count = 0;
     static __thread struct timeval last, now;
 
@@ -210,6 +211,7 @@ out:
       printf("\n\n");
       */
     }
+#endif
 }
 
 static void dpdk_net_free(void *data, void *buf)
@@ -265,6 +267,7 @@ static void dpdk_to_net(size_t size, void *data, void *buf)
         rte_pktmbuf_free(mb);
     }
 
+#if 0
     static __thread size_t count = 0;
     static __thread struct timeval last, now;
 
@@ -275,7 +278,7 @@ static void dpdk_to_net(size_t size, void *data, void *buf)
       count = 0;
       last = now;
     }
-
+#endif
 }
 
 #define nic_htons(x) x
