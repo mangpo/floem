@@ -3,6 +3,7 @@ import queue_smart2, net_real, library_dsl2
 from compiler import Compiler
 
 n_cores = 4
+nic_rx_threads = 1
 nic_tx_threads = 1
 
 class protocol_binary_request_header_request(State):
@@ -632,7 +633,7 @@ output switch { case segment: out(); else: null(); }
 
         def impl(self):
             self.run_c(r'''
-    static segment* h = NULL;
+    static __thread segment* h = NULL;
     while(h == NULL && this->head != this->tail) {
         uint32_t old = this->head;
         uint32_t new = (old + 1) % this->len;
@@ -691,12 +692,13 @@ output switch { case segment: out(); else: null(); }
 
         def impl_cavium(self):  # TODO: concurrent version -- each thread maintain current segment.
             self.run_c(r'''
-    static segment* h = NULL;
+    static __thread segment* h = NULL;
     while(h == NULL && this->head != this->tail) {
         int old = this->head;
         int new = (old + 1) % this->len;
         if(cvmx_atomic_compare_and_store32(&this->head, old, new)) {
             h = &this->segments[old];
+            printf("h = %p\n", h);
             break;
         }
     }
@@ -734,7 +736,8 @@ output switch { case segment: out(); else: null(); }
 
     if(addr) {
         item *it;
-        dma_read(addr, sizeof(item), (void**) &it);
+        dma_buf_alloc((void**) &it);
+        //dma_read(addr, sizeof(item), (void**) &it);
         it->refcount = nic_ntohs(1);
 
         //printf("get_item keylen: %d, totlen: %ld, item: %p\n",
@@ -867,7 +870,8 @@ output switch { case segment: out(); else: null(); }
         #MemoryRegion('data_region', 2 * 1024 * 1024 * 512) #4 * 1024 * 512)
 
         # Queue
-        RxEnq, RxDeq, RxScan = queue_smart2.smart_queue("rx_queue", 32 * 1024, n_cores, 2, enq_output=True, enq_blocking=True) # TODO: change this to False and make a seperate queue for full segment.
+        RxEnq, RxDeq, RxScan = queue_smart2.smart_queue("rx_queue", 32 * 1024, n_cores, 2,
+                                                        enq_output=True, enq_blocking=True, enq_atomic=True) # TODO: change this to False and make a seperate queue for full segment.
         TxEnq, TxDeq, TxScan = queue_smart2.smart_queue("tx_queue", 32 * 1024, n_cores, 3, clean="enq", enq_blocking=True)
         rx_enq = RxEnq()
         rx_deq = RxDeq()
@@ -875,7 +879,8 @@ output switch { case segment: out(); else: null(); }
         tx_deq = TxDeq()
         tx_scan = TxScan()
 
-        LogInEnq, LogInDeq, LogInScan = queue_smart2.smart_queue("log_in_queue", 1024, 1, 1, enq_blocking=True)
+        LogInEnq, LogInDeq, LogInScan = queue_smart2.smart_queue("log_in_queue", 1024, 1, 1,
+                                                                 enq_blocking=True, enq_atomic=True)
         LogOutEnq, LogOutDeq, LogOutScan = queue_smart2.smart_queue("log_out_queue", 1024, 1, 1, enq_blocking=True)
         log_in_enq = LogInEnq()
         log_in_deq = LogInDeq()
@@ -1010,7 +1015,7 @@ output switch { case segment: out(); else: null(); }
                 # full
                 log_out_deq.out[0] >> main.AddLogseg()
 
-        nic_rx('nic_rx', device=target.CAVIUM, cores=[nic_tx_threads])
+        nic_rx('nic_rx', device=target.CAVIUM, cores=[nic_tx_threads + i for i in range(nic_rx_threads)])
         process_eq('process_eq', process='app')
         init_segment('init_segment', process='app')
         create_segment('create_segment', process='app')
