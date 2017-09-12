@@ -781,7 +781,7 @@ output switch { case segment: out(); else: null(); }
             def impl(self):
                 from_net = net_real.FromNet('from_net')
                 from_net_free = net_real.FromNetFree('from_net_free')
-                to_net = net_real.ToNet('to_net', configure=['alloc'])
+                to_net = net_real.ToNet('to_net', configure=['from_net'])
                 classifier = main.Classifer()
                 check_packet = main.CheckPacket()
                 hton1 = net_real.HTON(configure=['iokvs_message'])

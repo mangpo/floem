@@ -11,6 +11,7 @@
 #include "protocol_binary.h"
 
 #define NUM_THREADS     4
+//#define DEBUG
 
 /******************************************************************************/
 /* Settings */

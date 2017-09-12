@@ -9,7 +9,7 @@ void settings_init(char *argv[])
 {
   settings.udpport = 11211;
   settings.verbose = 1;
-  settings.segsize = 2048; // 2048
+  settings.segsize = 2 * 1024 * 1024; // 2048
   settings.segmaxnum = 512;
   settings.segcqsize = 8 * 1024;
   struct ip_addr ip = { .addr = {0x0a, 0x03, 0x00, 0x23} };  // n35
@@ -17,10 +17,10 @@ void settings_init(char *argv[])
 }
 
 iokvs_message template = {
-  .ether = { .type = 0x0008 },
+  .ether = { .type = ETHERTYPE_IPv4 },
   .ipv4 = { ._v_hl = 0x45, ._ttl = 0x40, ._proto = 0x11},
-  .mcudp = { .n_data = 0x0100 }
-};
+  .mcudp = { .n_data = 1 }
+}; // CAVIUM
 
 iokvs_message* iokvs_template() {
   return &template;

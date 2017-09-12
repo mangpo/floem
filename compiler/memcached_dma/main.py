@@ -180,7 +180,7 @@ output switch {
         def impl(self):
             self.run_c(r'''
 uint8_t cmd = state.pkt->mcr.request.opcode;
-printf("classify: %d\n", cmd);
+//printf("classify: %d\n", cmd);
 
 output switch{
   case (cmd == PROTOCOL_BINARY_CMD_GET): out_get();
@@ -200,7 +200,7 @@ output { out(); }''')
             self.run_c(r'''
 int core = state.hash %s %d;;
 state.core = core;
-printf("hash = %s, core = %s\n", state.hash, core);
+//printf("hash = %s, core = %s\n", state.hash, core);
             output { out(); }''' % ('%', n_cores, '%d', '%d'))
 
     ######################## hash ########################
@@ -221,7 +221,7 @@ output { out(); }
         def impl(self):
             self.run_c(r'''
 item* it = hasht_get(state.key, state.pkt->mcr.request.keylen, state.hash);
-printf("hash get\n");
+//printf("hash get\n");
 state.it = it;
 if(it) state.it_addr = it->addr;
 output switch { case it: out(); else: null(); }
@@ -230,7 +230,7 @@ output switch { case it: out(); else: null(); }
     class HashPut(ElementOneInOut):
         def impl(self):
             self.run_c(r'''
-printf("hash put\n");
+//printf("hash put: state.it = %p\n", state.it);
 hasht_put(state.it, NULL);
 output { out(); }
             ''')
@@ -258,7 +258,7 @@ output { out(); }
 
     core = (core + 1) %s mod;
     output switch {
-      case(core < n_cores): out(core);
+      case((size_t) core < n_cores): out(core);
       else: log(0);
       }''' % (n_cores, n_cores + 1, nic_tx_threads, '%'))
 
@@ -512,6 +512,8 @@ output { out(msglen, m, pkt_buff); }
             self.run_c(r'''
 (size_t msglen, void* pkt, void* buff) = inp();
 iokvs_message* m = (iokvs_message*) pkt;
+
+#ifdef DEBUG
 uint8_t *val = m->payload + 4;
 uint8_t opcode = m->mcr.request.opcode;
 
@@ -519,6 +521,7 @@ if(opcode == PROTOCOL_BINARY_CMD_GET)
     printf("GET -- status: %d, val:%d, len: %d\n", m->mcr.request.status, val[0], m->mcr.request.bodylen);
 else if (opcode == PROTOCOL_BINARY_CMD_SET)
     printf("SET -- status: %d, len: %d\n", m->mcr.request.status, m->mcr.request.bodylen);
+#endif
 
 output { out(msglen, (void*) m, buff); }
     ''')
@@ -530,7 +533,9 @@ output { out(msglen, (void*) m, buff); }
 
     class FilterFull(ElementOneInOut):
         def impl(self):
-            self.run_c(r'''output switch { case state.segfull: out(); }''')
+            self.run_c(r'''
+state.core = 0;
+output switch { case state.segfull: out(); }''')
 
 
     class FirstSegment(Element):
@@ -732,8 +737,8 @@ output switch { case segment: out(); else: null(); }
         dma_read(addr, sizeof(item), (void**) &it);
         it->refcount = nic_ntohs(1);
 
-        printf("get_item keylen: %d, totlen: %ld, item: %p\n",
-            state.pkt->mcr.request.keylen, totlen, (void*) it);
+        //printf("get_item keylen: %d, totlen: %ld, item: %p\n",
+        //    state.pkt->mcr.request.keylen, totlen, (void*) it);
         it->hv = nic_ntohl(state.hash);
         it->vallen = nic_ntohl(totlen - state.pkt->mcr.request.keylen);
         it->keylen = nic_ntohs(state.pkt->mcr.request.keylen);
@@ -862,8 +867,8 @@ output switch { case segment: out(); else: null(); }
         #MemoryRegion('data_region', 2 * 1024 * 1024 * 512) #4 * 1024 * 512)
 
         # Queue
-        RxEnq, RxDeq, RxScan = queue_smart2.smart_queue("rx_queue", 1024, n_cores, 2, enq_output=True, enq_blocking=True) # TODO: change this to False and make a seperate queue for full segment.
-        TxEnq, TxDeq, TxScan = queue_smart2.smart_queue("tx_queue", 1024, n_cores, 3, clean="enq", enq_blocking=True)
+        RxEnq, RxDeq, RxScan = queue_smart2.smart_queue("rx_queue", 32 * 1024, n_cores, 2, enq_output=True, enq_blocking=True) # TODO: change this to False and make a seperate queue for full segment.
+        TxEnq, TxDeq, TxScan = queue_smart2.smart_queue("tx_queue", 32 * 1024, n_cores, 3, clean="enq", enq_blocking=True)
         rx_enq = RxEnq()
         rx_deq = RxDeq()
         tx_enq = TxEnq()
@@ -880,9 +885,13 @@ output switch { case segment: out(); else: null(); }
         ######################## NIC Rx #######################
         class nic_rx(InternalLoop):
             def impl(self):
-                from_net = main.FromNet()
-                from_net_free = main.FromNetFree()
-                to_net = main.ToNet()
+                from_net = net_real.FromNet('from_net')
+                from_net_free = net_real.FromNetFree('from_net_free')
+                to_net = net_real.ToNet('to_net', configure=['from_net'])
+
+                #from_net = main.FromNet()
+                #from_net_free = main.FromNetFree()
+                #to_net = main.ToNet()
 
                 classifier = main.Classifer()
                 check_packet = main.CheckPacket()
@@ -964,15 +973,15 @@ output switch { case segment: out(); else: null(); }
             def impl(self):
                 scheduler = main.Scheduler()
 
-                # to_net = net_real.ToNet('to_net', configure=['alloc'])
-                # net_alloc0 = net_real.NetAlloc('net_alloc0')
-                # net_alloc1 = net_real.NetAlloc('net_alloc1')
-                # net_alloc3 = net_real.NetAlloc('net_alloc3')
+                to_net = net_real.ToNet('to_net', configure=['alloc'])
+                net_alloc0 = net_real.NetAlloc('net_alloc0')
+                net_alloc1 = net_real.NetAlloc('net_alloc1')
+                net_alloc3 = net_real.NetAlloc('net_alloc3')
 
-                to_net = main.ToNet()
-                net_alloc0 = main.NetAlloc()
-                net_alloc1 = main.NetAlloc()
-                net_alloc3 = main.NetAlloc()
+                #to_net = main.ToNet()
+                #net_alloc0 = main.NetAlloc()
+                #net_alloc1 = main.NetAlloc()
+                #net_alloc3 = main.NetAlloc()
 
                 prepare_header = main.PrepareHeader()
                 display = main.PrintMsg()

@@ -301,7 +301,7 @@ typedef struct {
 } __attribute__ ((packed)) iokvs_message;
 
 static iokvs_message iokvs_template = {
- .ether = { .ether_type = 0x0008 },
+  .ether = { .ether_type = 0x0008 },
  .ipv4 = { .version_ihl = 0x45, .time_to_live = 0x40, .next_proto_id = 0x11},
  .mcudp = { .n_data = 0x0100 }
 };

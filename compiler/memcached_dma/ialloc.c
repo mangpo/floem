@@ -232,8 +232,8 @@ item *segment_item_alloc_pointer(struct segment_header *h, size_t total)
 /** Mark NIC log segment as full. */
 uint32_t ialloc_nicsegment_full(uintptr_t last)
 {
-  //printf("ialloc_nicsegment_full\n");
-    struct segment_header *h = segment_from_part(last);
+  printf("ialloc_nicsegment_full: last = %p\n", (void*) last);
+    struct segment_header *h = segment_from_part(last-1);
     size_t off = last - h->addr;
     printf("nicsegment_full: core_id =%d, h = %p, segment = %p, offset = %ld\n", h->core_id, h, h->data, off);
 
