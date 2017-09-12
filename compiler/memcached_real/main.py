@@ -4,6 +4,7 @@ from compiler import Compiler
 import library_dsl2
 
 n_cores = 4
+nic_rx_threads = 2
 nic_tx_threads = 3
 
 class protocol_binary_request_header_request(State):
@@ -624,12 +625,13 @@ output switch { case segment: out(); else: null(); }
 
         def impl(self):
             self.run_c(r'''
-    static segment* h = NULL;
+    static __thread segment* h = NULL;
     while(h == NULL && this->head != this->tail) {
         uint32_t old = this->head;
         uint32_t new = (old + 1) % this->len;
         if(__sync_bool_compare_and_swap(&this->head, old, new)) {
             h = &this->segments[old];
+            printf("h = %p\n", h);
             break;
         }
     }
@@ -758,9 +760,9 @@ output switch { case segment: out(); else: null(); }
         MemoryRegion('data_region', 2 * 1024 * 1024 * 512) #4 * 1024 * 512)
 
         # Queue
-        RxEnq, RxDeq, RxScan = queue_smart2.smart_queue("rx_queue", 64*1024, n_cores, 2, enq_output=True, enq_blocking=True)
+        RxEnq, RxDeq, RxScan = queue_smart2.smart_queue("rx_queue", 32*1024, n_cores, 2, enq_output=True, enq_blocking=True, enq_atomic=True)
         # ^ if enq_blocking = false, need to call item_unref if queue is full on set_request.
-        TxEnq, TxDeq, TxScan = queue_smart2.smart_queue("tx_queue", 64*1024, n_cores, 3, clean="enq",
+        TxEnq, TxDeq, TxScan = queue_smart2.smart_queue("tx_queue", 32*1024, n_cores, 3, clean="enq",
                                                         enq_blocking=True, deq_atomic=True)  # debug: size = 1 KB, real: size = 64 KB
         rx_enq = RxEnq()
         rx_deq = RxDeq()
@@ -892,7 +894,7 @@ output switch { case segment: out(); else: null(); }
                 # full
                 log_out_deq.out[0] >> main.AddLogseg()
 
-        nic_rx('nic_rx', process='dpdk', cores=[nic_tx_threads])
+        nic_rx('nic_rx', process='dpdk', cores=[nic_tx_threads + i for i in range(nic_rx_threads)])
         process_eq('process_eq', process='app')
         init_segment('init_segment', process='app')
         create_segment('create_segment', process='app')

@@ -107,7 +107,7 @@ static q_buffer enqueue_alloc(circular_queue* q, size_t len, void(*clean)(q_buff
     if(off >= qlen) printf("off = %ld, qlen = %ld\n", off, qlen);
     assert(off < qlen && qlen < 65536);
 
-#if 1
+#if 0
     static q_entry* prev_addr = 0;
     static size_t count = 0;
 
@@ -124,7 +124,7 @@ static q_buffer enqueue_alloc(circular_queue* q, size_t len, void(*clean)(q_buff
         if ((*flags & (FLAG_OWN | FLAG_INUSE)) != 0) {
             q->offset = eqe_off;
 
-#if 1
+#if 0
             if(eqe == prev_addr) count++;
             if(count > 20000 && (count % 10000) == 0)
 	      printf("enq_alloc (NULL): queue = %ld, entry = %ld, flag = %ld, len = %ld, offset = %ld\n", q->queue, eqe, *flags, len, off);
