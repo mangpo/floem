@@ -160,7 +160,7 @@ def queue_variable_size(name, size, n_cores, enq_blocking=False, deq_blocking=Fa
             self.out = Output(q_buffer)
 
         def impl(self):
-            noblock_noatom = "q_buffer buff = enqueue_alloc(q, len, %s);\n" % clean_name
+            noblock_noatom = "q_buffer buff = enqueue_alloc((circular_queue*) q, len, %s);\n" % clean_name
             block_noatom = r'''
 #ifdef QUEUE_STAT
     static size_t full = 0;
@@ -175,7 +175,7 @@ def queue_variable_size(name, size, n_cores, enq_blocking=False, deq_blocking=Fa
 ''' + r'''
                         q_buffer buff = { NULL, 0 };
                         while(buff.entry == NULL) {
-                            buff = enqueue_alloc(q, len, %s);
+                            buff = enqueue_alloc((circular_queue*) q, len, %s);
 #ifdef QUEUE_STAT
                             if(buff.entry == NULL) full++;
 #endif
@@ -310,13 +310,13 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
     uintptr_t addr1 = (uintptr_t) &q->data[old] + off;
     uintptr_t addr2 = (uintptr_t) x + off;
     rte_memcpy((void*) addr1, (void*) addr2, sizeof(%s) - off);
-    __sync_synchronize();
+    __SYNC;
     q->data[old].%s = x->%s;
-    __sync_synchronize();
+    __SYNC;
     ''' % (owner, type, owner, owner)
 
     atomic_src = r'''
-    __sync_synchronize();
+    __SYNC;
     size_t old = p->offset;
     size_t new = (old + 1) %s %d;
     while(!__sync_bool_compare_and_swap(&p->offset, old, new)) {
@@ -335,7 +335,7 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
         ''' % ('%', size, '%', size)
 
     wait_then_copy = r'''
-    while(q->data[old].%s != 0) __sync_synchronize();
+    while(q->data[old].%s != 0) __SYNC;
     %s
     ''' % (owner, copy)
 
@@ -353,7 +353,7 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
         ''' % (owner)  # TODO: check if dma_write is atomic?
 
     wait_then_get = r'''
-    while(q->data[old].%s == 0) __sync_synchronize();
+    while(q->data[old].%s == 0) __SYNC;
     %s x = &q->data[old];
     ''' % (owner, type_star)
 
@@ -390,7 +390,7 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
             '''
 
             noblock_noatom = stat + r'''
-                __sync_synchronize();
+                __SYNC;
                 size_t old = p->offset;
                 if(q->data[old].%s == 0) {
                     %s
@@ -403,7 +403,7 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
                 ''' % (owner, copy, '%d', '%ld','%', size)
 
             noblock_atom = stat + r'''
-    __sync_synchronize();
+    __SYNC;
     bool success = false;
     size_t old = p->offset;
     while(q->data[old].%s == 0) {
@@ -415,7 +415,7 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
             break;
         }
         old = p->offset;
-        __sync_synchronize();
+        __SYNC;
     }
 #ifdef QUEUE_STAT
     if(!success) __sync_fetch_and_add(&drop, 1);
@@ -493,7 +493,7 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
         def impl(self):
             noblock_noatom = r'''
             %s x = NULL;
-            __sync_synchronize();
+            __SYNC;
             if(q->data[p->offset].%s != 0) {
                 x = &q->data[p->offset];
                 p->offset = (p->offset + 1) %s %d;
@@ -502,7 +502,7 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
 
             noblock_atom = r'''
             %s x = NULL;
-            __sync_synchronize();
+            __SYNC;
             size_t old = p->offset;
             while(q->data[old].%s != 0) {
                 size_t new = (old + 1) %s %d;
@@ -512,7 +512,7 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
                     break;
                 }
                 old = p->offset;
-                __sync_synchronize();
+                __SYNC;
             }
             ''' % (type_star, owner, '%', size, '%d', '%ld')
 

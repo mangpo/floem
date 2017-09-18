@@ -48,6 +48,7 @@ typedef pthread_mutex_t lock_t;
 #define qlock_init(x) pthread_mutex_init(x, NULL)
 #define qlock_lock(x) pthread_mutex_lock(x)
 #define qlock_unlock(x) pthread_mutex_unlock(x)
+#define __SYNC __sync_synchronize()
 
 
 static void no_clean(q_buffer buff) {}
@@ -61,11 +62,19 @@ static inline void check_flag(q_entry* e, int offset, const char *s) {
 #endif
 }
 
+static inline void check_flag_val(q_entry* e, int offset, const char *s, uint8_t val) {
+  uint8_t flag = e->flags & FLAG_MASK;
+  if(flag != val)
+    printf("%s: offset = %d, e = %p, e->flags = %d != %d\n", s, offset, e, flag, val);
+  assert(flag == val);
+}
+
 static void enqueue_clean(circular_queue* q, void(*clean_func)(q_buffer)) {
     size_t off, clean, qlen;
     q_entry *eqe;
     void *eq;
 
+    __sync_synchronize();
     clean = q->clean;
     qlen = q->len;
     eq = q->queue;
@@ -80,11 +89,12 @@ static void enqueue_clean(circular_queue* q, void(*clean_func)(q_buffer)) {
         q_buffer temp = { eqe, 0 };
         clean_func(temp);
         eqe->flags = 0;
-	    __sync_synchronize();
+	__sync_synchronize();
         clean = (clean + eqe->len) % qlen;
         assert(clean < qlen);
     }
     q->clean = clean;
+    __sync_synchronize();
 }
 
 
@@ -97,6 +107,7 @@ static q_buffer enqueue_alloc(circular_queue* q, size_t len, void(*clean)(q_buff
     void *eq;
 
     /* Align to header size */
+    __sync_synchronize();
     len = (len + ALIGN - 1) & (~(ALIGN - 1));
     eq = q->queue;
     eqe_off = off = q->offset;
@@ -168,6 +179,7 @@ static q_buffer enqueue_alloc(circular_queue* q, size_t len, void(*clean)(q_buff
     eqe->flags = FLAG_INUSE;
 
     q->offset = (eqe_off + len) % qlen;
+    __sync_synchronize();
     //printf("enq_alloc: queue = %p, entry = %p, len = %d, offset = %ld\n", q->queue, eqe, eqe->len, q->offset);
     q_buffer buff = { eqe, 0 };
     return buff;
@@ -187,16 +199,21 @@ static void enqueue_submit(q_buffer buff)
 }
 
 static q_buffer dequeue_get(circular_queue* q) {
+  __sync_synchronize();
   assert(q->offset < q->len);
   q_entry* eqe = q->queue + q->offset;
-  __sync_synchronize();
   //if(eqe->flags) printf("dequeue_get: q = %p, offset = %ld, flags = %d\n", q->queue, q->offset, eqe->flags);
   if((eqe->flags & FLAG_MASK) == FLAG_OWN) {
+    check_flag_val(eqe, q->offset, "dequeue_get (before)", 1);
+    
     eqe->flags |= FLAG_INUSE;
-    check_flag(eqe, q->offset, "dequeue_get");
+    check_flag_val(eqe, q->offset, "dequeue_get (after)", 5);
+    //check_flag(eqe, q->offset, "dequeue_get");
     //printf("dequeue_get (before): entry = %p, len = %ld, mod = %ld\n", eqe, eqe->len, q->len);
     q->offset = (q->offset + eqe->len) % q->len;
+    __sync_synchronize();
     //printf("dequeue_get_return: entry = %p, flags = %d, offset = %ld\n", eqe, eqe->flags, q->offset);
+    
     q_buffer buff = { eqe, 0 };
     return buff;
   }
@@ -209,10 +226,11 @@ static q_buffer dequeue_get(circular_queue* q) {
 static void dequeue_release(q_buffer buff, uint8_t flag_clean)
 {
     q_entry *e = buff.entry;
-    check_flag(e, -1, "dequeue_release");
-
+    check_flag_val(e, -1, "dequeue_release", 5);
+    //check_flag(e, -1, "dequeue_release");
+    
     e->flags = (e->flags & TYPE_MASK) | flag_clean;
-    check_flag(e, -1, "enqueue_release");
+    //check_flag(e, -1, "enqueue_release");
     //printf("release: entry=%p\n", e);
     //__sync_fetch_and_and(&e->flags, ~FLAG_OWN);
     __sync_synchronize();

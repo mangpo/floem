@@ -4,7 +4,7 @@ from compiler import Compiler
 
 n_cores = 4
 nic_rx_threads = 1
-nic_tx_threads = 1
+nic_tx_threads = 2
 
 class protocol_binary_request_header_request(State):
     magic = Field(Uint(8))
@@ -604,7 +604,8 @@ output switch { case segment: out(); else: null(); }
         h->segaddr = state.segaddr;
         h->seglen = state.seglen;
         h->offset = 0;
-        __sync_synchronize(); // CVMX_SYNCWS for cavium
+        //__sync_synchronize(); // CVMX_SYNCWS for cavium
+        __SYNC;
         this->tail = (this->tail + 1) % this->len;
 
         if(this->head == this->tail) {
@@ -872,7 +873,7 @@ output switch { case segment: out(); else: null(); }
         # Queue
         RxEnq, RxDeq, RxScan = queue_smart2.smart_queue("rx_queue", 32 * 1024, n_cores, 2,
                                                         enq_output=True, enq_blocking=True, enq_atomic=True) # TODO: change this to False and make a seperate queue for full segment.
-        TxEnq, TxDeq, TxScan = queue_smart2.smart_queue("tx_queue", 32 * 1024, n_cores, 3, clean="enq", enq_blocking=True)
+        TxEnq, TxDeq, TxScan = queue_smart2.smart_queue("tx_queue", 32 * 1024, n_cores, 3, clean="enq", enq_blocking=True, deq_atomic=True)
         rx_enq = RxEnq()
         rx_deq = RxDeq()
         tx_enq = TxEnq()
@@ -881,7 +882,7 @@ output switch { case segment: out(); else: null(); }
 
         LogInEnq, LogInDeq, LogInScan = queue_smart2.smart_queue("log_in_queue", 1024, 1, 1,
                                                                  enq_blocking=True, enq_atomic=True)
-        LogOutEnq, LogOutDeq, LogOutScan = queue_smart2.smart_queue("log_out_queue", 1024, 1, 1, enq_blocking=True)
+        LogOutEnq, LogOutDeq, LogOutScan = queue_smart2.smart_queue("log_out_queue", 1024, 1, 1, enq_blocking=True, deq_atomic=True)
         log_in_enq = LogInEnq()
         log_in_deq = LogInDeq()
         log_out_enq = LogOutEnq()
