@@ -744,6 +744,7 @@ class NicRxPipeline(Pipeline):
                 # CASE 1: not ack
                 # send ack
                 classifier.pkt >> size_ack >> network_alloc >> GetBothPkts() >> DccpSendAck() >> tx_buf >> to_net
+                network_alloc.oom >> Drop()
                 # process
                 pkt2tuple = Pkt2Tuple()
                 classifier.pkt >> pkt2tuple >> GetCore() >> rx_enq >> rx_buf
@@ -753,7 +754,6 @@ class NicRxPipeline(Pipeline):
 
                 # Exception
                 classifier.drop >> rx_buf
-                network_alloc.oom >> rx_buf
                 rx_buf >> from_net_free
                 
         if nic == 'dpdk':
@@ -845,7 +845,7 @@ class NicTxPipeline(Pipeline):
                 # send
                 local_or_remote.out_send >> PreparePkt() >> get_buff
                 # local
-                local_or_remote.out_local >> GetCore() >> rx_enq >> CountTuple() >> get_buff
+                local_or_remote.out_local >> GetCore() >> rx_enq >> get_buff #CountTuple() >> get_buff
 
                 get_buff >> tx_release
 
