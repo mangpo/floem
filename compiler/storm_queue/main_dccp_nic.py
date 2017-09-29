@@ -9,8 +9,8 @@ workerid = {"spout": 0, "count": 1, "rank": 2}
 
 n_cores = 7
 n_workers = 'MAX_WORKERS'
-n_nic_tx = 4
 n_nic_rx = 1
+n_nic_tx = 4
 
 class DccpInfo(State):
     header = Field("struct pkt_dccp_headers")
@@ -31,6 +31,35 @@ class DccpInfo(State):
         self.tuples = 0
 
 dccp_info = DccpInfo()
+
+class CountTuple(Element):
+    dccp = Persistent(DccpInfo)
+    def states(self): self.dccp = dccp_info
+
+    def configure(self):
+        self.inp = Input("struct tuple*")
+        self.out = Output("struct tuple*")
+
+    def impl(self):
+        self.run_c(r'''
+        struct tuple *t = inp();
+        if(t) __sync_fetch_and_add64(&dccp->tuples, 1);
+        output { out(t); }''')
+
+class CountPacket(Element):
+    dccp = Persistent(DccpInfo)
+    def states(self): self.dccp = dccp_info
+
+    def configure(self):
+        self.inp = Input("void*")
+        self.out = Output("void*")
+
+    def impl(self):
+        self.run_c(r'''
+        void *t = inp();
+        if(t) __sync_fetch_and_add64(&dccp->tuples, 1);
+        output { out(t); }''')
+
 
 class Classifier(Element):
     def configure(self):
@@ -123,7 +152,7 @@ class LocalOrRemote(Element):
         if(local) printf("send to myself!\n");
 #endif
     }
-    output switch { case (t && local): out_local(t); case (t && !local): out_send(t, worker); }
+    output switch { case local: out_local(t); else: out_send(t, worker); }
         ''')
 
 
@@ -276,6 +305,10 @@ class DccpSendAck(Element):  # TODO
         (struct pkt_dccp_ack_headers* ack, struct pkt_dccp_headers* p) = inp();
         memcpy(ack, &dccp->header, sizeof(struct pkt_dccp_headers));
         ack->eth.dest = p->eth.src;
+        ack->eth.src = p->eth.dest;
+        ack->ip.dest = p->ip.src;
+        ack->ip.src = p->ip.dest;
+
         ack->dccp.hdr.src = p->dccp.dst;
         ack->dccp.hdr.res_type_x = DCCP_TYPE_ACK << 1;
         uint32_t seq = (p->dccp.seq_high << 16) | ntohs(p->dccp.seq_low);
@@ -669,11 +702,11 @@ MAX_ELEMS = 256 #(4 * 1024)
 
 rx_enq_creator, rx_deq_creator, rx_release_creator = \
     queue2.queue_custom_owner_bit("rx_queue", "struct tuple", MAX_ELEMS, n_cores, "task",
-                                  enq_atomic=True, deq_blocking=True, enq_output=True)
+                                  enq_blocking=False, enq_atomic=True, deq_blocking=True, enq_output=True)
 
 tx_enq_creator, tx_deq_creator, tx_release_creator = \
     queue2.queue_custom_owner_bit("tx_queue", "struct tuple", MAX_ELEMS, n_cores, "task",
-                                  deq_atomic=True)
+                                  enq_blocking=True, deq_atomic=True)
 
 
 class RxState(State):
@@ -790,7 +823,7 @@ class NicTxPipeline(Pipeline):
 
                 self.inp >> GetWorkerID() >> dccp_check
 
-                dccp_check.send >> size_pkt >> network_alloc >> tuple2pkt >> GetWorkerIDPkt() >> DccpSeqTime() \
+                dccp_check.send >> size_pkt >> network_alloc >> tuple2pkt >> CountPacket() >> GetWorkerIDPkt() >> DccpSeqTime() \
                 >> tx_buf >> to_net
 
                 dccp_check.drop >> nop
@@ -812,7 +845,7 @@ class NicTxPipeline(Pipeline):
                 # send
                 local_or_remote.out_send >> PreparePkt() >> get_buff
                 # local
-                local_or_remote.out_local >> GetCore() >> rx_enq >> get_buff
+                local_or_remote.out_local >> GetCore() >> rx_enq >> CountTuple() >> get_buff
 
                 get_buff >> tx_release
 

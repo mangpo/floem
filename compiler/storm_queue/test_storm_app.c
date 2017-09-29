@@ -84,7 +84,7 @@ int main(int argc, char *argv[]) {
     pthread_t threads[MAX_EXECUTORS];
     for(int i = 0; i < MAX_EXECUTORS && executor[i].execute != NULL; i++) {
         printf("main: executor[%d] = %p\n", i, &executor[i]);
-	executor[i].exe_id = i;
+	    executor[i].exe_id = i;
         if(executor[i].init != NULL) {
             executor[i].init(&executor[i]);
          }
