@@ -2,9 +2,9 @@ from dsl2 import *
 import queue_smart2, net_real, library_dsl2
 from compiler import Compiler
 
-n_cores = 4
-nic_rx_threads = 1
-nic_tx_threads = 2
+n_cores = 6
+nic_rx_threads = 2
+nic_tx_threads = 4
 
 class protocol_binary_request_header_request(State):
     magic = Field(Uint(8))

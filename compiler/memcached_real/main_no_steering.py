@@ -2,7 +2,7 @@ from dsl2 import *
 from compiler import Compiler
 import net_real
 
-n_cores = 8
+n_cores = 5
 
 class protocol_binary_request_header_request(State):
     magic = Field(Uint(8))
@@ -595,7 +595,12 @@ output { out(msglen, (void*) m, buff); }
 
         def impl(self):
             self.run_c(r'''
-    clean_log(&this->ia[state.core], state.pkt == NULL);
+    static __thread int count = 0;
+    count++;
+    if(count == 32) {
+      count = 0;
+      clean_log(&this->ia[state.core], state.pkt == NULL);
+    }
             ''')
 
     def impl(self):

@@ -10,7 +10,7 @@
 #include <assert.h>
 #include "protocol_binary.h"
 
-#define NUM_THREADS     4
+#define NUM_THREADS     6
 //#define DEBUG
 
 /******************************************************************************/
