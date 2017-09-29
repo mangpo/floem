@@ -1,27 +1,24 @@
 from dsl2 import *
 
 class FromNet(Element):
-    def configure(self):
+    def configure(self, batch_size=32):
         self.out = Output(Size, "void *", "void *") # packet, buffer
         self.nothing = Output()
         self.special = 'from_net'
+        self.batch_size = batch_size
 
     def impl(self):
         self.run_c(r'''
     static uint32_t count = 0;
     void *data, *buf;
     size_t size;
-    dpdk_from_net(&size, &data, &buf);
-/*    if(data) { 
-            count++;
-        printf("GOT A PACKET %d\n", count);
-        }
-*/
+    dpdk_from_net(&size, &data, &buf, %d);
+
     output switch {
         case data != NULL: out(size, data, buf);
         case data == NULL: nothing();
     }
-        ''')  # TODO: free mbuf when data == NULL?
+        ''' % self.batch_size)
 
     def impl_cavium(self):
         self.run_c(r'''
@@ -80,10 +77,11 @@ class NetAlloc(Element):
 
 
 class ToNet(Element):
-    def configure(self, buffer="from_net", has_output=False):
+    def configure(self, buffer="from_net", has_output=False, batch_size=32):
         self.inp = Input(Size, "void *", "void *")  # size, packet, buffer
         self.buffer = buffer
         self.has_output = False
+        self.batch_size = batch_size
         # self.has_output = has_output
         # if has_output:
         #     self.out = Output("void *", "void *")
@@ -94,16 +92,8 @@ class ToNet(Element):
     ''' if self.has_output else ""
         self.run_c(r'''
     (size_t len, void* p, void* buf) = inp();
-/*    uint8_t* x = p;
-    int i;
-    printf("send:");
-    for(i=0;i<len;i++) {
-        if(i%16==0) printf("\n");
-        printf("%x ", x[i]);
-    }
-    printf("\n"); */
-    dpdk_to_net(len, p, buf);
-        ''' + out)
+    dpdk_to_net(len, p, buf, %d);
+        ''' % self.batch_size + out)
 
     def impl_cavium(self):
         out = r'''

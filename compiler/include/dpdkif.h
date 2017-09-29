@@ -132,8 +132,7 @@ static void dpdk_thread_create(void *(*entry_point)(void *), void *arg)
     }
 }
 
-#define BATCH_SIZE_IN 64
-static void dpdk_from_net(size_t *sz, void **pdata, void **pbuf)
+static void dpdk_from_net(size_t *sz, void **pdata, void **pbuf, int BATCH_SIZE_IN)
 {
     static volatile uint16_t rx_queue_alloc = 0;
     static __thread uint16_t rx_queue_id;
@@ -232,8 +231,7 @@ static void dpdk_net_alloc(size_t len, void **pdata, void **pbuf)
     *pbuf = mb;
 }
 
-#define BATCH_SIZE_OUT 8
-static void dpdk_to_net(size_t size, void *data, void *buf)
+static void dpdk_to_net(size_t size, void *data, void *buf, int BATCH_SIZE_OUT)
 {
     static volatile uint16_t tx_queue_alloc = 0;
     static __thread uint16_t tx_queue_id, n = 0;
