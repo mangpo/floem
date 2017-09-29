@@ -129,7 +129,7 @@ int main(int argc, char *argv[]) {
         lasttuples = info->tuples;
         //printf("acks sent %zu, rtt %" PRIu64 "\n", info->acks_sent, info->link_rtt);
         printf("Tuples/s: %zu, Gbits/s: %.2f\n\n",
-	       tuples/wait, (tuples * (sizeof(struct tuple) /*+ sizeof(struct pkt_dccp_headers)*/) * 8) / 1000000000.0 / wait);
+	       tuples/wait, (tuples * (sizeof(struct tuple) + sizeof(struct pkt_dccp_headers)) * 8) / 1000000000.0 / wait);
     }
     kill_threads();
 
