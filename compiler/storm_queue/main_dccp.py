@@ -679,7 +679,7 @@ class NicRxPipeline(Pipeline):
     state = PerPacket(RxState)
 
     def impl(self):
-        from_net = net_real.FromNet()
+        from_net = net_real.FromNet(configure=[64])
         from_net_free = net_real.FromNetFree()
         class nic_rx(InternalLoop):
 
@@ -691,7 +691,7 @@ class NicRxPipeline(Pipeline):
 
             def impl(self):
                 network_alloc = net_real.NetAlloc()
-                to_net = net_real.ToNet(configure=["alloc", True])
+                to_net = net_real.ToNet(configure=["alloc", True, 8])
                 classifier = Classifier()
                 rx_enq = rx_enq_creator()
                 tx_buf = GetTxBuf(configure=['sizeof(struct pkt_dccp_ack_headers)'])
@@ -760,7 +760,7 @@ class NicTxPipeline(Pipeline):
     def impl(self):
         tx_release = tx_release_creator()
         network_alloc = net_real.NetAlloc()
-        to_net = net_real.ToNet(configure=["alloc", True])
+        to_net = net_real.ToNet(configure=["alloc", True, 8])
 
         tx_buf = GetTxBuf(configure=['sizeof(struct pkt_dccp_headers) + sizeof(struct tuple)'])
         size_pkt = SizePkt(configure=['sizeof(struct pkt_dccp_headers) + sizeof(struct tuple)'])

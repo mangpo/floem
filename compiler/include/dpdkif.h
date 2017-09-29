@@ -132,6 +132,7 @@ static void dpdk_thread_create(void *(*entry_point)(void *), void *arg)
     }
 }
 
+#define BATCH_SIZE_MAX 1024
 static void dpdk_from_net(size_t *sz, void **pdata, void **pbuf, int BATCH_SIZE_IN)
 {
     static volatile uint16_t rx_queue_alloc = 0;
@@ -139,7 +140,7 @@ static void dpdk_from_net(size_t *sz, void **pdata, void **pbuf, int BATCH_SIZE_
     struct rte_mbuf *mb = NULL;
     static __thread unsigned cache_count;
     static __thread unsigned cache_index;
-    static __thread struct rte_mbuf *cache_mbs[BATCH_SIZE_IN];
+    static __thread struct rte_mbuf *cache_mbs[BATCH_SIZE_MAX];
     struct rte_mbuf **mbs;
     void *data = NULL;
     unsigned num, idx;
@@ -235,12 +236,13 @@ static void dpdk_to_net(size_t size, void *data, void *buf, int BATCH_SIZE_OUT)
 {
     static volatile uint16_t tx_queue_alloc = 0;
     static __thread uint16_t tx_queue_id, n = 0;
-    static __thread int batch_size = BATCH_SIZE_OUT;
+    static __thread int batch_size = 0;
+    if(batch_size == 0) batch_size = BATCH_SIZE_OUT;
   
   int j;
   uint8_t* x = (uint8_t*) data;
   
-    static __thread struct rte_mbuf *mbufs[BATCH_SIZE_OUT];
+    static __thread struct rte_mbuf *mbufs[BATCH_SIZE_MAX];
     struct rte_mbuf *mb = buf;
     mb->pkt_len = mb->data_len = size;
     mb->data_off = (uint8_t *) data - (uint8_t *) mb->buf_addr;
@@ -262,7 +264,6 @@ static void dpdk_to_net(size_t size, void *data, void *buf, int BATCH_SIZE_OUT)
     txq--;
 
 #if 0
-  if(size != 406) {
     printf("to_net: size = %ld, n = %d/%d, txq = %d\n", size, n, batch_size, txq);
     //uint16_t* task =  (uint16_t*) (x + 46);
     //printf("task: task = %d\n", *task);
@@ -271,7 +272,6 @@ static void dpdk_to_net(size_t size, void *data, void *buf, int BATCH_SIZE_OUT)
       printf("%x ", x[j]);
     }
     printf("\n\n");
-  }
 #endif
 
     uint16_t i = 0, inc;
