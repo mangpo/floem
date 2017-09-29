@@ -9,6 +9,8 @@ void executor_thread(void *arg) {
   int tid = (long)arg;
   struct executor *self = &executor[tid];
   
+  //printf("executor[%d] = %p, exe_id = %d\n", tid, self, self->exe_id);
+
   // Run dispatch loop
   for(;;) {
     if(!self->spout) {
@@ -25,7 +27,6 @@ void executor_thread(void *arg) {
         self->numexecutes++;
       //}
     } else {
-      //printf("spout\n");
       uint64_t starttime = rdtsc();
       self->execute(NULL, self);
       uint64_t now = rdtsc();
@@ -73,7 +74,6 @@ void tuple_send(struct tuple *t, struct executor *self)
 }
 
 int main(int argc, char *argv[]) {
-
     assert(argc > 1);
     int workerid = atoi(argv[1]);
     struct worker* workers = get_workers();
@@ -86,9 +86,11 @@ int main(int argc, char *argv[]) {
     pthread_t threads[MAX_EXECUTORS];
     for(int i = 0; i < MAX_EXECUTORS && executor[i].execute != NULL; i++) {
         printf("main: executor[%d] = %p\n", i, &executor[i]);
+	executor[i].numexecutes = executor[i].lastnumexecutes = 0;
+	executor[i].execute_time = executor[i].lastexecute_time = 0;
+	executor[i].exe_id = i;
         if(executor[i].init != NULL) {
-            executor[i].exe_id = i;
-            executor[i].init(&executor[i]);
+	  executor[i].init(&executor[i]);
          }
         int rc = pthread_create(&threads[i], NULL, executor_thread, (void *)i);
         if (rc){
@@ -101,8 +103,9 @@ int main(int argc, char *argv[]) {
 
     size_t sum = 0, lasttuples = 0, tuples;
     run_threads();
+    int wait = 10;
     while(1) {
-        sleep(1);
+        sleep(wait);
         sum = 0;
         __sync_synchronize();
 	struct connection* connections = info->connections;
@@ -110,11 +113,23 @@ int main(int argc, char *argv[]) {
         /*     printf("pipe,cwnd,acks,lastack[%d] = %u, %u, %zu, %d\n", i, */
         /*     connections[i].pipe, connections[i].cwnd, connections[i].acks, connections[i].lastack); */
         /* } */
+#ifdef QUEUE_STAT
+	for(int i = 0; i < MAX_EXECUTORS && executor[i].execute != NULL; i++) {
+	  struct executor *self = &executor[i];
+	  if(self->numexecutes-self->lastnumexecutes) {
+	    printf("%d: numexecutes %zu, time %zu\n", self->taskid, 
+		   self->numexecutes-self->lastnumexecutes, 
+		   (self->execute_time-self->lastexecute_time) / (self->numexecutes - self->lastnumexecutes));
+	    self->lastnumexecutes = self->numexecutes;
+	    self->lastexecute_time = self->execute_time;
+	  }
+	}
+#endif
         tuples = info->tuples - lasttuples;
         lasttuples = info->tuples;
-        printf("acks sent %zu, rtt %" PRIu64 "\n", info->acks_sent, info->link_rtt);
+        //printf("acks sent %zu, rtt %" PRIu64 "\n", info->acks_sent, info->link_rtt);
         printf("Tuples/s: %zu, Gbits/s: %.2f\n\n",
-           tuples, (tuples * sizeof(struct tuple) * 8) / 1000000000.0);
+	       tuples/wait, (tuples * (sizeof(struct tuple) /*+ sizeof(struct pkt_dccp_headers)*/) * 8) / 1000000000.0 / wait);
     }
     kill_threads();
 

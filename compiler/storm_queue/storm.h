@@ -16,7 +16,7 @@
 #endif
 
 //#define CAVIUM
-#define QUEUE_STAT
+//#define QUEUE_STAT
 //#define DEBUG_MP
 //#define DEBUG_DCCP
 //#define THREAD_AFFINITY
@@ -60,6 +60,7 @@ struct executor {
   size_t	outqueue_empty, outqueue_full, inqueue_empty, inqueue_full;
 #ifndef FLEXNIC_EMULATION
   size_t	execute_time, numexecutes, emitted, recved, avglatency;
+  size_t	lastexecute_time, lastnumexecutes;
 #else
   size_t	tuples, lasttuples, full;
   size_t	wait_inq, wait_outq, memcpy_time, batchdone_time, batch_size, batches;

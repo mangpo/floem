@@ -8,7 +8,8 @@ workerid = {"spout": 0, "count": 1, "rank": 2}
 
 n_cores = 7
 n_workers = 'MAX_WORKERS'
-n_nic_tx = 4
+n_nic_rx = 2
+n_nic_tx = 3
 
 class Classifier(Element):
     def configure(self):
@@ -80,7 +81,6 @@ class GetCore(Element):
     output { out(t, id); }
         ''')
 
-
 class LocalOrRemote(Element):
     this = Persistent(TaskMaster)
     def states(self): self.this = task_master
@@ -93,15 +93,23 @@ class LocalOrRemote(Element):
     def impl(self):
         self.run_c(r'''
     (struct tuple* t) = inp();
-    bool local;
-    if(t != NULL) {
-        local = (state.worker == state.myworker);
-        if(local && t->task == 30) printf("30: send to myself!\n");
-#ifdef DEBUG_MP
-        if(local) printf("send to myself!\n");
-#endif
+    bool local = (state.worker == state.myworker);
+
+#ifdef QUEUE_STAT
+    static __thread size_t count = 0, sum = 0;
+    if(local) {
+        count++;
+        sum += rdtsc() - t->starttime;
+        if(count == 300000) {
+          printf("local tuple latency: %.2f\n", 1.0*sum/count);
+          count = sum = 0;
+        }
     }
-    output switch { case (t && local): out_local(t); case (t && !local): out_send(t, worker); }
+#endif
+
+    if(t->task==30) printf("REMOTE -- task = %d, fromtask = %d, local = %d\n", t->task, t->fromtask, local);
+
+    output switch { case local: out_local(t); else: out_send(t); }
         ''')
 
 
@@ -113,7 +121,7 @@ class PrintTuple(Element):
     def impl(self):
         self.run_c(r'''
     (struct tuple* t) = inp();
-
+        
 #ifdef DEBUG_MP
     if(t != NULL) {
         printf("TUPLE[0] -- task = %d, fromtask = %d, str = %s, integer = %d\n", t->task, t->fromtask, t->v[0].str, t->v[0].integer);
@@ -121,6 +129,10 @@ class PrintTuple(Element):
         fflush(stdout);
     }
 #endif
+
+    if(t && t->task >= 20) printf("TUPLE[0] -- task = %d, fromtask = %d, str = %s, integer = %d\n", t->task, t->fromtask, t->v[0].str, t->v[0].integer); 
+        
+    if(t) assert(t->task != 0);
     output switch { case t: out(t); }
         ''')
 
@@ -181,8 +193,11 @@ class DccpCheckCongestion(Element):
             dccp->connections[worker].pipe = 0;
             __sync_fetch_and_add(&dccp->link_rtt, dccp->link_rtt);
         }
-        if(dccp->connections[worker].pipe >= dccp->connections[worker].cwnd)
+        if(dccp->connections[worker].pipe >= dccp->connections[worker].cwnd) {
             worker = -1;
+        }
+        struct tuple* t = state.q_buf.entry;
+        if(t->task==30) printf("DCCP -- task = %d, worker = %d\n", t->task, worker);
 
         output switch { case (worker >= 0): send(worker); else: drop(); }
         ''')
@@ -209,7 +224,7 @@ class DccpSeqTime(Element):
         header->dccp.seq_high = seq >> 16;
         header->dccp.seq_low = htons(seq & 0xffff);
 #ifdef DEBUG_DCCP
-        printf("Send to worker %d: seq = %x, seq_high = %x, seq_low = %x\n", worker, seq, header->dccp.seq_high, header->dccp.seq_low);
+        //printf("Send to worker %d: seq = %x, seq_high = %x, seq_low = %x\n", worker, seq, header->dccp.seq_high, header->dccp.seq_low);
 #endif
         rte_spinlock_unlock(&dccp->global_lock);
 
@@ -233,6 +248,9 @@ class DccpSendAck(Element):  # TODO
         (struct pkt_dccp_ack_headers* ack, struct pkt_dccp_headers* p) = inp();
         memcpy(ack, &dccp->header, sizeof(struct pkt_dccp_headers));
         ack->eth.dest = p->eth.src;
+        ack->eth.src = p->eth.dest;
+        ack->ip.dest = p->ip.dest;
+        ack->ip.src = p->ip.src;
         ack->dccp.hdr.src = p->dccp.dst;
         ack->dccp.hdr.res_type_x = DCCP_TYPE_ACK << 1;
         uint32_t seq = (p->dccp.seq_high << 16) | ntohs(p->dccp.seq_low);
@@ -262,6 +280,7 @@ class DccpRecvAck(Element):
         assert(ntohl(ack->dccp.ack) < (1 << 24));
 
         struct connection* connections = dccp->connections;
+        //printf("Ack\n");
 
     // Wraparound?
 	if((int32_t)ntohl(ack->dccp.ack) < connections[srcworker].lastack &&
@@ -311,6 +330,36 @@ class DccpRecvAck(Element):
 	connections[srcworker].acks++;
 	output { out(p); }
         ''')
+
+class CountTuple(Element):
+    dccp = Persistent(DccpInfo)
+    def states(self): self.dccp = dccp_info
+
+    def configure(self):
+        self.inp = Input("struct tuple*")
+        self.out = Output("struct tuple*")
+
+    def impl(self):
+        self.run_c(r'''
+        struct tuple *t = inp();
+        if(t) __sync_fetch_and_add(&dccp->tuples, 1);
+        output { out(t); }''')
+
+class CountPacket(Element):
+    dccp = Persistent(DccpInfo)
+    def states(self): self.dccp = dccp_info
+
+    def configure(self):
+        self.inp = Input("void*")
+        self.out = Output("void*")
+
+    def impl(self):
+        self.run_c(r'''
+        void *t = inp();
+        if(t) __sync_fetch_and_add(&dccp->tuples, 1);
+        output { out(t); }''')
+
+
 
 ################################################
 
@@ -379,7 +428,7 @@ class Tuple2Pkt(Element):
         header->eth.src = workers[state.myworker].mac;
         header->ip.src = workers[state.myworker].ip;
         
-        //printf("PREPARE PKT: task = %d, worker = %d\n", t->task, state.worker);
+        if(t->task == 30) printf("PREPARE PKT: task = %d, fromtask = %d, worker = %d\n", t->task, t->fromtask, state.worker);
         output { out(p); }
         ''')
 
@@ -396,8 +445,9 @@ class Pkt2Tuple(Element):
     def impl(self):
         self.run_c(r'''
         (struct pkt_dccp_headers* p) = inp();
-        struct tuple* t= (struct tuple*) &p[1];
+        struct tuple* t = (struct tuple*) &p[1];
         __sync_fetch_and_add(&dccp->tuples, 1);
+        if(t->task == 30) printf("Receive task 30!!!!!\n");
         output { out(t); }
         ''')
 
@@ -494,33 +544,36 @@ class BatchScheduler(Element):
         self.out = Output(Size)
 
     def impl(self):
-        self.run_c(r'''
-    (size_t core_id) = inp();
+        self.run_c(r'''                                   
+    (size_t core_id) = inp();          
     int n_cores = %d;
-    static __thread int core = -1;
-    static __thread int batch_size = 0;
-    static __thread size_t start = 0;
-        
+    static __thread int core = -1;                                                                  
+    static __thread int batch_size = 0;                                                            
+    static __thread size_t start = 0; 
+
     if(core == -1) {
-        core = (core_id * n_cores)/%d;
-        while(this->executors[core].execute == NULL){
-            core = (core + 1) %s n_cores;
-            start = rdtsc();
-        } 
-    }
-
-    if(batch_size >= BATCH_SIZE || rdtsc() - start >= BATCH_DELAY) {
-        do {
-            core = (core + 1) %s n_cores;
-        } while(this->executors[core].execute == NULL);
-        batch_size = 0;
-        //printf("======================= Dequeue core = %s, thread = %s\n", core, core_id);
-        start = rdtsc();
-    }
-
-    batch_size++;
-    output { out(core); }
-        ''' % (n_cores, n_nic_tx, '%', '%', '%d', '%d'))
+        //core = (core_id * n_cores)/%d;
+        core = core_id;
+        while(this->executors[core].execute == NULL){                                                      
+            core = (core + 1) %s n_cores;                                                                  
+        }                                                                                                  
+        start = rdtsc();                                                                                   
+    }                                                                                                      
+                                                                                                           
+    if(core >= 2 && (batch_size >= BATCH_SIZE || rdtsc() - start >= BATCH_DELAY)) {                   
+        int old = core;                                                                                    
+        do {                                                                                               
+            core = (core + 1) %s n_cores;                                                               
+        } while(this->executors[core].execute == NULL);                                                    
+        //if(old <=1 && core > 1) core = 0;             
+        if(old >=2 && core < 2) core = 2;             
+        batch_size = 0;                                                                                   
+        start = rdtsc();                                                                                   
+    }                                                                                                      
+    //printf("BATCH SCHEDULER: id = %s, core = %s!!!!!!!!!!!!!!!!\n", core_id, core);                    
+    batch_size++;                                                                                       
+    output { out(core); }                                                                               
+        ''' % (n_cores, n_nic_tx, '%', '%', '%ld', '%d'))
 
 # class BatchInc(Element):
 #     this = Persistent(BatchInfo)
@@ -574,6 +627,8 @@ class SaveBuff(Element):
     def impl(self):
         self.run_c(r'''
     (q_buffer buff) = inp();
+    struct tuple* t = buff.entry;
+    if(t) t->starttime = rdtsc();
     state.q_buf = buff;
     output { out((struct tuple*) buff.entry); }
         ''')
@@ -607,11 +662,11 @@ MAX_ELEMS = (4 * 1024)
 
 rx_enq_creator, rx_deq_creator, rx_release_creator = \
     queue2.queue_custom_owner_bit("rx_queue", "struct tuple", MAX_ELEMS, n_cores, "task",
-                                  enq_atomic=True, deq_blocking=True, enq_output=True)
+                                  enq_blocking=False, enq_atomic=True, deq_blocking=True, enq_output=True)
 
 tx_enq_creator, tx_deq_creator, tx_release_creator = \
     queue2.queue_custom_owner_bit("tx_queue", "struct tuple", MAX_ELEMS, n_cores, "task",
-                                  deq_atomic=True)
+                                  enq_blocking=True, deq_atomic=True)
 
 
 class RxState(State):
@@ -661,7 +716,7 @@ class NicRxPipeline(Pipeline):
                 network_alloc.oom >> rx_buf
                 rx_buf >> from_net_free
 
-        nic_rx('nic_rx', process='dpdk')
+        nic_rx('nic_rx', process='dpdk', cores=range(n_nic_rx))
         #nic_rx('nic_rx', device=target.CAVIUM, cores=[0,1,2,3])
 
 
@@ -733,7 +788,7 @@ class NicTxPipeline(Pipeline):
 
                 self.inp >> GetWorkerID() >> dccp_check
 
-                dccp_check.send >> size_pkt >> network_alloc >> tuple2pkt >> GetWorkerIDPkt() >> DccpSeqTime() \
+                dccp_check.send >> size_pkt >> network_alloc >> tuple2pkt >> CountPacket() >> GetWorkerIDPkt() >> DccpSeqTime() \
                 >> tx_buf >> to_net
 
                 dccp_check.drop >> nop
@@ -755,7 +810,7 @@ class NicTxPipeline(Pipeline):
                 # send
                 local_or_remote.out_send >> PreparePkt() >> get_buff
                 # local
-                local_or_remote.out_local >> GetCore() >> rx_enq >> get_buff
+                local_or_remote.out_local >> GetCore() >> rx_enq >> CountTuple() >> get_buff
 
                 get_buff >> tx_release
 

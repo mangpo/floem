@@ -68,4 +68,5 @@ void rank_execute(const struct tuple *t, struct executor *self)
 
     tuple_send(&out, self);
   }
+  sleep(1);
 }

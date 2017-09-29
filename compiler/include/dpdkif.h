@@ -132,6 +132,7 @@ static void dpdk_thread_create(void *(*entry_point)(void *), void *arg)
     }
 }
 
+#define BATCH_SIZE_IN 64
 static void dpdk_from_net(size_t *sz, void **pdata, void **pbuf)
 {
     static volatile uint16_t rx_queue_alloc = 0;
@@ -139,7 +140,7 @@ static void dpdk_from_net(size_t *sz, void **pdata, void **pbuf)
     struct rte_mbuf *mb = NULL;
     static __thread unsigned cache_count;
     static __thread unsigned cache_index;
-    static __thread struct rte_mbuf *cache_mbs[32];
+    static __thread struct rte_mbuf *cache_mbs[BATCH_SIZE_IN];
     struct rte_mbuf **mbs;
     void *data = NULL;
     unsigned num, idx;
@@ -172,7 +173,7 @@ static void dpdk_from_net(size_t *sz, void **pdata, void **pbuf)
     rxq--;
 
     /* get more packets from NIC */
-    num = rte_eth_rx_burst(dpdk_port_id, rxq, mbs, 32);
+    num = rte_eth_rx_burst(dpdk_port_id, rxq, mbs, BATCH_SIZE_IN);
     mb = mbs[0];
     if (num > 1) {
       cache_count = num;
@@ -231,23 +232,22 @@ static void dpdk_net_alloc(size_t len, void **pdata, void **pbuf)
     *pbuf = mb;
 }
 
+#define BATCH_SIZE_OUT 8
 static void dpdk_to_net(size_t size, void *data, void *buf)
 {
-  /*
-  printf("to_net: size = %ld\n", size);
-  int i;
-  uint8_t* x = (uint8_t*) data;
-  for(i=0; i<size; i++) {
-    if(i%16==0) printf("\n");
-    printf("%x ", x[i]);
-  }
-  printf("\n\n");
-  */
     static volatile uint16_t tx_queue_alloc = 0;
-    static __thread uint16_t tx_queue_id;
+    static __thread uint16_t tx_queue_id, n = 0;
+    static __thread int batch_size = BATCH_SIZE_OUT;
+  
+  int j;
+  uint8_t* x = (uint8_t*) data;
+  
+    static __thread struct rte_mbuf *mbufs[BATCH_SIZE_OUT];
     struct rte_mbuf *mb = buf;
     mb->pkt_len = mb->data_len = size;
     mb->data_off = (uint8_t *) data - (uint8_t *) mb->buf_addr;
+    mbufs[n] = mb;
+    n++;
 
     /* get queue ID/initialize queue */
     uint16_t txq = tx_queue_id;
@@ -263,22 +263,42 @@ static void dpdk_to_net(size_t size, void *data, void *buf)
     }
     txq--;
 
-    if (rte_eth_tx_burst(dpdk_port_id, txq, &mb, 1) != 1) {
-        rte_pktmbuf_free(mb);
+#if 0
+  if(size != 406) {
+    printf("to_net: size = %ld, n = %d/%d, txq = %d\n", size, n, batch_size, txq);
+    //uint16_t* task =  (uint16_t*) (x + 46);
+    //printf("task: task = %d\n", *task);
+    for(j=0; j<size; j++) {
+      if(j%16==0) printf("\n");
+      printf("%x ", x[j]);
+    }
+    printf("\n\n");
+  }
+#endif
+
+    uint16_t i = 0, inc;
+    if(n >= batch_size) {
+      while (i < n) {
+        inc = rte_eth_tx_burst(dpdk_port_id, txq, mbufs + i, n - i);
+        i += inc;
+      }
+      n = 0;
     }
 
-#if 0
     static __thread size_t count = 0;
     static __thread struct timeval last, now;
 
     gettimeofday(&now, NULL);
     count++;
     if(now.tv_sec > last.tv_sec + 1) {
-      printf("to_net[%d]: %ld pkts/s\n", txq, count);
+      batch_size = (count > 1000)? BATCH_SIZE_OUT: 1;
+#if 0
+      printf("to_net[%d]: %ld pkts/s, batch_size = %d\n", txq, count, batch_size);
+#endif
       count = 0;
       last = now;
     }
-#endif
+
 }
 
 #define nic_htons(x) x

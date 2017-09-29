@@ -335,9 +335,14 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
         ''' % ('%', size, '%', size)
 
     wait_then_copy = r'''
-    while(q->data[old].%s != 0) __SYNC;
+    size_t count = 0;
+    while(q->data[old].%s != 0) { 
+      __SYNC; 
+      count++;
+      if(count %s 1000000 == 0) printf("enqueue stuck: %s, offset = %s, flag = %s, count = %s\n", c, p->offset, q->data[p->offset].%s, count);
+    };
     %s
-    ''' % (owner, copy)
+    ''' % (owner, '%', '%ld', '%ld', '%d', '%ld', owner, copy)
 
     init_read_cvm = r'''
         uintptr_t addr = (uintptr_t) &q->data[old];
@@ -353,7 +358,13 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
         ''' % (owner)  # TODO: check if dma_write is atomic?
 
     wait_then_get = r'''
-    while(q->data[old].%s == 0) __SYNC;
+    __SYNC;
+    while(q->data[old].%s == 0) { 
+#ifdef QUEUE_STAT
+      __sync_fetch_and_add(&empty[c], 1);
+#endif 
+      __SYNC;
+    }
     %s x = &q->data[old];
     ''' % (owner, type_star)
 
@@ -378,13 +389,16 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
 
             stat = r'''
 #ifdef QUEUE_STAT
-    static size_t drop = 0;
+    static size_t drop[10] = {0};
     static struct timeval base, now;
     gettimeofday(&now, NULL);
     if(now.tv_sec >= base.tv_sec + 5) {
-        printf("\n>>>>>>>>>>>>>>>>>>>>>>>> QUEUE DROP[''' + name + r''']: q = %p, drop/5s = %ld\n", q, drop);
-        drop = 0;
         base = now;
+        printf("\n>>>>>>>>>>>>>>>>>>>>>>>> QUEUE DROP[''' + name + r''']\n");
+        for(int i=0;i<8;i++) { 
+          if(drop[i]) printf("queue[%ld]: drop/5s = %ld\n", i, drop[i]);
+          drop[i] = 0;
+        }
     }
 #endif
             '''
@@ -398,7 +412,7 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
                     p->offset = (p->offset + 1) %s %d;
                 }
 #ifdef QUEUE_STAT
-                else __sync_fetch_and_add(&drop, 1);
+                else __sync_fetch_and_add(&drop[c], 1);
 #endif
                 ''' % (owner, copy, '%d', '%ld','%', size)
 
@@ -418,7 +432,7 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
         __SYNC;
     }
 #ifdef QUEUE_STAT
-    if(!success) __sync_fetch_and_add(&drop, 1);
+    if(!success) __sync_fetch_and_add(&drop[c], 1);
 #endif
                             ''' % (owner, '%', size, copy, '%d', '%ld')
 
@@ -514,7 +528,17 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
                 old = p->offset;
                 __SYNC;
             }
-            ''' % (type_star, owner, '%', size, '%d', '%ld')
+/*
+            static size_t count = 0;
+            if(c == 0) {
+              count++;
+              if(count == 1000000) {
+                printf("dequeue: %s, offset = %s\n", c, p->offset); 
+                count = 0;
+              }
+            }
+*/
+            ''' % (type_star, owner, '%', size, '%d', '%ld', '%ld', '%ld')
 
             block_noatom = "size_t old = p->offset;\n" + wait_then_get + inc_offset
 
@@ -526,6 +550,26 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
                 src = noblock_atom if deq_atomic else noblock_noatom
 
             debug = r'''printf("deq %ld\n", c);'''
+
+            src = r'''
+#ifdef QUEUE_STAT
+    static size_t empty[10] = {0};
+    static struct timeval base, now;
+    gettimeofday(&now, NULL);
+    if(now.tv_sec >= base.tv_sec + 5) {
+        printf("\n>>>>>>>>>>>>>>>>>>>>>>>> QUEUE EMPTY[''' + name + r''']\n");
+        base = now;
+        for(int i=0;i<10;i++) {
+          if(empty[i]) printf("queue[%ld]: empty/5s = %ld\n", i, empty[i]);
+          empty[i] = 0;
+        }
+    }
+#endif
+''' + src + r'''  
+#ifdef QUEUE_STAT
+    if(x == NULL)  __sync_fetch_and_add(&empty[c], 1);
+#endif
+'''
 
             self.run_c(r'''
                         (size_t c) = inp();

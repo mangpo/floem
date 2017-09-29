@@ -48,7 +48,7 @@ struct tuple* random_spout(size_t i);
 struct tuple* random_count(size_t i);
 struct tuple* random_rank(size_t i);
 
-#if defined(BIGFISH) || defined(BIGFISH_FLEXNIC) || defined(SAMPA)
+#if defined(BIGFISH) || defined(BIGFISH_FLEXNIC)
 #	define PROC_FREQ	1600000.0	// bigfish (Khz)
 #else
 #	define PROC_FREQ	2200000.0	// swingout (Khz)
