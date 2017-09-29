@@ -249,8 +249,8 @@ class DccpSendAck(Element):  # TODO
         memcpy(ack, &dccp->header, sizeof(struct pkt_dccp_headers));
         ack->eth.dest = p->eth.src;
         ack->eth.src = p->eth.dest;
-        ack->ip.dest = p->ip.dest;
-        ack->ip.src = p->ip.src;
+        ack->ip.dest = p->ip.src;
+        ack->ip.src = p->ip.dest;
         ack->dccp.hdr.src = p->dccp.dst;
         ack->dccp.hdr.res_type_x = DCCP_TYPE_ACK << 1;
         uint32_t seq = (p->dccp.seq_high << 16) | ntohs(p->dccp.seq_low);
