@@ -473,7 +473,7 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
                     }
                     old = p->offset;
                     addr = (uintptr_t) &q->data[old];
-                    dma_read(addr, size, (void**) &entry);
+                    dma_read_with_buf(addr, size, (void**) &entry);
                 }
                 ''' % (owner, '%', size)
 
@@ -605,7 +605,7 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
                 }
                 old = p->offset;
                 addr = (uintptr_t) &q->data[old];
-                dma_read(addr, size, (void**) &entry);
+                dma_read_with_buf(addr, size, (void**) &entry);
             }
             if(!success) dma_free(entry);
             ''' % (type_star, owner, '%', size)
