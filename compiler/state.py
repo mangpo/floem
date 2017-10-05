@@ -93,12 +93,13 @@ class State(object):
     obj_id = 0
     layout = None
 
-    def __init__(self, name=None, init=[], declare=True, instance=True):
+    def __init__(self, name=None, init=[], declare=True, instance=True, packed=True):
         if name is None:
             name = self.__class__.__name__ + str(self.__class__.obj_id)
             self.__class__.obj_id += 1
         self.name = name
         self.declare = declare
+        self.packed = packed
 
         self.compute_layout()
         self.init(*init)
@@ -116,7 +117,8 @@ class State(object):
                 self.__class__.__name__ += str(State.class_id)
                 State.class_id += 1
             State.all_defined.add(self.__class__.__name__)
-            decl_append(graph.State(self.__class__.__name__, content, class_init, self.declare, fields, mapping))
+            decl_append(graph.State(self.__class__.__name__, content, class_init,
+                                    self.declare, fields, mapping, self.packed))
 
         if instance:
             scope_append(program.StateInstance(self.__class__.__name__, name, init_code))

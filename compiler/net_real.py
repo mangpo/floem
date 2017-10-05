@@ -68,7 +68,8 @@ class NetAlloc(Element):
     def impl_cavium(self):
         self.run_c(r'''
     (size_t len) = inp();
-    void* p = malloc(sizeof(uint8_t) * len);
+    void *p = (void *)cvmx_fpa_alloc(CVM_FPA_DMA_CHUNK_POOL);
+
     output switch {
         case p != NULL: out(len, p, NULL);
         else: oom();
@@ -99,12 +100,12 @@ class ToNet(Element):
         out = r'''
     output { out(p, buf); }
     ''' if self.has_output else ""
-        free = "" if self.buffer == "from_net" else "free(p);\n"
+        free = "" if self.buffer == "from_net" else "cvmx_fpa_free(p, CVM_FPA_DMA_CHUNK_POOL, 0);\n"
 
         self.run_c(r'''
     (size_t len, void* p, void* buf) = inp();
     network_send(len, p, 2560);
-        ''' + free + out)
+    ''' + free + out)
 
 
 # class NetAllocFree(Element):

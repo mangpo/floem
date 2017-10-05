@@ -166,6 +166,8 @@ class DccpInfo(State):
         self.acks_sent = 0
         self.tuples = 0
 
+        self.packed = False
+
 dccp_info = DccpInfo()
 
 class DccpGetStat(Element):

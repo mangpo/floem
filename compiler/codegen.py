@@ -342,11 +342,12 @@ def element_to_function(instance, state_rename, graph, ext):
 
 def generate_state(state, graph, ext):
     if state.declare:
+        packed = '__attribute__ ((packed))' if state.packed else ''
         src = r'''
 typedef struct _%s { 
 %s 
-} __attribute__ ((packed)) %s;
-''' % (state.name, state.content, state.name)
+} %s %s;
+''' % (state.name, state.content, packed, state.name)
         for process in graph.processes:
             name = process + ext
             with open(name, 'a') as f, redirect_stdout(f):
