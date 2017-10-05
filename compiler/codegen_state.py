@@ -245,9 +245,9 @@ def generate_state_instances_cpu_cavium(graph, ext, all_processes, shared):
     for name in shared:
         inst = graph.state_instances[name]
         map_src += map_shared_state(name, inst)
-    map_src_cpu = '  memset((void *) shm_start, 0, shm_p - shm_start);\n'
-    map_src_cpu += '  printf("shared memory size = %ld\\n", shm_p - shm_start);\n'
+    map_src_cpu = '  printf("shared memory size = %ld\\n", shm_p - shm_start);\n'
     map_src_cpu += '  assert(shm_p - shm_start <= HUGE_PGSIZE);\n'
+    map_src_cpu += '  memset((void *) shm_start, 0, shm_p - shm_start);\n'
 
     for process in graph.processes:
         name = process + ext

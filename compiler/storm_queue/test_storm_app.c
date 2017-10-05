@@ -14,6 +14,8 @@ void executor_thread(void *arg) {
       q_buffer buff = inqueue_get(tid);
       struct tuple *t = (struct tuple *) buff.entry;
       assert(t != NULL);
+      char* s = t->v[0].str;
+      assert(strcmp(s, "nathan")==0 || strcmp(s, "golda")==0 || strcmp(s, "bertels")==0 || strcmp(s, "jackson")==0);
       //if(t != NULL) {
         uint64_t starttime = rdtsc();
         self->execute(t, self);

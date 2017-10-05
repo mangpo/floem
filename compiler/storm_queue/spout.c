@@ -65,7 +65,7 @@ void spout_execute(const struct tuple *t, struct executor *self)
   }
 
 #ifdef DEBUG_MP
-    usleep(1);
+    sleep(1);
 #else
     //usleep(1);
 #endif

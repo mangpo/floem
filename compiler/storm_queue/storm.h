@@ -38,16 +38,13 @@ typedef void (*WorkerInit)(struct executor *self);
 typedef int (*GrouperFunc)(const struct tuple *t, struct executor *self);
 
 struct tuple {
-#ifndef FLEXNIC
   int		task, fromtask;
-#else
-  volatile int		task, fromtask;
-#endif
   uint64_t 	starttime;
   struct {
     char	str[MAX_STR];
     int		integer;
   } v[MAX_VECTOR];
+  //int fromtask, task;
 };
 
 struct executor {

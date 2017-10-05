@@ -29,6 +29,15 @@ class Classifier(Element):
             state.rx_pkt = p;
             state.rx_net_buf = b;
         }
+
+        if(type==2) {
+          struct tuple* t = (struct tuple*) &p[1];
+          char* s = t->v[0].str;
+          if(!(strcmp(s, "nathan")==0 || strcmp(s, "golda")==0 || strcmp(s, "bertels")==0 || strcmp(s, "jackson")==0))
+            printf("From net: %s\n",s);
+          //assert(strcmp(s, "nathan")==0 || strcmp(s, "golda")==0 || strcmp(s, "bertels")==0 || strcmp(s, "jackson")==0); 
+        }
+
         output switch {
             case type==1: ack(p);
             case type==2: pkt(p);

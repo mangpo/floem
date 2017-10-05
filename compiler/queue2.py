@@ -319,27 +319,18 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
     __SYNC;
     size_t old = p->offset;
     size_t new = (old + 1) %s %d;
-    while(!__sync_bool_compare_and_swap(&p->offset, old, new)) {
+    while(!__sync_bool_compare_and_swap64(&p->offset, old, new)) {
         old = p->offset;
         new = (old + 1) %s %d;
     }
     ''' % ('%', size, '%', size)
 
-    atomic_src_cvm = r'''
-        size_t old = p->offset;
-        size_t new = (old + 1) %s %d;
-        while(!cvmx_atomic_compare_and_store64(&p->offset, old, new)) {
-            old = p->offset;
-            new = (old + 1) %s %d;
-        }
-        ''' % ('%', size, '%', size)
-
     wait_then_copy = r'''
-    size_t count = 0;
+    //size_t count = 0;
     while(q->data[old].%s != 0) { 
       __SYNC; 
-      count++;
-      if(count %s 1000000 == 0) printf("enqueue stuck: %s, offset = %s, flag = %s, count = %s\n", c, p->offset, q->data[p->offset].%s, count);
+      //count++;
+      //if(count %s 1000000 == 0) printf("enqueue stuck: %s, offset = %s, flag = %s, count = %s\n", c, p->offset, q->data[p->offset].%s, count);
     };
     %s
     ''' % (owner, '%', '%ld', '%ld', '%d', '%ld', owner, copy)
@@ -352,10 +343,11 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
         ''' % (type, type)
 
     wait_then_copy_cvm = r'''
-        while(entry->%s) dma_read_with_buf(addr, size, (void**) &entry);
+        int own_size = sizeof(entry->%s);
+        while(entry->%s) dma_read_with_buf(addr, own_size, (void**) &entry);
         memcpy(entry, x, size);
         dma_write(addr, size, entry);
-        ''' % (owner)  # TODO: check if dma_write is atomic?
+        ''' % (owner, owner)  # TODO: check if dma_write is atomic?
 
     wait_then_get = r'''
     __SYNC;
@@ -456,30 +448,34 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
 
         def impl_cavium(self):
             noblock_noatom = "size_t old = p->offset;\n" + init_read_cvm + r'''
+                int own_size = sizeof(entry->%s);
                 if(entry->%s == 0) {
                     memcpy(entry, x, size);
-                    dma_write(addr, size, entry);
+                    dma_write(addr + own_size, size - own_size, (void*) (((uintptr_t) entry) + own_size));
+                    dma_write(addr, own_size, entry);
                     p->offset = (p->offset + 1) %s %d;
                 }
-                ''' % (owner, '%', size)
+                ''' % (owner, owner, '%', size)
 
             noblock_atom = "size_t old = p->offset;\n" + init_read_cvm + r'''
+                int own_size = sizeof(entry->%s);
                 while(entry->%s == 0) {
                     size_t new = (old + 1) %s %d;
                     if(cvmx_atomic_compare_and_store64(&p->offset, old, new)) {
                         memcpy(entry, x, size);
-                        dma_write(addr, size, entry);
+                        dma_write(addr + own_size, size - own_size, (void*) (((uintptr_t) entry) + own_size));
+                        dma_write(addr, own_size, entry);
                         break;
-                    }
+                    } 
                     old = p->offset;
                     addr = (uintptr_t) &q->data[old];
-                    dma_read_with_buf(addr, size, (void**) &entry);
+                    dma_read_with_buf(addr, own_size, (void**) &entry);
                 }
-                ''' % (owner, '%', size)
+                ''' % (owner, owner, '%', size)
 
             block_noatom = "size_t old = p->offset;\n" + init_read_cvm + wait_then_copy_cvm + inc_offset
 
-            block_atom = atomic_src_cvm + init_read_cvm + wait_then_copy_cvm
+            block_atom = atomic_src + init_read_cvm + wait_then_copy_cvm
 
             if enq_blocking:
                 src = block_atom if enq_atomic else block_noatom
@@ -612,7 +608,7 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
 
             block_noatom = "size_t old = p->offset;\n" + init_read_cvm + wait_then_get_cvm + inc_offset
 
-            block_atom = atomic_src_cvm + init_read_cvm + wait_then_get_cvm
+            block_atom = atomic_src + init_read_cvm + wait_then_get_cvm
 
             if deq_blocking:
                 src = block_atom if deq_atomic else block_noatom
@@ -649,10 +645,10 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
             %s x = (%s) buff.entry;
             if(x) {
                 x->%s = 0;
-                dma_write(buff.addr, sizeof(%s), x);
+                dma_write(buff.addr, sizeof(x->%s), x);
                 dma_free(x);
             }
-            ''' % (type_star, type_star, owner, type))
+            ''' % (type_star, type_star, owner, owner))
 
 
     return Enqueue, Dequeue, Release

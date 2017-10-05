@@ -74,6 +74,7 @@ void tuple_send(struct tuple *t, struct executor *self)
 }
 
 int main(int argc, char *argv[]) {
+
     assert(argc > 1);
     int workerid = atoi(argv[1]);
     struct worker* workers = get_workers();

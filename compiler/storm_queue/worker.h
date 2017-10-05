@@ -13,7 +13,6 @@ struct eth_addr {
 } __attribute__ ((packed));
 
 struct ip_addr {
-  //uint32_t addr;
   uint8_t addr[4];
 } __attribute__ ((packed));
 

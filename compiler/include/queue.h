@@ -49,7 +49,12 @@ typedef pthread_mutex_t lock_t;
 #define qlock_lock(x) pthread_mutex_lock(x)
 #define qlock_unlock(x) pthread_mutex_unlock(x)
 #define __SYNC __sync_synchronize()
-
+#define __sync_fetch_and_add32(ptr, inc) __sync_fetch_and_add(ptr, inc)
+#define __sync_fetch_and_add64(ptr, inc) __sync_fetch_and_add(ptr, inc)
+#define __sync_fetch_and_sub32(ptr, inc) __sync_fetch_and_sub(ptr, inc)
+#define __sync_fetch_and_sub64(ptr, inc) __sync_fetch_and_sub(ptr, inc)
+#define __sync_bool_compare_and_swap32(ptr, old, new) __sync_bool_compare_and_swap(ptr, old, new)
+#define __sync_bool_compare_and_swap64(ptr, old, new) __sync_bool_compare_and_swap(ptr, old, new)
 
 static void no_clean(q_buffer buff) {}
 

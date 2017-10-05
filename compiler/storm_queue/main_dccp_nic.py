@@ -2,15 +2,15 @@ import queue2, net_real
 from dsl2 import *
 from compiler import Compiler
 
-nic = 'dpdk'
+nic = 'CAVIUM' #'dpdk'
 test = "spout"
 inject_func = "random_" + test
 workerid = {"spout": 0, "count": 1, "rank": 2}
 
 n_cores = 7
 n_workers = 'MAX_WORKERS'
-n_nic_rx = 1
-n_nic_tx = 4
+n_nic_rx = 2
+n_nic_tx = 3
 
 class DccpInfo(State):
     header = Field("struct pkt_dccp_headers")
@@ -145,13 +145,12 @@ class LocalOrRemote(Element):
         self.run_c(r'''
     (struct tuple* t) = inp();
     bool local;
-    if(t != NULL) {
-        local = (state.worker == state.myworker);
-        if(local && nic_htonl(t->task) == 30) printf("30: send to myself!\n");
+    local = (state.worker == state.myworker);
+    if(local && nic_htonl(t->task) == 30) printf("30: send to myself!\n");
 #ifdef DEBUG_MP
-        if(local) printf("send to myself!\n");
+    if(local) printf("send to myself!\n");
 #endif
-    }
+
     output switch { case local: out_local(t); else: out_send(t, worker); }
         ''')
 
@@ -167,7 +166,6 @@ class PrintTuple(Element):
     def impl(self):
         self.run_c(r'''
     (struct tuple* t) = inp();
-    __sync_fetch_and_add64(&dccp->tuples, 1);
 
 #ifdef DEBUG_MP
     if(t != NULL) {
@@ -213,7 +211,8 @@ class DccpPrintStat(Element):
 #endif
         static size_t lasttuples = 0;
         size_t tuples;
-        __sync_synchronize();
+        __SYNC;
+
 	    //struct connection* connections = info->connections;
         /* for(int i = 0; i < MAX_WORKERS; i++) { */
         /*     printf("pipe,cwnd,acks,lastack[%d] = %u, %u, %zu, %d\n", i, */
@@ -223,7 +222,7 @@ class DccpPrintStat(Element):
         lasttuples = info->tuples;
         printf("acks sent %zu, rtt %" PRIu64 "\n", info->acks_sent, info->link_rtt);
         printf("Tuples/s: %zu, Gbits/s: %.2f\n\n",
-           tuples, (tuples * sizeof(struct tuple) * 8) / 1000000000.0);
+           tuples, (tuples * (sizeof(struct tuple) + sizeof(struct pkt_dccp_headers)) * 8) / 1000000000.0);
         ''')
 
 class DccpCheckCongestion(Element):
@@ -249,8 +248,16 @@ class DccpCheckCongestion(Element):
             dccp->connections[worker].pipe = 0;
             __sync_fetch_and_add64(&dccp->link_rtt, dccp->link_rtt);
         }
+
+        static __thread size_t count = 0;
+        if(count == 200000) {
+          printf("worker = %d, pipe = %d, cwnd = %d\n", worker,dccp->connections[worker].pipe,dccp->connections[worker].cwnd);
+          count = 0;
+        }
+
         if(dccp->connections[worker].pipe >= dccp->connections[worker].cwnd)
             worker = -1;
+
 
         output switch { case (worker >= 0): send(worker); else: drop(); }
         ''')
@@ -315,8 +322,7 @@ class DccpSendAck(Element):  # TODO
         ack->dccp.ack = htonl(seq);
         ack->dccp.hdr.data_offset = 4;
 
-        dccp->acks_sent++;
-        __sync_synchronize();
+        __sync_fetch_and_add64(&dccp->acks_sent, 1);
 
         output { out(ack); }
         ''')
@@ -347,9 +353,10 @@ class DccpRecvAck(Element):
 	}
 
 	if(connections[srcworker].lastack < (int32_t)ntohl(ack->dccp.ack)) {
-	  int32_t oldpipe = __sync_sub_and_fetch(&connections[srcworker].pipe,
-						 (int)ntohl(ack->dccp.ack) - connections[srcworker].lastack);
-	  if(oldpipe < 0) {
+          __sync_fetch_and_sub32(&connections[srcworker].pipe, (int)ntohl(ack->dccp.ack) - connections[srcworker].lastack);
+	  //int32_t oldpipe = __sync_sub_and_fetch(&connections[srcworker].pipe,
+			//			 (int)ntohl(ack->dccp.ack) - connections[srcworker].lastack);
+	  if(connections[srcworker].pipe < 0) {
 	    connections[srcworker].pipe = 0;
 	  }
 
@@ -369,22 +376,31 @@ class DccpRecvAck(Element):
 	 	 connections[srcworker].lastack + 1);
 #endif
 	  // Congestion event! Shrink congestion window
-	  uint32_t oldcwnd = connections[srcworker].cwnd, newcwnd;
+	  uint32_t oldcwnd, success = 0;
+          size_t count = 0;
 	  do {
-	    newcwnd = oldcwnd;
+            oldcwnd = connections[srcworker].cwnd;
 	    if(oldcwnd >= 2) {
-	      newcwnd = __sync_val_compare_and_swap(&connections[srcworker].cwnd, oldcwnd, oldcwnd / 2);
+              success = __sync_bool_compare_and_swap32((uint32_t*) &connections[srcworker].cwnd, oldcwnd, oldcwnd / 2);
+	      //newcwnd = __sync_val_compare_and_swap(&connections[srcworker].cwnd, oldcwnd, oldcwnd / 2);
 	    } else {
 	      break;
 	    }
-	  } while(oldcwnd != newcwnd);
+            count++;
+            if(count%1000==0) printf("congestion loop (%d): cwnd = %d, count = %ld\n", cvmx_get_core_num(),connections[srcworker].cwnd,count);
+
+	  } while(!success);
+#ifdef DEBUG_DCCP
+          printf("cwnd = %d\n", connections[srcworker].cwnd);
+#endif
+
 	} else {
 #ifdef DEBUG_DCCP
 	  printf("Increasing congestion window for %d\n", srcworker);
 #endif
 	  // Increase congestion window
-	  /* __sync_fetch_and_add(&connections[srcworker].cwnd, 1); */
-	  connections[srcworker].cwnd++;
+	  __sync_fetch_and_add32(&connections[srcworker].cwnd, 1);
+	  //connections[srcworker].cwnd++;
 	}
 
 	connections[srcworker].lastack = MAX(connections[srcworker].lastack, (int32_t)ntohl(ack->dccp.ack));
@@ -581,7 +597,8 @@ class BatchScheduler(Element):
     static __thread size_t start = 0;
         
     if(core == -1) {
-        core = (core_id * n_cores)/%d;
+        //core = (core_id * n_cores)/%d;
+        core = core_id;
         while(this->executors[core].execute == NULL){
             core = (core + 1) %s n_cores;
         }  
@@ -593,13 +610,14 @@ class BatchScheduler(Element):
     }
 
 #ifndef CAVIUM
-    if(batch_size >= BATCH_SIZE || rdtsc() - start >= BATCH_DELAY * PROC_FREQ_MHZ) {
+    if(core >= 2 && (batch_size >= BATCH_SIZE || rdtsc() - start >= BATCH_DELAY * PROC_FREQ_MHZ)) {
 #else
-    if(batch_size >= BATCH_SIZE || core_time_now_us() - start >= BATCH_DELAY) {
+    if(core >= 2 && (batch_size >= BATCH_SIZE || core_time_now_us() - start >= BATCH_DELAY)) {
 #endif
         do {
             core = (core + 1) %s n_cores;
         } while(this->executors[core].execute == NULL);
+        if(core < 2) core = 2;
         batch_size = 0;
         //printf("======================= Dequeue core = %s, thread = %s\n", core, core_id);
 #ifndef CAVIUM
@@ -706,7 +724,7 @@ rx_enq_creator, rx_deq_creator, rx_release_creator = \
 
 tx_enq_creator, tx_deq_creator, tx_release_creator = \
     queue2.queue_custom_owner_bit("tx_queue", "struct tuple", MAX_ELEMS, n_cores, "task",
-                                  enq_blocking=True, deq_atomic=True)
+                                  enq_blocking=True, deq_atomic=False)
 
 
 class RxState(State):
@@ -757,7 +775,7 @@ class NicRxPipeline(Pipeline):
                 rx_buf >> from_net_free
                 
         if nic == 'dpdk':
-            nic_rx('nic_rx', process='dpdk')
+            nic_rx('nic_rx', process='dpdk', cores=[n_nic_tx + x for x in range(n_nic_rx)])
         else:
             nic_rx('nic_rx', device=target.CAVIUM, cores=[n_nic_tx + x for x in range(n_nic_rx)])
 
