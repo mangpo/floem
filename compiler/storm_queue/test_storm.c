@@ -14,17 +14,17 @@ void executor_thread(void *arg) {
   // Run dispatch loop
   for(;;) {
     if(!self->spout) {
+      //if(t != NULL) {
+      uint64_t starttime = rdtsc();
       q_buffer buff = inqueue_get(tid);
       struct tuple *t = (struct tuple *) buff.entry;
       assert(t != NULL);
-      //if(t != NULL) {
-        uint64_t starttime = rdtsc();
-        self->execute(t, self);
-        //printf("Tuple %d done\n", t->task);
-        uint64_t now = rdtsc();
-        inqueue_advance(buff);  // old version: inqueue_advance(tid);
-        self->execute_time += now - starttime;
-        self->numexecutes++;
+      self->execute(t, self);
+      //printf("Tuple %d done\n", t->task);
+      inqueue_advance(buff);  // old version: inqueue_advance(tid);
+      uint64_t now = rdtsc();
+      self->execute_time += now - starttime;
+      self->numexecutes++;
       //}
     } else {
       uint64_t starttime = rdtsc();

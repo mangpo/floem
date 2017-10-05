@@ -11,17 +11,17 @@ void executor_thread(void *arg) {
   // Run dispatch loop
   for(;;) {
     if(!self->spout) {
-      q_buffer buff = inqueue_get(tid);
-      struct tuple *t = (struct tuple *) buff.entry;
-      assert(t != NULL);
-      char* s = t->v[0].str;
-      assert(strcmp(s, "nathan")==0 || strcmp(s, "golda")==0 || strcmp(s, "bertels")==0 || strcmp(s, "jackson")==0);
-      //if(t != NULL) {
         uint64_t starttime = rdtsc();
+        q_buffer buff = inqueue_get(tid);
+        struct tuple *t = (struct tuple *) buff.entry;
+        assert(t != NULL);
+        char* s = t->v[0].str;
+        assert(strcmp(s, "nathan")==0 || strcmp(s, "golda")==0 || strcmp(s, "bertels")==0 || strcmp(s, "jackson")==0);
+      //if(t != NULL) {
         self->execute(t, self);
         //printf("Tuple %d done\n", t->task);
-        uint64_t now = rdtsc();
         inqueue_advance(buff);  // old version: inqueue_advance(tid);
+        uint64_t now = rdtsc();
         self->execute_time += now - starttime;
         self->numexecutes++;
       //}
@@ -97,7 +97,21 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    while(1) pause();
+    int wait = 10;
+    while(1) {
+#ifdef QUEUE_STAT
+	for(int i = 0; i < MAX_EXECUTORS && executor[i].execute != NULL; i++) {
+	  struct executor *self = &executor[i];
+	  if(self->numexecutes-self->lastnumexecutes) {
+	    printf("%d: numexecutes %zu, time %zu\n", self->taskid, 
+		   self->numexecutes-self->lastnumexecutes, 
+		   (self->execute_time-self->lastexecute_time) / (self->numexecutes - self->lastnumexecutes));
+	    self->lastnumexecutes = self->numexecutes;
+	    self->lastexecute_time = self->execute_time;
+	  }
+	}
+#endif
+    }
 
     return 0;
 }
