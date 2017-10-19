@@ -8,6 +8,10 @@ n_cores = 1
 Enq, Deq, DeqRelease = \
     queue2.queue_custom_owner_bit("rx_queue", "struct tuple", MAX_ELEMS, n_cores, "task",
                                   enq_blocking=True, enq_atomic=True, enq_output=True,
+                                  deq_blocking=True, deq_atomic=True)
+Enq2, Deq2, DeqRelease2 = \
+    queue2.queue_custom_owner_bit("tx_queue", "struct tuple", MAX_ELEMS, n_cores, "task",
+                                  enq_blocking=True, enq_atomic=True,
                                   deq_atomic=True)
 
 class MakeTuple(Element):
@@ -41,6 +45,7 @@ class MakeTuple(Element):
 
   int i;
   for(i=0; i<88; i++) t->data[i] = old;
+
     output { out(t, 0); }
         ''')
 
@@ -52,6 +57,19 @@ class Scheduler(Element):
         self.run_c(r'''
     output { out(0); }
         ''')
+
+class GetTuple(Element):
+    def configure(self):
+        self.inp = Input(queue2.q_buffer)
+        self.out = Output("struct tuple*", Size)
+
+    def impl(self):
+        self.run_c(r'''
+        (q_buffer buff) = inp();
+        
+        output { out((struct tuple*) buff.entry, 0); } 
+        ''')
+    
 
 class Display(Element):
     def configure(self):
@@ -68,14 +86,15 @@ class Display(Element):
 
         uint32_t task = htonl(t->task);
         uint32_t id = htonl(t->id);
-        if(task % 100000 == 0) printf("t: %d\n", task);
+        //if(task % 100000 == 0) 
+        printf("t: %d\n", task);
         if(t->task != t->data[87])
           printf("task = %d, data = %d\n", task, htonl(t->data[87]));
         assert(t->task == t->data[87]);
         if(id != task-1)
           printf("task = %d, id = %d\n", task, id);
         assert(id == task-1);
-#if 1
+#if 0
         uint32_t this = htonl(t->task);
         __SYNC;
         if(this > last) {
@@ -93,7 +112,7 @@ class Display(Element):
         }
 #endif
 
-#if 0
+#if 1
         assert(task == last+1);
         last = task;
 #endif
@@ -138,13 +157,28 @@ class nic_rx(InternalLoop):
 
         run_order(enq, from_net_free)
 
+class nic_tx(InternalLoop):
+    def impl(self):
+        zero = library_dsl2.Constant(configure=[0])
+        zero >> Deq2() >> Display() >> DeqRelease2()
+
 
 class run(InternalLoop):
     def impl(self):
-        Scheduler() >> Deq() >> Display() >> DeqRelease()
+        deq = Deq()
+        deq_rel = DeqRelease()
+        enq2 = Enq2()
+        display = Display()
 
+        Scheduler() >> deq >> display >> deq_rel
+        display >> GetTuple() >> enq2
 
-nic_rx('nic_rx', device=target.CAVIUM, cores=range(4))
+        run_order(enq2, deq_rel)
+
+n_rx = 1
+n_tx = 1
+nic_rx('nic_rx', device=target.CAVIUM, cores=range(n_rx))
+nic_tx('nic_tx', device=target.CAVIUM, cores=[n_rx + x for x in range(n_tx)])
 #nic_rx('nic_rx', process='test_queue')
 run('run', process='app', cores=range(1))
 

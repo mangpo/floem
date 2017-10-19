@@ -514,7 +514,7 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
             %s x = NULL;
             __SYNC;
             size_t old = p->offset;
-            while(q->data[old].%s != 0) {
+            while(q->data[old].%s != 0) { // TODO: || p->offset != old
                 size_t new = (old + 1) %s %d;
                 if(__sync_bool_compare_and_swap(&p->offset, old, new)) {
                     x = &q->data[old];
@@ -575,6 +575,7 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
                        #+ debug
                        + src
                        + r'''
+                       //if(x) printf("off = %ld\n", p->offset);
                        q_buffer tmp = {(void*) x, 0};
                        output { out(tmp); }''')
 
@@ -592,9 +593,9 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner,
             noblock_atom = "size_t old = p->offset;\n" + init_read_cvm + r'''
             %s x = NULL;
             bool success = false;
-            while(entry->%s != 0) {
+            while(entry->%s != 0) {  // TODO while(entry)
                 size_t new = (old + 1) %s %d;
-                if(__sync_bool_compare_and_swap(&p->offset, old, new)) {
+                if(__sync_bool_compare_and_swap(&p->offset, old, new)) { // assert(entry->task > 0);
                     x = entry;
                     success = true;
                     break;
