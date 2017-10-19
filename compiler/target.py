@@ -8,7 +8,7 @@ cpu_include_c = ["<stdint.h>", "<stdbool.h>", "<stdio.h>", "<stdlib.h>", "<strin
 # device = CAVIUM, process = CAVIUM
 CAVIUM = 'CAVIUM'
 cavium_include_h = ['"cvmcs-nic.h"', '"cvmcs-queue.h"']
-cavium_include_c = ['<cvmx-atomic.h>', '"cvmcs-nic.h"', '"cvmcs-dma.h"', '"cvmcs-queue.h"']
+cavium_include_c = ['<cvmx-atomic.h>', '"cvmcs-nic.h"', '"cvmcs-dma.h"', '"cvmcs-queue.h"', '"dma-circular-queue.h"']
 
 # device = CPU, process = DPDK
 def is_dpdk_proc(process):

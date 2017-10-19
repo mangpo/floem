@@ -6,7 +6,8 @@ MAX_ELEMS = 64
 n_cores = 1
 
 Enq, Deq, DeqRelease = \
-    queue2.queue_custom_owner_bit("rx_queue", "struct tuple", MAX_ELEMS, n_cores, "task",
+    queue2.queue_custom_owner_bit("rx_queue", "struct tuple", MAX_ELEMS, n_cores,
+                                  "task", Uint(32), "0xffffff00", "0x1",
                                   enq_blocking=True, enq_atomic=True, enq_output=True,
                                   deq_atomic=True)
 
@@ -66,17 +67,19 @@ class Display(Element):
     if(buff.entry) {
         struct tuple* t = (struct tuple*) buff.entry;
 
-        uint32_t task = htonl(t->task);
+        uint32_t task = htonl(t->task & 0xffffff00);
         uint32_t id = htonl(t->id);
-        if(task % 100000 == 0) printf("t: %d\n", task);
-        if(t->task != t->data[87])
-          printf("task = %d, data = %d\n", task, htonl(t->data[87]));
-        assert(t->task == t->data[87]);
+        uint32_t data = htonl(t->data[87]);
+        //if(task % 100000 == 0)
+        printf("t: %d\n", task);
+        if(task != data)
+          printf("task = %d, data = %d\n", task, data);
+        assert(task == data);
         if(id != task-1)
           printf("task = %d, id = %d\n", task, id);
         assert(id == task-1);
 #if 1
-        uint32_t this = htonl(t->task);
+        uint32_t this = task;
         __SYNC;
         if(this > last) {
           if(!((this <= last + 40) || (last + (999 - this) <= 40)))

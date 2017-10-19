@@ -241,5 +241,31 @@ static void dequeue_release(q_buffer buff, uint8_t flag_clean)
     __sync_synchronize();
 }
 
+#define mb() 	asm volatile("mfence":::"memory")
+#define CFLASH_SIZE 64
+#define __force	__attribute__((force))
+
+static inline void clflush(volatile void *__p)
+{
+	asm volatile("clflush %0" : "+m" (*(volatile char __force *)__p));
+}
+
+static void clflush_cache_range(void *vaddr, unsigned int size)
+{
+	void *vend = vaddr + size - 1;
+
+	mb();
+
+	for (; vaddr < vend; vaddr += CFLASH_SIZE) {
+		clflush(vaddr);
+	}
+
+	/*
+ 	 * Flush any possible final partial cacheline:
+  	 */
+	clflush(vend);
+
+	mb();
+}
 
 #endif
