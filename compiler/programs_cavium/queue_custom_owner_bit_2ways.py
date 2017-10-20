@@ -9,13 +9,15 @@ data = 14 #88
 Enq, Deq, DeqRelease = \
     queue2.queue_custom_owner_bit("rx_queue", "struct tuple", MAX_ELEMS, n_cores,
                                   "task", Uint(32), "0xffffff00", "0x1",
-                                  enq_blocking=True, enq_atomic=True, enq_output=True,
-                                  deq_blocking=True, deq_atomic=True)
+                                  enq_blocking=False, enq_atomic=True, deq_blocking=True, enq_output=True)
+                                  #enq_blocking=True, enq_atomic=True, enq_output=True,
+                                  #deq_blocking=True, deq_atomic=True)
 Enq2, Deq2, DeqRelease2 = \
     queue2.queue_custom_owner_bit("tx_queue", "struct tuple", MAX_ELEMS, n_cores,
                                   "task", Uint(32), "0xffffff00", "0x1",
-                                  enq_blocking=True, enq_atomic=True,
-                                  deq_atomic=True)
+                                  enq_blocking=True, deq_atomic=False)
+                                  #enq_blocking=True, enq_atomic=True,
+                                  #deq_atomic=True)
 
 class MakeTuple(Element):
     def configure(self):
