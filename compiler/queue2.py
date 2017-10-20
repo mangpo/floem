@@ -405,14 +405,14 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner, owner_type, entry_m
     wait_then_get_cvm = r'''
 #ifdef DMA_CACHE
         while(entry == NULL) entry = smart_dma_read(p->id, addr, size);
-        assert(entry->%s != 0);
+        assert((entry->%s & %s) != 0);
 #else
         // TODO: potential race condition here -- slow and fast thread grab the same entry!
 
         while((entry->%s & %s) == 0) dma_read_with_buf(addr, size, entry, 1);
 #endif
         %s* x = entry;
-        ''' % (owner, owner, entry_mask_nic, type)
+        ''' % (owner, entry_mask_nic, owner, entry_mask_nic, type)
 
     inc_offset = "p->offset = (p->offset + 1) %s %d;\n" % ('%', size)
 
@@ -653,7 +653,12 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner, owner_type, entry_m
         def impl_cavium(self):
             noblock_noatom = "size_t old = p->offset;\n" + init_read_cvm + r'''
     %s x = NULL;
+#ifdef DMA_CACHE
+    if(entry) {
+        assert((entry->%s & %s) != 0);
+#else
     if((entry->%s & %s) != 0) {
+#endif
         x = entry;
         p->offset = (p->offset + 1) %s %d;
     } else {
@@ -661,7 +666,7 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner, owner_type, entry_m
         dma_free(entry);
 #endif
     }
-    ''' % (type_star, owner, entry_mask_nic, '%', size)
+    ''' % (type_star, owner, entry_mask_nic, owner, entry_mask_nic, '%', size)
 
             noblock_atom = "size_t old = p->offset;\n" + init_read_cvm + r'''
     %s x = NULL;
@@ -677,7 +682,7 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner, owner_type, entry_m
         if(__sync_bool_compare_and_swap(&p->offset, old, new)) {
             x = entry;
             success = true;
-            assert(entry->%s != 0);
+            assert((entry->%s & %s) != 0);
             break;
         }
         old = p->offset;
@@ -693,7 +698,7 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner, owner_type, entry_m
         dma_free(entry);
 #endif
     }
-    ''' % (type_star, owner, entry_mask_nic, '%', size, owner)
+    ''' % (type_star, owner, entry_mask_nic, '%', size, owner, entry_mask_nic)
 
             block_noatom = "size_t old = p->offset;\n" + init_read_cvm + wait_then_get_cvm + inc_offset
 
