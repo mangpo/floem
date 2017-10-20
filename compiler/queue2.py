@@ -316,6 +316,7 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner, owner_type, entry_m
     prefix = "%s_" % name
 
     owner_size = common.sizeof(owner_type)
+    assert (owner_size == 4), "queue_custom_owner_bit currently only supports owner_type of 32 bytes."
     if owner_size == 2:
         entry_mask_nic = "nic_htons(%s)" % entry_mask
     elif owner_size == 4:
