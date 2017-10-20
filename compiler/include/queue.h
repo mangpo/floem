@@ -17,19 +17,21 @@
 
 
 typedef struct {
-    size_t len;
-    size_t offset;
-    void* queue;
-    size_t clean;
-    //pthread_mutex_t lock;
+  size_t len;
+  size_t offset;
+  void* queue;
+  size_t clean;
+  int id;
+  //pthread_mutex_t lock;
 } circular_queue;
 
 typedef struct {
-    size_t len;
-    size_t offset;
-    void* queue;
-    size_t clean;
-    pthread_mutex_t lock;
+  size_t len;
+  size_t offset;
+  void* queue;
+  size_t clean;
+  int id;
+  pthread_mutex_t lock;
 } circular_queue_lock;
 
 typedef struct {
@@ -240,6 +242,10 @@ static void dequeue_release(q_buffer buff, uint8_t flag_clean)
     //__sync_fetch_and_and(&e->flags, ~FLAG_OWN);
     __sync_synchronize();
 }
+
+static int create_dma_circular_queue(uint64_t addr, int size, int overlap, int (*ready_scan)(void*,int*, uint64_t), uint64_t typemask) { return 0; }
+static int entry_empty(void* buff, int* skip, uint64_t typemask) { return 0; }
+static int entry_full(void* buff, int* skip, uint64_t typemask) { return 0; }
 
 #define mb() 	asm volatile("mfence":::"memory")
 #define CFLASH_SIZE 64

@@ -2,8 +2,9 @@ from dsl2 import *
 from compiler import Compiler
 import target, queue2, net_real, library_dsl2
 
-MAX_ELEMS = 64
+MAX_ELEMS = 256 #64
 n_cores = 1
+data = 14 #88
 
 Enq, Deq, DeqRelease = \
     queue2.queue_custom_owner_bit("rx_queue", "struct tuple", MAX_ELEMS, n_cores,
@@ -23,8 +24,8 @@ class MakeTuple(Element):
 
     def impl(self):
         self.run_c(r'''
-    static int count = 1;
-    struct tuple* t = (struct tuple*) malloc(sizeof(struct tuple));
+  static uint32_t count = 1;
+  struct tuple* t = (struct tuple*) malloc(sizeof(struct tuple));
 
   uint32_t old, new;
   size_t loop = 0;
@@ -44,12 +45,12 @@ class MakeTuple(Element):
 
   t->id = old-1;
   t->task = old;
-
+        ''' + r'''
   int i;
-  for(i=0; i<88; i++) t->data[i] = old;
+  for(i=0; i<%d; i++) t->data[i] = old;
 
-    output { out(t, 0); }
-        ''')
+  output { out(t, 0); }
+        ''' % data)
 
 class Scheduler(Element):
     def configure(self):
@@ -86,11 +87,17 @@ class Display(Element):
     if(buff.entry) {
         struct tuple* t = (struct tuple*) buff.entry;
 
+#ifndef CAVIUM
         uint32_t task = htonl(t->task & 0xffffff00);
+#else
+        uint32_t task = t->task;
+#endif
         uint32_t id = htonl(t->id);
-        uint32_t data = htonl(t->data[87]);
-        //if(task % 100000 == 0) 
-        printf("t: %d\n", task);
+        uint32_t data = htonl(t->data[%d]);
+''' % (data-1)
+                   + r'''
+        if(task % 100000 == 0) 
+          printf("t: %d\n", task);
         if(task != data)
           printf("task = %d, data = %d\n", task, data);
         assert(task == data);
@@ -115,7 +122,7 @@ class Display(Element):
         }
 #endif
 
-#if 1
+#if 0
         assert(task == last+1);
         last = task;
 #endif
@@ -188,12 +195,12 @@ run('run', process='app', cores=range(1))
 c = Compiler()
 c.include_h = r'''
 struct tuple {
-  uint32_t data[88];
+  uint32_t data[%d];
   uint32_t id;
   uint32_t task;
 } __attribute__ ((packed));
 
-'''
+''' % data
 c.generate_code_as_header()
 c.depend = ['app']
 c.compile_and_run("test_queue")

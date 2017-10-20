@@ -18,8 +18,8 @@ class MakeTuple(Element):
 
     def impl(self):
         self.run_c(r'''
-    static int count = 1;
-    struct tuple* t = (struct tuple*) malloc(sizeof(struct tuple));
+  static uint32_t count = 1;
+  struct tuple* t = (struct tuple*) malloc(sizeof(struct tuple));
 
   uint32_t old, new;
   size_t loop = 0;

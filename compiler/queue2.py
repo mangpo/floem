@@ -17,7 +17,7 @@ class circular_queue(State):
         self.clean = 0
         self.declare = False
         if dma_cache:
-            self.id = "create_dma_circular_queue((uint32_t) {0}, sizeof({1}), {2}, {3}, {4})" \
+            self.id = "create_dma_circular_queue((uint64_t) {0}, sizeof({1}), {2}, {3}, {4})" \
                 .format(queue.name, queue.__class__.__name__, overlap, ready_scan, type_mask)
         else:
             self.id = 0
@@ -39,7 +39,7 @@ class circular_queue_lock(State):
         self.lock = lambda (x): 'qlock_init(&%s)' % x
         self.declare = False
         if dma_cache:
-            self.id = "create_dma_circular_queue((uint32_t) {0}, sizeof({1}), {2}, {3}, {4})" \
+            self.id = "create_dma_circular_queue((uint64_t) {0}, sizeof({1}), {2}, {3}, {4})" \
                 .format(queue.name, queue.__class__.__name__, overlap, ready_scan, type_mask)
         else:
             self.id = 0
@@ -317,17 +317,17 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner, owner_type, entry_m
 
     owner_size = common.sizeof(owner_type)
     if owner_size == 2:
-        type_mask = "nic_htons(%s)" % entry_mask
+        entry_mask_nic = "nic_htons(%s)" % entry_mask
     elif owner_size == 4:
-        type_mask = "nic_htonl(%s)" % entry_mask
+        entry_mask_nic = "nic_htonl(%s)" % entry_mask
     elif owner_size == 8:
-        type_mask = "nic_htonp(%s)" % entry_mask
+        entry_mask_nic = "nic_htonp(%s)" % entry_mask
     else:
-        type_mask = entry_mask
+        entry_mask_nic = entry_mask
 
     enq_all, deq_all, EnqQueue, DeqQueue, Storage = \
         create_queue_states(name, type, size, n_cores,
-                            overlap="sizeof(%s)" % type, type_mask=type_mask, dma_cache=dma_cache,
+                            overlap="sizeof(%s)" % type, type_mask=entry_mask_nic, dma_cache=dma_cache,
                             declare=True, enq_lock=False, deq_lock=False)
 
     type = string_type(type)
@@ -379,15 +379,14 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner, owner_type, entry_m
     memcpy(entry, x, size);
     smart_dma_write(p->id, addr, size, entry);
 #else
-    int own_size = sizeof(entry->%s);
     // TODO: potential race condition here -- slow and fast thread grab the same entry!
     // However, using typemask requires more DMA operations.
 
-    while(entry->%s) dma_read_with_buf(addr, own_size, entry, 1);
+    while(entry->%s) dma_read_with_buf(addr, size, entry, 1);
     memcpy(entry, x, size);
     dma_write(addr, size, entry, 1);
 #endif
-        ''' % (owner, owner, owner)
+        ''' % (owner, owner)
 
     wait_then_get = r'''
     %s x = &q->data[old];
@@ -408,10 +407,11 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner, owner_type, entry_m
         assert(entry->%s != 0);
 #else
         // TODO: potential race condition here -- slow and fast thread grab the same entry!
-        while(entry->%s == 0) dma_read_with_buf(addr, size, entry, 1);
+
+        while((entry->%s & %s) == 0) dma_read_with_buf(addr, size, entry, 1);
 #endif
         %s* x = entry;
-        ''' % (owner, owner, type)
+        ''' % (owner, owner, entry_mask_nic, type)
 
     inc_offset = "p->offset = (p->offset + 1) %s %d;\n" % ('%', size)
 
@@ -518,8 +518,8 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner, owner_type, entry_m
 #ifdef DMA_CACHE
     while(entry) {
 #else
-    int own_size = sizeof(entry->%s);
     // TODO: potential race condition for non DMA_CACHE
+
     while(entry->%s == 0) {
 #endif
         size_t new = (old + 1) %s %d;
@@ -538,10 +538,10 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner, owner_type, entry_m
 #ifdef DMA_CACHE
         entry = smart_dma_read(p->id, addr, size);
 #else
-        dma_read_with_buf(addr, own_size, entry, 1);
+        dma_read_with_buf(addr, size, entry, 1);
 #endif
     }
-    ''' % (owner, owner, '%', size, owner)
+    ''' % (owner, '%', size, owner)
 
             block_noatom = "size_t old = p->offset;\n" + init_read_cvm + wait_then_copy_cvm + inc_offset
 
@@ -580,11 +580,11 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner, owner_type, entry_m
             noblock_noatom = r'''
             %s x = NULL;
             __SYNC;
-            if(q->data[p->offset].%s != 0) {
+            if((q->data[p->offset].%s & %s) != 0) {
                 x = &q->data[p->offset];
                 p->offset = (p->offset + 1) %s %d;
             }
-            ''' % (type_star, owner, '%', size)
+            ''' % (type_star, owner, entry_mask, '%', size)
 
             noblock_atom = r'''
     %s x = NULL;
@@ -652,7 +652,7 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner, owner_type, entry_m
         def impl_cavium(self):
             noblock_noatom = "size_t old = p->offset;\n" + init_read_cvm + r'''
     %s x = NULL;
-    if(entry->%s != 0) {
+    if((entry->%s & %s) != 0) {
         x = entry;
         p->offset = (p->offset + 1) %s %d;
     } else {
@@ -660,7 +660,7 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner, owner_type, entry_m
         dma_free(entry);
 #endif
     }
-    ''' % (type_star, owner, '%', size)
+    ''' % (type_star, owner, entry_mask_nic, '%', size)
 
             noblock_atom = "size_t old = p->offset;\n" + init_read_cvm + r'''
     %s x = NULL;
@@ -670,7 +670,7 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner, owner_type, entry_m
 #else
     // TODO: potential race condition for non DMA_CACHE
 
-    while(entry->%s != 0) {
+    while((entry->%s & %s) != 0) {
 #endif
         size_t new = (old + 1) %s %d;
         if(__sync_bool_compare_and_swap(&p->offset, old, new)) {
@@ -692,7 +692,7 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner, owner_type, entry_m
         dma_free(entry);
 #endif
     }
-    ''' % (type_star, owner, '%', size, owner)
+    ''' % (type_star, owner, entry_mask_nic, '%', size, owner)
 
             block_noatom = "size_t old = p->offset;\n" + init_read_cvm + wait_then_get_cvm + inc_offset
 
@@ -734,13 +734,13 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner, owner_type, entry_m
     if(x) {
         x->%s = 0;
 #ifdef DMA_CACHE
-        smart_dma_write(buff.qid, buff.addr, sizeof(x->%s), x);
+        smart_dma_write(buff.qid, buff.addr, sizeof(%s), x);
 #else
-        dma_write(buff.addr, sizeof(x->%s), x, 1);
+        dma_write(buff.addr, sizeof(%s), x, 1);
         dma_free(x);
 #endif
     }
-    ''' % (type_star, type_star, owner, owner, owner))
+            ''' % (type_star, type_star, owner, type, type))
 
 
     return Enqueue, Dequeue, Release
