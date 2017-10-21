@@ -10,7 +10,7 @@ workerid = {"spout": 0, "count": 1, "rank": 2}
 n_cores = 7
 n_workers = 'MAX_WORKERS'
 n_nic_rx = 2
-n_nic_tx = 3
+n_nic_tx = 5
 
 class DccpInfo(State):
     header = Field("struct pkt_dccp_headers")
@@ -600,7 +600,7 @@ class BatchScheduler(Element):
         
     if(core == -1) {
         //core = (core_id * n_cores)/%d;
-        core = core_id;
+        core = core_id/2;
         while(this->executors[core].execute == NULL){
             core = (core + 1) %s n_cores;
         }  
@@ -722,13 +722,13 @@ MAX_ELEMS = 256 #(4 * 1024)
 
 rx_enq_creator, rx_deq_creator, rx_release_creator = \
     queue2.queue_custom_owner_bit("rx_queue", "struct tuple", MAX_ELEMS, n_cores,
-                                  "task", Uint(32), "0xffffff00", "0x1",
+                                  "task", Uint(32), "0x00ffffff", "0x80000000",
                                   enq_blocking=False, enq_atomic=True, deq_blocking=True, enq_output=True)
 
 tx_enq_creator, tx_deq_creator, tx_release_creator = \
     queue2.queue_custom_owner_bit("tx_queue", "struct tuple", MAX_ELEMS, n_cores,
-                                  "task", Uint(32), "0xffffff00", "0x1",
-                                  enq_blocking=True, deq_atomic=False)
+                                  "task", Uint(32), "0x00ffffff", "0x80000000",
+                                  enq_blocking=True, deq_atomic=True)
 
 
 class RxState(State):

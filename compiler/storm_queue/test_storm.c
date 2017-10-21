@@ -15,10 +15,10 @@ void executor_thread(void *arg) {
   for(;;) {
     if(!self->spout) {
       //if(t != NULL) {
-      uint64_t starttime = rdtsc();
       q_buffer buff = inqueue_get(tid);
       struct tuple *t = (struct tuple *) buff.entry;
       assert(t != NULL);
+      uint64_t starttime = rdtsc();
       self->execute(t, self);
       //printf("Tuple %d done\n", t->task);
       inqueue_advance(buff);  // old version: inqueue_advance(tid);

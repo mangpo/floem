@@ -45,6 +45,9 @@ void spout_execute(const struct tuple *t, struct executor *self)
   struct timeval start;
   r = gettimeofday(&start, NULL);
 
+  static __thread size_t count = 0, sum = 0;
+  size_t starttime = rdtsc();
+
 #ifndef TWITTER_FEED
   if(!init) {
     r = initstate_r(self->taskid, statebuf, 256, &mybuf);
@@ -75,6 +78,14 @@ void spout_execute(const struct tuple *t, struct executor *self)
 #ifdef DEBUG_MP
   printf("%d: Spout emitting '%s'.\n", self->taskid, st->words[i]);
 #endif
+  size_t endtime = rdtsc();
+  count++;
+  sum += endtime - starttime;
+  if(count == 1000000) {
+    printf("spout time: %.2f\n", 1.0*sum/count);
+    count = sum = 0;
+  }
+
   tuple_send(&myt, self);
 
 #ifdef TWITTER_FEED

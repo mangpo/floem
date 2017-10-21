@@ -11,13 +11,13 @@ void executor_thread(void *arg) {
   // Run dispatch loop
   for(;;) {
     if(!self->spout) {
-        uint64_t starttime = rdtsc();
         q_buffer buff = inqueue_get(tid);
         struct tuple *t = (struct tuple *) buff.entry;
         assert(t != NULL);
         char* s = t->v[0].str;
         assert(strcmp(s, "nathan")==0 || strcmp(s, "golda")==0 || strcmp(s, "bertels")==0 || strcmp(s, "jackson")==0);
       //if(t != NULL) {
+        uint64_t starttime = rdtsc();
         self->execute(t, self);
         //printf("Tuple %d done\n", t->task);
         inqueue_advance(buff);  // old version: inqueue_advance(tid);
@@ -74,6 +74,7 @@ void tuple_send(struct tuple *t, struct executor *self)
 }
 
 int main(int argc, char *argv[]) {
+  printf("size(tuple) = %d\n", sizeof(struct tuple));
     assert(argc > 1);
     int workerid = atoi(argv[1]);
     struct worker * workers = get_workers();
@@ -99,7 +100,8 @@ int main(int argc, char *argv[]) {
 
     int wait = 10;
     while(1) {
-#ifdef QUEUE_STAT
+      sleep(wait);
+#if 1 //def QUEUE_STAT
 	for(int i = 0; i < MAX_EXECUTORS && executor[i].execute != NULL; i++) {
 	  struct executor *self = &executor[i];
 	  if(self->numexecutes-self->lastnumexecutes) {
