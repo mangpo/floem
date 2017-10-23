@@ -46,6 +46,9 @@ struct tuple {
   } v[MAX_VECTOR];
   int           fromtask;
   int           task;
+  uint8_t      checksum;
+  uint8_t      pad[3];
+
 } __attribute__ ((packed));
 
 struct executor {

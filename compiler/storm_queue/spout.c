@@ -78,6 +78,7 @@ void spout_execute(const struct tuple *t, struct executor *self)
 #ifdef DEBUG_MP
   printf("%d: Spout emitting '%s'.\n", self->taskid, st->words[i]);
 #endif
+  /*
   size_t endtime = rdtsc();
   count++;
   sum += endtime - starttime;
@@ -85,6 +86,7 @@ void spout_execute(const struct tuple *t, struct executor *self)
     printf("spout time: %.2f\n", 1.0*sum/count);
     count = sum = 0;
   }
+  */
 
   tuple_send(&myt, self);
 

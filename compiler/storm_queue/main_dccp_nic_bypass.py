@@ -129,7 +129,7 @@ class GetCore(Element):
     struct tuple* t = inp();
     int id = this->task2executorid[nic_htonl(t->task)];
 #ifdef DEBUG_MP
-    printf("\nreceive: task %d, id %d\n", nic_htonl(t->task), id);
+    printf("\nget_core: task %d, qid %d\n", nic_htonl(t->task), id);
 #endif
     output { out(t, id); }
         ''')
@@ -147,7 +147,7 @@ class GetCoreCPU(Element):
     struct tuple* t = inp();
     int id = this->task2executorid[nic_htonl(t->task)];
 #ifdef DEBUG_MP
-    printf("\nreceive: task %d, id %d\n", nic_htonl(t->task), id);
+    printf("\nget_core: task %d, qid %d\n", nic_htonl(t->task), id);
 #endif
     output { out(t, id); }
         ''')
@@ -170,8 +170,8 @@ class LocalOrRemote(Element):
     local = (worker == myworker);
     if(local && nic_htonl(t->task) == 30) printf("30: send to myself!\n");
 #ifdef DEBUG_MP
-    if(local) printf("send to myself!\n");
-    else printf("remote!\n");
+    //if(local) printf("send to myself!\n");
+    //else printf("remote!\n");
 #endif
 
     output switch { case local: out_local(t); else: out_send(t, qid); }
@@ -190,6 +190,25 @@ class PrintTuple(Element):
         self.run_c(r'''
     (struct tuple* t) = inp();
 
+  if(t) {
+    uint32_t task = nic_htonl(t->task);
+    if(task == 10 && strcmp(t->v[0].str, "golda")) {
+      printf("print: task = %d, str = %s\n", task, t->v[0].str);
+      assert(strcmp(t->v[0].str, "golda") == 0);
+    }
+    if(task == 11 && strcmp(t->v[0].str, "nathan")) {
+      printf("print: task = %d, str = %s\n", task, t->v[0].str);
+      assert(strcmp(t->v[0].str, "nathan") == 0);
+    }
+    if(task == 12 && strcmp(t->v[0].str, "jackson")) {
+      printf("print: task = %d, str = %s\n", task, t->v[0].str);
+      assert(strcmp(t->v[0].str, "jackson") == 0);
+    }
+    if(task == 13 && strcmp(t->v[0].str, "bertels")) {
+      printf("print: task = %d, str = %s\n", task, t->v[0].str);
+      assert(strcmp(t->v[0].str, "berterls") == 0);
+    }
+  }
 #ifdef DEBUG_MP
     if(t != NULL) {
         printf("TUPLE[0] -- task = %d, fromtask = %d, str = %s, integer = %d\n", nic_htonl(t->task), nic_htonl(t->fromtask), t->v[0].str, t->v[0].integer);
@@ -497,6 +516,26 @@ class Tuple2Pkt(Element):
         header->eth.src = workers[state.myworker].mac;
         
         //printf("PREPARE PKT: task = %d, worker = %d\n", nic_hotnl(t->task), state.worker);
+
+        t = (struct tuple*) &header[1];
+    uint32_t task = nic_htonl(t->task);                                                              
+    if(task == 10 && strcmp(t->v[0].str, "golda")) {                                           
+      printf("pkt: task = %d, str = %s\n", task, t->v[0].str);                                     
+      assert(strcmp(t->v[0].str, "golda") == 0);                                                     
+    }                                                                                                
+    if(task == 11 && strcmp(t->v[0].str, "nathan")) {                                                
+      printf("pkt: task = %d, str = %s\n", task, t->v[0].str);                                     
+      assert(strcmp(t->v[0].str, "nathan") == 0);                                                    
+    }                                                                                                
+    if(task == 12 && strcmp(t->v[0].str, "jackson")) {                                               
+      printf("pkt: task = %d, str = %s\n", task, t->v[0].str);                                     
+      assert(strcmp(t->v[0].str, "jackson") == 0);                                                   
+    }                                                                                                
+    if(task == 13 && strcmp(t->v[0].str, "bertels")) {                                               
+      printf("pkt: task = %d, str = %s\n", task, t->v[0].str);                                     
+      assert(strcmp(t->v[0].str, "berterls") == 0);                                                  
+    }   
+
         output { out(p); }
         ''')
 
@@ -756,7 +795,7 @@ BypassEnq, BypassDeq, BypassRelease = \
     queue2.queue_custom_owner_bit("bypass_queue", "struct tuple", MAX_ELEMS, n_cores,
                                   "task", Uint(32), "0x00ffffff", "0x80000000",
                                   enq_blocking=True, enq_atomic=True,
-                                  deq_blocking=True)
+                                  deq_blocking=False) # TODO: enq_blocking?
 
 
 class RxState(State):
@@ -816,7 +855,7 @@ class inqueue_get(API):
     def configure(self):
         self.inp = Input(Size)
         self.out = Output(queue2.q_buffer)
-        self.default_return = "NULL"
+        self.default_return = "{NULL, 0}"
 
     def impl(self): self.inp >> rx_deq_creator() >> self.out
 
@@ -825,7 +864,7 @@ class bypass_get(API):
     def configure(self):
         self.inp = Input(Size)
         self.out = Output(queue2.q_buffer)
-        self.default_return = "NULL"
+        self.default_return = "{NULL, 0}"
 
     def impl(self): self.inp >> BypassDeq() >> self.out
 
