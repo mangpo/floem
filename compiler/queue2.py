@@ -10,15 +10,15 @@ class circular_queue(State):
     clean = Field(Size)
     id = Field(Int)
 
-    def init(self, len=0, queue=0, dma_cache=True, overlap=0, ready_scan="NULL", type_mask=0):
+    def init(self, len=0, queue=0, dma_cache=True, overlap=0, ready_scan="NULL", type_mask=0, type_offset=0):
         self.len = len
         self.offset = 0
         self.queue = queue
         self.clean = 0
         self.declare = False
         if dma_cache:
-            self.id = "create_dma_circular_queue((uint64_t) {0}, sizeof({1}), {2}, {3}, {4})" \
-                .format(queue.name, queue.__class__.__name__, overlap, ready_scan, type_mask)
+            self.id = "create_dma_circular_queue((uint64_t) {0}, sizeof({1}), {2}, {3}, {4}, {5})" \
+                .format(queue.name, queue.__class__.__name__, overlap, ready_scan, type_mask, type_offset)
         else:
             self.id = 0
 
@@ -39,8 +39,8 @@ class circular_queue_lock(State):
         self.lock = lambda (x): 'qlock_init(&%s)' % x
         self.declare = False
         if dma_cache:
-            self.id = "create_dma_circular_queue((uint64_t) {0}, sizeof({1}), {2}, {3}, {4})" \
-                .format(queue.name, queue.__class__.__name__, overlap, ready_scan, type_mask)
+            self.id = "create_dma_circular_queue((uint64_t) {0}, sizeof({1}), {2}, {3}, {4}, {5})" \
+                .format(queue.name, queue.__class__.__name__, overlap, ready_scan, type_mask, type_offset)
         else:
             self.id = 0
 
@@ -84,7 +84,7 @@ def get_field_name(state, field):
                 return s
 
 
-def create_queue_states(name, type, size, n_cores, overlap=0, type_mask=0, dma_cache=True,
+def create_queue_states(name, type, size, n_cores, overlap=0, type_mask=0, type_offset=0, dma_cache=True,
                         declare=True, enq_lock=False, deq_lock=False):
     prefix = "%s_" % name
 
@@ -104,9 +104,9 @@ def create_queue_states(name, type, size, n_cores, overlap=0, type_mask=0, dma_c
     else:
         deq = circular_queue
 
-    enq_infos = [enq(init=[size, storages[i], dma_cache, overlap, "entry_empty", type_mask], declare=declare, packed=False)
+    enq_infos = [enq(init=[size, storages[i], dma_cache, overlap, "entry_empty", type_mask, type_offset], declare=declare, packed=False)
                  for i in range(n_cores)]
-    deq_infos = [deq(init=[size, storages[i], dma_cache, overlap, "entry_full", type_mask], declare=declare, packed=False)
+    deq_infos = [deq(init=[size, storages[i], dma_cache, overlap, "entry_full", type_mask, type_offset], declare=declare, packed=False)
                  for i in range(n_cores)]
 
     class EnqueueCollection(State):
@@ -299,7 +299,8 @@ def queue_variable_size(name, size, n_cores, enq_blocking=False, deq_blocking=Fa
     return EnqueueAlloc, EnqueueSubmit, DequeueGet, DequeueRelease, clean_inst
 
 
-def queue_custom_owner_bit(name, type, size, n_cores, owner, owner_type, entry_mask, entry_use, dma_cache=True,
+def queue_custom_owner_bit(name, type, size, n_cores, owner, owner_type, entry_mask, entry_use,
+                           checksum="checksum", dma_cache=True,
                            enq_blocking=False, deq_blocking=False, enq_atomic=False, deq_atomic=False,
                            enq_output=False):
     """
@@ -326,22 +327,35 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner, owner_type, entry_m
     else:
         entry_mask_nic = entry_mask
 
-    enq_all, deq_all, EnqQueue, DeqQueue, Storage = \
-        create_queue_states(name, type, size, n_cores,
-                            overlap="sizeof(%s)" % type, type_mask=entry_mask_nic, dma_cache=dma_cache,
-                            declare=True, enq_lock=False, deq_lock=False)
-
     type = string_type(type)
     type_star = type + "*"
+    type_offset = "(int) &((%s) 0)->%s" % (type_star, owner)
+    checksum_offset = "(int) &((%s) 0)->%s" % (type_star, checksum)
 
-    copy = r'''
+    enq_all, deq_all, EnqQueue, DeqQueue, Storage = \
+        create_queue_states(name, type, size, n_cores,
+                            overlap="sizeof(%s)" % type, type_mask=entry_mask_nic, type_offset=type_offset, dma_cache=dma_cache,
+                            declare=True, enq_lock=False, deq_lock=False)
+
+
+    checksum_code = r'''
+    uint8_t checksum = 0;
+    uint8_t *data = (uint8_t*) x;
+    int checksum_size = %s;
+    int i;
+    for(i=0; i<checksum_size; i++)
+      checksum ^= *(data+i);
+    ''' % checksum_offset
+
+    copy = checksum_code + r'''
     int owner_size = sizeof(x->%s);
     %s content = &q->data[old];
     rte_memcpy(content, x, sizeof(struct tuple) - owner_size);
-    clflush_cache_range(content, sizeof(struct tuple) - owner_size);
+    //clflush_cache_range(content, sizeof(struct tuple) - owner_size);
     content->%s = x->%s & %s;
+    content->%s = checksum;
     __SYNC;
-    ''' % (owner, type_star, owner, owner, entry_mask)
+    ''' % (owner, type_star, owner, owner, entry_mask, checksum)
 
     atomic_src = r'''
     __SYNC;
@@ -730,14 +744,20 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner, owner_type, entry_m
             self.run_c(r'''
     (q_buffer buff) = inp();
     %s x = (%s) buff.entry;
-    if(x) x->%s = 0;
-    ''' % (type_star, type_star, owner))
+    if(x) {
+        x->%s = 0;
+        __SYNC;
+        x->%s = 0;
+        __SYNC;
+    }
+    ''' % (type_star, type_star, checksum, owner))
 
         def impl_cavium(self):
             self.run_c(r'''
     (q_buffer buff) = inp();
     %s x = (%s) buff.entry;
     if(x) {
+        x->%s = 0;
         x->%s = 0;
 #ifdef DMA_CACHE
         smart_dma_write(buff.qid, buff.addr, sizeof(%s), x);
@@ -746,7 +766,7 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner, owner_type, entry_m
         dma_free(x);
 #endif
     }
-            ''' % (type_star, type_star, owner, type, type))
+            ''' % (type_star, type_star, checksum, owner, type, type))
 
 
     return Enqueue, Dequeue, Release
