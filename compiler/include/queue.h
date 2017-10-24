@@ -243,7 +243,7 @@ static void dequeue_release(q_buffer buff, uint8_t flag_clean)
     __sync_synchronize();
 }
 
-static int create_dma_circular_queue(uint64_t addr, int size, int overlap, int (*ready_scan)(void*,int*, uint64_t), uint64_t typemask) { return 0; }
+static int create_dma_circular_queue(uint64_t addr, int size, int overlap, int (*ready_scan)(void*,int*, uint64_t)) { return 0; }
 static int entry_empty(void* buff, int* skip) { return 0; }
 static int entry_full(void* buff, int* skip) { return 0; }
 
