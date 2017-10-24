@@ -84,7 +84,7 @@ void tuple_send(struct tuple *t, struct executor *self)
 }
 
 int main(int argc, char *argv[]) {
-  printf("size(tuple) = %d\n", sizeof(struct tuple));
+  printf("size(tuple) = %d, %ld\n", sizeof(struct tuple), (uint64_t) &((struct tuple*) 0)->checksum);
     assert(argc > 1);
     int workerid = atoi(argv[1]);
     struct worker * workers = get_workers();

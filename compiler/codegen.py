@@ -522,11 +522,9 @@ def geneneate_extra_code(graph):
 
     for code in extra_code.values():
         for process in graph.processes:
-            device = graph.process2device[process]
-            if device == target.CAVIUM:
-                name = process + '.c'
-                with open(name, 'a') as f, redirect_stdout(f):
-                    print code
+            name = process + '.c'
+            with open(name, 'a') as f, redirect_stdout(f):
+                print code
 
 
 def generate_code(graph, ext, testing=None, include=None, include_h=None, init=None):

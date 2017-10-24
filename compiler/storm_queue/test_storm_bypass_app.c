@@ -29,6 +29,8 @@ void executor_thread(void *arg) {
 #ifdef DEBUG_MP
 	printf("\ngot: task %d = %d, bypass %d\n", t->task, t->task & 0xffffff, from_bypass);
 #endif
+
+#ifdef CHECK
         assert(t != NULL);
 	if((t->task & 0xffffff) == 10 && strcmp(t->v[0].str, "golda"))
 	  printf(">>> task = %d, str = %s, bypass = %d\n", t->task & 0xffffff, t->v[0].str, from_bypass);
@@ -41,11 +43,14 @@ void executor_thread(void *arg) {
 
 	//	if((t->task & 0xffffff) == 12 || (t->task & 0xffffff) == 13)
 	//printf("task = %d, str = %s\n", t->task & 0xffffff, t->v[0].str);
+#endif
 
         char* s = t->v[0].str;
+#ifdef CHECK
 	if(!(strcmp(s, "nathan")==0 || strcmp(s, "golda")==0 || strcmp(s, "bertels")==0 || strcmp(s, "jackson")==0))
 	  printf("BAD: %s, len = %d\n", s, strlen(s)); 
         assert(strcmp(s, "nathan")==0 || strcmp(s, "golda")==0 || strcmp(s, "bertels")==0 || strcmp(s, "jackson")==0);
+#endif
       //if(t != NULL) {
         uint64_t starttime = rdtsc();
         self->execute(t, self);
