@@ -483,7 +483,7 @@ class Port:
 
 
 class State:
-    def __init__(self, name, content, init=None, declare=True, fields=None, mapping=None, packed=True):
+    def __init__(self, name, content, init=None, declare=True, fields=None, mapping=None, packed=True, extra_code={}):
         self.name = name
         self.content = content
         self.init = init
@@ -491,6 +491,7 @@ class State:
         self.declare = declare
         self.mapping = mapping
         self.packed = packed
+        self.extra_code = extra_code
         if fields:
             self.fields = fields
         elif content is not None:

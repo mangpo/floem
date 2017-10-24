@@ -512,6 +512,23 @@ def generate_include(include, processes, ext):
                 print include
 
 
+def geneneate_extra_code(graph):
+    extra_code = {}
+    for state_name in graph.state_order:
+        state = graph.states[state_name]
+        for f in state.extra_code:
+            if f not in extra_code:
+                extra_code[f] = state.extra_code[f]
+
+    for code in extra_code.values():
+        for process in graph.processes:
+            device = graph.process2device[process]
+            if device == target.CAVIUM:
+                name = process + '.c'
+                with open(name, 'a') as f, redirect_stdout(f):
+                    print code
+
+
 def generate_code(graph, ext, testing=None, include=None, include_h=None, init=None):
     """
     Display C code to stdout
@@ -529,6 +546,8 @@ def generate_code(graph, ext, testing=None, include=None, include_h=None, init=N
     # Generate states.
     for state_name in graph.state_order:
         generate_state(graph.states[state_name], graph, ext)
+
+    geneneate_extra_code(graph)
 
     # Generate memory regions.
     #generate_memory_regions(graph, ext)

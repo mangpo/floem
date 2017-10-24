@@ -10,15 +10,15 @@ class circular_queue(State):
     clean = Field(Size)
     id = Field(Int)
 
-    def init(self, len=0, queue=0, dma_cache=True, overlap=0, ready_scan="NULL", type_mask=0, type_offset=0):
+    def init(self, len=0, queue=0, dma_cache=True, overlap=0, ready_scan="NULL"):
         self.len = len
         self.offset = 0
         self.queue = queue
         self.clean = 0
         self.declare = False
         if dma_cache:
-            self.id = "create_dma_circular_queue((uint64_t) {0}, sizeof({1}), {2}, {3}, {4}, {5})" \
-                .format(queue.name, queue.__class__.__name__, overlap, ready_scan, type_mask, type_offset)
+            self.id = "create_dma_circular_queue((uint64_t) {0}, sizeof({1}), {2}, {3})" \
+                .format(queue.name, queue.__class__.__name__, overlap, ready_scan)
         else:
             self.id = 0
 
@@ -31,7 +31,7 @@ class circular_queue_lock(State):
     id = Field(Int)
     #layout = [len, offset, queue, clean, lock]
 
-    def init(self, len=0, queue=0, dma_cache=True, overlap=0, ready_scan="NULL", type_mask=0):
+    def init(self, len=0, queue=0, dma_cache=True, overlap=0, ready_scan="NULL"):
         self.len = len
         self.offset = 0
         self.queue = queue
@@ -39,8 +39,8 @@ class circular_queue_lock(State):
         self.lock = lambda (x): 'qlock_init(&%s)' % x
         self.declare = False
         if dma_cache:
-            self.id = "create_dma_circular_queue((uint64_t) {0}, sizeof({1}), {2}, {3}, {4}, {5})" \
-                .format(queue.name, queue.__class__.__name__, overlap, ready_scan, type_mask, type_offset)
+            self.id = "create_dma_circular_queue((uint64_t) {0}, sizeof({1}), {2}, {3})" \
+                .format(queue.name, queue.__class__.__name__, overlap, ready_scan)
         else:
             self.id = 0
 
@@ -84,7 +84,7 @@ def get_field_name(state, field):
                 return s
 
 
-def create_queue_states(name, type, size, n_cores, overlap=0, type_mask=0, type_offset=0, dma_cache=True,
+def create_queue_states(name, type, size, n_cores, overlap=0, dma_cache=True, nameext="",
                         declare=True, enq_lock=False, deq_lock=False):
     prefix = "%s_" % name
 
@@ -104,9 +104,9 @@ def create_queue_states(name, type, size, n_cores, overlap=0, type_mask=0, type_
     else:
         deq = circular_queue
 
-    enq_infos = [enq(init=[size, storages[i], dma_cache, overlap, "entry_empty", type_mask, type_offset], declare=declare, packed=False)
+    enq_infos = [enq(init=[size, storages[i], dma_cache, overlap, "entry_empty" + nameext], declare=declare, packed=False)
                  for i in range(n_cores)]
-    deq_infos = [deq(init=[size, storages[i], dma_cache, overlap, "entry_full", type_mask, type_offset], declare=declare, packed=False)
+    deq_infos = [deq(init=[size, storages[i], dma_cache, overlap, "entry_full" + nameext], declare=declare, packed=False)
                  for i in range(n_cores)]
 
     class EnqueueCollection(State):
@@ -329,14 +329,42 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner, owner_type, entry_m
 
     type = string_type(type)
     type_star = type + "*"
-    type_offset = "(int) &((%s) 0)->%s" % (type_star, owner)
-    checksum_offset = "(int) &((%s) 0)->%s" % (type_star, checksum)
+    checksum_offset = "(uint64_t) &((%s) 0)->%s" % (type_star, checksum)
+    sanitized_name = '_' + type.replace(' ', '_')
 
     enq_all, deq_all, EnqQueue, DeqQueue, Storage = \
         create_queue_states(name, type, size, n_cores,
-                            overlap="sizeof(%s)" % type, type_mask=entry_mask_nic, type_offset=type_offset, dma_cache=dma_cache,
+                            overlap="sizeof(%s)" % type, dma_cache=dma_cache, nameext=sanitized_name,
                             declare=True, enq_lock=False, deq_lock=False)
 
+    # Extra functions
+    entry_empty = r'''
+int entry_empty%s(void* buff, int* skip) {
+  %s dummy = (%s) buff;
+  *skip = sizeof(%s); // always return size
+  return (dummy->%s == 0)? 1:0;
+}
+    ''' % (sanitized_name, type_star, type_star, type, owner)
+
+    entry_full = r'''
+int entry_full%s(void* buff, int* skip) {
+  %s dummy = (%s) buff;
+  *skip = sizeof(%s);
+
+  if(dummy->%s & %s) {
+    uint8_t checksum = dummy->%s;
+    uint64_t checksum_size = %s;
+    uint8_t* p = (uint8_t*) buff;
+    uint32_t i;
+    for(i=0; i<checksum_size; i++)
+      checksum ^= *(p+i);
+    return (checksum == 0)? 1: 0;
+  }
+  return 0;
+}
+    ''' % (sanitized_name, type_star, type_star, type, owner, entry_mask_nic, checksum, checksum_offset)
+
+    Storage.extra_code[type] = entry_empty + entry_full
 
     checksum_code = r'''
     uint8_t checksum = 0;

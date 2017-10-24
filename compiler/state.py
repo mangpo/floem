@@ -92,6 +92,7 @@ class State(object):
     defined = False
     obj_id = 0
     layout = None
+    extra_code = {}
 
     def __init__(self, name=None, init=[], declare=True, instance=True, packed=True):
         if name is None:
@@ -118,7 +119,7 @@ class State(object):
                 State.class_id += 1
             State.all_defined.add(self.__class__.__name__)
             decl_append(graph.State(self.__class__.__name__, content, class_init,
-                                    self.declare, fields, mapping, self.packed))
+                                    self.declare, fields, mapping, self.packed, self.__class__.extra_code))
 
         if instance:
             scope_append(program.StateInstance(self.__class__.__name__, name, init_code))
