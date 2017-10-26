@@ -157,9 +157,11 @@ def get_fill_entry_src(g, deq_thread, enq_thread, live, special, extras,
             if special_t == "shared":
                 fill_src += "    e->%s = %s((uintptr_t) state.%s - (uintptr_t) %s);\n" % (field, htonp, var, info)
             elif special_t == "copysize":
-                assert t == "void*" or common.sizeof(t[:-1]) == 1, \
-                    "Smart queue: field '%s' of per-packet state '%s' must be a pointer to uint8_t array." % \
-                    (field, pipeline_state)
+                assert t[-1] == "*", \
+                    "Smart queue: field '%s' of per-packet state '%s' must be a pointer" % (field, pipeline_state)
+                # assert t == "void*" or common.sizeof(t[:-1]) == 1, \
+                #     "Smart queue: field '%s' of per-packet state '%s' must be a pointer to uint8_t array." % \
+                #     (field, pipeline_state)
                 fill_src += "    memcpy(e->%s, state.%s, %s);\n" % (field, var, info)
         else:
             try:
@@ -209,9 +211,11 @@ def get_save_state_src(g, deq_thread, enq_thread, live, special, extras,
                 save_src += "  state.{0} = ({3}) ((uintptr_t) {1} + {2}(state.entry->{0}));\n". \
                     format(name, info, htonp, t)
             elif special_t == "copysize":
-                assert t == "void*" or common.sizeof(t[:-1]) == 1, \
-                    "Smart queue: field '%s' of per-packet state '%s' must be a pointer to uint8_t array." % \
-                    (field, pipeline_state)
+                assert t[-1] == "*", \
+                    "Smart queue: field '%s' of per-packet state '%s' must be a pointer" % (field, pipeline_state)
+                # assert t == "void*" or common.sizeof(t[:-1]) == 1, \
+                #     "Smart queue: field '%s' of per-packet state '%s' must be a pointer to uint8_t array." % \
+                #     (field, pipeline_state)
                 save_src += "  state.{0} = state.entry->{0};\n".format(name)
         elif byte_reverse:
             try:
