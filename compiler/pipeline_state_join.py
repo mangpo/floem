@@ -134,11 +134,15 @@ def get_node_before_release(name, g, lives, prefix, vis):
     return node
 
 
-def duplicate_subgraph(g, node_list, parents):
+def duplicate_subgraph(g, node_list):
     suffix = "_dup"
     for inst_name in node_list:
         instance = g.instances[inst_name]
-        n = len(parents[inst_name])
+
+        if len(instance.input2ele) == 0:
+            continue
+
+        n = len(instance.input2ele.values()[0])
         for i in range(n):
             g.copy_node_and_element(inst_name, suffix + str(i))
 
@@ -146,7 +150,7 @@ def duplicate_subgraph(g, node_list, parents):
             l = instance.input2ele[inport]
             assert len(l) == n, "len(l) != n"
             for i in range(n):
-                prev_name, prev_port = l[0]  # index = 0 because l is mutated.
+                prev_name, prev_port = l[0]  # index = 0 because l is mutated (first element is popped.
                 g.disconnect(prev_name, inst_name, prev_port, inport)
                 g.connect(prev_name, inst_name + suffix + str(i), prev_port, inport)
 

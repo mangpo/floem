@@ -526,10 +526,10 @@ def duplicate_overlapped(g, save_inst_names):
 
         for x in reversed(subgraph):
             if x not in global_list:
-                global_list.insert(0, x)
+                global_list.append(x)
 
     filtered_list = [x for x in global_list if (len(parents[x]) > 1) and (x not in g.API_outputs)]
-    duplicate_subgraph(g, filtered_list, parents)
+    duplicate_subgraph(g, filtered_list)
 
 
 def order_smart_queues(name, vis, order, g):

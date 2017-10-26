@@ -352,9 +352,9 @@ class Graph:
     def find_subgraph_list(self, root, subgraph):
         instance = self.instances[root]
         if instance.name not in subgraph:
-            subgraph.append(instance.name)
             for inst,port in instance.output2ele.values():
                 self.find_subgraph_list(inst, subgraph)
+            subgraph.append(instance.name)
         return subgraph
 
     def find_subgraph(self, root, subgraph):

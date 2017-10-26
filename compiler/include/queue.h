@@ -115,6 +115,7 @@ static q_buffer enqueue_alloc(circular_queue* q, size_t len, void(*clean)(q_buff
 
     /* Align to header size */
     __sync_synchronize();
+    printf("enqueue_alloc: len = %ld -> %ld\n", len, (len + ALIGN - 1) & (~(ALIGN - 1)));
     len = (len + ALIGN - 1) & (~(ALIGN - 1));
     eq = q->queue;
     eqe_off = off = q->offset;
@@ -211,6 +212,7 @@ static q_buffer dequeue_get(circular_queue* q) {
   q_entry* eqe = q->queue + q->offset;
   //if(eqe->flags) printf("dequeue_get: q = %p, offset = %ld, flags = %d\n", q->queue, q->offset, eqe->flags);
   if((eqe->flags & FLAG_MASK) == FLAG_OWN) {
+    printf("dequeue_get: len = %ld\n", eqe->len);
     check_flag_val(eqe, q->offset, "dequeue_get (before)", 1);
     
     eqe->flags |= FLAG_INUSE;

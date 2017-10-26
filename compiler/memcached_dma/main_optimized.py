@@ -63,7 +63,8 @@ class MyState(State):
     dst_mac = Field('struct eth_addr')
     src_ip = Field('struct ip_addr')
     src_port = Field(Uint(16))
-    resp = Field(Pointer(iokvs_message), copysize='sizeof(iokvs_message) + 4 + state.it->vallen')  # TODO: make sure vallen is set
+    resp_size = Field(Size)
+    resp = Field(Pointer(iokvs_message), copysize='state.resp_size')  # TODO: make sure vallen is set
 
 class Schedule(State):
     core = Field(Size)
@@ -287,6 +288,7 @@ output { out(); }
             self.run_c(r'''
 //printf("size get\n");
     size_t msglen = sizeof(iokvs_message) + 4 + state.it->vallen;
+    state.resp_size = msglen;
     state.vallen = state.it->vallen;
     state.keylen = state.it->keylen;
     state.it_addr;  // to make state.addr live.
@@ -365,9 +367,10 @@ output { out(msglen, m, pkt_buff); }
 
         def impl(self):
             self.run_c(r'''
-//printf("size get null\n");
-            size_t msglen = sizeof(iokvs_message) + 4;
-            output { out(msglen); }
+    //printf("size get null\n");
+    size_t msglen = sizeof(iokvs_message) + 4;
+    state.resp_size = msglen;
+    output { out(msglen); }
             ''')
 
     class PrepareGetNullResp(Element):
@@ -401,8 +404,9 @@ output { out(msglen, m, pkt_buff); }
 
         def impl(self):
             self.run_c(r'''
-            size_t msglen = sizeof(iokvs_message) + 4;
-            output { out(msglen); }
+    size_t msglen = sizeof(iokvs_message) + 4;
+    state.resp_size = msglen;
+    output { out(msglen); }
             ''')
 
     class SizePktBuffSetResp(Element):
@@ -538,7 +542,7 @@ output { out(msglen, m, pkt_buff); }
         def impl(self):
             self.run_c(r'''
 iokvs_message* resp = state.resp;
-size_t msglen = sizeof(iokvs_message) + resp->mcr.request.bodylen;
+size_t msglen = state.resp_size; //sizeof(iokvs_message) + resp->mcr.request.bodylen;
 
 output { out(msglen, (void*) resp, NULL); }
             ''')  # TODO: dpdk supports buf = NULL; if buf == NULL: create buffer and copy

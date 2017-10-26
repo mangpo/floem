@@ -223,19 +223,6 @@ def rename_entry_references(g, src2fields):
 def code_change(instance):
     return len(instance.uses) > 0
 
-# def duplicate_instances(g):
-#     parents = {}
-#     for instance in g.instances.values():
-#         parents[instance.name] = []
-#
-#     for start_name in g.pipeline_states:
-#         subgraph = set()
-#         g.find_subgraph(start_name, subgraph)
-#
-#         for inst_name in subgraph:
-#             parents[inst_name].append(start_name)
-#
-#     duplicate_instances_with_parents(g, parents, code_change)
 
 def duplicate_instances(g):
     parents = {}
@@ -251,10 +238,10 @@ def duplicate_instances(g):
 
         for x in reversed(subgraph):
             if x not in global_list:
-                global_list.insert(0, x)
+                global_list.append(x)
 
     filtered_list = [x for x in global_list if len(parents[x]) > 1 and code_change(g.instances[x])]
-    duplicate_subgraph(g, filtered_list, parents)
+    duplicate_subgraph(g, filtered_list)
 
 
 def insert_pipeline_states(g):
