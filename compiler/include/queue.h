@@ -115,7 +115,7 @@ static q_buffer enqueue_alloc(circular_queue* q, size_t len, void(*clean)(q_buff
 
     /* Align to header size */
     __sync_synchronize();
-    printf("enqueue_alloc: len = %ld -> %ld\n", len, (len + ALIGN - 1) & (~(ALIGN - 1)));
+    //printf("enqueue_alloc: len = %ld -> %ld\n", len, (len + ALIGN - 1) & (~(ALIGN - 1)));
     len = (len + ALIGN - 1) & (~(ALIGN - 1));
     eq = q->queue;
     eqe_off = off = q->offset;
@@ -212,7 +212,7 @@ static q_buffer dequeue_get(circular_queue* q) {
   q_entry* eqe = q->queue + q->offset;
   //if(eqe->flags) printf("dequeue_get: q = %p, offset = %ld, flags = %d\n", q->queue, q->offset, eqe->flags);
   if((eqe->flags & FLAG_MASK) == FLAG_OWN) {
-    printf("dequeue_get: len = %ld\n", eqe->len);
+    //printf("dequeue_get: len = %ld\n", eqe->len);
     check_flag_val(eqe, q->offset, "dequeue_get (before)", 1);
     
     eqe->flags |= FLAG_INUSE;
@@ -245,9 +245,7 @@ static void dequeue_release(q_buffer buff, uint8_t flag_clean)
     __sync_synchronize();
 }
 
-static int create_dma_circular_queue(uint64_t addr, int size, int overlap, int (*ready_scan)(void*,int*, uint64_t)) { return 0; }
-static int entry_empty(void* buff, int* skip) { return 0; }
-static int entry_full(void* buff, int* skip) { return 0; }
+static int create_dma_circular_queue(uint64_t addr, int size, int overlap, int (*ready_scan)(void*,int*)) { return 0; }
 
 #define mb() 	asm volatile("mfence":::"memory")
 #define CFLASH_SIZE 64
@@ -275,5 +273,14 @@ static void clflush_cache_range(void *vaddr, unsigned int size)
 
 	mb();
 }
+
+static int entry_empty_var(void* e, int* size) {
+  return 0;
+}
+
+static int entry_full_var(void* e, int* size) {
+  return 0;
+}
+
 
 #endif

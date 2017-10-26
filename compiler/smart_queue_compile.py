@@ -216,7 +216,7 @@ def get_save_state_src(g, deq_thread, enq_thread, live, special, extras,
                 # assert t == "void*" or common.sizeof(t[:-1]) == 1, \
                 #     "Smart queue: field '%s' of per-packet state '%s' must be a pointer to uint8_t array." % \
                 #     (field, pipeline_state)
-                save_src += "  state.{0} = state.entry->{0};\n".format(name)
+                save_src += "  state.{0} = ({1}) state.entry->{0};\n".format(name, t)
         elif byte_reverse:
             try:
                 t = mapping[var]

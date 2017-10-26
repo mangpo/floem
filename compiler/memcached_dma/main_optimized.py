@@ -3,8 +3,8 @@ import queue_smart2, net_real, library_dsl2
 from compiler import Compiler
 
 n_cores = 6
-nic_rx_threads = 2
-nic_tx_threads = 4
+nic_rx_threads = 4
+nic_tx_threads = 3
 
 class protocol_binary_request_header_request(State):
     magic = Field(Uint(8))
@@ -203,8 +203,10 @@ output { out(); }''')
             self.run_c(r'''
 int core = state.hash %s %d;;
 state.core = core;
-//printf("hash = %s, core = %s\n", state.hash, core);
-            output { out(); }''' % ('%', n_cores, '%d', '%d'))
+#ifdef DEBUG
+printf("hash = %s, keylen = %s, core = %s\n", state.pkt->mcr.request.keylen, state.hash, core);
+#endif
+            output { out(); }''' % ('%', n_cores, '%d', '%d', '%d'))
 
     ######################## hash ########################
 
@@ -224,7 +226,9 @@ output { out(); }
         def impl(self):
             self.run_c(r'''
 item* it = hasht_get(state.key, state.pkt->mcr.request.keylen, state.hash);
-//printf("hash get\n");
+#ifdef DEBUG
+            printf("hash get: keylen = %d, hash = %d\n", state.pkt->mcr.request.keylen, state.hash);
+#endif
 state.it = it;
 if(it) state.it_addr = it->addr;
 output switch { case it: out(); else: null(); }
@@ -233,7 +237,9 @@ output switch { case it: out(); else: null(); }
     class HashPut(ElementOneInOut):
         def impl(self):
             self.run_c(r'''
-//printf("hash put: state.it = %p\n", state.it);
+#ifdef DEBUG
+printf("hash put: state.it = %p\n", state.it);
+#endif
 hasht_put(state.it, NULL);
 output { out(); }
             ''')
@@ -275,7 +281,7 @@ output { out(); }
             self.run_c(r'''
     size_t size = inp();
     void* p = malloc(size);
-    output { out(p); }
+    output { out(size, p, NULL); }
             ''')
 
 
@@ -286,8 +292,8 @@ output { out(); }
 
         def impl(self):
             self.run_c(r'''
-//printf("size get\n");
     size_t msglen = sizeof(iokvs_message) + 4 + state.it->vallen;
+            //printf("size get: vallen = %d, size = %ld\n", state.it->vallen, msglen);
     state.resp_size = msglen;
     state.vallen = state.it->vallen;
     state.keylen = state.it->keylen;
@@ -367,8 +373,8 @@ output { out(msglen, m, pkt_buff); }
 
         def impl(self):
             self.run_c(r'''
-    //printf("size get null\n");
     size_t msglen = sizeof(iokvs_message) + 4;
+            //printf("size get null: size = %ld\n", msglen);
     state.resp_size = msglen;
     output { out(msglen); }
             ''')
@@ -405,6 +411,7 @@ output { out(msglen, m, pkt_buff); }
         def impl(self):
             self.run_c(r'''
     size_t msglen = sizeof(iokvs_message) + 4;
+            //printf("size set: size = %ld\n", msglen);
     state.resp_size = msglen;
     output { out(msglen); }
             ''')
@@ -467,7 +474,7 @@ output { out(msglen, m, pkt_buff); }
         m->ipv4._chksum = 0;
         //m->ipv4._chksum = rte_ipv4_cksum(&m->ipv4);  // TODO
 
-        m->udp.dest_port = state.src_port;
+        m->udp.dest_port = htons(state.src_port);
         m->udp.src_port = htons(11211);
         m->udp.len = htons(msglen - offsetof(iokvs_message, udp));
         m->udp.cksum = 0;
@@ -792,7 +799,7 @@ output switch { case segment: out(); else: null(); }
         it->keylen = nic_ntohs(state.pkt->mcr.request.keylen);
         it->addr = nic_ntohp(addr);
         memcpy(item_key(it), state.key, totlen);
-        dma_write(addr, sizeof(item) + totlen, it);
+        dma_write(addr, sizeof(item) + totlen, it, 1);
         dma_free(it);
         state.it = (item*) (addr - h->segaddr + h->segbase);
     }
@@ -926,16 +933,17 @@ output switch { case segment: out(); else: null(); }
 
         # Queue
         RxEnq, RxDeq, RxScan = queue_smart2.smart_queue("rx_queue", 32 * 1024, n_cores, 2,
-                                                        enq_output=True, enq_blocking=True, enq_atomic=True) # TODO: change this to False and make a seperate queue for full segment.
-        TxEnq, TxDeq, TxScan = queue_smart2.smart_queue("tx_queue", 32 * 1024, n_cores, 1, enq_blocking=True, enq_output=True, deq_atomic=True)
+                                                        enq_output=True, enq_blocking=True, enq_atomic=True)  # enq_blocking=False?
         rx_enq = RxEnq()
         rx_deq = RxDeq()
+
+        TxEnq, TxDeq, TxScan = queue_smart2.smart_queue("tx_queue", 32 * 1024, n_cores, 1, enq_blocking=True, enq_output=True, deq_atomic=True)
         tx_enq = TxEnq()
         tx_deq = TxDeq()
 
-        LogInEnq, LogInDeq, LogInScan = queue_smart2.smart_queue("log_in_queue", 1024, 1, 1,
+        LogInEnq, LogInDeq, LogInScan = queue_smart2.smart_queue("log_in_queue", 8 * 1024, 1, 1,
                                                                  enq_blocking=True, enq_atomic=True)
-        LogOutEnq, LogOutDeq, LogOutScan = queue_smart2.smart_queue("log_out_queue", 1024, 1, 1, enq_blocking=True, deq_atomic=True)
+        LogOutEnq, LogOutDeq, LogOutScan = queue_smart2.smart_queue("log_out_queue", 8 * 1024, 1, 1, enq_blocking=True, deq_atomic=True)
         log_in_enq = LogInEnq()
         log_in_deq = LogInDeq()
         log_out_enq = LogOutEnq()
@@ -1006,7 +1014,7 @@ output switch { case segment: out(); else: null(); }
                 hash_get.null >> main.SizeGetNullResp() >> main.Malloc() >> main.PrepareGetNullResp() >> prepare_header
 
                 # set
-                rx_deq.out[1] >> main.HashPut() >> main.Unref() >> main.SizeSetResp() >> main.Malloc() \
+                rx_deq.out[1] >> main.HashPut() >> main.SizeSetResp() >> main.Malloc() \
                 >> main.PrepareSetResp(configure=['PROTOCOL_BINARY_RESPONSE_SUCCESS']) >> prepare_header
 
                 prepare_header >> main.SaveResponse() >> tx_enq.inp[0]
@@ -1031,7 +1039,7 @@ output switch { case segment: out(); else: null(); }
         class nic_tx(InternalLoop):
             def impl(self):
                 scheduler = main.Scheduler()
-                to_net = net_real.ToNet('to_net', configure=['alloc'])
+                to_net = net_real.ToNet('to_net', configure=['from_net'])
                 display = main.PrintMsg()
                 hton = net_real.HTON(configure=['iokvs_message'])
                 extract_pkt = main.ExtractPkt()

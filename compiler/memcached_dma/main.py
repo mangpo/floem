@@ -448,7 +448,7 @@ output { out(msglen, m, pkt_buff); }
         m->ipv4._chksum = 0;
         //m->ipv4._chksum = rte_ipv4_cksum(&m->ipv4);  // TODO
 
-        m->udp.dest_port = state.src_port;
+        m->udp.dest_port = htons(state.src_port);
         m->udp.src_port = htons(11211);
         m->udp.len = htons(msglen - offsetof(iokvs_message, udp));
         m->udp.cksum = 0;
@@ -748,7 +748,7 @@ output switch { case segment: out(); else: null(); }
         it->keylen = nic_ntohs(state.pkt->mcr.request.keylen);
         it->addr = nic_ntohp(addr);
         memcpy(item_key(it), state.key, totlen);
-        dma_write(addr, sizeof(item) + totlen, it);
+        dma_write(addr, sizeof(item) + totlen, it, 1);
         dma_free(it);
         state.it = (item*) (addr - h->segaddr + h->segbase);
     }
@@ -880,9 +880,9 @@ output switch { case segment: out(); else: null(); }
         tx_deq = TxDeq()
         tx_scan = TxScan()
 
-        LogInEnq, LogInDeq, LogInScan = queue_smart2.smart_queue("log_in_queue", 1024, 1, 1,
+        LogInEnq, LogInDeq, LogInScan = queue_smart2.smart_queue("log_in_queue", 8 * 1024, 1, 1,
                                                                  enq_blocking=True, enq_atomic=True)
-        LogOutEnq, LogOutDeq, LogOutScan = queue_smart2.smart_queue("log_out_queue", 1024, 1, 1, enq_blocking=True, deq_atomic=True)
+        LogOutEnq, LogOutDeq, LogOutScan = queue_smart2.smart_queue("log_out_queue", 8 * 1024, 1, 1, enq_blocking=True, deq_atomic=True)
         log_in_enq = LogInEnq()
         log_in_deq = LogInDeq()
         log_out_enq = LogOutEnq()

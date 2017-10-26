@@ -10,7 +10,7 @@ class circular_queue(State):
     clean = Field(Size)
     id = Field(Int)
 
-    def init(self, len=0, queue=0, dma_cache=True, overlap=0, ready_scan="NULL"):
+    def init(self, len=0, queue=0, dma_cache=True, overlap=8, ready_scan="NULL"):
         self.len = len
         self.offset = 0
         self.queue = queue
@@ -85,7 +85,7 @@ def get_field_name(state, field):
 
 
 def create_queue_states(name, type, size, n_cores, overlap=0, dma_cache=True, nameext="",
-                        declare=True, enq_lock=False, deq_lock=False):
+                        declare=True, enq_lock=False, deq_lock=False, variable_size=False):
     prefix = "%s_" % name
 
     class Storage(State): data = Field(Array(type, size))
@@ -164,7 +164,7 @@ def queue_variable_size(name, size, n_cores, enq_blocking=False, deq_blocking=Fa
 
     enq_all, deq_all, EnqQueue, DeqQueue, Storage = \
         create_queue_states(name, Uint(8), size, n_cores,
-                            declare=False, enq_lock=enq_atomic, deq_lock=deq_atomic) # TODO: scan => clean
+                            declare=False, nameext="_var", enq_lock=enq_atomic, deq_lock=deq_atomic) # TODO: scan => clean
 
     class EnqueueAlloc(Element):
         this = Persistent(enq_all.__class__)
@@ -188,7 +188,11 @@ def queue_variable_size(name, size, n_cores, enq_blocking=False, deq_blocking=Fa
     }
 #endif
 ''' + r'''
-                        q_buffer buff = { NULL, 0 };
+#ifndef CAVIUM
+    q_buffer buff = { NULL, 0 };
+#else
+    q_buffer buff = { NULL, 0, 0 };
+#endif
                         while(buff.entry == NULL) {
                             buff = enqueue_alloc((circular_queue*) q, len, %s);
 #ifdef QUEUE_STAT
@@ -235,10 +239,14 @@ def queue_variable_size(name, size, n_cores, enq_blocking=False, deq_blocking=Fa
         def impl(self):
             noblock_noatom = "q_buffer buff = dequeue_get((circular_queue*) q);\n"
             block_noatom = r'''
-            q_buffer buff = { NULL, 0 };
-            while(buff.entry == NULL) {
-                buff = dequeue_get((circular_queue*) q);
-            }
+#ifndef CAVIUM
+    q_buffer buff = { NULL, 0 };
+#else
+    q_buffer buff = { NULL, 0, 0 };
+#endif
+    while(buff.entry == NULL) {
+        buff = dequeue_get((circular_queue*) q);
+    }
             '''
             noblock_atom = "qlock_lock(&q->lock);\n" + noblock_noatom + "qlock_unlock(&q->lock);\n"
             block_atom = "qlock_lock(&q->lock);\n" + block_noatom + "qlock_unlock(&q->lock);\n"

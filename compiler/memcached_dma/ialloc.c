@@ -145,7 +145,7 @@ uint64_t segment_item_alloc(uint64_t thisbase, uint64_t seglen, uint64_t* offset
     avail = seglen - *offset;
     //printf("avail = %ld\n", avail);
     if (avail == 0) {
-        return NULL;
+        return 0;
     } else if (avail < total) {
     // TODO: may need this?
 //        if (avail >= sizeof(item)) {
@@ -157,7 +157,7 @@ uint64_t segment_item_alloc(uint64_t thisbase, uint64_t seglen, uint64_t* offset
         // The following should be done on APP.
         //segment_item_free(h, avail);
         //h->offset += avail;
-        return NULL;
+        return 0;
     }
 
     /* Ordering here is important */

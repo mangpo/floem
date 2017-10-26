@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <arpa/inet.h>
 
 #include "iokvs.h"
 
@@ -17,9 +18,14 @@ void settings_init(char *argv[])
 }
 
 iokvs_message template = {
-  .ether = { .type = ETHERTYPE_IPv4 },
   .ipv4 = { ._v_hl = 0x45, ._ttl = 0x40, ._proto = 0x11},
+#ifndef CAVIUM
+  .ether = { .type = 0x0008 },
+  .mcudp = { .n_data = 0x0100 }
+#else
+  .ether = { .type = 0x0800 },
   .mcudp = { .n_data = 1 }
+#endif
 }; // CAVIUM
 
 iokvs_message* iokvs_template() {
