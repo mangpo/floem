@@ -44,7 +44,8 @@ class main(Pipeline):
         state.pkt = pkt;
         state.pkt_buff = buff;
 
-        static __thread uint32_t count = 1;
+        static __thread uint32_t count = 0;
+        count++;
 
         state.keylen = 32 + (count % 4) * 8;
         uint8_t* key = (uint8_t*) malloc(state.keylen);
@@ -106,6 +107,15 @@ class main(Pipeline):
         uint8_t* key = state.key;
         printf("keylen = %d, key = %d %d\n", state.keylen, key[0], key[state.keylen-1]);
         assert(key[0] == key[state.keylen-1]);
+        
+        static uint8_t last = 0;
+        if(key[0] > 0) {
+            printf("key = %d, last = %d\n", key[0], last);
+            assert(key[0] == last+1);
+        } else {
+            printf("key = %d, last = %d\n", key[0], last);
+            assert(last == 255);
+        }
                 ''')
 
         class run(InternalLoop):
