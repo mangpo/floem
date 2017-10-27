@@ -256,7 +256,7 @@ static void dequeue_release(q_buffer buff, uint8_t flag_clean)
 }
 
 static int create_dma_circular_queue(uint64_t addr, int size, int overlap, 
-				     int (*ready_scan)(void*,int*), int (*done_scan)(void*,int*)) 
+				     int (*ready_scan)(void*), int (*done_scan)(void*)) 
 { return 0; }
 
 #define mb() 	asm volatile("mfence":::"memory")

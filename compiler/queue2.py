@@ -350,26 +350,22 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner, owner_type, entry_m
 
     # Extra functions
     enqueue_ready = r'''
-int enqueue_ready%s(void* buff, int* skip) {
+int enqueue_ready%s(void* buff) {
   %s dummy = (%s) buff;
-  *skip = sizeof(%s); // always return size
-  return (dummy->%s == 0);
+  return (dummy->%s == 0)? sizeof(%s): 0;
 }
-    ''' % (sanitized_name, type_star, type_star, type, owner)
+    ''' % (sanitized_name, type_star, type_star, owner, type)
 
     enqueue_done = r'''
-    int enqueue_done%s(void* buff, int* skip) {
+    int enqueue_done%s(void* buff) {
       %s dummy = (%s) buff;
-      *skip = sizeof(%s); // always return size
-      return (dummy->%s != 0);
+      return (dummy->%s)? sizeof(%s): 0;
     }
-        ''' % (sanitized_name, type_star, type_star, type, owner)
+        ''' % (sanitized_name, type_star, type_star, owner, type)
 
     dequeue_ready = r'''
-int dequeue_ready%s(void* buff, int* skip) {
+int dequeue_ready%s(void* buff) {
   %s dummy = (%s) buff;
-  *skip = sizeof(%s);
-
   %s type = dummy->%s & %s;
   if(type && type == dummy->%s) {
     uint8_t checksum = dummy->%s;
@@ -378,19 +374,18 @@ int dequeue_ready%s(void* buff, int* skip) {
     uint32_t i;
     for(i=0; i<checksum_size; i++)
       checksum ^= *(p+i);
-    return (checksum == 0);
+    return (checksum == 0)? sizeof(%s): 0;
   }
   return 0;
 }
-    ''' % (sanitized_name, type_star, type_star, type, owner_type, owner, entry_mask_nic, owner, checksum, checksum_offset)
+    ''' % (sanitized_name, type_star, type_star, owner_type, owner, entry_mask_nic, owner, checksum, checksum_offset, type)
 
     dequeue_done = r'''
-    int dequeue_done%s(void* buff, int* skip) {
+    int dequeue_done%s(void* buff) {
       %s dummy = (%s) buff;
-      *skip = sizeof(%s); // always return size
-      return (dummy->%s == 0);
+      return (dummy->%s == 0)? sizeof(%s): 0;
     }
-        ''' % (sanitized_name, type_star, type_star, type, owner)
+        ''' % (sanitized_name, type_star, type_star, owner, type)
 
     Storage.extra_code[type] = enqueue_ready + enqueue_done + dequeue_ready + dequeue_done
 
@@ -407,6 +402,7 @@ int dequeue_ready%s(void* buff, int* skip) {
     int type_offset = %s;
     %s content = &q->data[old];
     rte_memcpy(content, x, type_offset);
+    __SYNC;
     clflush_cache_range(content, type_offset);
     content->%s = x->%s & %s;
     %s
@@ -479,8 +475,7 @@ int dequeue_ready%s(void* buff, int* skip) {
         assert((entry->%s & %s) != 0);
 #else
         // TODO: potential race condition here -- slow and fast thread grab the same entry!
-        int skip;
-        while(!dequeue_ready%s(entry, &skip)) dma_read_with_buf(addr, size, entry, 1);
+        while(!dequeue_ready%s(entry)) dma_read_with_buf(addr, size, entry, 1);
 #endif
         %s* x = entry;
         ''' % (sanitized_name, owner, entry_mask_nic, type)
@@ -728,8 +723,7 @@ int dequeue_ready%s(void* buff, int* skip) {
     if(entry) {
         assert((entry->%s & %s) != 0);
 #else
-    int skip;
-    if(dequeue_ready%s(entry, &skip)) {
+    if(dequeue_ready%s(entry)) {
 #endif
         x = entry;
         p->offset = (p->offset + 1) %s %d;
@@ -748,8 +742,7 @@ int dequeue_ready%s(void* buff, int* skip) {
 #else
     // TODO: potential race condition for non DMA_CACHE
 
-    int skip;
-    while(dequeue_ready%s(entry, &skip)) {
+    while(dequeue_ready%s(entry)) {
 #endif
         size_t new = (old + 1) %s %d;
         if(__sync_bool_compare_and_swap(&p->offset, old, new)) {
