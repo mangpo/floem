@@ -37,6 +37,8 @@ typedef struct {
 typedef struct {
     uint16_t flags;
     uint16_t len;
+    uint8_t checksum;
+    uint8_t pad;
 } __attribute__((packed)) q_entry;
 
 typedef struct {
@@ -198,10 +200,18 @@ static void enqueue_submit(q_buffer buff)
     q_entry *e = buff.entry;
     if(e) {
       	check_flag(e, -1, "enqueue_submit");
-
+        __sync_synchronize();
         e->flags = (e->flags & TYPE_MASK) | FLAG_OWN;
         //printf("enq_submit: entry = %p, len = %d\n", e, e->len);
         //__sync_fetch_and_or(&e->flags, FLAG_OWN);
+
+        e->checksum = e->pad = 0;
+        uint8_t checksum = 0;
+        uint8_t* p = (uint8_t*) e;
+        int i;
+        for(i=0; i<e->len; i++)
+            checksum ^= p[i];
+        e->checksum = checksum;
         __sync_synchronize();
     }
 }
@@ -281,6 +291,5 @@ static int entry_empty_var(void* e, int* size) {
 static int entry_full_var(void* e, int* size) {
   return 0;
 }
-
 
 #endif

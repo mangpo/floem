@@ -126,6 +126,7 @@ class ToNet(Element):
 #         ''')
 
 
+# Convert hton for fields in state_name if this element is on CPU.
 class HTON(Element):
     def configure(self, state_name):
         self.inp = Input(Size, "void *", "void *")

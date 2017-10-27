@@ -191,7 +191,6 @@ n_rx = 1
 n_tx = 1
 nic_rx('nic_rx', device=target.CAVIUM, cores=range(n_rx))
 nic_tx('nic_tx', device=target.CAVIUM, cores=[n_rx + x for x in range(n_tx)])
-#nic_rx('nic_rx', process='test_queue')
 run('run', process='app', cores=range(1))
 
 c = Compiler()

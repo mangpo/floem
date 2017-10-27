@@ -10,15 +10,15 @@ class circular_queue(State):
     clean = Field(Size)
     id = Field(Int)
 
-    def init(self, len=0, queue=0, dma_cache=True, overlap=8, ready_scan="NULL"):
+    def init(self, len=0, queue=0, dma_cache=True, overlap=8, ready="NULL", done="NULL"):
         self.len = len
         self.offset = 0
         self.queue = queue
         self.clean = 0
         self.declare = False
         if dma_cache:
-            self.id = "create_dma_circular_queue((uint64_t) {0}, sizeof({1}), {2}, {3})" \
-                .format(queue.name, queue.__class__.__name__, overlap, ready_scan)
+            self.id = "create_dma_circular_queue((uint64_t) {0}, sizeof({1}), {2}, {3}, {4})" \
+                .format(queue.name, queue.__class__.__name__, overlap, ready, done)
         else:
             self.id = 0
 
@@ -31,7 +31,7 @@ class circular_queue_lock(State):
     id = Field(Int)
     #layout = [len, offset, queue, clean, lock]
 
-    def init(self, len=0, queue=0, dma_cache=True, overlap=0, ready_scan="NULL"):
+    def init(self, len=0, queue=0, dma_cache=True, overlap=0, ready="NULL", done="NULL"):
         self.len = len
         self.offset = 0
         self.queue = queue
@@ -39,8 +39,8 @@ class circular_queue_lock(State):
         self.lock = lambda (x): 'qlock_init(&%s)' % x
         self.declare = False
         if dma_cache:
-            self.id = "create_dma_circular_queue((uint64_t) {0}, sizeof({1}), {2}, {3})" \
-                .format(queue.name, queue.__class__.__name__, overlap, ready_scan)
+            self.id = "create_dma_circular_queue((uint64_t) {0}, sizeof({1}), {2}, {3}, {4})" \
+                .format(queue.name, queue.__class__.__name__, overlap, ready, done)
         else:
             self.id = 0
 
@@ -104,9 +104,11 @@ def create_queue_states(name, type, size, n_cores, overlap=0, dma_cache=True, na
     else:
         deq = circular_queue
 
-    enq_infos = [enq(init=[size, storages[i], dma_cache, overlap, "entry_empty" + nameext], declare=declare, packed=False)
+    enq_infos = [enq(init=[size, storages[i], dma_cache, overlap, "enqueue_ready" + nameext, "enqueue_done" + nameext],
+                     declare=declare, packed=False)
                  for i in range(n_cores)]
-    deq_infos = [deq(init=[size, storages[i], dma_cache, overlap, "entry_full" + nameext], declare=declare, packed=False)
+    deq_infos = [deq(init=[size, storages[i], dma_cache, overlap, "dequeue_ready" + nameext, "dequeue_done" + nameext],
+                     declare=declare, packed=False)
                  for i in range(n_cores)]
 
     class EnqueueCollection(State):
@@ -346,16 +348,24 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner, owner_type, entry_m
                             declare=True, enq_lock=False, deq_lock=False)
 
     # Extra functions
-    entry_empty = r'''
-int entry_empty%s(void* buff, int* skip) {
+    enqueue_ready = r'''
+int enqueue_ready%s(void* buff, int* skip) {
   %s dummy = (%s) buff;
   *skip = sizeof(%s); // always return size
-  return (dummy->%s == 0)? 1:0;
+  return (dummy->%s == 0);
 }
     ''' % (sanitized_name, type_star, type_star, type, owner)
 
-    entry_full = r'''
-int entry_full%s(void* buff, int* skip) {
+    enqueue_done = r'''
+    int enqueue_done%s(void* buff, int* skip) {
+      %s dummy = (%s) buff;
+      *skip = sizeof(%s); // always return size
+      return (dummy->%s != 0);
+    }
+        ''' % (sanitized_name, type_star, type_star, type, owner)
+
+    dequeue_ready = r'''
+int dequeue_ready%s(void* buff, int* skip) {
   %s dummy = (%s) buff;
   *skip = sizeof(%s);
 
@@ -366,13 +376,21 @@ int entry_full%s(void* buff, int* skip) {
     uint32_t i;
     for(i=0; i<checksum_size; i++)
       checksum ^= *(p+i);
-    return (checksum == 0)? 1: 0;
+    return (checksum == 0);
   }
   return 0;
 }
     ''' % (sanitized_name, type_star, type_star, type, owner, entry_mask_nic, checksum, checksum_offset)
 
-    Storage.extra_code[type] = entry_empty + entry_full
+    dequeue_done = r'''
+    int dequeue_done%s(void* buff, int* skip) {
+      %s dummy = (%s) buff;
+      *skip = sizeof(%s); // always return size
+      return (dummy->%s == 0);
+    }
+        ''' % (sanitized_name, type_star, type_star, type, owner)
+
+    Storage.extra_code[type] = enqueue_ready + enqueue_done + dequeue_ready + dequeue_done
 
     checksum_code = r'''
     uint8_t checksum = 0;

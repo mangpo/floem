@@ -929,7 +929,6 @@ output switch { case segment: out(); else: null(); }
             ''')
 
     def impl(self):
-        #MemoryRegion('data_region', 2 * 1024 * 1024 * 512) #4 * 1024 * 512)
 
         # Queue
         RxEnq, RxDeq, RxScan = queue_smart2.smart_queue("rx_queue", 32 * 1024, n_cores, 2,

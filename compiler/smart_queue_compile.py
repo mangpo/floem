@@ -378,7 +378,7 @@ def compile_smart_queue(g, q, src2fields):
         # Create states
         content, special, mapping = get_entry_content(live, pipeline_state, g, src2fields)
         state_entry = State("entry_" + q.name + str(i),
-                            "uint16_t flags; uint16_t len; " + content)
+                            "uint16_t flags; uint16_t len; uint8_t checksum; uint8_t pad; " + content)
         state_pipeline = State("pipeline_" + q.name + str(i),
                                "q_buffer buffer; %s* entry;" % state_entry.name +
                                get_state_content(extras, pipeline_state, g, src2fields, special))
