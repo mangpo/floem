@@ -4,7 +4,7 @@ import target, queue2, net_real, library_dsl2
 
 MAX_ELEMS = 256 #64
 n_cores = 1
-data = 14 #88
+data = 13 #88
 
 Enq, Deq, DeqRelease = \
     queue2.queue_custom_owner_bit("rx_queue", "struct tuple", MAX_ELEMS, n_cores,
@@ -15,7 +15,7 @@ Enq, Deq, DeqRelease = \
 Enq2, Deq2, DeqRelease2 = \
     queue2.queue_custom_owner_bit("tx_queue", "struct tuple", MAX_ELEMS, n_cores,
                                   "task", Uint(32), "0xffffff00", "0x1",
-                                  enq_blocking=True, deq_atomic=False)
+                                  enq_blocking=True, deq_atomic=True)
                                   #enq_blocking=True, enq_atomic=True,
                                   #deq_atomic=True)
 
@@ -125,12 +125,30 @@ class Display(Element):
 #endif
 
 #if 0
+        if(task != last+1) printf("task = %d, last = %d\n", task, last);
         assert(task == last+1);
         last = task;
 #endif
     }
     output { out(buff); }
         ''')
+
+'''
+ CVMX_SHARED int64_t stat_count = 0;
+ CVMX_SHARED uint64_t lasttime = 0;
+
+
+        __sync_fetch_and_add64(&stat_count, 1);
+        size_t now = core_time_now_us();
+        __SYNC;
+        if(now - lasttime > 1000000) {
+          lasttime = now;
+          __SYNC;
+          printf("tuples/s = %ld\n", stat_count);
+          stat_count = 0;
+          __SYNC;
+        }
+'''
 
 class Free(Element):
     def configure(self):
@@ -199,6 +217,8 @@ struct tuple {
   uint32_t data[%d];
   uint32_t id;
   uint32_t task;
+  uint8_t checksum;
+  uint8_t pad[3];
 } __attribute__ ((packed));
 
 ''' % data

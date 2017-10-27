@@ -255,7 +255,9 @@ static void dequeue_release(q_buffer buff, uint8_t flag_clean)
     __sync_synchronize();
 }
 
-static int create_dma_circular_queue(uint64_t addr, int size, int overlap, int (*ready_scan)(void*,int*)) { return 0; }
+static int create_dma_circular_queue(uint64_t addr, int size, int overlap, 
+				     int (*ready_scan)(void*,int*), int (*done_scan)(void*,int*)) 
+{ return 0; }
 
 #define mb() 	asm volatile("mfence":::"memory")
 #define CFLASH_SIZE 64
