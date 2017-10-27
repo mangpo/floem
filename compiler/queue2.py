@@ -394,22 +394,23 @@ int dequeue_ready%s(void* buff, int* skip) {
 
     checksum_code = r'''
     uint8_t checksum = 0;
-    uint8_t *data = (uint8_t*) x;
+    uint8_t *data = (uint8_t*) content;
     int checksum_size = %s;
     int i;
     for(i=0; i<checksum_size; i++)
       checksum ^= *(data+i);
     ''' % checksum_offset
 
-    copy = checksum_code + r'''
+    copy = r'''
     int owner_size = sizeof(x->%s);
     %s content = &q->data[old];
     rte_memcpy(content, x, sizeof(struct tuple) - owner_size);
     //clflush_cache_range(content, sizeof(struct tuple) - owner_size);
     content->%s = x->%s & %s;
+    %s
     content->%s = checksum;
     __SYNC;
-    ''' % (owner, type_star, owner, owner, entry_mask, checksum)
+    ''' % (owner, type_star, owner, owner, entry_mask, checksum_code, checksum)
 
     atomic_src = r'''
     __SYNC;
