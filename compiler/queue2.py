@@ -479,11 +479,11 @@ int dequeue_ready%s(void* buff, int* skip) {
         assert((entry->%s & %s) != 0);
 #else
         // TODO: potential race condition here -- slow and fast thread grab the same entry!
-
-        while((entry->%s & %s) == 0) dma_read_with_buf(addr, size, entry, 1);
+        int skip;
+        while(!dequeue_ready%s(entry, &skip)) dma_read_with_buf(addr, size, entry, 1);
 #endif
         %s* x = entry;
-        ''' % (owner, entry_mask_nic, owner, entry_mask_nic, type)
+        ''' % (sanitized_name, owner, entry_mask_nic, type)
 
     inc_offset = "p->offset = (p->offset + 1) %s %d;\n" % ('%', size)
 
@@ -728,7 +728,8 @@ int dequeue_ready%s(void* buff, int* skip) {
     if(entry) {
         assert((entry->%s & %s) != 0);
 #else
-    if((entry->%s & %s) != 0) {
+    int skip;
+    if(dequeue_ready%s(entry, &skip)) {
 #endif
         x = entry;
         p->offset = (p->offset + 1) %s %d;
@@ -737,7 +738,7 @@ int dequeue_ready%s(void* buff, int* skip) {
         dma_free(entry);
 #endif
     }
-    ''' % (type_star, owner, entry_mask_nic, owner, entry_mask_nic, '%', size)
+    ''' % (type_star, owner, entry_mask_nic, sanitized_name, '%', size)
 
             noblock_atom = "size_t old = p->offset;\n" + init_read_cvm + r'''
     %s x = NULL;
@@ -747,7 +748,8 @@ int dequeue_ready%s(void* buff, int* skip) {
 #else
     // TODO: potential race condition for non DMA_CACHE
 
-    while((entry->%s & %s) != 0) {
+    int skip;
+    while(dequeue_ready%s(entry, &skip)) {
 #endif
         size_t new = (old + 1) %s %d;
         if(__sync_bool_compare_and_swap(&p->offset, old, new)) {
@@ -769,7 +771,7 @@ int dequeue_ready%s(void* buff, int* skip) {
         dma_free(entry);
 #endif
     }
-    ''' % (type_star, owner, entry_mask_nic, '%', size, owner, entry_mask_nic)
+    ''' % (type_star, sanitized_name, '%', size, owner, entry_mask_nic)
 
             block_noatom = "size_t old = p->offset;\n" + init_read_cvm + wait_then_get_cvm + inc_offset
 
