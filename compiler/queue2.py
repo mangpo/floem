@@ -407,7 +407,7 @@ int dequeue_ready%s(void* buff, int* skip) {
     int type_offset = %s;
     %s content = &q->data[old];
     rte_memcpy(content, x, type_offset);
-    //clflush_cache_range(content, type_offset);
+    clflush_cache_range(content, type_offset);
     content->%s = x->%s & %s;
     %s
     content->%s = checksum;
