@@ -340,6 +340,7 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner, owner_type, entry_m
     type = string_type(type)
     type_star = type + "*"
     checksum_offset = "(uint64_t) &((%s) 0)->%s" % (type_star, checksum)
+    type_offset = "&((%s) 0)->%s" % (type_star, owner)
     sanitized_name = '_' + type.replace(' ', '_')
 
     enq_all, deq_all, EnqQueue, DeqQueue, Storage = \
@@ -369,7 +370,8 @@ int dequeue_ready%s(void* buff, int* skip) {
   %s dummy = (%s) buff;
   *skip = sizeof(%s);
 
-  if(dummy->%s & %s) {
+  %s type = dummy->%s & %s;
+  if(type && type == dummy->%s) {
     uint8_t checksum = dummy->%s;
     uint64_t checksum_size = %s;
     uint8_t* p = (uint8_t*) buff;
@@ -380,7 +382,7 @@ int dequeue_ready%s(void* buff, int* skip) {
   }
   return 0;
 }
-    ''' % (sanitized_name, type_star, type_star, type, owner, entry_mask_nic, checksum, checksum_offset)
+    ''' % (sanitized_name, type_star, type_star, type, owner_type, owner, entry_mask_nic, owner, checksum, checksum_offset)
 
     dequeue_done = r'''
     int dequeue_done%s(void* buff, int* skip) {
@@ -402,15 +404,15 @@ int dequeue_ready%s(void* buff, int* skip) {
     ''' % checksum_offset
 
     copy = r'''
-    int owner_size = sizeof(x->%s);
+    int type_offset = %s;
     %s content = &q->data[old];
-    rte_memcpy(content, x, sizeof(struct tuple) - owner_size);
-    //clflush_cache_range(content, sizeof(struct tuple) - owner_size);
+    rte_memcpy(content, x, type_offset);
+    //clflush_cache_range(content, type_offset);
     content->%s = x->%s & %s;
     %s
     content->%s = checksum;
     __SYNC;
-    ''' % (owner, type_star, owner, owner, entry_mask, checksum_code, checksum)
+    ''' % (type_offset, type_star, owner, owner, entry_mask, checksum_code, checksum)
 
     atomic_src = r'''
     __SYNC;
