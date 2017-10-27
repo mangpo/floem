@@ -2,12 +2,14 @@ from dsl2 import *
 import graph_ir
 
 
-def smart_queue(name, size, n_cores, n_cases, enq_blocking=False, deq_blocking=False,
+def smart_queue(name, size, n_cores, n_cases,
+                overlap=0,
+                enq_blocking=False, deq_blocking=False,
                 enq_atomic=False, deq_atomic=False, clean=False,
                 enq_output=False):
     prefix = name + "_"
     queue = graph_ir.Queue(name, size, n_cores, n_cases, enq_blocking=enq_blocking, deq_blocking=deq_blocking,
-                           enq_atomic=enq_atomic, deq_atomic=deq_atomic, enq_output=enq_output)
+                           enq_atomic=enq_atomic, deq_atomic=deq_atomic, enq_output=enq_output, overlap=overlap)
 
     class Enqueue(Element):
         def configure(self):

@@ -132,7 +132,8 @@ def create_queue_states(name, type, size, n_cores, overlap=0, dma_cache=True, na
 
 
 def queue_variable_size(name, size, n_cores, enq_blocking=False, deq_blocking=False, enq_atomic=False, deq_atomic=False,
-                        clean=False, core=False):
+                        clean=False, core=False,
+                        dma_cache=True, overlap=0):
     """
     :param name: queue name
     :param size: number of bytes
@@ -166,7 +167,8 @@ def queue_variable_size(name, size, n_cores, enq_blocking=False, deq_blocking=Fa
 
     enq_all, deq_all, EnqQueue, DeqQueue, Storage = \
         create_queue_states(name, Uint(8), size, n_cores,
-                            declare=False, nameext="_var", enq_lock=enq_atomic, deq_lock=deq_atomic) # TODO: scan => clean
+                            overlap=overlap, dma_cache=dma_cache, nameext="_var",
+                            declare=False, enq_lock=enq_atomic, deq_lock=deq_atomic) # TODO: scan => clean
 
     class EnqueueAlloc(Element):
         this = Persistent(enq_all.__class__)

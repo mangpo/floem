@@ -98,11 +98,12 @@ def find_pipeline_state(g, instance):
             return state
 
 
-def create_queue(name, size, n_cores, enq_blocking, deq_blocking, enq_atomic, deq_atomic, clean, core):
+def create_queue(name, size, n_cores, enq_blocking, deq_blocking, enq_atomic, deq_atomic, clean, core, overlap):
     workspace.push_decl()
     workspace.push_scope(name)
     EnqAlloc, EnqSubmit, DeqGet, DeqRelease, clean = \
-        queue2.queue_variable_size(name, size, n_cores, enq_blocking, deq_blocking, enq_atomic, deq_atomic, clean, core)
+        queue2.queue_variable_size(name, size, n_cores, enq_blocking, deq_blocking, enq_atomic, deq_atomic, clean, core,
+                                   overlap=overlap)
     EnqAlloc(create=False)
     EnqSubmit(create=False)
     DeqGet(create=False)
@@ -251,7 +252,7 @@ def compile_smart_queue(g, q, src2fields):
 
     g_add, enq_alloc, enq_submit, deq_get, deq_release, clean = \
         create_queue(q.name, q.size, q.n_cores, enq_blocking=q.enq_blocking, deq_blocking=q.deq_blocking,
-                     enq_atomic=q.enq_atomic, deq_atomic=q.deq_atomic, clean=q.clean, core=True)
+                     enq_atomic=q.enq_atomic, deq_atomic=q.deq_atomic, clean=q.clean, core=True, overlap=q.overlap)
     g.merge(g_add)
 
     deq_types = ["q_buffer", "size_t"]

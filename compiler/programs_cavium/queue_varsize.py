@@ -22,8 +22,8 @@ class main(Pipeline):
     def impl(self):
         # Queue
         RxEnq, RxDeq, RxScan = queue_smart2.smart_queue("rx_queue", 32 * 1024, n_cores, 1,
-                                                        enq_output=True, enq_blocking=True,
-                                                        enq_atomic=True)
+                                                        overlap=64,
+                                                        enq_output=True, enq_blocking=True, enq_atomic=True)
         rx_enq = RxEnq()
         rx_deq = RxDeq()
 
@@ -53,6 +53,7 @@ class main(Pipeline):
         for(i=0; i<state.keylen; i++)
             key[i] = count;
         state.key = key;
+        state.core = 0;
 
         output { out(); }
                 ''')
