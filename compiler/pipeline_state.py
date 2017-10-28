@@ -426,8 +426,8 @@ def analyze_fields_liveness_instance(g, name, in_port):
         live = live.union(instance.liveness)
 
     # - kills + uses
+    live = live.union(instance.element.uses) # TODO: make sure this is okay. + uses before - defs
     live = kill_live(live, instance.element.defs) # live.difference(instance.element.defs)
-    live = live.union(instance.element.uses)
     uses = uses.union(instance.element.defs)
     uses = uses.union(instance.element.uses)
     instance.liveness = live

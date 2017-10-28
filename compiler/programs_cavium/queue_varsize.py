@@ -105,18 +105,41 @@ class main(Pipeline):
 
             def impl(self):
                 self.run_c(r'''
+        static __thread size_t count = 0;
+        count++;
+
         uint8_t* key = state.key;
+                //if(1) {
+        if(count % 1000 == 0) {
+                printf("count = %ld\n", count);
         printf("keylen = %d, key = %d %d\n", state.keylen, key[0], key[state.keylen-1]);
+                }
         assert(key[0] == key[state.keylen-1]);
         
+#if 0
         static uint8_t last = 0;
         if(key[0] > 0) {
+            if(key[0] != last+1)
             printf("key = %d, last = %d\n", key[0], last);
             assert(key[0] == last+1);
         } else {
+            if(last != 255)
             printf("key = %d, last = %d\n", key[0], last);
             assert(last == 255);
         }
+        last = key[0];
+#endif
+
+#if 0
+                static uint64_t lasttime = 0;
+                struct timeval now;
+                gettimeofday(&now, NULL);
+                if((now.tv_sec*1000000 + now.tv_usec) - lasttime >= 1000000) {
+                  lasttime = (now.tv_sec*1000000 + now.tv_usec);
+                  printf("%ld pkts/s\n", count);
+                  count = 0;
+                }
+#endif
                 ''')
 
         class run(InternalLoop):

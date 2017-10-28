@@ -60,22 +60,47 @@ typedef pthread_mutex_t lock_t;
 #define __sync_bool_compare_and_swap32(ptr, old, new) __sync_bool_compare_and_swap(ptr, old, new)
 #define __sync_bool_compare_and_swap64(ptr, old, new) __sync_bool_compare_and_swap(ptr, old, new)
 
+// Return 1 when entry is ready to read or being read.
+static int dequeue_ready_var(void* p) {
+  q_entry* e = p;
+  if(e->pad) return 0;
+  if((e->flags & 0xf0) != 0) return 0;
+
+  if((e->flags & FLAG_MASK) == FLAG_OWN) {
+    uint8_t* x = p;
+    uint8_t checksum = 0;
+    int i;
+    for(i=0; i<e->len; i++)
+      checksum ^= x[i];
+    return (checksum == 0)? e->len: 0;
+  }
+
+  return 0;
+}
+
+static inline int dequeue_done_var(void* e) { return 0; }
+static inline int enqueue_ready_var(void* e) { return 0; }
+static inline int enqueue_done_var(void* e) { return 0; }
+
+static void enqueue_submit(q_buffer buff);
 static void no_clean(q_buffer buff) {}
 
 static inline void check_flag(q_entry* e, int offset, const char *s) {
-#ifdef DEBUG
+#if 1 //def DEBUG
   if(e->flags & 0xf0f0) {
-    printf("%s: offset = %d, e = %p, e->flags = %d, e->len = %d\n", s, offset, e, e->flags, e->len);
+    printf("%s: offset = %d, e = %p, e->flags = %d, e->len = %d, checksum = %d, pad = %d\n", s, offset, e, e->flags, e->len, e->checksum, e->pad);
   }
   assert((e->flags & 0xf0f0) == 0);
 #endif
 }
 
 static inline void check_flag_val(q_entry* e, int offset, const char *s, uint8_t val) {
+#if 1 //def DEBUG
   uint8_t flag = e->flags & FLAG_MASK;
   if(flag != val)
     printf("%s: offset = %d, e = %p, e->flags = %d != %d\n", s, offset, e, flag, val);
   assert(flag == val);
+#endif
 }
 
 static void enqueue_clean(circular_queue* q, void(*clean_func)(q_buffer)) {
@@ -169,7 +194,10 @@ static q_buffer enqueue_alloc(circular_queue* q, size_t len, void(*clean)(q_buff
                 /* No entries wrapping around: create dummy entry from current
                  * entry and start fresh */
                 eqe->len = total;
-                eqe->flags = FLAG_OWN | TYPE_NOP;
+                //eqe->flags = FLAG_OWN | TYPE_NOP;
+		q_buffer buff = { eqe, 0 };
+		enqueue_submit(buff);  // need to fill checksum
+
                 eqe = eq;
                 eqe_off = off = 0;
                 total = 0;
@@ -221,8 +249,10 @@ static q_buffer dequeue_get(circular_queue* q) {
   assert(q->offset < q->len);
   q_entry* eqe = q->queue + q->offset;
   //if(eqe->flags) printf("dequeue_get: q = %p, offset = %ld, flags = %d\n", q->queue, q->offset, eqe->flags);
-  if((eqe->flags & FLAG_MASK) == FLAG_OWN) {
+  //if((eqe->flags & FLAG_MASK) == FLAG_OWN) {
+  if(dequeue_ready_var(eqe)) {
     //printf("dequeue_get: len = %ld\n", eqe->len);
+    check_flag(eqe, q->offset, "dequeue_get");
     check_flag_val(eqe, q->offset, "dequeue_get (before)", 1);
     
     eqe->flags |= FLAG_INUSE;
@@ -284,14 +314,6 @@ static void clflush_cache_range(void *vaddr, unsigned int size)
 	clflush(vend);
 
 	mb();
-}
-
-static int entry_empty_var(void* e, int* size) {
-  return 0;
-}
-
-static int entry_full_var(void* e, int* size) {
-  return 0;
 }
 
 #endif
