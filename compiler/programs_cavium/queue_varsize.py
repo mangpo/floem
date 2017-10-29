@@ -110,7 +110,7 @@ class main(Pipeline):
 
         uint8_t* key = state.key;
                 //if(1) {
-        if(count % 1000 == 0) {
+        if(count % 1000000 == 0) {
                 printf("count = %ld\n", count);
         printf("keylen = %d, key = %d %d\n", state.keylen, key[0], key[state.keylen-1]);
                 }

@@ -176,7 +176,7 @@ def get_fill_entry_src(g, deq_thread, enq_thread, live, special, extras,
             except common.UnkownType:
                 fill_src += "    e->%s = state.%s;\n" % (field, var)
 
-    fill_src += "    e->flags |= %s(%d << TYPE_SHIFT);\n" % (htons, i + 1)
+    fill_src += "    e->task = %d;\n" % (i + 1)
     fill_src += "  }" # end if(e)
     if i == 2:
         fill_src += r'''
@@ -267,10 +267,10 @@ def compile_smart_queue(g, q, src2fields):
        (q_buffer buff, size_t core) = in();
         q_entry* e = buff.entry;
         int type = -1;
-        if (e != NULL) type = (%s(e->flags) & TYPE_MASK) >> TYPE_SHIFT;
+        if (e != NULL) type = e->task;
         output switch {
             %s
-        }''' % (htons, src_cases))
+        }''' % src_cases)
 
     src_cases = ""
     for i in range(q.n_cases):
@@ -280,10 +280,10 @@ def compile_smart_queue(g, q, src2fields):
         (q_buffer buff) = in();
         q_entry* e = buff.entry;
         uint16_t type = 0;
-        if (e != NULL) type = (%s(e->flags) & TYPE_MASK) >> TYPE_SHIFT;
+        if (e != NULL) type = e->task;
         output switch {
             %s
-        }''' % (htons, src_cases))
+        }''' % src_cases)
 
     g.addElement(classify_ele)
     deq_get_inst = deq_get(q.deq.name + "_get", create=False).instance
@@ -379,7 +379,7 @@ def compile_smart_queue(g, q, src2fields):
         # Create states
         content, special, mapping = get_entry_content(live, pipeline_state, g, src2fields)
         state_entry = State("entry_" + q.name + str(i),
-                            "uint16_t flags; uint16_t len; uint8_t checksum; uint8_t pad; " + content)
+                            "uint8_t flag; uint8_t task; uint16_t len; uint8_t checksum; uint8_t pad; " + content)
         state_pipeline = State("pipeline_" + q.name + str(i),
                                "q_buffer buffer; %s* entry;" % state_entry.name +
                                get_state_content(extras, pipeline_state, g, src2fields, special))

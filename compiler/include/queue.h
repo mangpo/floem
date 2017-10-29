@@ -35,7 +35,8 @@ typedef struct {
 } circular_queue_lock;
 
 typedef struct {
-    uint16_t flags;
+    uint8_t flag;
+    uint8_t task;
     uint16_t len;
     uint8_t checksum;
     uint8_t pad;
@@ -64,9 +65,9 @@ typedef pthread_mutex_t lock_t;
 static int dequeue_ready_var(void* p) {
   q_entry* e = p;
   if(e->pad) return 0;
-  if((e->flags & 0xf0) != 0) return 0;
+  if((e->flag & 0xf0) != 0) return 0;
 
-  if((e->flags & FLAG_MASK) == FLAG_OWN) {
+  if(e->flag == FLAG_OWN) {
     uint8_t* x = p;
     uint8_t checksum = 0;
     /*
@@ -89,18 +90,18 @@ static void no_clean(q_buffer buff) {}
 
 static inline void check_flag(q_entry* e, int offset, const char *s) {
 #if 1 //def DEBUG
-  if(e->flags & 0xf0f0) {
-    printf("%s: offset = %d, e = %p, e->flags = %d, e->len = %d, checksum = %d, pad = %d\n", s, offset, e, e->flags, e->len, e->checksum, e->pad);
+  if(e->flag & 0xf0) {
+    printf("%s: offset = %d, e = %p, e->flag = %d, e->len = %d, checksum = %d, pad = %d\n", s, offset, e, e->flag, e->len, e->checksum, e->pad);
   }
-  assert((e->flags & 0xf0f0) == 0);
+  assert((e->flag & 0xf0) == 0);
 #endif
 }
 
 static inline void check_flag_val(q_entry* e, int offset, const char *s, uint8_t val) {
 #if 1 //def DEBUG
-  uint8_t flag = e->flags & FLAG_MASK;
+  uint8_t flag = e->flag;
   if(flag != val)
-    printf("%s: offset = %d, e = %p, e->flags = %d != %d\n", s, offset, e, flag, val);
+    printf("%s: offset = %d, e = %p, e->flag = %d != %d\n", s, offset, e, flag, val);
   assert(flag == val);
 #endif
 }
@@ -119,12 +120,12 @@ static void enqueue_clean(circular_queue* q, void(*clean_func)(q_buffer)) {
         eqe = (q_entry *) ((uintptr_t) eq + clean);
 	check_flag(eqe, clean, "clean");
 	__sync_synchronize();
-        if ((eqe->flags & FLAG_MASK) != FLAG_CLEAN) {
+        if (eqe->flag != FLAG_CLEAN) {
             break;
         }
         q_buffer temp = { eqe, 0 };
         clean_func(temp);
-        eqe->flags = 0;
+        eqe->flag = 0;
 	__sync_synchronize();
         clean = (clean + eqe->len) % qlen;
         assert(clean < qlen);
@@ -137,7 +138,7 @@ static void enqueue_clean(circular_queue* q, void(*clean_func)(q_buffer)) {
 static q_buffer enqueue_alloc(circular_queue* q, size_t len, void(*clean)(q_buffer)) {
 
   //printf("enq: queue = %p\n", q->queue);
-    volatile uint16_t *flags;
+    volatile uint8_t *flag;
     q_entry *eqe, *dummy;
     size_t off, qlen, total, elen, eqe_off;
     void *eq;
@@ -166,23 +167,23 @@ static q_buffer enqueue_alloc(circular_queue* q, size_t len, void(*clean)(q_buff
 #endif
 
     do {
-        flags = (volatile uint16_t *) ((uintptr_t) eq + off);
+        flag = (volatile uint8_t *) ((uintptr_t) eq + off);
         __sync_synchronize();
 	    check_flag(eqe, off, "enqueue_alloc");  // TODO: wrong
-        if ((*flags & (FLAG_OWN | FLAG_INUSE)) != 0) {
+        if ((*flag & (FLAG_OWN | FLAG_INUSE)) != 0) {
             q->offset = eqe_off;
 
 #if 0
             if(eqe == prev_addr) count++;
             if(count > 20000 && (count % 10000) == 0)
-	      printf("enq_alloc (NULL): queue = %ld, entry = %ld, flag = %ld, len = %ld, offset = %ld\n", q->queue, eqe, *flags, len, off);
+	      printf("enq_alloc (NULL): queue = %ld, entry = %ld, flag = %ld, len = %ld, offset = %ld\n", q->queue, eqe, *flag, len, off);
 #endif
 
             q_buffer buff = { NULL, 0 };
             return buff;
         }
         enqueue_clean(q, clean);
-        elen = flags[1];
+        elen = *((uint16_t*) (flag + 2)); // skip: flag & task
         //printf("off = %d, elen = %d\n", off, elen);
         /* Never been initialized -> rest of queue is usable */
         if (elen == 0) {
@@ -196,7 +197,7 @@ static q_buffer enqueue_alloc(circular_queue* q, size_t len, void(*clean)(q_buff
                 /* No entries wrapping around: create dummy entry from current
                  * entry and start fresh */
                 eqe->len = total;
-                //eqe->flags = FLAG_OWN | TYPE_NOP;
+                //eqe->flag = FLAG_OWN;
 		q_buffer buff = { eqe, 0 };
 		enqueue_submit(buff);  // need to fill checksum
 
@@ -212,11 +213,11 @@ static q_buffer enqueue_alloc(circular_queue* q, size_t len, void(*clean)(q_buff
     if (total > len) {
         assert(total - len >= sizeof(q_entry));
         dummy = (q_entry *) ((uintptr_t) eqe + len);
-        dummy->flags = 0;
+        dummy->flag = 0;
         dummy->len = total - len;
     }
     eqe->len = len;
-    eqe->flags = FLAG_INUSE;
+    eqe->flag = FLAG_INUSE;
 
     q->offset = (eqe_off + len) % qlen;
     __sync_synchronize();
@@ -231,9 +232,7 @@ static void enqueue_submit(q_buffer buff)
     if(e) {
       	check_flag(e, -1, "enqueue_submit");
         __sync_synchronize();
-        e->flags = (e->flags & TYPE_MASK) | FLAG_OWN;
-        //printf("enq_submit: entry = %p, len = %d\n", e, e->len);
-        //__sync_fetch_and_or(&e->flags, FLAG_OWN);
+        e->flag = FLAG_OWN;
 
         e->checksum = e->pad = 0;
         uint8_t checksum = 0;
@@ -250,20 +249,19 @@ static q_buffer dequeue_get(circular_queue* q) {
   __sync_synchronize();
   assert(q->offset < q->len);
   q_entry* eqe = q->queue + q->offset;
-  //if(eqe->flags) printf("dequeue_get: q = %p, offset = %ld, flags = %d\n", q->queue, q->offset, eqe->flags);
-  //if((eqe->flags & FLAG_MASK) == FLAG_OWN) {
+  //if(eqe->flag == FLAG_OWN) {
   if(dequeue_ready_var(eqe)) {
     //printf("dequeue_get: len = %ld\n", eqe->len);
     check_flag(eqe, q->offset, "dequeue_get");
     check_flag_val(eqe, q->offset, "dequeue_get (before)", 1);
     
-    eqe->flags |= FLAG_INUSE;
+    eqe->flag |= FLAG_INUSE;
     check_flag_val(eqe, q->offset, "dequeue_get (after)", 5);
     //check_flag(eqe, q->offset, "dequeue_get");
     //printf("dequeue_get (before): entry = %p, len = %ld, mod = %ld\n", eqe, eqe->len, q->len);
     q->offset = (q->offset + eqe->len) % q->len;
     __sync_synchronize();
-    //printf("dequeue_get_return: entry = %p, flags = %d, offset = %ld\n", eqe, eqe->flags, q->offset);
+    //printf("dequeue_get_return: entry = %p, flag = %d, offset = %ld\n", eqe, eqe->flag, q->offset);
     
     q_buffer buff = { eqe, 0 };
     return buff;
@@ -280,10 +278,7 @@ static void dequeue_release(q_buffer buff, uint8_t flag_clean)
     check_flag_val(e, -1, "dequeue_release", 5);
     //check_flag(e, -1, "dequeue_release");
     
-    e->flags = (e->flags & TYPE_MASK) | flag_clean;
-    //check_flag(e, -1, "enqueue_release");
-    //printf("release: entry=%p\n", e);
-    //__sync_fetch_and_and(&e->flags, ~FLAG_OWN);
+    e->flag = flag_clean;
     __sync_synchronize();
 }
 
