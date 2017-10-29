@@ -47,10 +47,11 @@ class main(Pipeline):
         static __thread uint32_t count = 0;
         count++;
 
-        state.keylen = 32 + (count % 4) * 8;
-        uint8_t* key = (uint8_t*) malloc(state.keylen);
+        int keylen = 32 + (count % 4) * 8;
+        state.keylen = keylen;
+        uint8_t* key = (uint8_t*) malloc(keylen);
         int i;
-        for(i=0; i<state.keylen; i++)
+        for(i=0; i<keylen; i++)
             key[i] = count;
         state.key = key;
         state.core = 0;
