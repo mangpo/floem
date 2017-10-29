@@ -69,9 +69,11 @@ static int dequeue_ready_var(void* p) {
   if((e->flags & FLAG_MASK) == FLAG_OWN) {
     uint8_t* x = p;
     uint8_t checksum = 0;
+    /*
     int i;
     for(i=0; i<e->len; i++)
       checksum ^= x[i];
+    */
     return (checksum == 0)? e->len: 0;
   }
 
