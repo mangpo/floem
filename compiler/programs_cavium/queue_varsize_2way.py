@@ -117,8 +117,8 @@ class main(Pipeline):
         count++;
 
         uint8_t* key = state.key;
-                //if(1) {
-        if(count % 1000000 == 0) {
+        if(1) {
+        //if(count % 1000000 == 0) {
                 printf("count = %ld\n", count);
         printf("keylen = %d, key = %d %d\n", state.keylen, key[0], key[state.keylen-1]);
                 }
@@ -138,7 +138,7 @@ class main(Pipeline):
         last = key[0];
 #endif
 
-#ifndef CAVIUM
+#if 0
                 static uint64_t lasttime = 0;
                 struct timeval now;
                 gettimeofday(&now, NULL);
@@ -157,8 +157,8 @@ class main(Pipeline):
                 Scheduler() >> rx_deq
                 rx_deq.out[0] >> Display() >> tx_enq.inp[0]
 
-        nic_rx('nic_rx', device=target.CAVIUM, cores=range(1))
-        nic_tx('nic_tx', device=target.CAVIUM, cores=range(1))
+        nic_rx('nic_rx', device=target.CAVIUM, cores=[0])
+        nic_tx('nic_tx', device=target.CAVIUM, cores=[4])
         run('run', process='app', cores=range(1))
 
 master_process('app')

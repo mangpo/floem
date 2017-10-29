@@ -130,7 +130,7 @@ class main(Pipeline):
         last = key[0];
 #endif
 
-#if 0
+#if 1
                 static uint64_t lasttime = 0;
                 struct timeval now;
                 gettimeofday(&now, NULL);

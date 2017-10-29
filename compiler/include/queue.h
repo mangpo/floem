@@ -6,6 +6,34 @@
 #include <assert.h>
 #include <pthread.h>
 
+
+#define mb() 	asm volatile("mfence":::"memory")
+#define CFLASH_SIZE 64
+#define __force	__attribute__((force))
+
+static inline void clflush(volatile void *__p)
+{
+	asm volatile("clflush %0" : "+m" (*(volatile char __force *)__p));
+}
+
+static void clflush_cache_range(void *vaddr, unsigned int size)
+{
+	void *vend = vaddr + size - 1;
+
+	mb();
+
+	for (; vaddr < vend; vaddr += CFLASH_SIZE) {
+		clflush(vaddr);
+	}
+
+	/*
+ 	 * Flush any possible final partial cacheline:
+  	 */
+	clflush(vend);
+
+	mb();
+}
+
 #define ALIGN 8U
 #define FLAG_MASK 7
 #define FLAG_INUSE 4
@@ -64,7 +92,7 @@ typedef pthread_mutex_t lock_t;
 // Return 1 when entry is ready to read or being read.
 static int dequeue_ready_var(void* p) {
   q_entry* e = p;
-  if(e->pad) return 0;
+  if(e->pad != 0xff) return 0;
   if((e->flag & 0xf0) != 0) return 0;
 
   if(e->flag == FLAG_OWN) {
@@ -196,16 +224,17 @@ static q_buffer enqueue_alloc(circular_queue* q, size_t len, void(*clean)(q_buff
             if (off + elen >= qlen) {
                 /* No entries wrapping around: create dummy entry from current
                  * entry and start fresh */
-                eqe->len = total;
-                //eqe->flag = FLAG_OWN;
-		q_buffer buff = { eqe, 0 };
-		enqueue_submit(buff);  // need to fill checksum
-
-                eqe = eq;
-                eqe_off = off = 0;
-                total = 0;
+	      eqe->task = 0;
+	      eqe->len = total;
+	      //eqe->flag = FLAG_OWN;
+	      q_buffer buff = { eqe, 0 };
+	      enqueue_submit(buff);  // need to fill checksum
+	      
+	      eqe = eq;
+	      eqe_off = off = 0;
+	      total = 0;
             } else {
-                off = (off + elen) % qlen;
+	      off = (off + elen) % qlen;
             }
         }
     } while (total < len);
@@ -214,10 +243,12 @@ static q_buffer enqueue_alloc(circular_queue* q, size_t len, void(*clean)(q_buff
         assert(total - len >= sizeof(q_entry));
         dummy = (q_entry *) ((uintptr_t) eqe + len);
         dummy->flag = 0;
+	dummy->task = 0;
         dummy->len = total - len;
     }
     eqe->len = len;
     eqe->flag = FLAG_INUSE;
+    eqe->task = 0;
 
     q->offset = (eqe_off + len) % qlen;
     __sync_synchronize();
@@ -232,9 +263,12 @@ static void enqueue_submit(q_buffer buff)
     if(e) {
       	check_flag(e, -1, "enqueue_submit");
         __sync_synchronize();
+	if(e->len > sizeof(q_entry))
+	  clflush_cache_range(&e[1], e->len - sizeof(q_entry));
         e->flag = FLAG_OWN;
 
-        e->checksum = e->pad = 0;
+	e->pad = 0xff;
+        e->checksum = 0;
         uint8_t checksum = 0;
         uint8_t* p = (uint8_t*) e;
         int i;
@@ -278,39 +312,13 @@ static void dequeue_release(q_buffer buff, uint8_t flag_clean)
     check_flag_val(e, -1, "dequeue_release", 5);
     //check_flag(e, -1, "dequeue_release");
     
+    e->checksum = e->pad = 0;
     e->flag = flag_clean;
-    __sync_synchronize();
+    __SYNC;
 }
 
 static int create_dma_circular_queue(uint64_t addr, int size, int overlap, 
 				     int (*ready_scan)(void*), int (*done_scan)(void*)) 
 { return 0; }
-
-#define mb() 	asm volatile("mfence":::"memory")
-#define CFLASH_SIZE 64
-#define __force	__attribute__((force))
-
-static inline void clflush(volatile void *__p)
-{
-	asm volatile("clflush %0" : "+m" (*(volatile char __force *)__p));
-}
-
-static void clflush_cache_range(void *vaddr, unsigned int size)
-{
-	void *vend = vaddr + size - 1;
-
-	mb();
-
-	for (; vaddr < vend; vaddr += CFLASH_SIZE) {
-		clflush(vaddr);
-	}
-
-	/*
- 	 * Flush any possible final partial cacheline:
-  	 */
-	clflush(vend);
-
-	mb();
-}
 
 #endif
