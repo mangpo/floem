@@ -931,18 +931,20 @@ output switch { case segment: out(); else: null(); }
     def impl(self):
 
         # Queue
-        RxEnq, RxDeq, RxScan = queue_smart2.smart_queue("rx_queue", 32 * 1024, n_cores, 2,
+        RxEnq, RxDeq, RxScan = queue_smart2.smart_queue("rx_queue", 32 * 1024, n_cores, 2, overlap=64,
                                                         enq_output=True, enq_blocking=True, enq_atomic=True)  # enq_blocking=False?
         rx_enq = RxEnq()
         rx_deq = RxDeq()
 
-        TxEnq, TxDeq, TxScan = queue_smart2.smart_queue("tx_queue", 32 * 1024, n_cores, 1, enq_blocking=True, enq_output=True, deq_atomic=True)
+        TxEnq, TxDeq, TxScan = queue_smart2.smart_queue("tx_queue", 32 * 1024, n_cores, 1, overlap=160,
+                                                        enq_blocking=True, enq_output=True, deq_atomic=True)
         tx_enq = TxEnq()
         tx_deq = TxDeq()
 
-        LogInEnq, LogInDeq, LogInScan = queue_smart2.smart_queue("log_in_queue", 8 * 1024, 1, 1,
+        LogInEnq, LogInDeq, LogInScan = queue_smart2.smart_queue("log_in_queue", 8 * 1024, 1, 1, overlap=32,
                                                                  enq_blocking=True, enq_atomic=True)
-        LogOutEnq, LogOutDeq, LogOutScan = queue_smart2.smart_queue("log_out_queue", 8 * 1024, 1, 1, enq_blocking=True, deq_atomic=True)
+        LogOutEnq, LogOutDeq, LogOutScan = queue_smart2.smart_queue("log_out_queue", 8 * 1024, 1, 1, overlap=32,
+                                                                    enq_blocking=True, deq_atomic=True)
         log_in_enq = LogInEnq()
         log_in_deq = LogInDeq()
         log_out_enq = LogOutEnq()
