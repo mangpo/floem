@@ -19,7 +19,7 @@ typedef struct {
   size_t offset;
   void* queue;
   size_t clean;
-  int id;
+  int id, entry_size;
 } circular_queue;
 
 typedef struct {
@@ -27,7 +27,7 @@ typedef struct {
   size_t offset;
   void* queue;
   size_t clean;
-  int id;
+  int id, entry_size;
   lock_t lock;
 } circular_queue_lock;
 

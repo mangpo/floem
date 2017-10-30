@@ -9,12 +9,14 @@ class circular_queue(State):
     queue = Field(Pointer(Void))
     clean = Field(Size)
     id = Field(Int)
+    entry_size = Field(Int)
 
     def init(self, len=0, queue=0, dma_cache=True, overlap=8, ready="NULL", done="NULL"):
         self.len = len
         self.offset = 0
         self.queue = queue
         self.clean = 0
+        self.entry_size = overlap
         self.declare = False
         if dma_cache:
             self.id = "create_dma_circular_queue((uint64_t) {0}, sizeof({1}), {2}, {3}, {4})" \
@@ -29,6 +31,7 @@ class circular_queue_lock(State):
     clean = Field(Size)
     lock = Field('lock_t')
     id = Field(Int)
+    entry_size = Field(Int)
     #layout = [len, offset, queue, clean, lock]
 
     def init(self, len=0, queue=0, dma_cache=True, overlap=0, ready="NULL", done="NULL"):
@@ -36,6 +39,7 @@ class circular_queue_lock(State):
         self.offset = 0
         self.queue = queue
         self.clean = 0
+        self.entry_size = overlap
         self.lock = lambda (x): 'qlock_init(&%s)' % x
         self.declare = False
         if dma_cache:
@@ -133,7 +137,7 @@ def create_queue_states(name, type, size, n_cores, overlap=0, dma_cache=True, na
 
 def queue_variable_size(name, size, n_cores, enq_blocking=False, deq_blocking=False, enq_atomic=False, deq_atomic=False,
                         clean=False, core=False,
-                        dma_cache=True, overlap=0):
+                        dma_cache=True, overlap=32):
     """
     :param name: queue name
     :param size: number of bytes
@@ -164,6 +168,8 @@ def queue_variable_size(name, size, n_cores, enq_blocking=False, deq_blocking=Fa
     else:
         clean_inst = None
         clean_name = "no_clean"
+
+    assert (size % overlap == 0), "queue_variable_size: size must be multiples of overlap parameter."
 
     enq_all, deq_all, EnqQueue, DeqQueue, Storage = \
         create_queue_states(name, Uint(8), size, n_cores,
