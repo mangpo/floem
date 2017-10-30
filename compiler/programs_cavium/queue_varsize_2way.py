@@ -118,8 +118,8 @@ class main(Pipeline):
         count++;
 
         uint8_t* key = state.key;
-        if(1) {
-        //if(count % 1000000 == 0) {
+        //if(1) {
+        if(count % 1000000 == 0) {
                 printf("count = %ld\n", count);
         printf("keylen = %d, key = %d %d\n", state.keylen, key[0], key[state.keylen-1]);
                 }
@@ -139,7 +139,7 @@ class main(Pipeline):
         last = key[0];
 #endif
 
-#if 0
+#if 1
                 static uint64_t lasttime = 0;
                 struct timeval now;
                 gettimeofday(&now, NULL);

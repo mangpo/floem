@@ -134,18 +134,18 @@ static void enqueue_clean(circular_queue* q, void(*clean_func)(q_buffer)) {
     __sync_synchronize();
     assert(q->clean < q->len);
     while (1) {
-        eqe = (q_entry *) ((uintptr_t) q->queue + q->clean);
-	    check_flag(eqe, q->clean, "clean");
-	    __sync_synchronize();
-        if (eqe->flag != FLAG_CLEAN) {
-            break;
-        }
-        q_buffer temp = { eqe, 0 };
-        clean_func(temp);
-        eqe->flag = 0;
-        __sync_synchronize();
-	    q->clean += q->entry_size;
-	    if(q->clean + q->entry_size > q->len) q->clean = 0;
+      eqe = (q_entry *) ((uintptr_t) q->queue + q->clean);
+      check_flag(eqe, q->clean, "clean");
+      __sync_synchronize();
+      if (eqe->flag != FLAG_CLEAN) {
+	break;
+      }
+      q_buffer temp = { eqe, 0 };
+      clean_func(temp);
+      eqe->flag = 0;
+      __sync_synchronize();
+      q->clean += q->entry_size;
+      if(q->clean + q->entry_size > q->len) q->clean = 0;
     }
     __sync_synchronize();
 }
@@ -153,7 +153,7 @@ static void enqueue_clean(circular_queue* q, void(*clean_func)(q_buffer)) {
 static q_buffer enqueue_alloc(circular_queue* q, size_t len, void(*clean)(q_buffer)) {
   __sync_synchronize();
   assert(q->offset < q->len);
-  assert(len <= q->entry_size)
+  assert(len <= q->entry_size);
   q_entry* eqe = q->queue + q->offset;
 
   if(eqe->flag == FLAG_CLEAN) enqueue_clean(q, clean);
@@ -167,6 +167,10 @@ static q_buffer enqueue_alloc(circular_queue* q, size_t len, void(*clean)(q_buff
     __sync_synchronize();
     //printf("enq_alloc: queue = %p, entry = %p, len = %d, offset = %ld\n", q->queue, eqe, eqe->len, q->offset);
     q_buffer buff = { eqe, 0 };
+    return buff;
+  }
+  else {
+    q_buffer buff = { NULL, 0 };
     return buff;
   }
 }
@@ -206,6 +210,8 @@ static q_buffer dequeue_get(circular_queue* q) {
     check_flag_val(eqe, q->offset, "dequeue_get (after)", 5);
     //check_flag(eqe, q->offset, "dequeue_get");
     //printf("dequeue_get (before): entry = %p, len = %ld, mod = %ld\n", eqe, eqe->len, q->len);
+
+    q->offset += q->entry_size;
     if(q->offset + q->entry_size > q->len) q->offset = 0;
     __sync_synchronize();
     //printf("dequeue_get_return: entry = %p, flag = %d, offset = %ld\n", eqe, eqe->flag, q->offset);
