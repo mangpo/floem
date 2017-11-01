@@ -34,7 +34,9 @@ static void clflush_cache_range(void *vaddr, unsigned int size)
 	mb();
 }
 
+//#define OPTIMISTIC
 
+#define ALIGN 8U
 #define FLAG_INUSE 4
 #define FLAG_CLEAN 2
 #define FLAG_OWN 1
@@ -155,10 +157,16 @@ static q_buffer enqueue_alloc(circular_queue* q, size_t len, void(*clean)(q_buff
   assert(q->offset < q->len);
   assert(len <= q->entry_size);
   q_entry* eqe = q->queue + q->offset;
+  len = (len + ALIGN - 1) & (~(ALIGN - 1));
 
   if(eqe->flag == FLAG_CLEAN) enqueue_clean(q, clean);
+
+#ifdef OPTIMISTIC
+  if(eqe->flag != FLAG_INUSE) {
+#else
   if(eqe->flag == 0) {
-    eqe->len = q->entry_size;
+#endif
+    eqe->len = len;
     eqe->flag = FLAG_INUSE;
     eqe->task = 0;
 
@@ -181,10 +189,10 @@ static void enqueue_submit(q_buffer buff)
     if(e) {
       	check_flag(e, -1, "enqueue_submit");
         __sync_synchronize();
-	    clflush_cache_range(&e[1], e->len - sizeof(q_entry));
+	clflush_cache_range(&e[1], e->len - sizeof(q_entry));
         e->flag = FLAG_OWN;
 
-	    e->pad = 0xff;
+	e->pad = 0xff;
         e->checksum = 0;
         uint8_t checksum = 0;
         uint8_t* p = (uint8_t*) e;

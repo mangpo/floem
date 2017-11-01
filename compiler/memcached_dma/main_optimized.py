@@ -2,7 +2,7 @@ from dsl2 import *
 import queue_smart2, net_real, library_dsl2
 from compiler import Compiler
 
-n_cores = 6
+n_cores = 7
 nic_rx_threads = 4
 nic_tx_threads = 3
 
