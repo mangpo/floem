@@ -21,7 +21,7 @@ m->ipv4.dest = dest_ip;
 
 static __thread uint16_t sport = 0;
 m->udp.src_port = (++sport == 0 ? ++sport : sport);
-m->udp.dest_port = htons(11211);
+m->udp.dest_port = m->udp.src_port;
 
 m->ether.type = htons(ETHERTYPE_IPv4);
 m->ipv4._proto = 17;
@@ -61,9 +61,8 @@ class Reply(Element):
 iokvs_message* m = (iokvs_message*) pkt;
 
 
-if(m->udp.src_port == htons(11211) &&
-   m->mcr.request.magic == PROTOCOL_BINARY_RES) {
-    printf("pkt\n");
+if(m->mcr.request.magic == PROTOCOL_BINARY_RES) {
+    //printf("pkt\n");
 uint64_t mycount = __sync_fetch_and_add64(&this->count, 1);
 if(mycount == 5000000) {
     struct timeval now;
@@ -97,7 +96,7 @@ class recv(InternalLoop):
 
         from_net >> Reply() >> free
 
-n = 2
+n = 5
 gen('gen', process='dpdk', cores=range(n))
 recv('recv', process='dpdk', cores=range(n))
 c = Compiler()
