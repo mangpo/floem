@@ -23,6 +23,17 @@ static __thread uint16_t sport = 0;
 m->udp.src_port = (++sport == 0 ? ++sport : sport);
 m->udp.dest_port = htons(11211);
 
+m->ether.type = htons(ETHERTYPE_IPv4);
+m->ipv4._proto = 17;
+        m->ipv4._len = htons(size - offsetof(iokvs_message, ipv4));
+        m->ipv4._ttl = 64;
+        m->ipv4._chksum = 0;
+        //m->ipv4._chksum = rte_ipv4_cksum(&m->ipv4);  // TODO
+
+        m->udp.len = htons(size - offsetof(iokvs_message, udp));
+        m->udp.cksum = 0;
+        //printf("sizeof(iokvs) = %d, size = %ld\n", sizeof(iokvs_message), size);
+
 output { out(size, pkt, buff); }
         ''')
 
@@ -32,12 +43,12 @@ class gen(InternalLoop):
         net_alloc = net_real.NetAlloc()
         to_net = net_real.ToNet(configure=["net_alloc"])
 
-        library_dsl2.Constant(configure=[64]) >> net_alloc
+        library_dsl2.Constant(configure=[74]) >> net_alloc
         net_alloc.oom >> library_dsl2.Drop()
         net_alloc.out >> Request() >> to_net
 
 
-gen('gen', process='dpdk', cores=[0])
+gen('gen', process='dpdk', cores=[0,1])
 c = Compiler()
 c.include = r'''
 #include "protocol_binary.h"

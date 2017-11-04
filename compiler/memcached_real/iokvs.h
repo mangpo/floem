@@ -9,7 +9,7 @@
 #include <assert.h>
 #include "protocol_binary.h"
 
-#define NUM_THREADS     3
+#define NUM_THREADS     1
 //#define QUEUE_STAT
 
 /******************************************************************************/

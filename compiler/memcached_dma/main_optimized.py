@@ -3,7 +3,7 @@ import queue_smart2, net_real, library_dsl2
 from compiler import Compiler
 
 n_cores = 7
-nic_rx_threads = 4
+nic_rx_threads = 5
 nic_tx_threads = 3
 
 class protocol_binary_request_header_request(State):
@@ -931,12 +931,12 @@ output switch { case segment: out(); else: null(); }
     def impl(self):
 
         # Queue
-        RxEnq, RxDeq, RxScan = queue_smart2.smart_queue("rx_queue", 32 * 1024, n_cores, 2, overlap=64,
+        RxEnq, RxDeq, RxScan = queue_smart2.smart_queue("rx_queue", 512 * 64, n_cores, 2, overlap=64, #64
                                                         enq_output=True, enq_blocking=True, enq_atomic=True)  # enq_blocking=False?
         rx_enq = RxEnq()
         rx_deq = RxDeq()
 
-        TxEnq, TxDeq, TxScan = queue_smart2.smart_queue("tx_queue", 512 * 160, n_cores, 1, overlap=160,
+        TxEnq, TxDeq, TxScan = queue_smart2.smart_queue("tx_queue", 512 * 160, n_cores, 1, overlap=160, #160
                                                         enq_blocking=True, enq_output=True, deq_atomic=True)
         tx_enq = TxEnq()
         tx_deq = TxDeq()

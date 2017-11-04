@@ -12,6 +12,8 @@ class Stat(State):
         self.lasttime = 0
 
 class Reply(Element):
+    this = Persistent(Stat)
+
     def configure(self):
         self.inp = Input(Size, "void*", "void*")
         self.out = Output(Size, "void*", "void*")
@@ -52,15 +54,17 @@ for(i=0; i<64; i++) {
 printf("\n");
 */
 
-int64_t mycount = __sync_fetch_and_add64(&this.count, 1);
+/*
+uint64_t mycount = __sync_fetch_and_add64(&this->count, 1);
 if(mycount == 5000000) {
     struct timeval now;
     gettimeofday(&now, NULL);
-    size_t thistime = now.tv_sec * 1000000 + now.tv_used;
-    printf("%zu pkts/s\n", mycount/(thistime - this.lasttime));
-    this.lasttime = thistime;
+    size_t thistime = now.tv_sec * 1000000 + now.tv_usec;
+    printf("%zu pkts/s\n", (mycount * 1000000)/(thistime - this->lasttime));
+    this->lasttime = thistime;
+    this->count = 0;
 }
-
+*/
 output { out(size, pkt, buff); }
         ''')
 

@@ -10,6 +10,7 @@ void run_app(void *threadid) {
   ialloc_init_allocator(&ia, tid);
   iallocs[tid] = &ia;
   init_segment(tid, &ia);
+  //init_segment(tid, &ia);
 
   printf("Worker %ld starting\n", tid);
 
