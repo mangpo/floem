@@ -13,14 +13,14 @@ class Request(Element):
 (size_t size, void* pkt, void* buff) = inp();
 iokvs_message* m = (iokvs_message*) pkt;
 
-m->ether.src = "\x68\x05\xca\x33\x13\x40"; // n30
-m->ether.dest = "\x68\x05\xca\x33\x11\x3c"; // n33
+m->ether.src = src;
+m->ether.dest = dest;
 
-m->ipv4.src = "\x0a\x03\x00\x1e";
-m->ipv4.dest = "\x0a\x03\x00\x21";
+m->ipv4.src = src_ip;
+m->ipv4.dest = dest_ip;
 
 static __thread uint16_t sport = 0;
-udp.src_port = (++sport == 0 ? ++sport : sport);
+m->udp.src_port = (++sport == 0 ? ++sport : sport);
 m->udp.dest_port = htons(11211);
 
 output { out(size, pkt, buff); }
@@ -38,8 +38,13 @@ class gen(InternalLoop):
 
 gen('gen', process='dpdk', cores=[0])
 c = Compiler()
-c.include_h = r'''
+c.include = r'''
 #include "protocol_binary.h"
+
+struct eth_addr src = { .addr = "\x68\x05\xca\x33\x13\x40" };
+struct eth_addr dest = { .addr = "\x68\x05\xca\x33\x11\x3c" };
+struct ip_addr src_ip = { .addr = "\x0a\x03\x00\x1e" };
+struct ip_addr dest_ip = { .addr = "\x0a\x03\x00\x21" };
 '''
 c.testing = 'while (1) pause();'
 c.generate_code_and_compile()
