@@ -3,10 +3,21 @@ from compiler import Compiler
 import target, queue2, net_real, library_dsl2
 
 
+class Stat(State):
+    count = Field(Size)
+    lasttime = Field(Size)
+
+    def init(self):
+        self.count = 0
+        self.lasttime = 0
+
 class Reply(Element):
     def configure(self):
         self.inp = Input(Size, "void*", "void*")
         self.out = Output(Size, "void*", "void*")
+
+    def states(self):
+        self.this = Stat()
 
     def impl(self):
         self.run_c(r'''
@@ -40,6 +51,15 @@ for(i=0; i<64; i++) {
 }
 printf("\n");
 */
+
+int64_t mycount = __sync_fetch_and_add64(&this.count, 1);
+if(mycount == 5000000) {
+    struct timeval now;
+    gettimeofday(&now, NULL);
+    size_t thistime = now.tv_sec * 1000000 + now.tv_used;
+    printf("%zu pkts/s\n", mycount/(thistime - this.lasttime));
+    this.lasttime = thistime;
+}
 
 output { out(size, pkt, buff); }
         ''')

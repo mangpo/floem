@@ -26,6 +26,7 @@ m->udp.dest_port = htons(11211);
 output { out(size, pkt, buff); }
         ''')
 
+
 class gen(InternalLoop):
     def impl(self):
         net_alloc = net_real.NetAlloc()
