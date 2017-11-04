@@ -25,7 +25,7 @@ class Reply(Element):
         self.run_c(r'''
 (size_t size, void* pkt, void* buff) = inp();
 iokvs_message* m = (iokvs_message*) pkt;
-//printf("pkt\n");
+//printf("pkt %ld\n", size);
 
 struct eth_addr src = m->ether.src;
 struct eth_addr dest = m->ether.dest;
@@ -38,8 +38,9 @@ m->ipv4.src = dest_ip;
 m->ipv4.dest = src_ip;
 
 uint16_t src_port = m->udp.src_port;
+uint16_t dest_port = m->udp.dest_port;
 m->udp.dest_port = src_port;
-m->udp.src_port = htons(11211);
+m->udp.src_port = dest_port;
 
             m->mcr.request.magic = PROTOCOL_BINARY_RES;
             m->mcr.request.opcode = PROTOCOL_BINARY_CMD_GET;
@@ -78,7 +79,8 @@ class nic_rx(InternalLoop):
         from_net >> Reply() >> to_net
 
 
-nic_rx('nic_rx', process='dpdk', cores=[0])
+#nic_rx('nic_rx', process='dpdk', cores=range(1))
+nic_rx('nic_rx', device=target.CAVIUM, cores=range(1))
 c = Compiler()
 c.include = r'''
 #include "protocol_binary.h"
