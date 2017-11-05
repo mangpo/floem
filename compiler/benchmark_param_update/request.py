@@ -25,14 +25,13 @@ m->udp.dest_port = m->udp.src_port;
 
 m->ether.type = htons(ETHERTYPE_IPv4);
 m->ipv4._proto = 17;
-        m->ipv4._len = htons(size - offsetof(iokvs_message, ipv4));
+        m->ipv4._len = htons(size - offsetof(param_message, ipv4));
         m->ipv4._ttl = 64;
         m->ipv4._chksum = 0;
         //m->ipv4._chksum = rte_ipv4_cksum(&m->ipv4);  // TODO
 
-        m->udp.len = htons(size - offsetof(iokvs_message, udp));
+        m->udp.len = htons(size - offsetof(param_message, udp));
         m->udp.cksum = 0;
-        //printf("sizeof(iokvs) = %d, size = %ld\n", sizeof(iokvs_message), size);
 
 m->pool = rand() % 8;
 m->param = (double)rand() / (double)RAND_MAX;
@@ -67,7 +66,7 @@ param_message* m = (param_message*) pkt;
 if(m->status == 1) {
     //printf("pkt\n");
 uint64_t mycount = __sync_fetch_and_add64(&this->count, 1);
-if(mycount == 5000000) {
+if(mycount == 100000) {
     struct timeval now;
     gettimeofday(&now, NULL);
     size_t thistime = now.tv_sec * 1000000 + now.tv_usec;

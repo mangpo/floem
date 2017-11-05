@@ -1,7 +1,9 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <rte_spinlock.h>
+#include <math.h>
 
-#define N_PARAMS 64
+#define N_PARAMS 1024
 #define N_POOLS 100000
 
 typedef struct {
@@ -19,7 +21,7 @@ double r2()
 
 void init_params() {
     int i, j;
-    for(i=0; i<N_POOLS< i++) {
+    for(i=0; i<N_POOLS; i++) {
         rte_spinlock_init(&params[i].lock);
         for(j=0; j<N_PARAMS; j++) {
             params[i].ws[j] = r2();
@@ -33,6 +35,7 @@ void update_param(uint32_t pool, double param) {
     rte_spinlock_lock(&params[pool].lock);
     for(j=0; j<N_PARAMS; j++) {
         params[pool].accums[j] += param * params[pool].ws[j];
+	params[pool].accums[j] = sqrt(params[pool].accums[j]);
     }
     rte_spinlock_unlock(&params[pool].lock);
 }

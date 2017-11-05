@@ -3,7 +3,6 @@ from compiler import Compiler
 import target, queue2, net_real, library_dsl2, queue_smart2
 
 n_cores = 1
-nic_cores = 1
 
 class MyState(State):
     core = Field(Size)
@@ -58,6 +57,7 @@ class Update(Element):
         self.run_c(r'''
 (size_t size, void* pkt, void* buff) = inp();
 param_message* m = (param_message*) pkt;
+//printf("udpate: pool = %d, param = %lf\n", m->pool, m->param);
 update_param(m->pool, m->param);
         ''')
 
@@ -73,12 +73,12 @@ class run(InternalLoop):
         from_net >> Reply() >> to_net
 
 
-run('run', process='app', cores=range(n_cores))
+run('run', process='dpdk', cores=range(n_cores))
 
 c = Compiler()
 c.include = r'''
 #include "protocol_binary.h"
 '''
 c.generate_code_as_header()
-c.depend = ['app', 'param_update']
+c.depend = ['dpdk', 'param_update']
 c.compile_and_run("test_queue")
