@@ -57,5 +57,5 @@ class Constant(Element):
 
     def impl(self):
         self.run_c(r'''
-        output { out(%d); }
+        output { out(%s); }
         ''' % self.c)

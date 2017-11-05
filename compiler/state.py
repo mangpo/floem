@@ -10,6 +10,8 @@ Int = 'int'
 Size = 'size_t'
 Void = 'void'
 Uintptr = 'uintptr_t'
+Double = 'double'
+Float = 'float'
 
 
 def Uint(bits):

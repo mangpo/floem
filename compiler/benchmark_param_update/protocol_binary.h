@@ -233,18 +233,17 @@ typedef struct {
     struct eth_hdr ether;
     struct ip_hdr ipv4;
     struct udp_hdr udp;
-    memcached_udp_header mcudp;
-    protocol_binary_request_header mcr;
-    uint8_t payload[];
-} __attribute__ ((packed)) iokvs_message;
-
-typedef struct {
-    struct eth_hdr ether;
-    struct ip_hdr ipv4;
-    struct udp_hdr udp;
     uint8_t status;
     uint32_t pool;
     double param;
 } __attribute__ ((packed)) param_message;
+
+typedef struct {
+    uint32_t pool;
+    double param;
+} __attribute__ ((packed)) param_entry;
+
+void init_params();
+void update_param(uint32_t pool, double param);
 
 #endif
