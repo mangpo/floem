@@ -41,11 +41,20 @@ class main(Pipeline):
                 self.inp = Input(Size)
                 self.out1 = Output(Size)
                 self.out2 = Output(Size)
+                self.out3 = Output(Size)
+                self.out4 = Output(Size)
+                self.out5 = Output(Size)
 
             def impl(self):
                 self.run_c(r'''
         (size_t size) = inp();
-        output { out1(size); out2(size); }
+        output { 
+                out1(size); 
+                out2(size); 
+                out3(size); 
+                out4(size); 
+                out5(size); 
+                }
                     ''')
 
         class Update(Element):
@@ -60,7 +69,7 @@ class main(Pipeline):
         //printf("udpate: pool = %d, param = %lf\n", m->pool, m->param);
         update_param(m->pool, m->param);
 
-        state.pkt = pkt
+        state.pkt = pkt;
 
         struct eth_addr src = m->ether.src;
         struct eth_addr dest = m->ether.dest;
@@ -97,6 +106,9 @@ class main(Pipeline):
                 from_net >> update >> fork
                 fork.out1 >> net_alloc
                 fork.out2 >> net_alloc
+                fork.out3 >> net_alloc
+                fork.out4 >> net_alloc
+                fork.out5 >> net_alloc
 
                 net_alloc >> copy >> to_net2
                 net_alloc.oom >> library_dsl2.Drop()

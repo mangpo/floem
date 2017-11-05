@@ -3,7 +3,7 @@
 #include <rte_spinlock.h>
 #include <math.h>
 
-#define N_PARAMS 1024
+#define N_PARAMS 512
 #define N_POOLS 100000
 
 typedef struct {
