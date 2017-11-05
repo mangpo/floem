@@ -3,7 +3,7 @@ from compiler import Compiler
 import target, queue2, net_real, library_dsl2
 import queue_smart2
 
-n_cores = 1
+n_cores = 9
 
 class MyState(State):
     pkt = Field('void*')
@@ -20,7 +20,7 @@ class main(Pipeline):
         # Queue
         RxEnq, RxDeq, RxScan = queue_smart2.smart_queue("rx_queue", 32 * 1024, n_cores, 1,
                                                         overlap=32,
-                                                        enq_output=True, enq_blocking=True, enq_atomic=True)
+                                                        enq_output=True, enq_blocking=True, enq_atomic=False)
         rx_enq = RxEnq()
         rx_deq = RxDeq()
 
@@ -37,8 +37,8 @@ class main(Pipeline):
         iokvs_message* m = (iokvs_message*) pkt;
 
         state.key = m->payload + m->mcr.request.extlen;;
-        state.core = 0;
         state.pool = 0;
+        state.core = cvmx_get_core_num();
 
         output { out(); }
                 ''')
@@ -55,24 +55,15 @@ class main(Pipeline):
         output { out(pkt, pkt_buff); }
                 ''')
 
-        class Free(Element):
-            def configure(self):
-                self.inp = Input()
-
-            def impl(self):
-                self.run_c(r'''
-            free(state.key);
-                ''')
-
         class nic_rx(InternalLoop):
             def impl(self):
                 from_net = net_real.FromNet()
                 from_net_free = net_real.FromNetFree()
 
                 from_net >> MakeKey() >> rx_enq.inp[0]
-                rx_enq.done >> Free()
                 rx_enq.done >> GetPktBuff() >> from_net_free
                 from_net.nothing >> library_dsl2.Drop()
+
 
         ############################ CPU #############################
         class Scheduler(Element):
@@ -81,8 +72,10 @@ class main(Pipeline):
 
             def impl(self):
                 self.run_c(r'''
-            output { out(0); }
-                ''')
+    static size_t core = 0;
+    core = (core+1) %s %d;
+                output { out(core); }
+                ''' % ('%', n_cores))
 
         class Display(Element):
             def configure(self):
@@ -112,13 +105,16 @@ class main(Pipeline):
                 Scheduler() >> rx_deq
                 rx_deq.out[0] >> Display()
 
-        nic_rx('nic_rx', device=target.CAVIUM, cores=range(1))
+        nic_rx('nic_rx', device=target.CAVIUM, cores=range(n_cores))
         run('run', process='app', cores=range(1))
 
 
 master_process('app')
 
 c = Compiler(main)
+c.include = r'''
+#include "protocol_binary.h"
+'''
 c.generate_code_as_header()
 c.depend = ['app']
 c.compile_and_run("test_queue")

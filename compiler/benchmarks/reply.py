@@ -2,24 +2,11 @@ from dsl2 import *
 from compiler import Compiler
 import target, queue2, net_real, library_dsl2
 
-
-class Stat(State):
-    count = Field(Size)
-    lasttime = Field(Size)
-
-    def init(self):
-        self.count = 0
-        self.lasttime = 0
-
 class Reply(Element):
-    this = Persistent(Stat)
 
     def configure(self):
         self.inp = Input(Size, "void*", "void*")
         self.out = Output(Size, "void*", "void*")
-
-    def states(self):
-        self.this = Stat()
 
     def impl(self):
         self.run_c(r'''
@@ -55,17 +42,6 @@ for(i=0; i<64; i++) {
 printf("\n");
 */
 
-/*
-uint64_t mycount = __sync_fetch_and_add64(&this->count, 1);
-if(mycount == 5000000) {
-    struct timeval now;
-    gettimeofday(&now, NULL);
-    size_t thistime = now.tv_sec * 1000000 + now.tv_usec;
-    printf("%zu pkts/s\n", (mycount * 1000000)/(thistime - this->lasttime));
-    this->lasttime = thistime;
-    this->count = 0;
-}
-*/
 output { out(size, pkt, buff); }
         ''')
 
@@ -79,11 +55,12 @@ class nic_rx(InternalLoop):
         from_net >> Reply() >> to_net
 
 
-#nic_rx('nic_rx', process='dpdk', cores=range(1))
-nic_rx('nic_rx', device=target.CAVIUM, cores=range(1))
+nic_rx('nic_rx', process='dpdk', cores=range(2))
+#nic_rx('nic_rx', device=target.CAVIUM, cores=range(1))
 c = Compiler()
 c.include = r'''
 #include "protocol_binary.h"
 '''
 c.testing = 'while (1) pause();'
+#c.generate_code_as_header()
 c.generate_code_and_compile()
