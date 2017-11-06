@@ -72,7 +72,7 @@ class main(Pipeline):
             def impl(self):
                 self.run_c(r'''
         param_entry* payload = state.payload;
-        printf("update: pool = %d, param = %lf\n", payload->pool, payload->param);
+        //printf("update: pool = %d, param = %lf\n", payload->pool, payload->param);
         update_param(payload->pool, payload->param);
                     ''')
 
@@ -86,7 +86,7 @@ class main(Pipeline):
         (size_t size, void* pkt, void* buff) = inp();
         param_message* m = (param_message*) pkt;
         state.core = 0;
-        state.payload = (uint8_t*) m->pool;
+        state.payload = (uint8_t*) &m->pool;
         state.pkt = pkt;
 
         struct eth_addr src = m->ether.src;
@@ -117,25 +117,25 @@ class main(Pipeline):
             def impl(self):
                 from_net = net_real.FromNet()
                 to_net1 = net_real.ToNet(configure=["from_net"])
-                to_net2 = net_real.ToNet(configure=["alloc"])
-                net_alloc = net_real.NetAlloc()
-                copy = Copy()
-                fork = Fork()
                 prep = PrepPkt()
+                # to_net2 = net_real.ToNet(configure=["alloc"])
+                # net_alloc = net_real.NetAlloc()
+                # copy = Copy()
+                # fork = Fork()
 
                 from_net.nothing >> library_dsl2.Drop()
 
                 from_net >> prep >> rx_enq
 
-                prep >> fork
-                fork.out1 >> net_alloc
-                fork.out2 >> net_alloc
-                fork.out3 >> net_alloc
-                fork.out4 >> net_alloc
-                fork.out5 >> net_alloc
+                # prep >> fork
+                # fork.out1 >> net_alloc
+                # fork.out2 >> net_alloc
+                # fork.out3 >> net_alloc
+                # fork.out4 >> net_alloc
+                # fork.out5 >> net_alloc
 
-                net_alloc >> copy >> to_net2
-                net_alloc.oom >> library_dsl2.Drop()
+                # net_alloc >> copy >> to_net2
+                # net_alloc.oom >> library_dsl2.Drop()
 
                 from_net >> Reply() >> to_net1
 

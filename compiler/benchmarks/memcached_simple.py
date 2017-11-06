@@ -36,7 +36,7 @@ class main(Pipeline):
         state.pkt_buff = buff;
         iokvs_message* m = (iokvs_message*) pkt;
 
-        state.keylen = state.pkt->mcr.request.keylen;
+        state.keylen = m->mcr.request.keylen;
         state.key = m->payload + m->mcr.request.extlen;
         state.core = cvmx_get_core_num();
 

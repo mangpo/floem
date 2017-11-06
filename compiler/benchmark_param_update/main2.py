@@ -94,15 +94,16 @@ class main(Pipeline):
         class run(InternalLoop):
             def impl(self):
                 from_net = net_real.FromNet()
+                update = Update()
                 to_net1 = net_real.ToNet(configure=["from_net"])
                 to_net2 = net_real.ToNet(configure=["alloc"])
                 net_alloc = net_real.NetAlloc()
-                update = Update()
                 copy = Copy()
                 fork = Fork()
 
                 from_net.nothing >> library_dsl2.Drop()
 
+                #from_net >> update >> library_dsl2.Drop()
                 from_net >> update >> fork
                 fork.out1 >> net_alloc
                 fork.out2 >> net_alloc

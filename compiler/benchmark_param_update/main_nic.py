@@ -72,7 +72,7 @@ class main(Pipeline):
         param_message* m = (param_message*) pkt;
 
         state.core = nic_htonl(m->pool) %s %d;
-        state.payload = (uint8_t*) m->pool;
+        state.payload = (uint8_t*) &m->pool;
 
         output { out(); }
                 ''' % ('%', n_cores))

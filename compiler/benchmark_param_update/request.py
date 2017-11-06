@@ -106,9 +106,12 @@ c.include = r'''
 #include "protocol_binary.h"
 
 struct eth_addr src = { .addr = "\x68\x05\xca\x33\x13\x40" }; // n30
-struct eth_addr dest = { .addr = "\x68\x05\xca\x33\x11\x3c" }; // n33
+//struct eth_addr dest = { .addr = "\x68\x05\xca\x33\x11\x3c" }; // n33
+struct eth_addr dest = { .addr = "\x00\x0f\xb7\x30\x3f\x58" }; // n35
+
 struct ip_addr src_ip = { .addr = "\x0a\x03\x00\x1e" };
-struct ip_addr dest_ip = { .addr = "\x0a\x03\x00\x21" };
+//struct ip_addr dest_ip = { .addr = "\x0a\x03\x00\x21" }; // n33
+struct ip_addr dest_ip = { .addr = "\x0a\x03\x00\x23" }; // n35
 '''
 c.testing = 'while (1) pause();'
 c.generate_code_and_compile()
