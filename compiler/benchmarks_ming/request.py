@@ -25,14 +25,14 @@ m->udp.dest_port = m->udp.src_port;
 
 m->ether.type = htons(ETHERTYPE_IPv4);
 m->ipv4._proto = 17; // udp
-        m->ipv4._len = htons(size - offsetof(iokvs_message, ipv4));
+        m->ipv4._len = htons(size - offsetof(udp_message, ipv4));
         m->ipv4._ttl = 64;
         m->ipv4._chksum = 0;
         //m->ipv4._chksum = rte_ipv4_cksum(&m->ipv4);  // TODO
 
-        m->udp.len = htons(size - offsetof(iokvs_message, udp));
+        m->udp.len = htons(size - offsetof(udp_message, udp));
         m->udp.cksum = 0;
-        //printf("sizeof(iokvs) = %d, size = %ld\n", sizeof(iokvs_message), size);
+        //printf("sizeof(iokvs) = %d, size = %ld\n", sizeof(udp_message), size);
 
 output { out(size, pkt, buff); }
         ''')
@@ -49,7 +49,7 @@ class PayloadGen(Element):
 udp_message* m = (udp_message*) pkt;
 int i;
 
-strcpy(m->cmd, "HASH");
+strcpy(m->cmd, "FLOW");
 for(i=0; i<4; i++) {
     sprintf(m->payload + 8*i, "%d", TEXT_BASE + rand() % TEXT_BASE);
 }
@@ -78,11 +78,11 @@ class Reply(Element):
     def impl(self):
         self.run_c(r'''
 (size_t size, void* pkt, void* buff) = inp();
-iokvs_message* m = (iokvs_message*) pkt;
+udp_message* m = (udp_message*) pkt;
 
 
-if(m->mcr.request.magic == PROTOCOL_BINARY_RES) {
-    //printf("pkt\n");
+if(m->ipv4._proto == 17) {
+    printf("pkt\n");
 uint64_t mycount = __sync_fetch_and_add64(&this->count, 1);
 if(mycount == 5000000) {
     struct timeval now;
@@ -138,7 +138,7 @@ typedef enum _TYPE {
     SEQU, /* sequencer */
 } PKT_TYPE;
 
-#define CMD HASH
+#define CMD FLOW
 '''
 c.testing = 'while (1) pause();'
 c.generate_code_and_compile()
