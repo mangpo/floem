@@ -99,7 +99,7 @@ int global_grouping(const struct tuple *t, struct executor *self)
   return self->outtasks[0];
 }
 
-#define SAMPA_DPDK_CAVIUM
+#define SAMPA_CAVIUM2
 
 struct worker workers[MAX_WORKERS] = {
 #if defined(LOCAL)
@@ -262,6 +262,25 @@ struct worker workers[MAX_WORKERS] = {
       { .execute = rank_execute, .taskid = 30, .outtasks = { 0 }, .grouper = global_grouping },
     }
   },
+#elif defined(SAMPA_CAVIUM2)
+  {
+    .hostname = "10.3.0.35", .ip.addr = "\x0a\x03\x00\x23", .port = 1234,  .mac.addr = "\x00\x0f\xb7\x30\x3f\x58",
+    .executors = {
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 1, .outtasks = { 10, 11 }, .grouper = fields_grouping },
+      { .execute = count_execute, .init = count_init, .taskid = 10, .outtasks = { 20, 21 }, .grouper = fields_grouping },
+      { .execute = rank_execute, .taskid = 20, .outtasks = { 30 }, .grouper = global_grouping },
+    }
+  },
+  {
+    .hostname = "10.3.0.36", .ip.addr = "\x0a\x03\x00\x24", .port = 1234,  .mac.addr = "\x02\xaf\x01\x8b\xb5\x00",
+    .executors = {
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 2, .outtasks = { 10, 11 }, .grouper = fields_grouping },
+      { .execute = count_execute, .init = count_init, .taskid = 11, .outtasks = { 20, 21 }, .grouper = fields_grouping },
+      { .execute = rank_execute, .taskid = 21, .outtasks = { 30 }, .grouper = global_grouping },
+      { .execute = rank_execute, .taskid = 30, .outtasks = { 0 }, .grouper = global_grouping },
+    }
+  },
+
 #elif defined(SAMPA_DPDK_CAVIUM)
   {
     .hostname = "10.3.0.35", .ip.addr = "\x0a\x03\x00\x23", .port = 1234,  .mac.addr = "\x00\x0f\xb7\x30\x3f\x58", // 00:0f:b7:30:3f:58
