@@ -75,6 +75,11 @@ crc16(uint8_t *data_p,
 bool
 pkt_filter(uint8_t *pkt_ptr)
 {
+  /* int i; */
+  /* for(i=0; i<32;i++) */
+  /*   printf("%x ", pkt_ptr[i]); */
+  /* printf("\n"); */
+  /* printf("UDP: pkt[%d] = %d %d\n", IP_PROTOCOL_POS, pkt_ptr[IP_PROTOCOL_POS], 0x11); */
     // UDP only
     if (pkt_ptr[IP_PROTOCOL_POS] == 0x11) {
         return false;
@@ -156,21 +161,6 @@ in_chksum(uint16_t *addr,
 }
 
 static void
-rebuild_ether_header(uint8_t *pkt_ptr,
-                     entity *des)
-{
-    // source mac
-    memcpy(pkt_ptr + ETHER_SRC_POS,
-           pkt_ptr + ETHER_DES_POS,
-           MAC_ADDRESS_LEN);
-
-    // destination mac
-    memcpy(pkt_ptr + ETHER_DES_POS,
-           des->mac,
-           MAC_ADDRESS_LEN);
-}
-
-static void
 swap_ether_header(uint8_t *pkt_ptr)
 {
     uint8_t tmp[MAC_ADDRESS_LEN];
@@ -186,21 +176,6 @@ swap_ether_header(uint8_t *pkt_ptr)
     memcpy(pkt_ptr + ETHER_DES_POS,
            tmp,
            MAC_ADDRESS_LEN);
-}
-
-static void
-rebuild_ip_header(uint8_t *pkt_ptr,
-                  entity *des)
-{
-    // source ip
-    memcpy(pkt_ptr + IP_SRC_POS,
-           pkt_ptr + IP_DES_POS,
-           IP_ADDRESS_LEN);
-
-    // destination ip
-    memcpy(pkt_ptr + IP_DES_POS,
-           des->ip,
-           IP_ADDRESS_LEN);
 }
 
 static void
@@ -290,75 +265,6 @@ typedef struct _tcp_pseudo_hdr {
     uint8_t payload[PAYLOAD_SIZE];
 } tcp_pseudo_hdr;
 
-static void
-recalculate_tcp_chksum(uint8_t *pkt_ptr,
-                       int pkt_len)
-{
-    uint8_t saved_header[ETHER_HEADER_LEN + IP_HEADER_LEN + TCP_HEADER_LEN];
-    uint16_t chksum = 0;
-    tcp_pseudo_hdr *my_pseudo_hdr_ptr;
-
-    memcpy(saved_header,
-           pkt_ptr,
-           ETHER_HEADER_LEN + IP_HEADER_LEN + TCP_HEADER_LEN);
-
-    my_pseudo_hdr_ptr = (tcp_pseudo_hdr *)(pkt_ptr + TCP_PSEUDO_START);
-
-    memcpy(my_pseudo_hdr_ptr->src_addr,
-           saved_header + IP_SRC_POS,
-           IP_ADDRESS_LEN);
-    memcpy(my_pseudo_hdr_ptr->des_addr,
-           saved_header + IP_DES_POS,
-           IP_ADDRESS_LEN);
-
-    my_pseudo_hdr_ptr->reserved = 0;
-    my_pseudo_hdr_ptr->protocol = saved_header[IP_PROTOCOL_POS];
-    my_pseudo_hdr_ptr->len = pkt_len - ETHER_HEADER_LEN - IP_HEADER_LEN;
-    my_pseudo_hdr_ptr->tcp_hdr.th_sum = 0;
-
-    chksum = in_chksum((uint16_t *)my_pseudo_hdr_ptr,
-                        pkt_len - ETHER_HEADER_LEN -
-                        IP_HEADER_LEN - TCP_HEADER_LEN +
-                        TCP_HEADER_LEN + PSEUDO_TCP_HEADER_LEN);
-
-    memcpy(pkt_ptr,
-           saved_header,
-           ETHER_HEADER_LEN + IP_HEADER_LEN + TCP_HEADER_LEN);
-
-    *(uint16_t *)(pkt_ptr + TCP_CHKSUM_POS) = chksum;
-}
-
-static entity*
-pkt_2_des(uint8_t *pkt_ptr)
-{
-    unsigned int i;
-    int mac_ret, ip_ret;
-
-    for (i = 0; i < sizeof(mycluster)/sizeof(flow); i++) {
-        mac_ret = memcmp(pkt_ptr + ETHER_SRC_POS, mycluster[i].src.mac,
-                         MAC_ADDRESS_LEN);
-        ip_ret = memcmp(pkt_ptr + IP_SRC_POS, mycluster[i].src.ip,
-                        IP_ADDRESS_LEN);
-
-        if (!mac_ret && !ip_ret)
-            return &mycluster[i].des;
-    }
-
-    return NULL;
-}
-
-static bool
-is_prob_pkt(uint8_t *pkt_ptr)
-{
-    if (pkt_ptr[IP_PROTOCOL_POS] == 0x11) {
-        if (!memcmp(pkt_ptr + UDP_PAYLOAD, "PROB", 4)) {
-            return true;
-        }
-    }
-
-    return false;
-}
-
 static bool
 is_echo_pkt(uint8_t *pkt_ptr)
 {
@@ -389,9 +295,7 @@ header_swap(uint8_t *pkt_ptr)
     recalculate_udp_chksum(pkt_ptr);
 }
 
-static void
-recapsulate_pkt(uint8_t *pkt_ptr,
-                int pkt_len)
+void recapsulate_pkt(uint8_t *pkt_ptr, int pkt_len)
 {
 /*
     if (is_prob_pkt(pkt_ptr)) {

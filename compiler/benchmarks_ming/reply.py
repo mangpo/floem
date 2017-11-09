@@ -68,6 +68,8 @@ class Flow(Element):
     def impl(self):
         self.run_c(r'''
 (size_t pkt_len, void* pkt_ptr, void* buff) = inp();
+
+int i;
 uint64_t flow_id, processed_bytes = UINT64_MAX;
             flow_id = get_flow_id(pkt_ptr);
             flow_id += rand() % 1024;
@@ -106,6 +108,7 @@ class Seq(Element):
         self.run_c(r'''
 (size_t pkt_len, void* pkt_ptr, void* buff) = inp();
 
+    int i;
     uint32_t lock_bitmap;
             lock_bitmap = *(uint32_t *)(pkt_ptr + UDP_PAYLOAD + 5);
             uint64_t myseq;
@@ -120,7 +123,7 @@ class Seq(Element):
             while (!__sync_bool_compare_and_swap64(&this->seq_num,
                                                            myseq,
                                                            myseq + 1)) {
-                myseq = seq_num;
+                myseq = this->seq_num;
             }
             myseq = htonp(myseq);
             memcpy(pkt_ptr + UDP_PAYLOAD + 5, &myseq, sizeof(int64_t));
@@ -174,7 +177,7 @@ class nic_rx(InternalLoop):
 nic_rx('nic_rx', device=target.CAVIUM, cores=range(1))
 c = Compiler()
 c.include = r'''
-#include "pkt-util.h"
+#include "pkt-utils.h"
 #include "nic-compute.h"
 #include "count-min-sketch.h"
 '''

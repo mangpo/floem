@@ -17,10 +17,7 @@
 #include <dpdkif.h>
 #endif
 
-#define MIN(a,b) (((a)>(b))?(b):(a))
-#define MAX(a,b) (((a)>(b))?(a):(b))
-
-void lock_group_init(cvmx_spinlock_t* lock_group, int n) {
+void lock_group_init(spinlock_t* lock_group, int n) {
     int i = 0;
 
     for (i = 0; i < n; i++) {
@@ -29,8 +26,7 @@ void lock_group_init(cvmx_spinlock_t* lock_group, int n) {
 }
 
 
-static PKT_TYPE
-pkt_parser(uint8_t *pkt_ptr)
+PKT_TYPE pkt_parser(uint8_t *pkt_ptr)
 {
     PKT_TYPE cmd_type;
 
@@ -54,7 +50,7 @@ pkt_parser(uint8_t *pkt_ptr)
  *
  * @param key    3des keys
  */
-static void crypto_3des_initialize(const uint64_t *key)
+void crypto_3des_initialize(const uint64_t *key)
 {
     CVMX_MT_3DES_KEY(key[0],0);
     CVMX_MT_3DES_KEY(key[1],1);
@@ -67,7 +63,7 @@ static void crypto_3des_initialize(const uint64_t *key)
  * @param data     Data to encrypt
  * @param data_len Length of the data. Must be a multiple of 8
  */
-static void crypto_3des_encrypt(uint64_t *data, int data_len)
+void crypto_3des_encrypt(uint64_t *data, int data_len)
 {
     assert((data_len & 0x7) == 0);
 
@@ -98,7 +94,7 @@ compute_3des(uint8_t *pkt_ptr,
  * @param key     AES keys
  * @param key_len Length of key in bits
  */
-static void crypto_aes_initialize(const uint64_t *key, int key_len)
+void crypto_aes_initialize(const uint64_t *key, int key_len)
 {
     CVMX_MT_AES_KEY(key[0],0);
     CVMX_MT_AES_KEY(key[1],1);
@@ -113,7 +109,7 @@ static void crypto_aes_initialize(const uint64_t *key, int key_len)
  * @param data     Data to encrypt
  * @param data_len Length of the data. Must be a multiple of 16
  */
-static void crypto_aes_encrypt(uint64_t *data, int data_len)
+void crypto_aes_encrypt(uint64_t *data, int data_len)
 {
     assert((data_len & 0xf) == 0);
 
@@ -147,7 +143,7 @@ compute_aes(uint8_t *pkt_ptr,
  *
  * @param key    3des keys
  */
-static void crypto_3des_initialize(const uint64_t *key)
+void crypto_3des_initialize(const uint64_t *key)
 {
     //CVMX_MT_3DES_KEY(key[0],0);
     //CVMX_MT_3DES_KEY(key[1],1);
@@ -160,7 +156,7 @@ static void crypto_3des_initialize(const uint64_t *key)
  * @param data     Data to encrypt
  * @param data_len Length of the data. Must be a multiple of 8
  */
-static void crypto_3des_encrypt(uint64_t *data, int data_len)
+void crypto_3des_encrypt(uint64_t *data, int data_len)
 {
     assert((data_len & 0x7) == 0);
 
@@ -191,7 +187,7 @@ compute_3des(uint8_t *pkt_ptr,
  * @param key     AES keys
  * @param key_len Length of key in bits
  */
-static void crypto_aes_initialize(const uint64_t *key, int key_len)
+void crypto_aes_initialize(const uint64_t *key, int key_len)
 {
 /*
     CVMX_MT_AES_KEY(key[0],0);
@@ -208,7 +204,7 @@ static void crypto_aes_initialize(const uint64_t *key, int key_len)
  * @param data     Data to encrypt
  * @param data_len Length of the data. Must be a multiple of 16
  */
-static void crypto_aes_encrypt(uint64_t *data, int data_len)
+void crypto_aes_encrypt(uint64_t *data, int data_len)
 {
     assert((data_len & 0xf) == 0);
 

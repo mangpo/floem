@@ -13,5 +13,7 @@ uint32_t get_flow_id(uint8_t *pkt_ptr);
 void print_pkt(uint8_t *pkt_ptr, int len);
 bool pkt_filter(uint8_t *pkt_ptr);
 void header_swap(uint8_t *pkt_ptr);
+void recapsulate_pkt(uint8_t *pkt_ptr, int pkt_len);
+
 
 #endif /* _PKT_UTILS_H */
