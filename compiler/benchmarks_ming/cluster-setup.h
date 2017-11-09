@@ -23,7 +23,10 @@ typedef struct _flow {
     entity des;
 } __attribute__((packed)) flow;
 
-CVMX_SHARED flow mycluster[] = {
+#ifdef CAVIUM
+CVMX_SHARED 
+#endif
+flow mycluster[] = {
     { // n72 -> n73
         .src = {
             .mac = {0x00, 0x02, 0xc9, 0x4e, 0xde, 0xe4},

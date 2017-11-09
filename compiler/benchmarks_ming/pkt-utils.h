@@ -6,7 +6,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#define CAVIUM
+//#define CAVIUM
 #define UDP_PAYLOAD 42
 
 uint32_t get_flow_id(uint8_t *pkt_ptr);

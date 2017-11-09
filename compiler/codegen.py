@@ -684,7 +684,7 @@ def generate_code_and_compile(graph, opt):
         compile_object_file(opt.depend)
 
     for process in graph.processes:
-        cmd = get_compile_command(process)
+        cmd = get_compile_command(process, opt.depend)
         status = os.system(cmd)
         if not status == 0:
             raise Exception("Compile error: " + cmd)

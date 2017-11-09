@@ -37,8 +37,9 @@ void
 cm_sketch_init()
 {
     cm_sketch = (uint64_t *) malloc(sizeof(uint64_t) *
-                                               CM_ROW_NUM * CM_COL_NUM, 8);
+                                               CM_ROW_NUM * CM_COL_NUM);
     memset(cm_sketch, 0x00, sizeof(uint64_t) * CM_ROW_NUM * CM_COL_NUM);
+}
 #endif
 
 /*
@@ -91,7 +92,7 @@ cm_hash4(uint32_t v)
     return v * UINT32_C(2654435761);
 }
 
-static uint32_t
+uint32_t
 flow_to_hash(int row,
              uint32_t flow_id)
 {

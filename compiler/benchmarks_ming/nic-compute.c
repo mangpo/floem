@@ -15,6 +15,7 @@
 #include "util.h"
 #else
 #include <dpdkif.h>
+#include <assert.h>
 #endif
 
 void lock_group_init(spinlock_t* lock_group, int n) {

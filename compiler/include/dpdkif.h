@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdio.h>
+#include <sys/time.h>
 
 #include <rte_config.h>
 #include <rte_memcpy.h>
@@ -22,6 +23,8 @@ typedef rte_spinlock_t spinlock_t;
 
 #define __sync_fetch_and_add32(ptr, inc) __sync_fetch_and_add(ptr, inc)
 #define __sync_fetch_and_add64(ptr, inc) __sync_fetch_and_add(ptr, inc)
+#define __sync_bool_compare_and_swap32(ptr, old, new) __sync_bool_compare_and_swap(ptr, old, new)
+#define __sync_bool_compare_and_swap64(ptr, old, new) __sync_bool_compare_and_swap(ptr, old, new)
 
 /* these are non-static on purpose! */
 uint8_t dpdk_port_id;

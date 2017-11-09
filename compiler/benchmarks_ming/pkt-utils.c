@@ -9,6 +9,8 @@
 #include "cvmx-config.h"
 #include "cvmx.h"
 #include "cvmx-pko.h"
+#else
+#include <stdio.h>
 #endif
 
 

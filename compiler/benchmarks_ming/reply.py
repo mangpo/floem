@@ -35,6 +35,7 @@ class Classify(Element):
 PKT_TYPE mytype;
 
 mytype = pkt_parser(pkt);
+printf("type = %d\n", mytype);
 
 output switch {
   case mytype==HASH: hash(size, pkt, buff);
@@ -89,7 +90,7 @@ output { out(pkt_len, pkt_ptr, buff); }
 class SeqState(State):
     n = 32
     seq_num = Field(Uint(64))
-    lock_group = Field(Array('lock_t', n))
+    lock_group = Field(Array('spinlock_t', n))
 
     def init(self):
         self.seq_num = 0
@@ -173,8 +174,8 @@ class nic_rx(InternalLoop):
         reply >> to_net
 
 
-#nic_rx('nic_rx', process='dpdk', cores=range(2))
-nic_rx('nic_rx', device=target.CAVIUM, cores=range(1))
+nic_rx('nic_rx', process='dpdk', cores=range(1))
+#nic_rx('nic_rx', device=target.CAVIUM, cores=range(1))
 c = Compiler()
 c.include = r'''
 #include "pkt-utils.h"
@@ -185,5 +186,8 @@ c.init = r'''
 cm_sketch_init();
 '''
 c.testing = 'while (1) pause();'
-c.generate_code_as_header()
+c.depend = ['pkt-utils', 'count-min-sketch', 'nic-compute']
+#c.generate_code_as_header()
 #c.generate_code_and_compile()
+#c.compile_and_run('dpdk')
+c.generate_code_and_run()
