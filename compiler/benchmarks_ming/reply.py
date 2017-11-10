@@ -35,7 +35,7 @@ class Classify(Element):
 PKT_TYPE mytype;
 
 mytype = pkt_parser(pkt);
-printf("type = %d\n", mytype);
+//printf("type = %d\n", mytype);
 
 output switch {
   case mytype==HASH: hash(size, pkt, buff);
@@ -54,8 +54,9 @@ class Hash(Element):
     def impl(self):
         self.run_c(r'''
 (size_t pkt_len, void* pkt_ptr, void* buff) = inp();
-//compute_3des(pkt_ptr, pkt_len);
-compute_aes(pkt_ptr, pkt_len);
+compute_3des(pkt_ptr, pkt_len);
+//compute_aes(pkt_ptr, pkt_len);
+//printf("AES\n");
 
 output { out(pkt_len, pkt_ptr, buff); }
         ''')
@@ -126,6 +127,7 @@ class Seq(Element):
                                                            myseq + 1)) {
                 myseq = this->seq_num;
             }
+        //printf("seq: %ld  size: %ld\n", myseq, pkt_len);
             myseq = htonp(myseq);
             memcpy(pkt_ptr + UDP_PAYLOAD + 5, &myseq, sizeof(int64_t));
 
@@ -186,7 +188,7 @@ c.init = r'''
 cm_sketch_init();
 '''
 c.testing = 'while (1) pause();'
-c.depend = ['pkt-utils', 'count-min-sketch', 'nic-compute']
+c.depend = ['pkt-utils', 'count-min-sketch', 'nic-compute', 'tdes', 'aes']
 #c.generate_code_as_header()
 #c.generate_code_and_compile()
 #c.compile_and_run('dpdk')
