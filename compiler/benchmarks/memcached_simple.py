@@ -105,7 +105,8 @@ class main(Pipeline):
                 Scheduler() >> rx_deq
                 rx_deq.out[0] >> Display()
 
-        nic_rx('nic_rx', device=target.CAVIUM, cores=range(n_cores))
+        #nic_rx('nic_rx', device=target.CAVIUM, cores=range(n_cores))
+        nic_rx('nic_rx', process='dpdk', cores=range(n_cores))
         run('run', process='app', cores=range(1))
 
 
@@ -116,5 +117,5 @@ c.include = r'''
 #include "protocol_binary.h"
 '''
 c.generate_code_as_header()
-c.depend = ['app']
-c.compile_and_run("test_queue")
+c.depend = {"test_app": ['app']}
+c.compile_and_run(["test_queue", "dpdk"])
