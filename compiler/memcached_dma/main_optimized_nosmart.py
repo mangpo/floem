@@ -2,9 +2,9 @@ from dsl2 import *
 import queue_smart2, net_real, library_dsl2
 from compiler import Compiler
 
-n_cores = 7
+n_cores = 1
 nic_rx_threads = 5
-nic_tx_threads = 3
+nic_tx_threads = 2
 
 # class protocol_binary_request_header_request(State):
 #     magic = Field(Uint(8))
@@ -228,9 +228,9 @@ output { out(); }
             self.run_c(r'''
 iokvs_message* pkt = state.pkt;
 void* key = pkt->payload + pkt->mcr.request.extlen;
-item* it = hasht_get(key, pkt->mcr.request.keylen, state.hash);
+item* it = hasht_get(key, htons(pkt->mcr.request.keylen), state.hash);
 #ifdef DEBUG
-            printf("hash get: keylen = %d, hash = %d\n", pkt->mcr.request.keylen, state.hash);
+            printf("hash get: keylen = %d, hash = %d\n", htons(pkt->mcr.request.keylen), state.hash);
 #endif
 state.it = it;
 if(it) state.it_addr = it->addr;
@@ -939,7 +939,7 @@ iokvs_message* pkt = state.pkt;
     def impl(self):
 
         # Queue
-        RxEnq, RxDeq, RxScan = queue_smart2.smart_queue("rx_queue", 512 * 180, n_cores, 2, overlap=180, #64
+        RxEnq, RxDeq, RxScan = queue_smart2.smart_queue("rx_queue", 512 * 192, n_cores, 2, overlap=192, #64
                                                         enq_output=True, enq_blocking=True, enq_atomic=True)  # enq_blocking=False?
         rx_enq = RxEnq()
         rx_deq = RxDeq()
