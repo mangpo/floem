@@ -81,16 +81,6 @@ class segments_holder(State):
 class main(Pipeline):
     state = PerPacket(MyState)
 
-    class SaveID(Element):
-        def configure(self):
-            self.inp = Input(Int)
-
-        def impl(self):
-            self.run_c(r'''
-    state.core = inp();
-    state.pkt = NULL;
-            ''')
-
     class SaveState(Element):
         def configure(self):
             self.inp = Input(Size, "void *", "void *")
@@ -102,6 +92,7 @@ class main(Pipeline):
     iokvs_message* m = (iokvs_message*) pkt;
     state.pkt = m;
     state.pkt_buff = buff;
+    state.core = cvmx_get_core_num();
     output { out(); }
                 ''')
 
@@ -609,9 +600,6 @@ output { out(msglen, (void*) m, buff); }
                 prepare_header = main.PrepareHeader()
                 display = main.PrintMsg()
                 drop = main.Drop()
-                save_id = main.SaveID()
-
-                self.core_id >> save_id
 
                 # from_net
                 from_net >> hton1 >> check_packet >> main.SaveState() \
@@ -649,7 +637,6 @@ output { out(msglen, (void*) m, buff); }
                 # clean log
                 clean_log = main.CleanLog()
 
-                run_order(save_id, from_net)
                 run_order([to_net, from_net_free, drop], clean_log)
 
         process_one_pkt('process_one_pkt', device=target.CAVIUM, cores=range(n_cores))
@@ -684,7 +671,7 @@ class maintenance(InternalLoop):
 
         Schedule() >> Maintain()
 
-maintenance('maintenance', device=target.CAVIUM, cores=[n_cores])
+maintenance('maintenance', device=target.CAVIUM, cores=[11])
 
 
 ######################## Run test #######################
@@ -695,8 +682,11 @@ c.include = r'''
 #include "protocol_binary.h"
 '''
 c.init = r'''
+int corenum = cvmx_get_core_num();
 settings_init();
-ialloc_init();
-hasht_init();
+if(corenum == 0) {
+  ialloc_init();
+  hasht_init();
+}
 '''
 c.generate_code_as_header()
