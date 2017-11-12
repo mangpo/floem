@@ -92,7 +92,6 @@ class main(Pipeline):
     iokvs_message* m = (iokvs_message*) pkt;
     state.pkt = m;
     state.pkt_buff = buff;
-    state.core = cvmx_get_core_num();
     output { out(); }
                 ''')
 
@@ -120,6 +119,8 @@ class main(Pipeline):
 (size_t msglen, void* pkt, void* buff) = inp();
 iokvs_message* m = (iokvs_message*) pkt;
 
+state.pkt = null;
+state.core = cvmx_get_core_num();
 int type; // 0 = normal, 1 = slow, 2 = drop
 
 if (m->ether.ether_type == htons(ETHER_TYPE_IPv4) &&
@@ -555,7 +556,10 @@ output { out(msglen, (void*) m, buff); }
             self.inp = Input()
 
         def impl(self):
-            self.run_c("")
+            self.run_c(r'''
+state.pkt = null;
+state.core = cvmx_get_core_num();
+            ''')
 
     class ForwardBool(Element):
         def configure(self):
