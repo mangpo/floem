@@ -1,6 +1,6 @@
 from dsl2 import *
 from compiler import Compiler
-import net_real
+import net_real, library_dsl2
 
 n_cores = 1
 
@@ -24,8 +24,8 @@ class protocol_binary_request_header(State):
     def init(self): self.declare = False
 
 class iokvs_message(State):
-    ether = Field('struct ether_hdr')
-    ipv4 = Field('struct ipv4_hdr')
+    ether = Field('struct eth_hdr')
+    ipv4 = Field('struct ip_hdr')
     dup = Field('struct udp_hdr')
     mcudp = Field('memcached_udp_header')
     mcr = Field(protocol_binary_request_header)
@@ -49,15 +49,8 @@ class MyState(State):
     it = Field(Pointer(item), shared='data_region')
     key = Field('void*', copysize='state.pkt->mcr.request.keylen')
     hash = Field(Uint(32))
-    # segfull = Field(Uint(64))
-    # segbase = Field(Uint(64))
-    # seglen = Field(Uint(64))
     core = Field(Uint(16))
     vallen = Field(Uint(32))
-    # src_mac = Field('struct ether_addr')
-    # dst_mac = Field('struct ether_addr')
-    # src_ip = Field(Uint(32))
-    # src_port = Field(Uint(16))  # TODO: remove some fields
 
 class Schedule(State):
     core = Field(Size)
@@ -119,14 +112,15 @@ class main(Pipeline):
 (size_t msglen, void* pkt, void* buff) = inp();
 iokvs_message* m = (iokvs_message*) pkt;
 
-state.pkt = null;
+state.pkt = NULL;
 state.core = cvmx_get_core_num();
 int type; // 0 = normal, 1 = slow, 2 = drop
 
-if (m->ether.ether_type == htons(ETHER_TYPE_IPv4) &&
-    m->ipv4.next_proto_id == 17 &&
-    m->ipv4.dst_addr == settings.localip &&
-    m->udp.dst_port == htons(11211) &&
+if (m->ether.type == htons(ETHERTYPE_IPv4) &&
+    m->ipv4._proto == 17 &&
+    memcmp(m->ipv4.dest.addr, settings.localip.addr, sizeof(struct ip_addr)) == 0 &&
+    //m->ipv4.dest == settings.localip &&
+    m->udp.dest_port == htons(11211) &&
     msglen >= sizeof(iokvs_message))
 {
     uint32_t blen = m->mcr.request.bodylen;
@@ -275,34 +269,7 @@ m->mcr.request.extlen = 4;
 m->mcr.request.bodylen = 4;
 *((uint32_t *)m->payload) = 0;
 m->mcr.request.bodylen = 4 + state.vallen;
-rte_memcpy(m->payload + 4, item_value(it), state.vallen);
-
-output { out(msglen, m, pkt_buff); }
-            ''')
-
-        def impl_cavium(self):
-            self.run_c(r'''
-        (size_t msglen, void* pkt, void* pkt_buff) = inp();
-        iokvs_message *m = pkt;
-        //memcpy(m, &iokvs_template, sizeof(iokvs_message));
-        int msglen = sizeof(iokvs_message) + 4;
-        item* it = state.it;
-
-        m->mcr.request.magic = PROTOCOL_BINARY_RES;
-        m->mcr.request.opcode = PROTOCOL_BINARY_CMD_GET;
-        m->mcr.request.datatype = PROTOCOL_BINARY_RAW_BYTES;
-        m->mcr.request.status = PROTOCOL_BINARY_RESPONSE_SUCCESS;
-
-m->mcr.request.keylen = 0;
-m->mcr.request.extlen = 4;
-m->mcr.request.bodylen = 4;
-*((uint32_t *)m->payload) = 0;
-m->mcr.request.bodylen = 4 + state.vallen;
-
-void* value;
-dma_read(item_value(it), state.vallen, (void**) &value);
-rte_memcpy(m->payload + 4, value, state.vallen);
-dma_free(value);
+memcpy(m->payload + 4, item_value(it), state.vallen);
 
 output { out(msglen, m, pkt_buff); }
             ''')
@@ -416,20 +383,20 @@ output { out(msglen, m, pkt_buff); }
             self.run_c(r'''
         (size_t msglen, iokvs_message* m, void* buff) = inp();
 
-        struct ether_addr mymac = m->ether.d_addr;
-        m->ether.d_addr = m->ether.s_addr;
-        m->ether.s_addr = mymac; //settings.localmac;
-        m->ipv4.dst_addr = m->ipv4.src_addr;
-        m->ipv4.src_addr = settings.localip;
-        m->ipv4.total_length = htons(msglen - offsetof(iokvs_message, ipv4));
-        m->ipv4.time_to_live = 64;
-        m->ipv4.hdr_checksum = 0;
-        //m->ipv4.hdr_checksum = rte_ipv4_cksum(&m->ipv4);
+        struct eth_addr mymac = m->ether.dest;
+        m->ether.dest = m->ether.src;
+        m->ether.src = mymac;
+        m->ipv4.dest = m->ipv4.src;
+        m->ipv4.src = settings.localip;
+        m->ipv4._len = htons(msglen - offsetof(iokvs_message, ipv4));
+        m->ipv4._ttl = 64;
+        m->ipv4._chksum = 0;
+        //m->ipv4._chksum = rte_ipv4_cksum(&m->ipv4);  // TODO
 
-        m->udp.dst_port = m->udp.src_port;
+        m->udp.dest_port = m->udp.src_port;
         m->udp.src_port = htons(11211);
-        m->udp.dgram_len = htons(msglen - offsetof(iokvs_message, udp));
-        m->udp.dgram_cksum = 0;
+        m->udp.len = htons(msglen - offsetof(iokvs_message, udp));
+        m->udp.cksum = 0;
 
         output { out(msglen, (void*) m, buff); }
             ''')
@@ -448,21 +415,24 @@ output { out(msglen, m, pkt_buff); }
     int resp = 0;
 
     /* Currently we're only handling ARP here */
-    if (msg->ether.ether_type == htons(ETHER_TYPE_ARP) &&
-            arp->arp_hrd == htons(ARP_HRD_ETHER) && arp->arp_pln == 4 &&
-            arp->arp_op == htons(ARP_OP_REQUEST) && arp->arp_hln == 6 &&
-            arp->arp_data.arp_tip == settings.localip)
+    if (msg->ether.type == htons(ETHERTYPE_ARP) &&
+            arp->arp_hrd == htons(ARPHRD_ETHER) && arp->arp_pln == 4 &&
+            arp->arp_op == htons(ARPOP_REQUEST) && arp->arp_hln == 6 &&
+            memcmp(arp->arp_tip.addr, settings.localip.addr, sizeof(struct ip_addr)) == 0
+            //arp->arp_tip == settings.localip
+            )
     {
         printf("Responding to ARP\n");
         resp = 1;
-        struct ether_addr mymac = msg->ether.d_addr;
-        msg->ether.d_addr = msg->ether.s_addr;
-        msg->ether.s_addr = mymac;
-        arp->arp_op = htons(ARP_OP_REPLY);
-        arp->arp_data.arp_tha = arp->arp_data.arp_sha;
-        arp->arp_data.arp_sha = mymac;
-        arp->arp_data.arp_tip = arp->arp_data.arp_sip;
-        arp->arp_data.arp_sip = settings.localip;
+        struct eth_addr mymac = msg->ether.dest;
+        msg->ether.dest = msg->ether.src;
+        msg->ether.src = mymac; // TODO
+
+        arp->arp_op = htons(ARPOP_REPLY);
+        arp->arp_tha = arp->arp_sha;
+        arp->arp_sha = mymac;
+        arp->arp_tip = arp->arp_sip;
+        arp->arp_sip = settings.localip;
 
         //rte_mbuf_refcnt_update(mbuf, 1);  // TODO
 
@@ -473,9 +443,9 @@ output { out(msglen, m, pkt_buff); }
     }
 
     output switch { 
-      case resp: out(sizeof(struct ether_hdr) + sizeof(struct arp_hdr), pkt, buff); 
+      case resp: out(sizeof(struct eth_hdr) + sizeof(struct arp_hdr), pkt, buff); 
             else: drop(pkt, buff);
-    }
+            }
             ''')
 
 
@@ -488,15 +458,15 @@ output { out(msglen, m, pkt_buff); }
             self.run_c(r'''
 (size_t msglen, void* pkt, void* buff) = inp();
 iokvs_message* m = (iokvs_message*) pkt;
+
+#ifdef DEBUG
 uint8_t *val = m->payload + 4;
 uint8_t opcode = m->mcr.request.opcode;
-
-/*
 if(opcode == PROTOCOL_BINARY_CMD_GET)
     printf("GET -- status: %d, len: %d, val:%d\n", m->mcr.request.status, m->mcr.request.bodylen, val[0]);
 else if (opcode == PROTOCOL_BINARY_CMD_SET)
     printf("SET -- status: %d, len: %d\n", m->mcr.request.status, m->mcr.request.bodylen);
-*/
+#endif
 
 output { out(msglen, (void*) m, buff); }
     ''')
@@ -557,7 +527,7 @@ output { out(msglen, (void*) m, buff); }
 
         def impl(self):
             self.run_c(r'''
-state.pkt = null;
+state.pkt = NULL;
 state.core = cvmx_get_core_num();
             ''')
 
@@ -614,7 +584,7 @@ state.core = cvmx_get_core_num();
                 hash_get = main.HashGet()
                 get_response = main.PrepareGetResp()
                 classifier.out_get >> hash_get >> main.SizeGetResp() >> main.SizePktBuff() >> get_response >> prepare_header
-                get_response >> main.Unref() >> main.Drop()
+                get_response >> main.Unref() >> library_dsl2.Drop()
 
                 # get (null)
                 hash_get.null >> main.SizeGetNullResp() >> main.SizePktBuff() >> main.PrepareGetNullResp() >> prepare_header
@@ -670,7 +640,7 @@ class maintenance(InternalLoop):
             def impl(self):
                 self.run_c(r'''
                 int id = inp();
-                ialloc_maintenance(&this->iallocs[id]);
+                ialloc_maintenance(&this->ia[id]);
                 ''')
 
         Schedule() >> Maintain()

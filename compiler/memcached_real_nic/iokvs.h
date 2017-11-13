@@ -1,14 +1,17 @@
 #ifndef IOKVS_H_
 #define IOKVS_H_
 
-#include "cvmx.h"
-#include "cvmx-atomic.h"
-#include "shared-mm.h"
-#include "util.h"
+
+#include <stdio.h>
+#include <stddef.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <stdbool.h>
+#include <assert.h>
 #include "protocol_binary.h"
 
-#define NUM_THREADS     1
-//#define QUEUE_STAT
+#define NUM_THREADS     6
+//#define DEBUG
 
 /******************************************************************************/
 /* Settings */
@@ -33,19 +36,7 @@ struct settings {
 
 /** Global settings */
 extern struct settings settings;
-void settings_init(int argc, char *argv[]);
-uint32_t settings_total_space();
-
-/*
-static struct settings settings = {
-  .udpport = 11211,
-  .verbose = 1,
-  .segsize = 2 * 1024 * 1024, //  4 * 1024
-  .segmaxnum = 512,
-  .segcqsize = 32 * 1024 // 1024
-};
-*/
-
+void settings_init();
 
 /**
  * Item.
@@ -65,6 +56,7 @@ typedef struct _item {
     uint16_t keylen;
     /** Flags (currently unused, but provides padding) */
     uint32_t flags;
+    uint64_t addr;
 } item;
 
 /******************************************************************************/
@@ -72,12 +64,6 @@ typedef struct _item {
 
 /** Initialize hash table. */
 void hasht_init(void);
-
-/** Prefetch hash table slot */
-void hasht_prefetch1(uint32_t hv);
-
-/** Prefetch matching items */
-void hasht_prefetch2(uint32_t hv);
 
 /**
  * Lookup key in hash table.
@@ -98,6 +84,7 @@ void hasht_put(item *it, item *cas);
 
 struct segment_header {
     void *data;
+    uint64_t addr;
     struct segment_header *next;
     struct segment_header *prev;
     uint32_t offset;
@@ -150,13 +137,9 @@ struct item_allocator {
 
 
 /** Initialize item allocation. Prepares memory regions etc. */
-//void ialloc_init(void);
-//void ialloc_init_slave(void);
-//void ialloc_finalize(void);
-//void ialloc_finalize_slave(void);
 uint64_t get_pointer_offset(void* p);
 struct item_allocator* get_item_allocators();
-void ialloc_init(void*);
+void ialloc_init();
 
 /** Initialize an item allocator instance. */
 void ialloc_init_allocator(struct item_allocator *ia, uint32_t core_id);
@@ -280,160 +263,23 @@ static inline void myt_item_release(void *it)
     item_unref(it);
 }
 
+/*
 typedef struct {
-    struct ether_hdr ether;
-#if DPDK_IPV6
-    struct ipv6_hdr ipv6;
-#else
-    struct ipv4_hdr ipv4;
-#endif
+    struct eth_hdr ether;
+    struct ip_hdr ipv4;
     struct udp_hdr udp;
     memcached_udp_header mcudp;
     protocol_binary_request_header mcr;
     uint8_t payload[];
 } __attribute__ ((packed)) iokvs_message;
+*/
 
-static iokvs_message iokvs_template = {
-  .ether = { .ether_type = 0x0008 },
- .ipv4 = { .version_ihl = 0x45, .time_to_live = 0x40, .next_proto_id = 0x11},
- .mcudp = { .n_data = 0x0100 }
-};
-
+iokvs_message* iokvs_template();
 uint32_t jenkins_hash(const void *key, size_t length);
-void populate_hasht();
 
-static item* random_item(size_t v) {
-  size_t keylen = (v % 4) + 1;
-  size_t vallen = (v % 4) + 1;
-
-  item *it = (item *) malloc(sizeof(item) + keylen + vallen);
-  it->keylen = keylen;
-  it->vallen = vallen;
-  uint8_t *key = item_key(it);
-  uint8_t *val = item_value(it);
-  for(size_t i=0; i<keylen; i++)
-    key[i] = v;
-  for(size_t i=0; i<vallen; i++)
-    val[i] = v * 3;
-
-  uint32_t hash = jenkins_hash(key, keylen);
-  it->hv = hash;
-  it->refcount = 1;
-  return it;
-}
-
-static iokvs_message* random_get_request(size_t v, size_t id) {
-  size_t keylen = (v % 4) + 1;
-  size_t extlen = 4;
-
-  iokvs_message *m = (iokvs_message *) malloc(sizeof(iokvs_message) + extlen + keylen);
-  m->mcr.request.opcode = PROTOCOL_BINARY_CMD_GET;
-  m->mcr.request.magic = id; // PROTOCOL_BINARY_REQ
-  m->mcr.request.opaque = id; // PROTOCOL_BINARY_REQ
-  m->mcr.request.keylen = keylen;
-  m->mcr.request.datatype = PROTOCOL_BINARY_RAW_BYTES;
-  m->mcr.request.status = 0;
-
-  m->mcr.request.extlen = extlen;
-  m->mcr.request.bodylen = extlen + keylen;
-  *((uint32_t *)m->payload) = 0;
-
-  uint8_t* key = m->payload + extlen;
-  for(size_t i=0; i<keylen; i++)
-    key[i] = v;
-
-  return m;
-}
-
-static iokvs_message* random_set_request(size_t v, size_t id) {
-  size_t keylen = (v % 4) + 1;
-  size_t vallen = (v % 4) + 1;
-  size_t extlen = 4;
-
-  iokvs_message *m = (iokvs_message *) malloc(sizeof(iokvs_message) + extlen + keylen + vallen);
-  m->mcr.request.opcode = PROTOCOL_BINARY_CMD_SET;
-  m->mcr.request.magic = id; // PROTOCOL_BINARY_REQ
-  m->mcr.request.opaque = id; // PROTOCOL_BINARY_REQ
-  m->mcr.request.keylen = keylen;
-  m->mcr.request.datatype = PROTOCOL_BINARY_RAW_BYTES;
-  m->mcr.request.status = 0;
-
-  m->mcr.request.extlen = extlen;
-  m->mcr.request.bodylen = extlen + keylen + vallen;
-  *((uint32_t *)m->payload) = 0;
-
-  uint8_t* key = m->payload + extlen;
-  for(size_t i=0; i<keylen; i++)
-    key[i] = v;
-
-  uint8_t* val = m->payload + extlen + keylen;
-  for(size_t i=0; i<vallen; i++)
-    val[i] = v * 3;
-
-  return m;
-}
-
-static iokvs_message* random_request(size_t v) {
-    if(v % 2 == 0)
-        return random_set_request(v/2, v);
-    else
-        return random_get_request(v/2, v);
-}
-
-static iokvs_message* double_set_request(size_t v) {
-    if(v < 500)
-        return random_set_request(v, v);
-    else
-        return random_set_request(v - 500, v - 500);
-}
-
-static void cmp_func(int spec_n, iokvs_message **spec_data, int impl_n, iokvs_message **impl_data) {
-  if(!(spec_n == impl_n)) {
-    printf("Spec records %d entries, but Impl records %d entries.\n", spec_n, impl_n);
-    exit(-1);
-  }
-  for(int i=0; i<spec_n; i++) {
-    iokvs_message *ref = spec_data[i];
-    bool found = false;
-    for(int j=0; j<impl_n; j++) {
-        iokvs_message *my = impl_data[j];
-        if(ref->mcr.request.opcode == PROTOCOL_BINARY_CMD_GET && my->mcr.request.opcode == PROTOCOL_BINARY_CMD_GET) {
-            if(ref->mcr.request.opaque == my->mcr.request.opaque
-            && ref->mcr.request.extlen == my->mcr.request.extlen
-            && ref->mcr.request.bodylen == my->mcr.request.bodylen) {
-              int vallen = ref->mcr.request.bodylen - 4;
-              uint8_t* ref_val = ref->payload + 4;
-              uint8_t* my_val = ref->payload + 4;
-              bool eq = true;
-              for(int k=0; k < vallen; k++) {
-                if(ref_val[k] != my_val[k]) {
-                  eq = false;
-                  break;
-                }
-              }
-              if(eq) {
-                found = true;
-                break;
-              }
-            }
-        }
-        else if (ref->mcr.request.opcode == PROTOCOL_BINARY_CMD_SET && my->mcr.request.opcode == PROTOCOL_BINARY_CMD_SET) {
-            if(ref->mcr.request.opaque == my->mcr.request.opaque
-            && ref->mcr.request.extlen == my->mcr.request.extlen
-            && ref->mcr.request.bodylen == my->mcr.request.bodylen) {
-                found = true;
-                break;
-            }
-        }
-          // TODO: continue
-    }
-    if(!found) {
-        printf("Impl doesn't have a response for %d, %d, %d, %d.\n", ref->mcr.request.opcode, ref->mcr.request.opaque, ref->mcr.request.extlen, ref->mcr.request.bodylen);
-        //printf("Impl doesn't have some responses.");
-        exit(-1);
-    }
-  }
-  printf("PASSED: n = %d\n", spec_n);
-}
+iokvs_message* random_get_request(uint8_t v, uint8_t id);
+iokvs_message* random_set_request(uint8_t v, uint8_t id);
+iokvs_message* random_request(uint8_t v);
+iokvs_message* double_set_request(uint8_t v);
 
 #endif // ndef IOKVS_H_

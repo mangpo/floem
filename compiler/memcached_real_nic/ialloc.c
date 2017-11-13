@@ -15,9 +15,9 @@ CVMX_SHARED struct segment_header **seg_headers;
 CVMX_SHARED size_t seg_alloced;
 
 void ialloc_init() {
-  seg_base = share_mm_malloc(settings_total_space());
+  seg_base = (void*) shared_mm_malloc(settings.segsize * settings.segmaxnum);
   printf("seg_base = %p\n", seg_base);
-  seg_headers = share_mm_malloc(settings.segmaxnum * sizeof(*seg_headers));
+  seg_headers = (struct segment_header **) shared_mm_malloc(settings.segmaxnum * sizeof(*seg_headers)); 
 }
 
 static struct segment_header *segment_alloc(uint32_t core_id)
@@ -44,7 +44,7 @@ static struct segment_header *segment_alloc(uint32_t core_id)
     i = seg_alloced;
     if (i >= settings.segmaxnum) {
         spinlock_unlock(&segalloc_lock);
-	printf("i = %d >= settings.segmaxnum (1)\n", i);
+	printf("i = %ld >= settings.segmaxnum (1)\n", i);
 	exit(1);
         return NULL;
     }
@@ -55,7 +55,7 @@ static struct segment_header *segment_alloc(uint32_t core_id)
     i = seg_alloced;
     if (i >= settings.segmaxnum) {
         spinlock_unlock(&segalloc_lock);
-	printf("i = %d >= settings.segmaxnum (2)\n", i);
+	printf("i = %ld >= settings.segmaxnum (2)\n", i);
 	exit(1);
         return NULL;
     }
@@ -65,7 +65,7 @@ static struct segment_header *segment_alloc(uint32_t core_id)
 
     segsz = settings.segsize;
     data = (void *) ((uintptr_t) seg_base + segsz * i);
-    printf("segment alloc: seg_base = %p, data = %p, i = %d\n", seg_base, data, i);
+    printf("segment alloc: seg_base = %p, data = %p, i = %ld\n", seg_base, data, i);
     //#ifndef BARRELFISH
 #ifdef BARRELFISH
     if (mprotect(data, settings.segsize, PROT_READ | PROT_WRITE) != 0) {
@@ -78,7 +78,7 @@ static struct segment_header *segment_alloc(uint32_t core_id)
 #endif
     fflush(stdout);
 
-    h = share_mm_malloc(sizeof(*h));
+    h = (struct segment_header *) shared_mm_malloc(sizeof(*h));
     if (h == NULL) {
         /* TODO: check what to do here */
         return NULL;
@@ -104,12 +104,12 @@ static inline struct segment_header *segment_from_part(void *data)
 
 static void segment_free(struct segment_header *h)
 {
-  //printf("Free segment!\n");
-    spinlock_lock(&segalloc_lock);
-    h->offset = 0;
-    h->next = free_segments;
-    free_segments = h;
-    spinlock_unlock(&segalloc_lock);
+  printf("Free segment!\n");
+  spinlock_lock(&segalloc_lock);
+  h->offset = 0;
+  h->next = free_segments;
+  free_segments = h;
+  spinlock_unlock(&segalloc_lock);
 }
 
 void segment_item_free(struct segment_header *h, size_t total)
@@ -317,9 +317,10 @@ void ialloc_init_allocator(struct item_allocator *ia, uint32_t core_id)
     ia->cur_nic = NULL;
     ia->oldest = h;
     ia->oldest_nic = NULL;
-    ia->cleanup_queue = share_mm_malloc(settings.segcqsize, sizeof(*ia->cleanup_queue));
+    ia->cleanup_queue = (item **) shared_mm_malloc(settings.segcqsize * sizeof(*ia->cleanup_queue));
     ia->cq_head = ia->cq_tail = 0;
     ia->cleaning = NULL;
+    ia->reserved = segment_alloc(ia->core_id);
     __sync_synchronize();
 }
 
@@ -540,10 +541,11 @@ CVMX_SHARED struct item_allocator iallocs[NUM_THREADS];
 CVMX_SHARED bool init_allocator = false;
 
 struct item_allocator* get_item_allocators() {
+  int i;
     if(!init_allocator) {
         init_allocator = true;
         printf("Init item_allocator\n");
-        for(int i=0; i<NUM_THREADS; i++) {
+        for(i=0; i<NUM_THREADS; i++) {
             ialloc_init_allocator(&iallocs[i], i);
         }
     }

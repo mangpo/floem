@@ -30,7 +30,7 @@ void hasht_init(void)
     size_t i;
 
     nbuckets = TABLESZ(HASHTABLE_POWER);
-    buckets = share_mm_malloc((nbuckets + 1) * sizeof(*buckets));
+    buckets = (struct hash_bucket *) shared_mm_malloc((nbuckets + 1) * sizeof(*buckets));
     buckets = (struct hash_bucket *) (((uintptr_t) buckets + 63) & ~63ULL);
     if (buckets == NULL) {
         perror("Allocating item hash table failed");
@@ -105,6 +105,7 @@ void hasht_put(item *nit, item *cas)
 
 
     b = buckets + (hv % nbuckets);
+    di = 0;
 #ifndef NOHTLOCKS
     spinlock_lock(&b->lock);
 #endif
@@ -170,35 +171,4 @@ done:
     spinlock_unlock(&b->lock);
 #endif
     return;
-}
-
-void populate_hasht(size_t n) {
-  uint32_t hashes[10];
-  uint8_t *keys[10];
-  uint8_t *vals[10];
-  uint16_t keylens[10];
-
-  hasht_init();
-  for(size_t i=0; i<n; i++) {
-    item *it = random_item(i);
-    hashes[i] = it->hv;
-    keylens[i] = it->keylen;
-    keys[i] = item_key(it);
-    vals[i] = item_value(it);
-    hasht_put(it, NULL);
-  }
-
-//  for(size_t i=0; i<n; i++) {
-//    printf("key[%d] = %d %d\n", i, keys[i][0], vals[i][0]);
-//  }
-//
-//  for(size_t i=0; i<n; i++) {
-//    uint32_t hash = jenkins_hash(keys[i], keylens[i]);
-//    printf("keylen, hash = %d %d\n", keylens[i], hash);
-//    item *it = hasht_get(keys[i], keylens[i], hash);
-//    //printf("it[%d] = %ld\n", i, it);
-//  }
-//  printf("done\n");
-//  item *it =hasht_get(keys[0], 0, 0);
-//  printf("extra = %ld\n", it);
 }
