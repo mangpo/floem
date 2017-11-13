@@ -12,6 +12,7 @@
 #include <sys/mman.h>
 #include <fcntl.h>
 #include <linux_hugepage.h>
+#include <dpdkif.h>
 #endif
 
 #define SF_INACTIVE 1

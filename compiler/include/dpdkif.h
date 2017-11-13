@@ -324,4 +324,9 @@ static inline uint64_t ntohp(uint64_t x) {
   return htonp(x);
 }
 
+
+// Ignore CAVIUM DEFINE
+#define CVMX_CACHE_LINE_ALIGNED
+#define CVMX_SHARED
+
 #endif /* ndef DPDK_H_ */
