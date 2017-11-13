@@ -17,3 +17,17 @@ void settings_init()
   settings.localip = ip;
 }
 
+iokvs_message template = {
+  .ipv4 = { ._v_hl = 0x45, ._ttl = 0x40, ._proto = 0x11},
+#ifndef CAVIUM
+  .ether = { .type = 0x0008 },
+  .mcudp = { .n_data = 0x0100 }
+#else
+  .ether = { .type = 0x0800 },
+  .mcudp = { .n_data = 1 }
+#endif
+}; // CAVIUM
+
+iokvs_message* iokvs_template() {
+  return &template;
+}

@@ -10,8 +10,9 @@
 #include <assert.h>
 #include "protocol_binary.h"
 
-#define NUM_THREADS     11
-//#define DEBUG
+#define NUM_THREADS     10
+#define CPU_THREADS     1
+#define DEBUG
 
 /******************************************************************************/
 /* Settings */
