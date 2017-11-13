@@ -3,7 +3,7 @@ from compiler import Compiler
 import net_real, library_dsl2, queue_smart2
 
 n_cores = 10
-miss_every = 2
+miss_every = 1
 
 class protocol_binary_request_header_request(State):
     magic = Field(Uint(8))
@@ -838,5 +838,5 @@ if(corenum == 0) {
 #endif
 '''
 c.generate_code_as_header()
-c.depend = {"test_app": ['app']}
+c.depend = {"test_app": ['jenkins_hash', 'hashtable', 'ialloc', 'settings', 'app']}
 c.compile_and_run(["test_app"])

@@ -1,8 +1,18 @@
+#include "iokvs.h"
+
+#ifdef CAVIUM
 #include "cvmx.h"
 #include "cvmx-atomic.h"
 #include "shared-mm.h"
 #include "util.h"
-#include "iokvs.h"
+#else
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/mman.h>
+#include <fcntl.h>
+#include <linux_hugepage.h>
+#endif
 
 #define SF_INACTIVE 1
 #define SF_NIC 2
