@@ -206,7 +206,8 @@ output { out(); }''')
     class JenkinsHash(ElementOneInOut):
         def impl(self):
             self.run_c(r'''
-state.hash = jenkins_hash(state.key, state.pkt->mcr.request.keylen);
+uint32_t hash = jenkins_hash(state.key, state.pkt->mcr.request.keylen);
+state.hash = hash;
 printf("hash = %d\n", hash);
 output { out(); }
             ''')
@@ -580,14 +581,14 @@ state.core = cvmx_get_core_num();
 
         def impl(self):
             self.run_c(r'''
-            void pkt = state.pkt;
+            void* pkt = state.pkt;
             printf("cpu: hash = %d\n", state.hash);
             ''')
 
     def impl(self):
 
         # Queue
-        RxEnq, RxDeq, RxScan = queue_smart2.smart_queue("rx_queue", 512 * 192, n_cores, 1, overlap=192, #64
+        RxEnq, RxDeq, RxScan = queue_smart2.smart_queue("rx_queue", 128 * 192, n_cores, 1, overlap=192, #64
                                                         enq_output=True, enq_blocking=True, enq_atomic=False)  # enq_blocking=False?
         rx_enq = RxEnq()
         rx_deq = RxDeq()
