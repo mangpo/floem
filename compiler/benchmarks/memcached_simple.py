@@ -36,9 +36,13 @@ class main(Pipeline):
         state.pkt_buff = buff;
         iokvs_message* m = (iokvs_message*) pkt;
 
-        state.keylen = m->mcr.request.keylen;
-        state.key = m->payload + m->mcr.request.extlen;
-        state.core = cvmx_get_core_num();
+        //printf("keylen = %d\n", htons(m->mcr.request.keylen));
+        //state.keylen = htons(m->mcr.request.keylen);
+        //state.key = m->payload + m->mcr.request.extlen;
+        //printf("size = %ld\n", size);
+        state.keylen = 32;  // 32->64 vs 188(size)->192
+        state.key = m;
+        state.core = 0; //cvmx_get_core_num();
 
         output { out(); }
                 ''')
@@ -117,5 +121,5 @@ c.include = r'''
 #include "protocol_binary.h"
 '''
 c.generate_code_as_header()
-c.depend = {"test_app": ['app']}
-c.compile_and_run(["test_queue", "dpdk"])
+c.depend = {"test_queue": ['app'], "test_queue_dpdk": ['dpdk']}
+c.compile_and_run(["test_queue", "test_queue_dpdk"])

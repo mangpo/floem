@@ -102,7 +102,7 @@ udp_message* m = (udp_message*) pkt;
 if(m->ipv4._proto == 17) {
         //printf("pkt %ld\n", size);
 uint64_t mycount = __sync_fetch_and_add64(&this->count, 1);
-if(mycount == 10000) {
+        if(mycount == 100000) {
     struct timeval now;
     gettimeofday(&now, NULL);
     size_t thistime = now.tv_sec * 1000000 + now.tv_usec;
@@ -122,7 +122,7 @@ class gen(InternalLoop):
         net_alloc = net_real.NetAlloc()
         to_net = net_real.ToNet(configure=["net_alloc"])
 
-        library_dsl2.Constant(configure=[1024]) >> net_alloc
+        library_dsl2.Constant(configure=[80]) >> net_alloc
         net_alloc.oom >> library_dsl2.Drop()
         net_alloc.out >> Request() >> PayloadGen() >> to_net
 
@@ -145,12 +145,13 @@ c.include = r'''
 #include <rte_ip.h>
 
 struct eth_addr src = { .addr = "\x68\x05\xca\x33\x13\x40" };
-struct eth_addr dest = { .addr = "\x68\x05\xca\x33\x11\x3c" }; // n33
-//struct eth_addr dest = { .addr = "\x00\x0f\xb7\x30\x3f\x58" }; // n35
+//struct eth_addr dest = { .addr = "\x68\x05\xca\x33\x11\x3c" }; // n33
+struct eth_addr dest = { .addr = "\x00\x0f\xb7\x30\x3f\x58" }; // n35
 
 struct ip_addr src_ip = { .addr = "\x0a\x03\x00\x1e" };   // n30
-struct ip_addr dest_ip = { .addr = "\x0a\x03\x00\x21" }; // n33
-//struct ip_addr dest_ip = { .addr = "\x0a\x03\x00\x23" }; // n35
+//struct ip_addr dest_ip = { .addr = "\x0a\x03\x00\x21" }; // n33
+struct ip_addr dest_ip = { .addr = "\x0a\x03\x00\x23" }; // n35
+//struct ip_addr dest_ip = { .addr = "\x0a\x03\x00\x24" }; // n36
 
 #define TEXT_BASE 10000000 /* 10M (8 bits) */
 typedef enum _TYPE {
