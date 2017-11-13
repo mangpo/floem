@@ -3,7 +3,7 @@ from compiler import Compiler
 import net_real, library_dsl2, queue_smart2
 
 n_cores = 10
-miss_every = 1
+miss_every = 10
 
 class protocol_binary_request_header_request(State):
     magic = Field(Uint(8))
@@ -207,7 +207,7 @@ output switch{
 void* key = state.pkt->payload + state.pkt->mcr.request.extlen;
 uint32_t hash = jenkins_hash(key, state.pkt->mcr.request.keylen);
 state.hash = hash;
-printf("hash = %d\n", hash);
+//printf("hash = %d\n", hash);
 output { out(); }
             ''')
 
@@ -222,7 +222,7 @@ output { out(); }
         iokvs_message* pkt = state.pkt;
         void* key = pkt->payload + pkt->mcr.request.extlen;
         item* it = hasht_get(key, htons(pkt->mcr.request.keylen), state.hash);
-        printf("hash get: hash = %d, it = %p, keylen = %d\n", state.hash, it, htons(pkt->mcr.request.keylen));
+        //printf("hash get: hash = %d, it = %p, keylen = %d\n", state.hash, it, htons(pkt->mcr.request.keylen));
         state.it = it;
 
         output switch { case it: out(); else: null(); }
@@ -231,7 +231,7 @@ output { out(); }
     class HashPut(ElementOneInOut):
         def impl(self):
             self.run_c(r'''
-printf("hash put: hash = %d, it = %p\n", state.hash, state.it);
+//printf("hash put: hash = %d, it = %p\n", state.hash, state.it);
 hasht_put(state.it, NULL);
 output { out(); }
             ''')
@@ -533,7 +533,7 @@ output { out(msglen, m, pkt_buff); }
             self.run_c(r'''
     iokvs_message* resp = state.resp;
     size_t msglen = state.resp_size;
-    printf("packet from CPU: size = %ld\n", msglen);
+    //printf("packet from CPU: size = %ld\n", msglen);
 
     output { out(msglen, (void*) resp, NULL); }
                 ''')  # TODO: dpdk supports buf = NULL; if buf == NULL: create buffer and copy
@@ -579,8 +579,14 @@ output { out(msglen, (void*) m, buff); }
             self.run_c(r'''
     iokvs_message* pkt = state.pkt;
     size_t totlen = htonl(pkt->mcr.request.bodylen) - pkt->mcr.request.extlen;
-    item *it = ialloc_alloc(&this->ia[state.core], sizeof(item) + totlen, false); // TODO
-    printf("get item: totlen = %ld, it = %p\n", totlen, it);
+
+#ifdef CAVIUM
+    item *it = ialloc_alloc(&this->ia[state.core], sizeof(item) + totlen, false);
+#else
+    item *it = ialloc_alloc(&this->ia[0], sizeof(item) + totlen, false);
+#endif
+
+    //printf("get item: totlen = %ld, it = %p\n", totlen, it);
     if(it) {
         it->refcount = 1;
         uint16_t keylen = htons(pkt->mcr.request.keylen);

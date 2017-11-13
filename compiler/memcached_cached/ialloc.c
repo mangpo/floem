@@ -13,6 +13,7 @@
 #include <fcntl.h>
 #include <linux_hugepage.h>
 #include <dpdkif.h>
+#define shared_mm_malloc(x) malloc(x)
 #endif
 
 #define SF_INACTIVE 1
@@ -55,7 +56,7 @@ static struct segment_header *segment_alloc(uint32_t core_id)
     i = seg_alloced;
     if (i >= settings.segmaxnum) {
         spinlock_unlock(&segalloc_lock);
-	printf("i = %ld >= settings.segmaxnum (1)\n", i);
+	printf("i = %ld >= settings.segmaxnum = %d(1)\n", i, settings.segmaxnum);
 	exit(1);
         return NULL;
     }
@@ -313,7 +314,6 @@ uint32_t ialloc_nicsegment_full(uintptr_t last)
 void ialloc_init_allocator(struct item_allocator *ia, uint32_t core_id)
 {
     ia->core_id = core_id;
-    printf("init allocator %p (%d)\n", ia, ia->core_id);
     struct segment_header *h;
     memset(ia, 0, sizeof(*ia));
 
@@ -332,6 +332,7 @@ void ialloc_init_allocator(struct item_allocator *ia, uint32_t core_id)
     ia->cq_head = ia->cq_tail = 0;
     ia->cleaning = NULL;
     ia->reserved = segment_alloc(ia->core_id);
+    printf("init allocator %p, reserved %p (%d)\n", ia, ia->reserved, ia->core_id);
     __sync_synchronize();
 }
 
@@ -548,18 +549,30 @@ size_t clean_log(struct item_allocator *ia, bool idle)
     return n;
 }
 
+#ifdef CAVIUM
 CVMX_SHARED struct item_allocator iallocs[NUM_THREADS];
 CVMX_SHARED bool init_allocator = false;
+#else
+struct item_allocator iallocs[CPU_THREADS];
+bool init_allocator = false;
+#endif
 
 struct item_allocator* get_item_allocators() {
   int i;
     if(!init_allocator) {
         init_allocator = true;
         printf("Init item_allocator\n");
+#ifdef CAVIUM
         for(i=0; i<NUM_THREADS; i++) {
+#else
+        for(i=0; i<CPU_THREADS; i++) {
+#endif
             ialloc_init_allocator(&iallocs[i], i);
         }
     }
     return iallocs;
 }
 
+struct item_allocator* get_item_allocator(int id) {
+  return &iallocs[id];
+}

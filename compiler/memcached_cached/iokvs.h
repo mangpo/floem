@@ -12,7 +12,7 @@
 
 #define NUM_THREADS     10
 #define CPU_THREADS     1
-#define DEBUG
+//#define DEBUG
 
 /******************************************************************************/
 /* Settings */
@@ -140,6 +140,7 @@ struct item_allocator {
 /** Initialize item allocation. Prepares memory regions etc. */
 uint64_t get_pointer_offset(void* p);
 struct item_allocator* get_item_allocators();
+struct item_allocator* get_item_allocator(int);
 void ialloc_init();
 
 /** Initialize an item allocator instance. */

@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <dpdkif.h>
+#define shared_mm_malloc(x) malloc(x)
 #endif
 
 #define HASHTABLE_POWER 15
