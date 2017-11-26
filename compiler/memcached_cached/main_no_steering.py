@@ -2,7 +2,7 @@ from dsl2 import *
 from compiler import Compiler
 import net_real, library_dsl2, queue_smart2
 
-n_cores = 10
+n_cores = 9
 miss_every = 10
 
 class protocol_binary_request_header_request(State):
@@ -226,6 +226,21 @@ output { out(); }
         state.it = it;
 
         output switch { case it: out(); else: null(); }
+                    ''')
+
+
+    class HashGetDummy(ElementOneInOut):
+        def impl(self):
+            self.run_c(r'''
+        iokvs_message* pkt = state.pkt;
+        uint8_t cmd = pkt->mcr.request.opcode;   
+
+        if(cmd == PROTOCOL_BINARY_CMD_GET) {
+          void* key = pkt->payload + pkt->mcr.request.extlen;
+          hasht_get(key, htons(pkt->mcr.request.keylen), state.hash);
+        }
+
+        output { out(); }
                     ''')
 
     class HashPut(ElementOneInOut):
@@ -754,7 +769,7 @@ state.core = cvmx_get_core_num();
 
                 # from_net
                 from_net >> hton1 >> check_packet >> main.SaveState() >> main.JenkinsHash() >> cache
-                cache.out_miss >> rx_enq >> main.GetPktBuff() >> from_net_free
+                cache.out_miss >> main.HashGetDummy() >> rx_enq >> main.GetPktBuff() >> from_net_free
                 cache.out_hit >> classifier
                 from_net.nothing >> drop
 
