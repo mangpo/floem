@@ -237,7 +237,8 @@ output { out(); }
 
         if(cmd == PROTOCOL_BINARY_CMD_GET) {
           void* key = pkt->payload + pkt->mcr.request.extlen;
-          hasht_get(key, htons(pkt->mcr.request.keylen), state.hash);
+          item* it = hasht_get(key, htons(pkt->mcr.request.keylen), state.hash);
+          if(it) item_unref(it);
         }
 
         output { out(); }
