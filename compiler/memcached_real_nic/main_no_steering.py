@@ -2,7 +2,7 @@ from dsl2 import *
 from compiler import Compiler
 import net_real, library_dsl2
 
-n_cores = 1
+n_cores = 11
 
 class protocol_binary_request_header_request(State):
     magic = Field(Uint(8))
@@ -177,14 +177,6 @@ output switch{
 state.key = state.pkt->payload + state.pkt->mcr.request.extlen;
 output { out(); }''')
 
-    class GetCore(ElementOneInOut):
-        def impl(self):
-            self.run_c(r'''
-int core = state.hash %s %d;;
-state.core = core;
-//printf("hash = %s, core = %s\n", state.hash, core);
-            output { out(); }''' % ('%', n_cores, '%d', '%d'))
-
     ######################## hash ########################
 
     class JenkinsHash(ElementOneInOut):
@@ -220,18 +212,6 @@ output { out(); }
 
 
     ######################## responses ########################
-
-    class Scheduler(Element):
-        this = Persistent(Schedule)
-
-        def configure(self):
-            self.out = Output(Size)
-            self.this = Schedule()
-
-        def impl(self):
-            self.run_c(r'''
-this->core = (this->core + 1) %s %s;
-output { out(this->core); }''' % ('%', n_cores))
 
     class SizeGetResp(Element):
         def configure(self):

@@ -190,6 +190,7 @@ class PrintTuple(Element):
         self.run_c(r'''
     (struct tuple* t) = inp();
 
+#if 1
   if(t) {
     uint32_t task = nic_htonl(t->task);
     if(task == 10 && strcmp(t->v[0].str, "golda")) {
@@ -209,6 +210,8 @@ class PrintTuple(Element):
       assert(strcmp(t->v[0].str, "berterls") == 0);
     }
   }
+#endif
+
 #ifdef DEBUG_MP
     if(t != NULL) {
         printf("TUPLE[0] -- task = %d, fromtask = %d, str = %s, integer = %d\n", nic_htonl(t->task), nic_htonl(t->fromtask), t->v[0].str, t->v[0].integer);
@@ -517,6 +520,7 @@ class Tuple2Pkt(Element):
         
         //printf("PREPARE PKT: task = %d, worker = %d\n", nic_hotnl(t->task), state.worker);
 
+#if 1
         t = (struct tuple*) &header[1];
     uint32_t task = nic_htonl(t->task);                                                              
     if(task == 10 && strcmp(t->v[0].str, "golda")) {                                           
@@ -535,6 +539,7 @@ class Tuple2Pkt(Element):
       printf("pkt: task = %d, str = %s\n", task, t->v[0].str);                                     
       assert(strcmp(t->v[0].str, "berterls") == 0);                                                  
     }   
+#endif
 
         output { out(p); }
         ''')
@@ -987,10 +992,11 @@ struct worker* workers = get_workers();
 init_task2executor(workers[workerid].executors);
 '''
 c.generate_code_as_header()
-c.depend = {"test_storm_nic": ['hash', 'worker', 'dummy', 'dpdk'],
-            "test_storm_bypass_app": ['list', 'hash', 'hash_table', 'spout', 'count', 'rank', 'worker', 'app']}
 
 if nic == 'dpdk':
+    c.depend = {"test_storm_nic": ['hash', 'worker', 'dummy', 'dpdk'],
+                "test_storm_bypass_app": ['list', 'hash', 'hash_table', 'spout', 'count', 'rank', 'worker', 'app']}
     c.compile_and_run([("test_storm_bypass_app", workerid[test]), ("test_storm_nic", workerid[test])])
 else:
+    c.depend = {"test_storm_bypass_app": ['list', 'hash', 'hash_table', 'spout', 'count', 'rank', 'worker', 'app']}
     c.compile_and_run([("test_storm_bypass_app", workerid[test])])
