@@ -1,6 +1,7 @@
 from program import *
 import re, sys
 from contextlib import contextmanager
+import target
 
 @contextmanager
 def redirect_stdout(new_target):
@@ -154,10 +155,6 @@ def internal_thread_code(forever, graph):
     return global_src, run_src, kill_src
 
 
-# for state_instance in injects:
-#     if process in graph.state_instances[state_instance].processes:
-#         inject = injects[state_instance]
-
 def generate_internal_triggers_with_process(graph, process, ext, mode):
     threads_internal = set([trigger.call_instance for trigger in graph.threads_internal])
     threads_api = set([trigger.call_instance for trigger in graph.threads_API])
@@ -201,11 +198,12 @@ def generate_internal_triggers_with_process(graph, process, ext, mode):
                 )
 
     header_src = ""
+    runtime_src = target.runtime_hook(graph, process)
     if not mode == "compare":
         g1, r1, k1 = inject_thread_code(spec_injects + impl_injects, graph)
         g2, r2, k2 = internal_thread_code(forever, graph)
         global_src = g1 + g2
-        run_src = "void run_threads() {\n" + r1 + r2 + "}\n"
+        run_src = "void run_threads() {\n" + runtime_src + r1 + r2 + "}\n"
         kill_src = "void kill_threads() {\n" + k1 + k2 + "}\n"
         header_src += "void run_threads();\n"
         header_src += "void kill_threads();\n"
@@ -218,13 +216,13 @@ def generate_internal_triggers_with_process(graph, process, ext, mode):
         g1, r1, k1 = inject_thread_code(spec_injects, graph)
         g2, r2, k2 = internal_thread_code([x for x in forever if re.match('_spec', x)], graph)
         global_src = g1 + g2
-        run_src += "void spec_run_threads() {\n" + r1 + r2 + "}\n"
+        run_src += "void spec_run_threads() {\n" + runtime_src + r1 + r2 + "}\n"
         kill_src += "void spec_kill_threads() {\n" + k1 + k2 + "}\n"
 
         g1, r1, k1 = inject_thread_code(impl_injects,graph)
         g2, r2, k2 = internal_thread_code([x for x in forever if not re.match('_spec', x)], graph)
         global_src += g1 + g2
-        run_src += "void impl_run_threads() {\n" + r1 + r2 + "}\n"
+        run_src += "void impl_run_threads() {\n" + runtime_src + r1 + r2 + "}\n"
         kill_src += "void impl_kill_threads() {\n" + k1 + k2 + "}\n"
 
         header_src += "void run_threads();\n"
@@ -257,6 +255,7 @@ def generate_internal_triggers(graph, ext, mode):
     for process in graph.processes:
         generate_internal_triggers_with_process(graph, process, ext, mode)
 
+
 def dpdk_init_call(graph, process):
     num_threads = 0
     num_rx = 0
@@ -274,6 +273,7 @@ def dpdk_init_call(graph, process):
                     num_rx += n
 
     return "  dpdk_init(argv, %d, %d);\n" % (num_threads, num_rx)
+
 
 def generate_inject_probe_code_with_process(graph, process, ext, init_code):
     injects = graph.inject_populates

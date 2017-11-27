@@ -199,34 +199,7 @@ def generate_state_instances_cpu_only(graph, ext, all_processes, shared):
             print src
 
 
-def generate_state_instances_cpu_cavium(graph, ext, all_processes, shared):
-#     if len(shared) > 0:
-#         # Kernel code
-#         os.system('rm uio_size.c')
-#         process = [p for p in all_processes if not (p == target.CAVIUM)][0]
-#         kernal_src = '#include "%s.h"\n' % process
-#         kernal_src += 'size_t get_shared_size() {\n'
-#         kernal_src += '  size_t shm_size = 0;\n'
-#         for name in shared:
-#             inst = graph.state_instances[name]
-#             kernal_src += '  shm_size += sizeof(%s);\n' % inst.state.name
-#         for region in graph.memory_regions:
-#             kernal_src += "  shm_size += %d;\n" % region.size
-#         kernal_src += '  return shm_size;\n}\n'
-
-#         kernal_src += r'''
-# int main() {
-#   FILE *f = fopen("uio_simple.h", "w");
-#   fprintf(f, "#define SIZE %ld\n", get_shared_size());
-
-#   fclose(f);
-#   return 0;
-# }
-#         '''
-
-#         with open('uio_size.c', 'a') as f, redirect_stdout(f):
-#             print kernal_src
-
+def generate_state_instances_cpu_cavium(graph, ext, shared):
     src_cpu = "void init_state_instances(char *argv[]) {\n"
     src_cavium = "void init_state_instances() {\n"
     src_cavium += "  int corenum = cvmx_get_core_num();\n"
@@ -288,9 +261,6 @@ def get_shared_states(graph):
     for name in graph.state_instance_order:
         inst = graph.state_instances[name]
         if len(inst.processes) > 1:
-            # size = inst.state.size  # TODO
-            # shared[name] = size
-            # total_size += size
             shared.add(name)
             all_processes = all_processes.union(inst.processes)
 
@@ -305,8 +275,9 @@ def generate_state_instances(graph, ext):
         declare_state(name, graph.state_instances[name], ext)
 
     # Collect shared memory
-    shared , all_processes = get_shared_states(graph)
+    shared, all_processes = get_shared_states(graph)
+    graph.shared_states = shared
     if target.CAVIUM in graph.processes:
-        generate_state_instances_cpu_cavium(graph, ext, all_processes, shared)
+        generate_state_instances_cpu_cavium(graph, ext, shared)
     else:
         generate_state_instances_cpu_only(graph, ext, all_processes, shared)

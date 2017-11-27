@@ -840,7 +840,7 @@ class maintenance(InternalLoop):
 
         Schedule() >> Maintain()
 
-maintenance('maintenance', device=target.CAVIUM, cores=[11])
+maintenance('maintenance', device=target.CAVIUM, cores=[n_cores+1])
 
 
 ######################## Run test #######################

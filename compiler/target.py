@@ -10,6 +10,7 @@ CAVIUM = 'CAVIUM'
 cavium_include_h = ['"cvmcs-nic.h"', '"cvmcs-queue.h"']
 cavium_include_c = ['<cvmx-atomic.h>', '"cvmcs-nic.h"', '"cvmcs-dma.h"', '"cvmcs-queue.h"', '"dma-circular-queue.h"', '"util.h"']
 
+
 # device = CPU, process = DPDK
 def is_dpdk_proc(process):
     return process == 'dpdk'
@@ -25,3 +26,17 @@ dpdk_libs = "-Wl,--whole-archive " + dpdk_pmds + " -lrte_eal" + \
     " -lrte_ethdev -lrte_mbuf -lrte_pmd_ring -Wl,--no-whole-archive -lm" + \
     " -lpthread -ldl"
 dpdk_driver_header = ['<dpdkif.h>']
+
+
+def runtime_hook(graph, process):
+    src = ""
+    if process == CAVIUM and graph.shared_states:
+        src = r'''
+#ifdef RUNTIME
+    {
+        int corenum = cvmx_get_core_num();
+        if(corenum >= RUNTIME_CORE)  smart_dma_manage(corenum - RUNTIME_CORE);
+    }
+#endif
+        '''
+    return src

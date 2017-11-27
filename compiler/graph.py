@@ -22,6 +22,7 @@ class Graph:
         self.state_order = []
         self.state_instance_order = []
         self.memory_regions = []
+        self.shared_states = None
 
         self.threads_internal = []
         self.threads_API = []

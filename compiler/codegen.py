@@ -553,8 +553,6 @@ def generate_code(graph, ext, testing=None, include=None, include_h=None, init=N
     # Generate state instances.
     declare_data_regions(graph, ext)
     generate_state_instances(graph, '.c')
-    # for name in graph.state_instance_order:
-    #     generate_state_instance(name, graph.state_instances[name], ext)
 
     # Generate functions to save join buffers.
     for instance in graph.instances.values():
