@@ -112,10 +112,10 @@ static int dequeue_ready_var_checksum(void* p) {
 }
 
 static inline int dequeue_done_var(void* e) { return 0; }
-static inline int enqueue_ready_var(void* e, bool check) { return 0; }
+static inline int enqueue_ready_var(void* e) { return 0; }
 static inline int enqueue_done_var(void* e) { return 0; }
 
-static void enqueue_submit(q_buffer buff);
+static void enqueue_submit(q_buffer buff, bool check);
 static void no_clean(q_buffer buff) {}
 
 static inline void check_flag(q_entry* e, int offset, const char *s) {
@@ -211,12 +211,12 @@ static void enqueue_submit(q_buffer buff, bool check)
     }
 }
 
-static q_buffer dequeue_get(circular_queue* q, bool check) {
+static q_buffer dequeue_get(circular_queue* q) {
   __sync_synchronize();
   assert(q->offset < q->len);
   q_entry* eqe = q->queue + q->offset;
   //if(eqe->flag == FLAG_OWN) {
-  if(dequeue_ready_var(eqe, check)) {
+  if(dequeue_ready_var(eqe)) {
     //printf("dequeue_get: len = %ld\n", eqe->len);
     check_flag(eqe, q->offset, "dequeue_get");
     check_flag_val(eqe, q->offset, "dequeue_get (before)", 1);
