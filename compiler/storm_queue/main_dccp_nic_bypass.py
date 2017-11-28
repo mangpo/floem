@@ -787,19 +787,19 @@ MAX_ELEMS = 256 #(4 * 1024)
 
 rx_enq_creator, rx_deq_creator, rx_release_creator = \
     queue2.queue_custom_owner_bit("rx_queue", "struct tuple", MAX_ELEMS, n_cores,
-                                  "task", Uint(32), "0x00ffffff", "0x80000000",
+                                  "task", Int, "0x00ffffff", "0x80000000",
                                   enq_blocking=False, enq_atomic=True, enq_output=True,
                                   deq_blocking=False)
 
 tx_enq_creator, tx_deq_creator, tx_release_creator = \
     queue2.queue_custom_owner_bit("tx_queue", "struct tuple", MAX_ELEMS, n_cores,
-                                  "task", Uint(32), "0x00ffffff", "0x80000000",
+                                  "task", Int, "0x00ffffff", "0x80000000",
                                   checksum="checksum",
                                   enq_blocking=True, deq_atomic=True)
 
 BypassEnq, BypassDeq, BypassRelease = \
     queue2.queue_custom_owner_bit("bypass_queue", "struct tuple", MAX_ELEMS, n_cores,
-                                  "task", Uint(32), "0x00ffffff", "0x80000000",
+                                  "task", Int, "0x00ffffff", "0x80000000",
                                   enq_blocking=True, enq_atomic=True,
                                   deq_blocking=False) # TODO: enq_blocking?
 
