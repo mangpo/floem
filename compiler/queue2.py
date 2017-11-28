@@ -395,11 +395,10 @@ int dequeue_done%s(void* buff) {
     int i;
     for(i=0; i<checksum_size; i++)
       checksum ^= *(data+i);
-    ''' % checksum_offset
+    content->%s = checksum; 
+    ''' % (checksum_offset, checksum)
     else:
-        checksum_code = r'''
-    uint8_t checksum = 0;
-    '''
+        checksum_code = ""
 
     copy = r'''
     int type_offset = %s;
@@ -409,9 +408,8 @@ int dequeue_done%s(void* buff) {
     clflush_cache_range(content, type_offset);
     content->%s = x->%s & %s;
     %s
-    content->%s = checksum;
     __SYNC;
-    ''' % (type_offset, type_star, owner, owner, entry_mask, checksum_code, checksum)
+    ''' % (type_offset, type_star, owner, owner, entry_mask, checksum_code)
 
     atomic_src = r'''
     __SYNC;
