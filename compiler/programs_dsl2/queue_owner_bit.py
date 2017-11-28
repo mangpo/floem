@@ -8,23 +8,23 @@ n_cores = 2
 class Tuple(State):
     task = Field(Int)
     val = Field(Int)
-
+    layout = [val, task]
 
 class Display(Element):
     def configure(self):
-        self.inp = Input(Pointer(Tuple), Uintptr)
-        self.out = Output(Pointer(Tuple), Uintptr)
+        self.inp = Input(queue2.q_buffer)
+        self.out = Output(queue2.q_buffer)
 
     def impl(self):
         self.run_c(r'''
-        (Tuple* t, uintptr_t addr) = inp();
+        q_buffer buff = inp();
+        Tuple* t = (Tuple*) buff.entry;
         if(t) printf("%d\n", t->val);
-        output switch { case t: out(t, addr); }
+        output switch { case t: out(buff); }
         ''')
 
-Enq, Deq, Release, Scan, ScanRelease = queue2.queue_custom_owner_bit('queue', Tuple, 4, n_cores, Tuple.task,
-                                                  blocking=False, enq_atomic=False)
-
+Enq, Deq, Release = queue2.queue_custom_owner_bit('queue', Tuple, 4, n_cores,
+                                                                     Tuple.task, Int, "0x00ffffff", "0x80000000")
 
 class RxWrite(API):
     def configure(self):
@@ -45,13 +45,10 @@ class RxPrint(API):
         display = Display()
         self.inp >> deq >> display >> release
 
-RxWrite('send')
+RxWrite('mysend')
 RxPrint('process')
 
 c = Compiler()
-c.include = r'''
-#include <rte_memcpy.h>
-'''
 c.testing = r'''
 Tuple tuples[10];
 for(int i=0; i<10;i++) {
@@ -60,13 +57,13 @@ for(int i=0; i<10;i++) {
 }
 
 for(int i=0; i<10;i++) {
-    send(&tuples[i], 0);
+    mysend(&tuples[i], 0);
     process(0);
 }
 
 for(int i=0; i<10;i++) {
     tuples[i].val = 100 + i;
-    send(&tuples[i], 1);
+    mysend(&tuples[i], 1);
     tuples[i].task = 0;
 }
 
