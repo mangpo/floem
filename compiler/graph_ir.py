@@ -529,6 +529,7 @@ class MemoryRegion:
 
 class Queue:
     def __init__(self, name, size, n_cores, n_cases, overlap=0,
+                 checksum=False,
                  enq_blocking=False, deq_blocking=False,
                  enq_atomic=False, deq_atomic=False,
                  enq_output=False):
@@ -545,6 +546,7 @@ class Queue:
         self.deq_atomic = deq_atomic
         self.enq_output = enq_output
         self.overlap = overlap
+        self.checksum = checksum
 
 def is_queue_clean(instance):
     return instance.element.special == 'clean'

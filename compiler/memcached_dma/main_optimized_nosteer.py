@@ -953,6 +953,7 @@ output switch { case segment: out(); else: null(); }
         rx_deq = RxDeq()
 
         TxEnq, TxDeq, TxScan = queue_smart2.smart_queue("tx_queue", 512 * 160, nic_rx_threads, 1, overlap=160, #160
+                                                        checksum=True,
                                                         enq_blocking=True, enq_output=True, deq_atomic=False)
         tx_enq = TxEnq()
         tx_deq = TxDeq()

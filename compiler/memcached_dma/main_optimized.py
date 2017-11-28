@@ -937,6 +937,7 @@ output switch { case segment: out(); else: null(); }
         rx_deq = RxDeq()
 
         TxEnq, TxDeq, TxScan = queue_smart2.smart_queue("tx_queue", 512 * 160, n_cores, 1, overlap=160, #160
+                                                        checksum=True,
                                                         enq_blocking=True, enq_output=True, deq_atomic=True)
         tx_enq = TxEnq()
         tx_deq = TxDeq()
@@ -944,6 +945,7 @@ output switch { case segment: out(); else: null(); }
         LogInEnq, LogInDeq, LogInScan = queue_smart2.smart_queue("log_in_queue", 8 * 1024, 1, 1, overlap=32,
                                                                  enq_blocking=True, enq_atomic=True)
         LogOutEnq, LogOutDeq, LogOutScan = queue_smart2.smart_queue("log_out_queue", 8 * 1024, 1, 1, overlap=32,
+                                                                    checksum=False,
                                                                     enq_blocking=True, deq_atomic=True)
         log_in_enq = LogInEnq()
         log_in_deq = LogInDeq()

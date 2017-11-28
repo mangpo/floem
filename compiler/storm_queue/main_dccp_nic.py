@@ -728,6 +728,7 @@ rx_enq_creator, rx_deq_creator, rx_release_creator = \
 tx_enq_creator, tx_deq_creator, tx_release_creator = \
     queue2.queue_custom_owner_bit("tx_queue", "struct tuple", MAX_ELEMS, n_cores,
                                   "task", Uint(32), "0x00ffffff", "0x80000000",
+                                  checksum="checksum",
                                   enq_blocking=True, deq_atomic=True)
 
 
@@ -905,10 +906,11 @@ struct worker* workers = get_workers();
 init_task2executor(workers[workerid].executors);
 '''
 c.generate_code_as_header()
-c.depend = {"test_storm_nic": ['hash', 'worker', 'dummy', 'dpdk'],
-            "test_storm_app": ['list', 'hash', 'hash_table', 'spout', 'count', 'rank', 'worker', 'app']}
 
 if nic == 'dpdk':
+    c.depend = {"test_storm_nic": ['hash', 'worker', 'dummy', 'dpdk'],
+                "test_storm_bypass_app": ['list', 'hash', 'hash_table', 'spout', 'count', 'rank', 'worker', 'app']}
     c.compile_and_run([("test_storm_app", workerid[test]), ("test_storm_nic", workerid[test])])
 else:
+    c.depend = {"test_storm_bypass_app": ['list', 'hash', 'hash_table', 'spout', 'count', 'rank', 'worker', 'app']}
     c.compile_and_run([("test_storm_app", workerid[test])])

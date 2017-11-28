@@ -91,15 +91,20 @@ static int dequeue_ready_var(void* p) {
   q_entry* e = p;
   if(e->pad != 0xff) return 0;
   if((e->flag & 0xf0) != 0) return 0;
+  return (e->flag == FLAG_OWN)? e->len: 0;
+}
+
+static int dequeue_ready_var_checksum(void* p) {
+  q_entry* e = p;
+  if(e->pad != 0xff) return 0;
+  if((e->flag & 0xf0) != 0) return 0;
 
   if(e->flag == FLAG_OWN) {
-    uint8_t* x = p;
     uint8_t checksum = 0;
-    /*
+    uint8_t* x = p;
     int i;
     for(i=0; i<e->len; i++)
-      checksum ^= x[i];
-    */
+        checksum ^= x[i];
     return (checksum == 0)? e->len: 0;
   }
 
@@ -107,7 +112,7 @@ static int dequeue_ready_var(void* p) {
 }
 
 static inline int dequeue_done_var(void* e) { return 0; }
-static inline int enqueue_ready_var(void* e) { return 0; }
+static inline int enqueue_ready_var(void* e, bool check) { return 0; }
 static inline int enqueue_done_var(void* e) { return 0; }
 
 static void enqueue_submit(q_buffer buff);
@@ -183,33 +188,35 @@ static q_buffer enqueue_alloc(circular_queue* q, size_t len, void(*clean)(q_buff
   }
 }
 
-static void enqueue_submit(q_buffer buff)
+static void enqueue_submit(q_buffer buff, bool check)
 {
     q_entry *e = buff.entry;
     if(e) {
       	check_flag(e, -1, "enqueue_submit");
         __sync_synchronize();
-	clflush_cache_range(&e[1], e->len - sizeof(q_entry));
+	    clflush_cache_range(&e[1], e->len - sizeof(q_entry));
         e->flag = FLAG_OWN;
 
-	e->pad = 0xff;
+	    e->pad = 0xff;
         e->checksum = 0;
         uint8_t checksum = 0;
-        uint8_t* p = (uint8_t*) e;
-        int i;
-        for(i=0; i<e->len; i++)
-            checksum ^= p[i];
+        if(check) {
+            uint8_t* p = (uint8_t*) e;
+            int i;
+            for(i=0; i<e->len; i++)
+                checksum ^= p[i];
+        }
         e->checksum = checksum;
         __sync_synchronize();
     }
 }
 
-static q_buffer dequeue_get(circular_queue* q) {
+static q_buffer dequeue_get(circular_queue* q, bool check) {
   __sync_synchronize();
   assert(q->offset < q->len);
   q_entry* eqe = q->queue + q->offset;
   //if(eqe->flag == FLAG_OWN) {
-  if(dequeue_ready_var(eqe)) {
+  if(dequeue_ready_var(eqe, check)) {
     //printf("dequeue_get: len = %ld\n", eqe->len);
     check_flag(eqe, q->offset, "dequeue_get");
     check_flag_val(eqe, q->offset, "dequeue_get (before)", 1);

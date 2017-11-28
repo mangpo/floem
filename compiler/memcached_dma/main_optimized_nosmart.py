@@ -6,35 +6,6 @@ n_cores = 1
 nic_rx_threads = 5
 nic_tx_threads = 2
 
-# class protocol_binary_request_header_request(State):
-#     magic = Field(Uint(8))
-#     opcode = Field(Uint(8))
-#     keylen = Field(Uint(16))
-#     extlen = Field(Uint(8))
-#     datatype = Field(Uint(8))
-#     status = Field(Uint(16))
-#     bodylen = Field(Uint(32))
-#     opaque = Field(Uint(32))
-#     cas = Field(Uint(64))
-#
-#     # Tell compiler not to generate this struct because it's already declared in some other header file.
-#     def init(self): self.declare = False
-#
-# class protocol_binary_request_header(State):
-#     request = Field(protocol_binary_request_header_request)
-#
-#     def init(self): self.declare = False
-#
-# class iokvs_message(State):
-#     ether = Field('struct ehter_hdr')
-#     ipv4 = Field('struct ipv4_hdr')
-#     dup = Field('struct udp_hdr')
-#     mcudp = Field('memcached_udp_header')
-#     mcr = Field(protocol_binary_request_header)
-#     payload = Field(Array(Uint(8)))
-#
-#     def init(self): self.declare = False
-
 class item(State):
     next = Field('struct _item')
     hv = Field(Uint(32))
@@ -945,6 +916,7 @@ iokvs_message* pkt = state.pkt;
         rx_deq = RxDeq()
 
         TxEnq, TxDeq, TxScan = queue_smart2.smart_queue("tx_queue", 512 * 160, n_cores, 1, overlap=160, #160
+                                                        checksum=True,
                                                         enq_blocking=True, enq_output=True, deq_atomic=True)
         tx_enq = TxEnq()
         tx_deq = TxDeq()

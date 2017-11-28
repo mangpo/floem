@@ -696,11 +696,12 @@ state.core = cvmx_get_core_num();
 
         # Queue
         RxEnq, RxDeq, RxScan = queue_smart2.smart_queue("rx_queue", 128 * 192, n_cores, 1, overlap=192, #64
-                                                        enq_output=True, enq_blocking=True, enq_atomic=False)  # enq_blocking=False?
+                                                        enq_output=True, enq_blocking=True, enq_atomic=False)
         rx_enq = RxEnq()
         rx_deq = RxDeq()
 
         TxEnq, TxDeq, TxScan = queue_smart2.smart_queue("tx_queue", 512 * 192, n_cores, 1, overlap=192, #160
+                                                        checksum=True,
                                                         enq_blocking=True, enq_output=True, deq_atomic=False)
         tx_enq = TxEnq()
         tx_deq = TxDeq()

@@ -794,6 +794,7 @@ rx_enq_creator, rx_deq_creator, rx_release_creator = \
 tx_enq_creator, tx_deq_creator, tx_release_creator = \
     queue2.queue_custom_owner_bit("tx_queue", "struct tuple", MAX_ELEMS, n_cores,
                                   "task", Uint(32), "0x00ffffff", "0x80000000",
+                                  checksum="checksum",
                                   enq_blocking=True, deq_atomic=True)
 
 BypassEnq, BypassDeq, BypassRelease = \

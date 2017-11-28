@@ -872,8 +872,10 @@ output switch { case segment: out(); else: null(); }
 
         # Queue
         RxEnq, RxDeq, RxScan = queue_smart2.smart_queue("rx_queue", 32 * 1024, n_cores, 2, overlap=64,
+                                                        checksum=False,
                                                         enq_output=True, enq_blocking=True, enq_atomic=True) # TODO: change this to False and make a seperate queue for full segment.
         TxEnq, TxDeq, TxScan = queue_smart2.smart_queue("tx_queue", 32 * 1024, n_cores, 3, overlap=64,
+                                                        checksum=False,
                                                         clean="enq", enq_blocking=True, deq_atomic=True)
         rx_enq = RxEnq()
         rx_deq = RxDeq()
@@ -882,8 +884,10 @@ output switch { case segment: out(); else: null(); }
         tx_scan = TxScan()
 
         LogInEnq, LogInDeq, LogInScan = queue_smart2.smart_queue("log_in_queue", 8 * 1024, 1, 1, overlap=32,
+                                                                 checksum=False,
                                                                  enq_blocking=True, enq_atomic=True)
         LogOutEnq, LogOutDeq, LogOutScan = queue_smart2.smart_queue("log_out_queue", 8 * 1024, 1, 1, overlap=32,
+                                                                    checksum=False,
                                                                     enq_blocking=True, deq_atomic=True)
         log_in_enq = LogInEnq()
         log_in_deq = LogInDeq()
