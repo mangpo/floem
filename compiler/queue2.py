@@ -313,11 +313,12 @@ def queue_custom_owner_bit(name, entry_type, size, n_cores,
     define_state(entry_type)
     owner = get_field_name(entry_type, owner)
 
-    decl = workspace.get_decl(entry_type.__name__)
-    if decl:
-        assert decl.fields[-1] == owner, \
-            "The last field of queue entry type '%s' must be '%s'. Please specify 'layout' of state '%s' accordingly." \
-            % (decl.name, owner, decl.name)
+    if isinstance(entry_type, type):
+        decl = workspace.get_decl(entry_type.__name__)
+        if decl:
+            assert decl.fields[-1] == owner, \
+                "The last field of queue entry type '%s' must be '%s'. Please specify 'layout' of state '%s' accordingly." \
+                % (decl.name, owner, decl.name)
 
     owner_size = common.sizeof(owner_type)
     assert (owner_size == 4), "queue_custom_owner_bit currently only supports owner_type of 32 bytes."
