@@ -75,10 +75,10 @@ class GetCore(Element):
     def impl(self):
         self.run_c(r'''
     struct tuple* t = inp();
-        int id = this->task2executorid[t->task & 0xff];
+        int id = this->task2executorid[t->task];
 #if 1 //def DEBUG_MP
 
-    if((t->task & 0xff) == 30)
+    if((t->task) == 30)
         printf("steer: task %d, id %d\n", t->task, id);
 #endif
     output { out(t, id); }
@@ -110,7 +110,7 @@ class LocalOrRemote(Element):
     }
 #endif
 
-        if(t->task==30 && local) printf("Local -- task = %d, fromtask = %d, local = %d\n", t->task & 0xff, t->fromtask, local);
+        if(t->task==30 && local) printf("Local -- task = %d, fromtask = %d, local = %d\n", t->task, t->fromtask, local);
 
     output switch { case local: out_local(t); else: out_send(t); }
         ''')
@@ -377,7 +377,7 @@ class SaveWorkerID(Element):
     def impl(self):
         self.run_c(r'''
         (struct tuple* t) = inp();
-        state.worker = this->task2worker[t->task & 0xff];
+        state.worker = this->task2worker[t->task];
         state.myworker = this->task2worker[t->fromtask];
         output { out(t); }
         ''')
@@ -421,7 +421,7 @@ class Tuple2Pkt(Element):
         memcpy(header, &dccp->header, sizeof(struct pkt_dccp_headers));
         struct tuple* new_t = &header[1];
         memcpy(new_t, t, sizeof(struct tuple));
-        new_t->task = t->task & 0xff;
+        new_t->task = t->task;
 
         struct worker* workers = get_workers();
         header->dccp.dst = htons(state.worker);
@@ -635,12 +635,12 @@ MAX_ELEMS = (4 * 1024)
 
 rx_enq_creator, rx_deq_creator, rx_release_creator = \
     queue2.queue_custom_owner_bit("rx_queue", "struct tuple", MAX_ELEMS, n_cores,
-                                  "task", Uint(32), "0x00ffffff", "0x80000000",
+                                  "status", Int,
                                   enq_blocking=False, enq_atomic=True, deq_blocking=True, enq_output=True)
 
 tx_enq_creator, tx_deq_creator, tx_release_creator = \
     queue2.queue_custom_owner_bit("tx_queue", "struct tuple", MAX_ELEMS, n_cores,
-                                  "task", Uint(32), "0x00ffffff", "0x80000000",
+                                  "status", Int,
                                   enq_blocking=True, deq_atomic=False)
 
 

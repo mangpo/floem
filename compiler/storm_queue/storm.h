@@ -38,16 +38,15 @@ typedef void (*WorkerInit)(struct executor *self);
 typedef int (*GrouperFunc)(const struct tuple *t, struct executor *self);
 
 struct tuple {
-  //int		task, fromtask;
+  int		task, fromtask;
   uint64_t 	starttime;
   struct {
     char	str[MAX_STR];
     int		integer;
   } v[MAX_VECTOR];
-  int           fromtask;
-  int           task;
+  uint8_t      status;
   uint8_t      checksum;
-  uint8_t      pad[3];
+  uint8_t      pad[2];
 
 } __attribute__ ((packed));
 
