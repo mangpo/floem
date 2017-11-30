@@ -3,7 +3,7 @@ HOST = 'CPU'
 CPU = 'CPU'
 cpu_include_h = ["<stdint.h>", "<stdbool.h>", "<stdio.h>", "<stdlib.h>", '<queue.h>']
 cpu_include_c = ["<stdint.h>", "<stdbool.h>", "<stdio.h>", "<stdlib.h>", "<string.h>", 
-                 "<stddef.h>", "<unistd.h>", "<pthread.h>", '<queue.h>', '<shm.h>', '<arpa/inet.h>']
+                 "<stddef.h>", "<unistd.h>", "<pthread.h>", '<queue.h>', '<shm.h>', '<util.h>', '<arpa/inet.h>']
 
 # device = CAVIUM, process = CAVIUM
 CAVIUM = 'CAVIUM'
@@ -18,7 +18,7 @@ def is_dpdk_proc(process):
 dpdk = "dpdk"
 dpdk_base = "/opt/dpdk/"
 dpdk_include = dpdk_base + "/include/dpdk"
-#dpdk_include = "/home/mangpo/lib/dpdk-16.11/build/include"
+#dpdk_include = "/home/mangpo/lib/dpdk-17.05.2/x86_64-native-linuxapp-gcc/include"
 dpdk_lib = dpdk_base + "/lib/"
 dpdk_pmds = "-lrte_pmd_ixgbe -lrte_pmd_i40e"
 dpdk_libs = "-Wl,--whole-archive " + dpdk_pmds + " -lrte_eal" + \

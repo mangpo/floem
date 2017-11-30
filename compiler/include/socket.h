@@ -1,5 +1,5 @@
-#ifndef NET_H
-#define NET_H
+#ifndef SOCKET_H
+#define SOCKET_H
 
 #include <sys/socket.h>
 #include <sys/types.h>

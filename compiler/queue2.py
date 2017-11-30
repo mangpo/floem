@@ -1,4 +1,5 @@
 from dsl2 import *
+import workspace
 
 q_buffer = 'q_buffer'
 q_entry = 'q_entry'
@@ -294,13 +295,14 @@ def queue_variable_size(name, size, n_cores,
     return EnqueueAlloc, EnqueueSubmit, DequeueGet, DequeueRelease, clean_inst
 
 
-def queue_custom_owner_bit(name, type, size, n_cores, owner, owner_type, entry_mask, entry_use,
+def queue_custom_owner_bit(name, entry_type, size, n_cores,
+                           owner, owner_type, entry_mask, entry_use,
                            checksum=False, dma_cache=True,
                            enq_blocking=False, deq_blocking=False, enq_atomic=False, deq_atomic=False,
                            enq_output=False):
     """
     :param name: queue name
-    :param type: entry type
+    :param entry_type: entry type
     :param size: number of entries of type type
     :param n_cores:
     :param owner: ownerbit field in type (owner = 0 --> empty entry)
@@ -308,7 +310,14 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner, owner_type, entry_m
     :param atomic:
     :return:
     """
-    owner = get_field_name(type, owner)
+    define_state(entry_type)
+    owner = get_field_name(entry_type, owner)
+
+    decl = workspace.get_decl(entry_type.__name__)
+    if decl:
+        assert decl.fields[-1] == owner, \
+            "The last field of queue entry type '%s' must be '%s'. Please specify 'layout' of state '%s' accordingly." \
+            % (decl.name, owner, decl.name)
 
     owner_size = common.sizeof(owner_type)
     assert (owner_size == 4), "queue_custom_owner_bit currently only supports owner_type of 32 bytes."
@@ -321,18 +330,18 @@ def queue_custom_owner_bit(name, type, size, n_cores, owner, owner_type, entry_m
     else:
         entry_mask_nic = entry_mask
 
-    type = string_type(type)
-    type_star = type + "*"
+    entry_type = string_type(entry_type)
+    type_star = entry_type + "*"
     if checksum:
         checksum_offset = "(uint64_t) &((%s) 0)->%s" % (type_star, checksum)
     else:
         checksum_offset = None
-    type_offset = "&((%s) 0)->%s" % (type_star, owner)
-    sanitized_name = '_' + type.replace(' ', '_')
+    type_offset = "(uint64_t) &((%s) 0)->%s" % (type_star, owner)
+    sanitized_name = '_' + entry_type.replace(' ', '_')
 
     enq_all, deq_all, EnqQueue, DeqQueue, Storage = \
-        create_queue_states(name, type, size, n_cores,
-                            overlap="sizeof(%s)" % type, dma_cache=dma_cache,
+        create_queue_states(name, entry_type, size, n_cores,
+                            overlap="sizeof(%s)" % entry_type, dma_cache=dma_cache,
                             nameext=sanitized_name, deqext="_checksum" if checksum else "",
                             declare=True, enq_lock=False, deq_lock=False)
 
@@ -342,14 +351,14 @@ int enqueue_ready%s(void* buff) {
   %s dummy = (%s) buff;
   return (dummy->%s == 0)? sizeof(%s): 0;
 }
-    ''' % (sanitized_name, type_star, type_star, owner, type)
+    ''' % (sanitized_name, type_star, type_star, owner, entry_type)
 
     enqueue_done = r'''
 int enqueue_done%s(void* buff) {
     %s dummy = (%s) buff;
     return (dummy->%s)? sizeof(%s): 0;
 }
-        ''' % (sanitized_name, type_star, type_star, owner, type)
+        ''' % (sanitized_name, type_star, type_star, owner, entry_type)
 
     dequeue_ready = r'''
 int dequeue_ready%s(void* buff) {
@@ -375,17 +384,17 @@ int dequeue_ready%s_checksum(void* buff) {
   }
   return 0;
 }
-    ''' % (sanitized_name, type_star, type_star, owner_type, owner, entry_mask_nic, owner, checksum, checksum_offset, type)
+    ''' % (sanitized_name, type_star, type_star, owner_type, owner, entry_mask_nic, owner, checksum, checksum_offset, entry_type)
 
     dequeue_done = r'''
 int dequeue_done%s(void* buff) {
     %s dummy = (%s) buff;
     return (dummy->%s == 0)? sizeof(%s): 0;
 }
-        ''' % (sanitized_name, type_star, type_star, owner, type)
+        ''' % (sanitized_name, type_star, type_star, owner, entry_type)
 
-    if type not in Storage.extra_code or checksum:
-        Storage.extra_code[type] = enqueue_ready + enqueue_done + dequeue_ready + dequeue_done
+    if entry_type not in Storage.extra_code or checksum:
+        Storage.extra_code[entry_type] = enqueue_ready + enqueue_done + dequeue_ready + dequeue_done
 
     if checksum:
         checksum_code = r'''
@@ -404,8 +413,9 @@ int dequeue_done%s(void* buff) {
 
     copy = r'''
     int type_offset = %s;
+    assert(type_offset > 0);
     %s content = &q->data[old];
-    rte_memcpy(content, x, type_offset);
+    memcpy(content, x, type_offset);
     __SYNC;
     %s
     content->%s = x->%s & %s;
@@ -441,7 +451,7 @@ int dequeue_done%s(void* buff) {
 #else
         dma_read(addr, size, (void**) &entry);
 #endif
-        ''' % (type, type)
+        ''' % (entry_type, entry_type)
 
     wait_then_copy_cvm = r'''
 #ifdef DMA_CACHE
@@ -481,7 +491,7 @@ int dequeue_done%s(void* buff) {
         while(!dequeue_ready%s(entry)) dma_read_with_buf(addr, size, entry, 1);
 #endif
         %s* x = entry;
-        ''' % (sanitized_name, owner, entry_mask_nic, type)
+        ''' % (sanitized_name, owner, entry_mask_nic, entry_type)
 
     inc_offset = "p->offset = (p->offset + 1) %s %d;\n" % ('%', size)
 
@@ -822,7 +832,7 @@ int dequeue_done%s(void* buff) {
         dma_free(x);
 #endif
     }
-            ''' % (type_star, type_star, set_checksum, set_owner, type, type))
+            ''' % (type_star, type_star, set_checksum, set_owner, entry_type, entry_type))
 
 
     return Enqueue, Dequeue, Release

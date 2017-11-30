@@ -4,14 +4,16 @@ import program
 
 ######################## Scope ##########################
 decls = [[]]
+decl_dict = {}
 scope = [[]]
 stack = []
 inst_collection = [InstancesCollection()]
 
 
 def workspace_reset():
-    global decls, scope, stack, inst_collection
+    global decls, decl_dict, scope, stack, inst_collection
     decls = [[]]
+    decl_dict = {}
     scope = [[]]
     stack = []
     inst_collection = [InstancesCollection()]
@@ -25,13 +27,28 @@ def get_last_decl():
 
 def decl_append(x):
     decls[-1].append(x)
+    decl_dict[x.name] = x
+
+
+def get_decl(x, env=decl_dict):
+    if x in env:
+        return env[x]
+    elif '__up__' in env:
+        return get_decl(x, env=env['__up__'])
+    else:
+        return False
 
 
 def push_decl():
     decls.append([])
+    global decl_dict
+    decl_dict = {'__up__': decl_dict}
 
 
 def pop_decl():
+    global decl_dict
+    decl_dict = decl_dict['__up__']
+
     global decls
     decl = decls[-1]
     decls = decls[:-1]

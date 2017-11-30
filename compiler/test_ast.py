@@ -145,7 +145,7 @@ class TestAST(unittest.TestCase):
             g = program_to_graph_pass(p)
             join_and_resource_annotation_pass(g, True, False)
         except Exception as e:
-            self.assertNotEqual(e.message.find("Resource 't2' has more than one starting element instance."),
+            self.assertNotEqual(e.message.find("Resource 't2' has more than one starting element instance"),
                                 -1, 'Expect undefined exception.')
         else:
             self.fail('Exception is not raised.')
