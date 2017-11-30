@@ -61,7 +61,7 @@ static int count_emit(uint64_t key, void *data, void *arg)
   strcpy(t.v[0].str, b->str);
   t.v[0].integer = sum;
   tuple_send(&t, myself);
-  printf("Count: %s %d | key = %ld, b = %p!!!!!!!!!!!!!!!\n", t.v[0].str, t.v[0].integer, key, b);
+  //printf("Count: %s %d | key = %ld, b = %p!!!!!!!!!!!!!!!\n", t.v[0].str, t.v[0].integer, key, b);
   return 1;
 }
 #endif
@@ -105,7 +105,7 @@ void count_execute(const struct tuple *t, struct executor *self)
   /* uint64_t before_insert = rdtsc(); */
 
   if(b == NULL) {
-    printf(">>>>>>>>>>>>>> NEW BUCKET: %s key = %ld\n", t->v[0].str, key);
+    //printf(">>>>>>>>>>>>>> NEW BUCKET: %s key = %ld\n", t->v[0].str, key);
     b = malloc(sizeof(struct bucket));
     assert(b != NULL);
     memset(b, 0, sizeof(struct bucket));

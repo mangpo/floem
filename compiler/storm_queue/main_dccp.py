@@ -30,14 +30,6 @@ class Classifier(Element):
             state.rx_net_buf = b;
         }
 
-        if(type==2) {
-          struct tuple* t = (struct tuple*) &p[1];
-          char* s = t->v[0].str;
-          if(!(strcmp(s, "nathan")==0 || strcmp(s, "golda")==0 || strcmp(s, "bertels")==0 || strcmp(s, "jackson")==0))
-            printf("From net: %s\n",s);
-          //assert(strcmp(s, "nathan")==0 || strcmp(s, "golda")==0 || strcmp(s, "bertels")==0 || strcmp(s, "jackson")==0); 
-        }
-
         output switch {
             case type==1: ack(p);
             case type==2: pkt(p);
@@ -83,7 +75,7 @@ class GetCore(Element):
     def impl(self):
         self.run_c(r'''
     struct tuple* t = inp();
-    int id = this->task2executorid[t->task];
+        int id = this->task2executorid[t->task & 0xff];
 #ifdef DEBUG_MP
     printf("\nreceive: task %d, id %d\n", t->task, id);
 #endif
@@ -116,7 +108,7 @@ class LocalOrRemote(Element):
     }
 #endif
 
-    if(t->task==30) printf("REMOTE -- task = %d, fromtask = %d, local = %d\n", t->task, t->fromtask, local);
+    //if(t->task==30) printf("REMOTE -- task = %d, fromtask = %d, local = %d\n", t->task, t->fromtask, local);
 
     output switch { case local: out_local(t); else: out_send(t); }
         ''')
@@ -138,8 +130,6 @@ class PrintTuple(Element):
         fflush(stdout);
     }
 #endif
-
-    if(t && t->task >= 20) printf("TUPLE[0] -- task = %d, fromtask = %d, str = %s, integer = %d\n", t->task, t->fromtask, t->v[0].str, t->v[0].integer); 
         
     if(t) assert(t->task != 0);
     output switch { case t: out(t); }
@@ -207,8 +197,6 @@ class DccpCheckCongestion(Element):
         if(dccp->connections[worker].pipe >= dccp->connections[worker].cwnd) {
             worker = -1;
         }
-        struct tuple* t = state.q_buf.entry;
-        if(t->task==30) printf("DCCP -- task = %d, worker = %d\n", t->task, worker);
 
         output switch { case (worker >= 0): send(worker); else: drop(); }
         ''')
@@ -387,7 +375,7 @@ class SaveWorkerID(Element):
     def impl(self):
         self.run_c(r'''
         (struct tuple* t) = inp();
-        state.worker = this->task2worker[t->task];
+        state.worker = this->task2worker[t->task & 0xff];
         state.myworker = this->task2worker[t->fromtask];
         output { out(t); }
         ''')
@@ -429,7 +417,9 @@ class Tuple2Pkt(Element):
         state.tx_net_buf = b;
         struct tuple* t = state.q_buf.entry;
         memcpy(header, &dccp->header, sizeof(struct pkt_dccp_headers));
-        memcpy(&header[1], t, sizeof(struct tuple));
+        struct tuple* new_t = &header[1];
+        memcpy(new_t, t, sizeof(struct tuple));
+        new_t->task = t->task & 0xff;
 
         struct worker* workers = get_workers();
         header->dccp.dst = htons(state.worker);
@@ -439,7 +429,7 @@ class Tuple2Pkt(Element):
         header->eth.src = workers[state.myworker].mac;
         header->ip.src = workers[state.myworker].ip;
         
-        if(t->task == 30) printf("PREPARE PKT: task = %d, fromtask = %d, worker = %d\n", t->task, t->fromtask, state.worker);
+        if(new_t->task == 30) printf("PREPARE PKT: task = %d, fromtask = %d, worker = %d\n", new_t->task, new_t->fromtask, state.worker);
         output { out(p); }
         ''')
 

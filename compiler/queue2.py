@@ -397,19 +397,21 @@ int dequeue_done%s(void* buff) {
       checksum ^= *(data+i);
     content->%s = checksum; 
     ''' % (checksum_offset, checksum)
+        flush_code = "clflush_cache_range(content, type_offset);"
     else:
         checksum_code = ""
+        flush_code = ""
 
     copy = r'''
     int type_offset = %s;
     %s content = &q->data[old];
     rte_memcpy(content, x, type_offset);
     __SYNC;
-    clflush_cache_range(content, type_offset);
+    %s
     content->%s = x->%s & %s;
     %s
     __SYNC;
-    ''' % (type_offset, type_star, owner, owner, entry_mask, checksum_code)
+    ''' % (type_offset, type_star, flush_code, owner, owner, entry_mask, checksum_code)
 
     atomic_src = r'''
     __SYNC;

@@ -8,7 +8,7 @@
 
 #include "storm.h"
 
-//#define TWITTER_FEED
+#define TWITTER_FEED
 
 // in seconds
 #ifndef LOCAL
@@ -39,6 +39,7 @@ void spout_execute(const struct tuple *t, struct executor *self)
   static __thread char statebuf[256];
   int r, i;
 #else
+  int r;
   static __thread int i = 0;
 #endif
 
