@@ -6,7 +6,7 @@ test = "spout"
 inject_func = "random_" + test
 workerid = {"spout": 0, "count": 1, "rank": 2}
 
-n_cores = 7
+n_cores = 4 #7
 n_workers = 'MAX_WORKERS'
 n_nic_rx = 2
 n_nic_tx = 3
@@ -76,8 +76,10 @@ class GetCore(Element):
         self.run_c(r'''
     struct tuple* t = inp();
         int id = this->task2executorid[t->task & 0xff];
-#ifdef DEBUG_MP
-    printf("\nreceive: task %d, id %d\n", t->task, id);
+#if 1 //def DEBUG_MP
+
+    if((t->task & 0xff) == 30)
+        printf("steer: task %d, id %d\n", t->task, id);
 #endif
     output { out(t, id); }
         ''')
@@ -108,7 +110,7 @@ class LocalOrRemote(Element):
     }
 #endif
 
-    //if(t->task==30) printf("REMOTE -- task = %d, fromtask = %d, local = %d\n", t->task, t->fromtask, local);
+        if(t->task==30 && local) printf("Local -- task = %d, fromtask = %d, local = %d\n", t->task & 0xff, t->fromtask, local);
 
     output switch { case local: out_local(t); else: out_send(t); }
         ''')
@@ -448,7 +450,7 @@ class Pkt2Tuple(Element):
         (struct pkt_dccp_headers* p) = inp();
         struct tuple* t = (struct tuple*) &p[1];
         __sync_fetch_and_add(&dccp->tuples, 1);
-        if(t->task == 30) printf("Receive task 30!!!!!\n");
+        if(t->task == 30) printf("\nReceive pkt 30: %s, count %d!!!!!\n", t->v[0].str, t->v[0].integer);
         output { out(t); }
         ''')
 
@@ -504,37 +506,6 @@ class GetRxBuf(Element):
 
 
 ############################### Queue #################################
-# class BatchInfo(State):
-#     core = Field(Int)
-#     batch_size = Field(Int)
-#     start = Field(Uint(64))
-#
-#     def init(self):
-#         self.core = 0
-#         self.batch_size = 0
-#         self.start = 0
-#
-# batch_info = BatchInfo()
-#
-# class BatchScheduler(Element):
-#     this = Persistent(BatchInfo)
-#     def states(self):
-#         self.this = batch_info
-#
-#     def configure(self):
-#         self.out = Output(Size)
-#
-#     def impl(self):
-#         self.run_c(r'''
-#     if(this->batch_size >= BATCH_SIZE || rdtsc() - this->start >= BATCH_DELAY) {
-#         this->core = (this->core + 1) %s %d;
-#         this->batch_size = 0;
-#         this->start = rdtsc();
-#         printf("======================= Dequeue core = %d\n", this->core);
-#     }
-#     output { out(this->core); }
-#         ''' % ('%', n_cores))
-
 class BatchScheduler(Element):
     this = Persistent(TaskMaster)
 
@@ -547,6 +518,7 @@ class BatchScheduler(Element):
     def impl(self):
         self.run_c(r'''                                   
     (size_t core_id) = inp();          
+/*
     int n_cores = %d;
     static __thread int core = -1;                                                                  
     static __thread int batch_size = 0;                                                            
@@ -555,26 +527,26 @@ class BatchScheduler(Element):
     if(core == -1) {
         //core = (core_id * n_cores)/%d;
         core = core_id;
-        while(this->executors[core].execute == NULL){                                                      
-            core = (core + 1) %s n_cores;                                                                  
-        }                                                                                                  
-        start = rdtsc();                                                                                   
-    }                                                                                                      
-                                                                                                           
-    if(core >= 2 && (batch_size >= BATCH_SIZE || rdtsc() - start >= BATCH_DELAY)) {                   
-        int old = core;                                                                                    
-        do {                                                                                               
-            core = (core + 1) %s n_cores;                                                               
-        } while(this->executors[core].execute == NULL);                                                    
-        //if(old <=1 && core > 1) core = 0;             
-        if(old >=2 && core < 2) core = 2;             
-        batch_size = 0;                                                                                   
-        start = rdtsc();                                                                                   
-    }                                                                                                      
-    //printf("BATCH SCHEDULER: id = %s, core = %s!!!!!!!!!!!!!!!!\n", core_id, core);                    
-    batch_size++;                                                                                       
-    output { out(core); }                                                                               
-        ''' % (n_cores, n_nic_tx, '%', '%', '%ld', '%d'))
+        while(this->executors[core].execute == NULL)
+            core = (core + 1) %s n_cores;               
+        start = rdtsc();                                     
+    }                                                             
+                                                                       
+    if(core >= 2 && (batch_size >= BATCH_SIZE || rdtsc() - start >= BATCH_DELAY)) {    
+        int old = core;                                  
+        do {                                                                      
+            core = (core + 1) %s n_cores;                              
+        } while(this->executors[core].execute == NULL);                 
+        if(old <=3 && core > 3) core = 2;             
+        if(old >=4 && core < 4) core = 4;             
+        //if(old >=2 && core < 2) core = 2;             
+        batch_size = 0;                                        
+        start = rdtsc();                                             
+    }                                                             
+    batch_size++;                                          
+*/
+    output { out(core_id); }                                      
+        ''' % (n_cores, n_nic_tx, '%', '%',))
 
 # class BatchInc(Element):
 #     this = Persistent(BatchInfo)

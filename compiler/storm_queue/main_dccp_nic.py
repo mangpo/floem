@@ -212,19 +212,19 @@ class DccpPrintStat(Element):
         __cvmx_wait_usec_internal__(1000000);
 #endif
         static size_t lasttuples = 0;
+        static int round = 0;
         size_t tuples;
         __SYNC;
 
-	    //struct connection* connections = info->connections;
-        /* for(int i = 0; i < MAX_WORKERS; i++) { */
-        /*     printf("pipe,cwnd,acks,lastack[%d] = %u, %u, %zu, %d\n", i, */
-        /*     connections[i].pipe, connections[i].cwnd, connections[i].acks, connections[i].lastack); */
-        /* } */
+        round++;
+        if(round == 10) {
         tuples = info->tuples - lasttuples;
         lasttuples = info->tuples;
         printf("acks sent %zu, rtt %" PRIu64 "\n", info->acks_sent, info->link_rtt);
         printf("Tuples/s: %zu, Gbits/s: %.2f\n\n",
-           tuples, (tuples * (sizeof(struct tuple) + sizeof(struct pkt_dccp_headers)) * 8) / 1000000000.0);
+           tuples/round, (tuples * (sizeof(struct tuple) + sizeof(struct pkt_dccp_headers)) * 8) / (1000000000.0 * round));
+        round = 0;
+        }
         ''')
 
 class DccpCheckCongestion(Element):

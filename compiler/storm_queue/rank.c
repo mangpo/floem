@@ -22,7 +22,8 @@ void rank_execute(const struct tuple *t, struct executor *self)
   static __thread time_t lasttime = 0;
   static __thread struct tuple rankings[TOP_N + 1];
 
-  /* printf("Ranker %d got '%s', %d.\n", t->task, t->v[0].str, t->v[0].integer); */
+  if(t->task == 30)
+    printf("Ranker %d got '%s', %d.\n", t->task & 0xff, t->v[0].str, t->v[0].integer);
 
   for(int j = 0; j < MAX_VECTOR; j++) {
     if(t->v[j].integer == 0) {
@@ -68,5 +69,5 @@ void rank_execute(const struct tuple *t, struct executor *self)
 
     tuple_send(&out, self);
   }
-  sleep(1);
+  //sleep(1);
 }

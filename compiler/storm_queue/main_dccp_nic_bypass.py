@@ -190,7 +190,7 @@ class PrintTuple(Element):
         self.run_c(r'''
     (struct tuple* t) = inp();
 
-#if 1
+#ifdef DEBUG_MP
   if(t) {
     uint32_t task = nic_htonl(t->task);
     if(task == 10 && strcmp(t->v[0].str, "golda")) {
@@ -255,19 +255,19 @@ class DccpPrintStat(Element):
         __cvmx_wait_usec_internal__(1000000);
 #endif
         static size_t lasttuples = 0;
+        static int round = 0;
         size_t tuples;
         __SYNC;
 
-	    //struct connection* connections = info->connections;
-        /* for(int i = 0; i < MAX_WORKERS; i++) { */
-        /*     printf("pipe,cwnd,acks,lastack[%d] = %u, %u, %zu, %d\n", i, */
-        /*     connections[i].pipe, connections[i].cwnd, connections[i].acks, connections[i].lastack); */
-        /* } */
+        round++;
+        if(round == 10) {
         tuples = info->tuples - lasttuples;
         lasttuples = info->tuples;
         printf("acks sent %zu, rtt %" PRIu64 "\n", info->acks_sent, info->link_rtt);
         printf("Tuples/s: %zu, Gbits/s: %.2f\n\n",
-           tuples, (tuples * (sizeof(struct tuple) + sizeof(struct pkt_dccp_headers)) * 8) / 1000000000.0);
+           tuples/round, (tuples * (sizeof(struct tuple) + sizeof(struct pkt_dccp_headers)) * 8) / (1000000000.0 * round));
+        round = 0;
+        }
         ''')
 
 class DccpCheckCongestion(Element):
@@ -520,7 +520,7 @@ class Tuple2Pkt(Element):
         
         //printf("PREPARE PKT: task = %d, worker = %d\n", nic_hotnl(t->task), state.worker);
 
-#if 1
+#ifdef DEBUG_MP
         t = (struct tuple*) &header[1];
     uint32_t task = nic_htonl(t->task);                                                              
     if(task == 10 && strcmp(t->v[0].str, "golda")) {                                           
@@ -614,37 +614,6 @@ class GetRxBuf(Element):
 
 
 ############################### Queue #################################
-# class BatchInfo(State):
-#     core = Field(Int)
-#     batch_size = Field(Int)
-#     start = Field(Uint(64))
-#
-#     def init(self):
-#         self.core = 0
-#         self.batch_size = 0
-#         self.start = 0
-#
-# batch_info = BatchInfo()
-#
-# class BatchScheduler(Element):
-#     this = Persistent(BatchInfo)
-#     def states(self):
-#         self.this = batch_info
-#
-#     def configure(self):
-#         self.out = Output(Size)
-#
-#     def impl(self):
-#         self.run_c(r'''
-#     if(this->batch_size >= BATCH_SIZE || rdtsc() - this->start >= BATCH_DELAY) {
-#         this->core = (this->core + 1) %s %d;
-#         this->batch_size = 0;
-#         this->start = rdtsc();
-#         printf("======================= Dequeue core = %d\n", this->core);
-#     }
-#     output { out(this->core); }
-#         ''' % ('%', n_cores))
-
 class BatchScheduler(Element):
     this = Persistent(TaskMaster)
 
