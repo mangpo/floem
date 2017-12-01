@@ -61,7 +61,9 @@ static int count_emit(uint64_t key, void *data, void *arg)
   strcpy(t.v[0].str, b->str);
   t.v[0].integer = sum;
   tuple_send(&t, myself);
-  //printf("Count: %s %d | key = %ld, b = %p!!!!!!!!!!!!!!!\n", t.v[0].str, t.v[0].integer, key, b);
+#ifdef DEBUG_MP
+  printf("Count: %s %d | key = %ld, b = %p!!!!!!!!!!!!!!!\n", t.v[0].str, t.v[0].integer, key, b);
+#endif
   return 1;
 }
 #endif

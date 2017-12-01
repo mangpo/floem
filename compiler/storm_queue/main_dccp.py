@@ -6,7 +6,7 @@ test = "spout"
 inject_func = "random_" + test
 workerid = {"spout": 0, "count": 1, "rank": 2}
 
-n_cores = 4 #7
+n_cores = 7
 n_workers = 'MAX_WORKERS'
 n_nic_rx = 2
 n_nic_tx = 3
@@ -76,10 +76,8 @@ class GetCore(Element):
         self.run_c(r'''
     struct tuple* t = inp();
         int id = this->task2executorid[t->task];
-#if 1 //def DEBUG_MP
-
-    if((t->task) == 30)
-        printf("steer: task %d, id %d\n", t->task, id);
+#ifdef DEBUG_MP
+    printf("steer: task %d, id %d\n", t->task, id);
 #endif
     output { out(t, id); }
         ''')
@@ -110,7 +108,9 @@ class LocalOrRemote(Element):
     }
 #endif
 
-        if(t->task==30 && local) printf("Local -- task = %d, fromtask = %d, local = %d\n", t->task, t->fromtask, local);
+#ifdef DEBUG_MP
+        if(local) printf("Local -- task = %d, fromtask = %d, local = %d\n", t->task, t->fromtask, local);
+#endif
 
     output switch { case local: out_local(t); else: out_send(t); }
         ''')
@@ -518,7 +518,6 @@ class BatchScheduler(Element):
     def impl(self):
         self.run_c(r'''                                   
     (size_t core_id) = inp();          
-/*
     int n_cores = %d;
     static __thread int core = -1;                                                                  
     static __thread int batch_size = 0;                                                            
@@ -537,15 +536,14 @@ class BatchScheduler(Element):
         do {                                                                      
             core = (core + 1) %s n_cores;                              
         } while(this->executors[core].execute == NULL);                 
-        if(old <=3 && core > 3) core = 2;             
-        if(old >=4 && core < 4) core = 4;             
-        //if(old >=2 && core < 2) core = 2;             
+        //if(old <=3 && core > 3) core = 2;             
+        //if(old >=4 && core < 4) core = 4;             
+        if(old >=2 && core < 2) core = 2;             
         batch_size = 0;                                        
         start = rdtsc();                                             
     }                                                             
     batch_size++;                                          
-*/
-    output { out(core_id); }                                      
+    output { out(core); }
         ''' % (n_cores, n_nic_tx, '%', '%',))
 
 # class BatchInc(Element):

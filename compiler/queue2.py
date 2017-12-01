@@ -314,13 +314,6 @@ def queue_custom_owner_bit(name, entry_type, size, n_cores,
     owner = get_field_name(entry_type, owner)
     assert owner_type != "bool", "Owner field type should be at least 1 byte."
 
-    if isinstance(entry_type, type):
-        decl = workspace.get_decl(entry_type.__name__)
-        if decl:
-            assert decl.fields[-1] == owner, \
-                "The last field of queue entry type '%s' must be '%s'. Please specify 'layout' of state '%s' accordingly." \
-                % (decl.name, owner, decl.name)
-
     entry_type = string_type(entry_type)
     type_star = entry_type + "*"
     if checksum:
@@ -354,9 +347,9 @@ int enqueue_done%s(void* buff) {
     dequeue_ready = r'''
 int dequeue_ready%s(void* buff) {
     %s dummy = (%s) buff;
-    return dummy->%s;
+    return (dummy->%s & FLAG_OWN)? sizeof(%s): 0;
 }
-''' % (sanitized_name, type_star, type_star, owner)
+''' % (sanitized_name, type_star, type_star, owner, entry_type)
 
     if checksum:
         dequeue_ready += r'''
@@ -460,14 +453,13 @@ int dequeue_done%s(void* buff) {
 
     wait_then_get = r'''
     %s x = &q->data[old];
-    %s owner = x->%s;
-    while(owner != FLAG_OWN || !__sync_bool_compare_and_swap(&x->%s, owner, owner | FLAG_INUSE)) {
+    while(x->%s != FLAG_OWN || !__sync_bool_compare_and_swap(&x->%s, FLAG_OWN, FLAG_OWN | FLAG_INUSE)) {
 #ifdef QUEUE_STAT
         __sync_fetch_and_add(&empty[c], 1);
 #endif
         __SYNC;
     }
-    ''' % (type_star, owner_type, owner, owner)
+    ''' % (type_star, owner, owner)
 
     wait_then_get_cvm = r'''
 #ifdef DMA_CACHE
@@ -525,28 +517,21 @@ int dequeue_done%s(void* buff) {
             noblock_atom = stat + r'''
     __SYNC;
     bool success = false;
-    size_t old2, old = p->offset;
-    %s owner = q->data[old].%s;
-    while(owner != FLAG_OWN) {
-        if(__sync_bool_compare_and_swap(&q->data[old].%s, 0, FLAG_INUSE)) {
-            // increase offset
-            old2 = p->offset;
-            while(!__sync_bool_compare_and_swap(&p->offset, old2, (old2 + 1) %s %d)) {
-                __SYNC;
-                old2 = p->offset;
-            }
-            %s
-            success = true;
-            break;
-        }
-        old = (old + 1) %s %d;
-        owner = q->data[old].%s;
-        __SYNC;
+    size_t old = p->offset;
+
+    if(__sync_bool_compare_and_swap(&q->data[old].%s, 0, FLAG_INUSE)) {
+      if(__sync_bool_compare_and_swap(&p->offset, old, (old + 1) %s %d)) {
+        %s
+        success = true; 
+      } else {
+        q->data[old].%s = 0;
+      }
     }
+
 #ifdef QUEUE_STAT
     if(!success) __sync_fetch_and_add(&drop[c], 1);
 #endif
-    ''' % (owner_type, owner, owner, '%', size, copy, '%', size, owner)
+    ''' % (owner, '%', size, copy, owner)
 
             block_noatom = "size_t old = p->offset;\n" + wait_then_copy + inc_offset
 
@@ -585,7 +570,7 @@ int dequeue_done%s(void* buff) {
 #else
     // TODO: potential race condition for non DMA_CACHE
 
-    while(entry->%s == 0) {
+    if(entry->%s == 0) {
 #endif
         size_t new = (old + 1) %s %d;
         if(cvmx_atomic_compare_and_store64(&p->offset, old, new)) {
@@ -596,15 +581,7 @@ int dequeue_done%s(void* buff) {
 #else
             dma_write(addr, size, entry, 1);
 #endif
-            break;
         }
-        old = p->offset;
-        addr = (uintptr_t) &q->data[old];
-#ifdef DMA_CACHE
-        entry = smart_dma_read(p->id, addr, size);
-#else
-        dma_read_with_buf(addr, size, entry, 1);
-#endif
     }
     ''' % (owner, '%', size, owner)
 
@@ -654,24 +631,15 @@ int dequeue_done%s(void* buff) {
             noblock_atom = r'''
     %s x = NULL;
     __SYNC;
-    size_t old2, old = p->offset;
-    %s owner = q->data[old].%s;
-    while(owner != 0) {
-        if(__sync_bool_compare_and_swap(&q->data[old].%s, FLAG_OWN, FLAG_OWN | FLAG_INUSE)) {
-            // increase offset
-            old2 = p->offset;
-            while(!__sync_bool_compare_and_swap(&p->offset, old2, (old2 + 1) %s %d)) {
-                __SYNC;
-                old2 = p->offset;
-            }
-            x = &q->data[old];
-            break;
-        }
-        old = (old + 1) %s %d;
-        owner = q->data[old].%s;
-        __SYNC;
+    size_t old = p->offset; 
+    if(__sync_bool_compare_and_swap(&q->data[old].%s, FLAG_OWN, FLAG_OWN | FLAG_INUSE)) {
+      if(__sync_bool_compare_and_swap(&p->offset, old, (old + 1) %s %d)) {
+        x = &q->data[old];
+      } else {
+        q->data[old].%s = FLAG_OWN;
+      }
     }
-    ''' % (type_star, owner_type, owner, owner, '%', size, '%', size, owner)
+    ''' % (type_star, owner, '%', size, owner)
 
             block_noatom = "size_t old = p->offset;\n" + wait_then_get + inc_offset
 
@@ -738,22 +706,14 @@ int dequeue_done%s(void* buff) {
 #else
     // TODO: potential race condition for non DMA_CACHE
 
-    while(dequeue_ready%s(entry)) {
+    if(dequeue_ready%s(entry)) {
 #endif
         size_t new = (old + 1) %s %d;
         if(__sync_bool_compare_and_swap(&p->offset, old, new)) {
             x = entry;
             success = true;
             assert(entry->%s != 0);
-            break;
         }
-        old = p->offset;
-        addr = (uintptr_t) &q->data[old];
-#ifdef DMA_CACHE
-        entry = smart_dma_read(p->id, addr, size);
-#else
-        dma_read_with_buf(addr, size, entry, 1);
-#endif
     }
     if(!success) {
 #ifndef DMA_CACHE
