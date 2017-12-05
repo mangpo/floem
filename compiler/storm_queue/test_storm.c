@@ -114,7 +114,7 @@ int main(int argc, char *argv[]) {
         /*     printf("pipe,cwnd,acks,lastack[%d] = %u, %u, %zu, %d\n", i, */
         /*     connections[i].pipe, connections[i].cwnd, connections[i].acks, connections[i].lastack); */
         /* } */
-#ifdef QUEUE_STAT
+#ifdef DEBUG_PERF
 	for(int i = 0; i < MAX_EXECUTORS && executor[i].execute != NULL; i++) {
 	  struct executor *self = &executor[i];
 	  if(self->numexecutes-self->lastnumexecutes) {

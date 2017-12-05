@@ -11,8 +11,6 @@
 #include "hash.h"
 #include "collections/hash_table.h"
 
-#define DEBUG
-
 #define NUM_WINDOW_CHUNKS			5
 #define DEFAULT_SLIDING_WINDOW_IN_SECONDS	(NUM_WINDOW_CHUNKS * 10) // 60
 #define DEFAULT_EMIT_FREQUENCY_IN_SECONDS	(DEFAULT_SLIDING_WINDOW_IN_SECONDS / NUM_WINDOW_CHUNKS)
@@ -49,6 +47,13 @@ static int count_reset(uint64_t key, void *data, void *arg)
 
 static int count_emit(uint64_t key, void *data, void *arg)
 {
+#ifdef DEBUG_PERF
+  static __thread size_t numexecutes = 0;
+  static __thread uint64_t execute_time1 = 0;
+  static __thread uint64_t execute_time2 = 0;
+  uint64_t t1 = rdtsc();
+#endif
+
   struct bucket *b = data;
   long sum = 0;
   struct tuple t;
@@ -60,10 +65,28 @@ static int count_emit(uint64_t key, void *data, void *arg)
   memset(&t, 0, sizeof(struct tuple));
   strcpy(t.v[0].str, b->str);
   t.v[0].integer = sum;
+#ifdef DEBUG_PERF
+  uint64_t t2 = rdtsc();
+#endif
+
   tuple_send(&t, myself);
 #ifdef DEBUG_MP
   printf("Count: %s %d | key = %ld, b = %p!!!!!!!!!!!!!!!\n", t.v[0].str, t.v[0].integer, key, b);
 #endif
+
+#ifdef DEBUG_PERF
+  uint64_t t3 = rdtsc();
+  numexecutes++;
+  execute_time1 += t2 - t1;
+  execute_time2 += t3 - t2;
+
+  if(numexecutes == 1000000) {
+    printf(">>> sum time: %.2f\n", 1.0*execute_time1/numexecutes);
+    printf(">>> emit time: %.2f\n", 1.0*execute_time2/numexecutes);
+    execute_time1 = execute_time2 = numexecutes = 0;
+  }
+#endif
+
   return 1;
 }
 #endif
@@ -74,7 +97,7 @@ void count_execute(const struct tuple *t, struct executor *self)
   struct count_state *st = self->state;
   static __thread uintptr_t headslot = 0, tailslot = 1;
   static __thread time_t lasttime = 0;
-#ifdef DEBUG
+#ifdef DEBUG_PERF
   static __thread time_t debug_lasttime = 0;
   static __thread size_t numexecutes = 0;
   static __thread uint64_t execute_time = 0;
@@ -118,31 +141,24 @@ void count_execute(const struct tuple *t, struct executor *self)
 
   /* usleep(10000); */
 
-#ifdef DEBUG
+#ifdef DEBUG_PERF
   uint64_t now = rdtsc();
   /* before_time += before_hash - starttime; */
   /* hash_time += before_lookup - before_hash; */
   /* lookup_time += before_insert - before_lookup; */
   /* insert_time += now - before_insert; */
   execute_time += now - starttime;
+  
+  if(numexecutes == 1000000) {
+    printf("count time: %.2f\n", 1.0*execute_time/numexecutes);
+    execute_time = numexecutes = 0;
+  }
 #endif
 
   struct timeval tv;
   int r = gettimeofday(&tv, NULL);
   assert(r == 0);
   
-  static int i = 0;
-/*
-  for(;;) {
-    int r = gettimeofday(&tv, NULL);
-    assert(r == 0);
-    printf("time: %d, %ld, %ld, %ld\n", i, tv.tv_sec, tv.tv_sec, DEFAULT_EMIT_FREQUENCY_IN_SECONDS);
-    i++;
-  }
-*/
-  //printf("time: %d, %ld, %ld, %d\n", i, tv.tv_sec, tv.tv_sec, DEFAULT_EMIT_FREQUENCY_IN_SECONDS);
-  i++;
-
   if(tv.tv_sec >= lasttime + DEFAULT_EMIT_FREQUENCY_IN_SECONDS) {
     lasttime = tv.tv_sec;
 #ifdef DEBUG_MP
@@ -164,21 +180,6 @@ void count_execute(const struct tuple *t, struct executor *self)
     tailslot = (tailslot + 1) % NUM_WINDOW_CHUNKS;
   }
 
-#ifdef DEBUG
-  if(tv.tv_sec >= debug_lasttime + 1) {
-    debug_lasttime = tv.tv_sec;
-    /* printf("Count %d executed %zu latency %" PRIu64 "\n", */
-    /* 	   self->taskid, numexecutes, execute_time / numexecutes); */
-    //self->avglatency / (self->numexecutes > 0 ? self->numexecutes : 1));
-    /* printf("Worker %d executed %zu latency %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 "\n", self->taskid, numexecutes, execute_time / numexecutes, */
-    /* 	   before_time / numexecutes, */
-    /* 	   hash_time / numexecutes, */
-    /* 	   lookup_time / numexecutes, */
-    /* 	   insert_time / numexecutes); */
-    /* numexecutes = 0; */
-    /* execute_time = 0; */
-  }
-#endif
 }
 
 void count_init(struct executor *self)

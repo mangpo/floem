@@ -46,7 +46,7 @@ struct tuple {
   } v[MAX_VECTOR];
   uint8_t      status;
   uint8_t      checksum;
-  uint8_t      pad[2];
+  uint8_t      pad[26];
 
 } __attribute__ ((packed));
 

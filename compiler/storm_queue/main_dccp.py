@@ -131,9 +131,9 @@ class PrintTuple(Element):
         //printf("TUPLE[1] -- task = %d, fromtask = %d, str = %s, integer = %d\n", t->task, t->fromtask, t->v[1].str, t->v[1].integer);
         fflush(stdout);
     }
+    if(t) assert(t->task != 0);
 #endif
         
-    if(t) assert(t->task != 0);
     output switch { case t: out(t); }
         ''')
 
