@@ -13,29 +13,14 @@ void executor_thread(void *arg) {
     if(!self->spout) {
         q_buffer buff = inqueue_get(tid);
         struct tuple *t = (struct tuple *) buff.entry;
-        assert(t != NULL);
-	
-	if((t->task & 0xffffff) == 10 && strcmp(t->v[0].str, "golda"))
-          printf(">>> task = %d, str = %s\n", t->task & 0xffffff, t->v[0].str);
-	if((t->task & 0xffffff) == 11 && strcmp(t->v[0].str, "nathan"))
-          printf(">>> task = %d, str = %s\n", t->task & 0xffffff, t->v[0].str);
-	if((t->task & 0xffffff) == 12 && strcmp(t->v[0].str, "jackson"))
-          printf(">>> task = %d, str = %s\n", t->task & 0xffffff, t->v[0].str);
-	if((t->task & 0xffffff) == 13 && strcmp(t->v[0].str, "bertels"))
-          printf(">>> task = %d, str = %s\n", t->task & 0xffffff, t->v[0].str);
-
-        char* s = t->v[0].str;
-        assert(strcmp(s, "nathan")==0 || strcmp(s, "golda")==0 || strcmp(s, "bertels")==0 || strcmp(s, "jackson")==0);
-      //if(t != NULL) {
-        uint64_t starttime = rdtsc();
+           uint64_t starttime = rdtsc();
         self->execute(t, self);
         //printf("Tuple %d done\n", t->task);
         inqueue_advance(buff);  // old version: inqueue_advance(tid);
         uint64_t now = rdtsc();
         self->execute_time += now - starttime;
         self->numexecutes++;
-      //}
-    } else {
+       } else {
       //printf("spout\n");
       uint64_t starttime = rdtsc();
       self->execute(NULL, self);

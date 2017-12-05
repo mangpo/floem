@@ -566,7 +566,7 @@ int dequeue_done%s(void* buff) {
 
             noblock_atom = "size_t old = p->offset;\n" + init_read_cvm + r'''
 #ifdef DMA_CACHE
-    while(entry) {
+    if(entry) {
 #else
     // TODO: potential race condition for non DMA_CACHE
 
@@ -702,7 +702,7 @@ int dequeue_done%s(void* buff) {
     %s x = NULL;
     bool success = false;
 #ifdef DMA_CACHE
-    while(entry) {
+    if(entry) {
 #else
     // TODO: potential race condition for non DMA_CACHE
 

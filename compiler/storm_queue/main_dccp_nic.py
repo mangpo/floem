@@ -722,12 +722,12 @@ MAX_ELEMS = 256 #(4 * 1024)
 
 rx_enq_creator, rx_deq_creator, rx_release_creator = \
     queue2.queue_custom_owner_bit("rx_queue", "struct tuple", MAX_ELEMS, n_cores,
-                                  "status", Int,
+                                  "status", Uint(8),
                                   enq_blocking=False, enq_atomic=True, deq_blocking=True, enq_output=True)
 
 tx_enq_creator, tx_deq_creator, tx_release_creator = \
     queue2.queue_custom_owner_bit("tx_queue", "struct tuple", MAX_ELEMS, n_cores,
-                                  "status", Int,
+                                  "status", Uint(8),
                                   checksum="checksum",
                                   enq_blocking=True, deq_atomic=True)
 
@@ -909,8 +909,8 @@ c.generate_code_as_header()
 
 if nic == 'dpdk':
     c.depend = {"test_storm_nic": ['hash', 'worker', 'dummy', 'dpdk'],
-                "test_storm_bypass_app": ['list', 'hash', 'hash_table', 'spout', 'count', 'rank', 'worker', 'app']}
+                "test_storm_app": ['list', 'hash', 'hash_table', 'spout', 'count', 'rank', 'worker', 'app']}
     c.compile_and_run([("test_storm_app", workerid[test]), ("test_storm_nic", workerid[test])])
 else:
-    c.depend = {"test_storm_bypass_app": ['list', 'hash', 'hash_table', 'spout', 'count', 'rank', 'worker', 'app']}
+    c.depend = {"test_storm_app": ['list', 'hash', 'hash_table', 'spout', 'count', 'rank', 'worker', 'app']}
     c.compile_and_run([("test_storm_app", workerid[test])])
