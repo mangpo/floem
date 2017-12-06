@@ -528,7 +528,7 @@ class MemoryRegion:
 
 
 class Queue:
-    def __init__(self, name, size, n_cores, n_cases, overlap=0,
+    def __init__(self, name, size, n_cores, n_cases, overlap,
                  checksum=False,
                  enq_blocking=False, deq_blocking=False,
                  enq_atomic=False, deq_atomic=False,

@@ -59,3 +59,24 @@ class Constant(Element):
         self.run_c(r'''
         output { out(%s); }
         ''' % self.c)
+
+
+class Print(Element):
+    def configure(self, data_type=Int):
+        self.data_type = data_type
+        self.inp = Input(data_type)
+
+    def impl(self):
+        if self.data_type in [Size, Uintptr]:
+            format = "%ld"
+        elif self.data_type == Float:
+            format = "%f"
+        elif self.data_type == Double:
+            format = "%lf"
+        else:
+            format = "%d"
+
+        self.run_c(r'''
+        %s x = inp();
+        printf("%s\n", x);
+        ''' % (self.data_type, format))
