@@ -1,5 +1,5 @@
-import queue_smart2
-from dsl2 import *
+import queue_smart
+from dsl import *
 from compiler import Compiler
 
 class MyState(State):
@@ -62,8 +62,8 @@ class main(Pipeline):
         def impl(self):
             self.run_c(r'''printf("done %d\n", state.a);''')
 
-    Enq, Deq, Scan = queue_smart2.smart_queue("queue", entry_size=32, size=3, insts=2, channels=2, clean=True,
-                                              enq_output=True)
+    Enq, Deq, Scan = queue_smart.smart_queue("queue", entry_size=32, size=3, insts=2, channels=2, clean=True,
+                                             enq_output=True)
 
     class run1(API):
         def configure(self):

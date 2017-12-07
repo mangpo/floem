@@ -52,8 +52,8 @@ static struct segment_header *segment_alloc(uint32_t core_id)
     i = seg_alloced;
     if (i >= settings.segmaxnum) {
         rte_spinlock_unlock(&segalloc_lock);
-	printf("i = %d >= settings.segmaxnum (1)\n", i);
-	exit(1);
+	    printf("i = %ld >= settings.segmaxnum (1)\n", i);
+	    exit(1);
         return NULL;
     }
 
@@ -63,7 +63,7 @@ static struct segment_header *segment_alloc(uint32_t core_id)
     i = seg_alloced;
     if (i >= settings.segmaxnum) {
         rte_spinlock_unlock(&segalloc_lock);
-	    printf("i = %d >= settings.segmaxnum (2)\n", i);
+	    printf("i = %ld >= settings.segmaxnum (2)\n", i);
 	    exit(1);
         return NULL;
     }
@@ -82,7 +82,7 @@ static struct segment_header *segment_alloc(uint32_t core_id)
         return NULL;
     }
 
-    printf("segment alloc: data = %p, addr = %p, i = %d\n", data, (void*) phys, i);
+    printf("segment alloc: data = %p, addr = %p, i = %ld\n", data, (void*) phys, i);
     fflush(stdout);
 
     h = malloc(sizeof(*h));

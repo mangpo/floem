@@ -1,5 +1,5 @@
-from dsl2 import *
-import queue_smart2
+from dsl import *
+import queue_smart
 from compiler import Compiler
 
 class MyState(State):
@@ -65,7 +65,7 @@ class main(Pipeline):
     state = PerPacket(MyState)
 
     def impl(self):
-        Enq, Deq, Clean = queue_smart2.smart_queue("queue", 32, 1, 1, 2, clean=True)
+        Enq, Deq, Clean = queue_smart.smart_queue("queue", 32, 1, 1, 2, clean=True)
 
         class run1(API):
             def configure(self):

@@ -1,4 +1,4 @@
-import queue2, workspace, desugaring, graph_ir
+import queue, workspace, desugaring, graph_ir
 from program import *
 from pipeline_state_join import get_node_before_release, duplicate_subgraph
 
@@ -103,10 +103,10 @@ def create_queue(name, entry_size, size, insts, enq_blocking, deq_blocking, enq_
     workspace.push_decl()
     workspace.push_scope(name)
     EnqAlloc, EnqSubmit, DeqGet, DeqRelease, clean = \
-        queue2.queue_default(name, entry_size, size, insts,
-                             enq_blocking=enq_blocking, deq_blocking=deq_blocking,
-                             enq_atomic=enq_atomic, deq_atomic=deq_atomic,
-                             clean=clean, qid_output=qid_output, checksum=checksum)
+        queue.queue_default(name, entry_size, size, insts,
+                            enq_blocking=enq_blocking, deq_blocking=deq_blocking,
+                            enq_atomic=enq_atomic, deq_atomic=deq_atomic,
+                            clean=clean, qid_output=qid_output, checksum=checksum)
     EnqAlloc(create=False)
     EnqSubmit(create=False)
     DeqGet(create=False)

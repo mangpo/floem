@@ -1,5 +1,5 @@
-from dsl2 import *
-import queue2
+from dsl import *
+import queue
 from compiler import Compiler
 
 n_cores = 2
@@ -12,8 +12,8 @@ class Tuple(State):
 
 class Display(Element):
     def configure(self):
-        self.inp = Input(queue2.q_buffer)
-        self.out = Output(queue2.q_buffer)
+        self.inp = Input(queue.q_buffer)
+        self.out = Output(queue.q_buffer)
 
     def impl(self):
         self.run_c(r'''
@@ -23,7 +23,7 @@ class Display(Element):
         output switch { case t: out(buff); }
         ''')
 
-Enq, Deq, Release = queue2.queue_custom('queue', Tuple, 4, n_cores, Tuple.task)
+Enq, Deq, Release = queue.queue_custom('queue', Tuple, 4, n_cores, Tuple.task)
 
 class RxWrite(API):
     def configure(self):

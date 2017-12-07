@@ -1,10 +1,10 @@
 #include "iokvs.h"
+#include "util.h"
 
 #ifdef CAVIUM
 #include "cvmx.h"
 #include "cvmx-atomic.h"
 #include "shared-mm.h"
-#include "util.h"
 #else
 #include <stdlib.h>
 #include <stdio.h>

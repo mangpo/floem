@@ -1,6 +1,6 @@
-from dsl2 import *
+from dsl import *
 from compiler import Compiler
-import target, queue2, net_real, library_dsl2
+import target, queue, net_real, library
 
 
 class Request(Element):
@@ -122,8 +122,8 @@ class gen(InternalLoop):
         net_alloc = net_real.NetAlloc()
         to_net = net_real.ToNet(configure=["net_alloc"])
 
-        library_dsl2.Constant(configure=[80]) >> net_alloc
-        net_alloc.oom >> library_dsl2.Drop()
+        library.Constant(configure=[80]) >> net_alloc
+        net_alloc.oom >> library.Drop()
         net_alloc.out >> Request() >> PayloadGen() >> to_net
 
 class recv(InternalLoop):
@@ -131,7 +131,7 @@ class recv(InternalLoop):
         from_net = net_real.FromNet()
         free = net_real.FromNetFree()
 
-        from_net.nothing >> library_dsl2.Drop()
+        from_net.nothing >> library.Drop()
 
         from_net >> Reply() >> free
 

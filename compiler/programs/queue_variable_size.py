@@ -1,5 +1,5 @@
-import queue2
-from dsl2 import*
+import queue
+from dsl import*
 from compiler import Compiler
 
 n_cores = 4
@@ -14,7 +14,7 @@ class Entry(State):
     layout = [flag, task, len, checksum, pad, val]
 
 EnqAlloc, EnqSubmit, DeqGet, DeqRelease, clean = \
-    queue2.queue_default("queue", 32, 3, n_cores, enq_atomic=True, deq_atomic=True, clean=True)
+    queue.queue_default("queue", 32, 3, n_cores, enq_atomic=True, deq_atomic=True, clean=True)
 
 class ComputeCore(Element):
     def configure(self):
@@ -30,9 +30,9 @@ class ComputeCore(Element):
 
 class FillEntry(Element):
     def configure(self):
-        self.in_entry = Input(queue2.q_buffer)
+        self.in_entry = Input(queue.q_buffer)
         self.in_val = Input(Int)
-        self.out = Output(queue2.q_buffer)
+        self.out = Output(queue.q_buffer)
 
     def impl(self):
         self.run_c(r'''
@@ -49,7 +49,7 @@ class FillEntry(Element):
 
 class CleanPrint(Element):
     def configure(self):
-        self.inp = Input(queue2.q_buffer)
+        self.inp = Input(queue.q_buffer)
 
     def impl(self):
         self.run_c(r'''
@@ -76,14 +76,14 @@ class rx_write(API):
 class rx_read(API):
     def configure(self):
         self.inp = Input(Size)
-        self.out = Output(queue2.q_buffer)
+        self.out = Output(queue.q_buffer)
 
     def impl(self):
         self.inp >> DeqGet() >> self.out
 
 class rx_release(API):
     def configure(self):
-        self.inp = Input(queue2.q_buffer)
+        self.inp = Input(queue.q_buffer)
 
     def impl(self):
         self.inp >> DeqRelease()

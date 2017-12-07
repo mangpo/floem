@@ -1,19 +1,19 @@
-from dsl2 import *
+from dsl import *
 from compiler import Compiler
-import target, queue2, net_real, library_dsl2
+import target, queue, net_real, library
 
 MAX_ELEMS = 256 #64
 n_cores = 1
 data = 13 #88
 
 Enq, Deq, DeqRelease = \
-    queue2.queue_custom("rx_queue", "struct tuple", MAX_ELEMS, n_cores, "task",
-                        enq_blocking=False, deq_blocking=True, enq_atomic=True, enq_output=True)
+    queue.queue_custom("rx_queue", "struct tuple", MAX_ELEMS, n_cores, "task",
+                       enq_blocking=False, deq_blocking=True, enq_atomic=True, enq_output=True)
                                   #enq_blocking=True, enq_atomic=True, enq_output=True,
                                   #deq_blocking=True, deq_atomic=True)
 Enq2, Deq2, DeqRelease2 = \
-    queue2.queue_custom("tx_queue", "struct tuple", MAX_ELEMS, n_cores, "task",
-                        enq_blocking=True, deq_atomic=True)
+    queue.queue_custom("tx_queue", "struct tuple", MAX_ELEMS, n_cores, "task",
+                       enq_blocking=True, deq_atomic=True)
                                   #enq_blocking=True, enq_atomic=True,
                                   #deq_atomic=True)
 
@@ -63,7 +63,7 @@ class Scheduler(Element):
 
 class GetTuple(Element):
     def configure(self):
-        self.inp = Input(queue2.q_buffer)
+        self.inp = Input(queue.q_buffer)
         self.out = Output("struct tuple*", Size)
 
     def impl(self):
@@ -76,8 +76,8 @@ class GetTuple(Element):
 
 class Display(Element):
     def configure(self):
-        self.inp = Input(queue2.q_buffer)
-        self.out = Output(queue2.q_buffer)
+        self.inp = Input(queue.q_buffer)
+        self.out = Output(queue.q_buffer)
 
     def impl(self):
         self.run_c(r'''
@@ -178,7 +178,7 @@ class nic_rx(InternalLoop):
         make_tuple = MakeTuple()
         free = Free()
 
-        from_net.nothing >> library_dsl2.Drop()
+        from_net.nothing >> library.Drop()
 
         from_net >> make_tuple >> enq >> free
         from_net >> DropSize() >> from_net_free
@@ -187,7 +187,7 @@ class nic_rx(InternalLoop):
 
 class nic_tx(InternalLoop):
     def impl(self):
-        zero = library_dsl2.Constant(configure=[0])
+        zero = library.Constant(configure=[0])
         zero >> Deq2() >> Display() >> DeqRelease2()
 
 

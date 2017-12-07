@@ -1,7 +1,7 @@
-from dsl2 import *
+from dsl import *
 from compiler import Compiler
-import net_real, library_dsl2
-import queue_smart2
+import net_real, library
+import queue_smart
 
 n_cores = 1
 
@@ -18,8 +18,8 @@ class main(Pipeline):
 
     def impl(self):
         # Queue
-        RxEnq, RxDeq, RxScan = queue_smart2.smart_queue("rx_queue", entry_size=64, size=512, insts=n_cores,
-                                                        channels=1, enq_blocking=True, enq_atomic=False, enq_output=True)
+        RxEnq, RxDeq, RxScan = queue_smart.smart_queue("rx_queue", entry_size=64, size=512, insts=n_cores,
+                                                       channels=1, enq_blocking=True, enq_atomic=False, enq_output=True)
         rx_enq = RxEnq()
         rx_deq = RxDeq()
 
@@ -65,7 +65,7 @@ class main(Pipeline):
 
                 from_net >> MakeKey() >> rx_enq.inp[0]
                 rx_enq.done >> GetPktBuff() >> from_net_free
-                from_net.nothing >> library_dsl2.Drop()
+                from_net.nothing >> library.Drop()
 
 
         ############################ CPU #############################

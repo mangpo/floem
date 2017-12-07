@@ -1,4 +1,4 @@
-from library_dsl2 import *
+from library import *
 from compiler import Compiler
 
 inc1 = Inc('inc1', configure=[Int])

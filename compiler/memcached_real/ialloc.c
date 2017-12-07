@@ -67,7 +67,7 @@ static struct segment_header *segment_alloc(uint32_t core_id)
     i = seg_alloced;
     if (i >= settings.segmaxnum) {
         rte_spinlock_unlock(&segalloc_lock);
-	printf("i = %d >= settings.segmaxnum (1)\n", i);
+	printf("i = %ld >= settings.segmaxnum (1)\n", i);
 	exit(1);
         return NULL;
     }
@@ -78,7 +78,7 @@ static struct segment_header *segment_alloc(uint32_t core_id)
     i = seg_alloced;
     if (i >= settings.segmaxnum) {
         rte_spinlock_unlock(&segalloc_lock);
-	printf("i = %d >= settings.segmaxnum (2)\n", i);
+	printf("i = %ld >= settings.segmaxnum (2)\n", i);
 	exit(1);
         return NULL;
     }
@@ -88,7 +88,7 @@ static struct segment_header *segment_alloc(uint32_t core_id)
 
     segsz = settings.segsize;
     data = (void *) ((uintptr_t) seg_base + segsz * i);
-    printf("segment alloc: seg_base = %p, data = %p, i = %d\n", seg_base, data, i);
+    printf("segment alloc: seg_base = %p, data = %p, i = %ld\n", seg_base, data, i);
     //#ifndef BARRELFISH
 #ifdef BARRELFISH
     if (mprotect(data, settings.segsize, PROT_READ | PROT_WRITE) != 0) {

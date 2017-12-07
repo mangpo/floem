@@ -1,5 +1,5 @@
-from dsl2 import *
-import queue_smart2, net_real
+from dsl import *
+import queue_smart, net_real
 from compiler import Compiler
 
 class MyState(State):
@@ -96,7 +96,7 @@ class main(Pipeline):
             output { out(pkt, buf); }
             ''')
 
-    Enq, Deq, Scan = queue_smart2.smart_queue("queue", 256, 2, 1, enq_blocking=False)
+    Enq, Deq, Scan = queue_smart.smart_queue("queue", 256, 2, 1, enq_blocking=False)
 
     class push(InternalLoop):
         def impl(self):

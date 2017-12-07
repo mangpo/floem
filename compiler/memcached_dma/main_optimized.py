@@ -1,5 +1,5 @@
-from dsl2 import *
-import queue_smart2, net_real, library_dsl2
+from dsl import *
+import queue_smart, net_real, library
 from compiler import Compiler
 
 n_cores = 7
@@ -931,24 +931,24 @@ output switch { case segment: out(); else: null(); }
     def impl(self):
 
         # Queue
-        RxEnq, RxDeq, RxScan = queue_smart2.smart_queue("rx_queue", entry_size=64, size=512, insts=n_cores,
-                                                        channels=2, enq_blocking=True, enq_atomic=True,
-                                                        enq_output=True)  # enq_blocking=False?
+        RxEnq, RxDeq, RxScan = queue_smart.smart_queue("rx_queue", entry_size=64, size=512, insts=n_cores,
+                                                       channels=2, enq_blocking=True, enq_atomic=True,
+                                                       enq_output=True)  # enq_blocking=False?
         rx_enq = RxEnq()
         rx_deq = RxDeq()
 
-        TxEnq, TxDeq, TxScan = queue_smart2.smart_queue("tx_queue", entry_size=160, size=512, insts=n_cores,
-                                                        channels=1, checksum=True, enq_blocking=True, deq_atomic=True,
-                                                        enq_output=True)
+        TxEnq, TxDeq, TxScan = queue_smart.smart_queue("tx_queue", entry_size=160, size=512, insts=n_cores,
+                                                       channels=1, checksum=True, enq_blocking=True, deq_atomic=True,
+                                                       enq_output=True)
         tx_enq = TxEnq()
         tx_deq = TxDeq()
 
-        LogInEnq, LogInDeq, LogInScan = queue_smart2.smart_queue("log_in_queue", entry_size=32, size=256,
-                                                                 insts=1, channels=1, enq_blocking=True,
-                                                                 enq_atomic=True)
-        LogOutEnq, LogOutDeq, LogOutScan = queue_smart2.smart_queue("log_out_queue", entry_size=32, size=256,
-                                                                    insts=1, channels=1, checksum=False,
-                                                                    enq_blocking=True, deq_atomic=True)
+        LogInEnq, LogInDeq, LogInScan = queue_smart.smart_queue("log_in_queue", entry_size=32, size=256,
+                                                                insts=1, channels=1, enq_blocking=True,
+                                                                enq_atomic=True)
+        LogOutEnq, LogOutDeq, LogOutScan = queue_smart.smart_queue("log_out_queue", entry_size=32, size=256,
+                                                                   insts=1, channels=1, checksum=False,
+                                                                   enq_blocking=True, deq_atomic=True)
         log_in_enq = LogInEnq()
         log_in_deq = LogInDeq()
         log_out_enq = LogOutEnq()
@@ -1036,7 +1036,7 @@ output switch { case segment: out(); else: null(); }
         class create_segment(API):
             def impl(self):
                 new_segment = main.NewSegment()
-                library_dsl2.Constant(configure=[0]) >> log_in_deq
+                library.Constant(configure=[0]) >> log_in_deq
                 log_in_deq.out[0] >> new_segment >> log_out_enq.inp[0]
                 new_segment.null >> main.Drop()
 

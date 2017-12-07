@@ -1,6 +1,6 @@
-from dsl2 import *
+from dsl import *
 from compiler import Compiler
-import net_real, library_dsl2, queue_smart2
+import net_real, library, queue_smart
 
 n_cores = 9
 miss_every = 10
@@ -695,14 +695,14 @@ state.core = cvmx_get_core_num();
     def impl(self):
 
         # Queue
-        RxEnq, RxDeq, RxScan = queue_smart2.smart_queue("rx_queue", entry_size=192, size=128, insts=n_cores,
-                                                        channels=1, enq_blocking=True, enq_atomic=False, enq_output=True)
+        RxEnq, RxDeq, RxScan = queue_smart.smart_queue("rx_queue", entry_size=192, size=128, insts=n_cores,
+                                                       channels=1, enq_blocking=True, enq_atomic=False, enq_output=True)
         rx_enq = RxEnq()
         rx_deq = RxDeq()
 
-        TxEnq, TxDeq, TxScan = queue_smart2.smart_queue("tx_queue", entry_size=192, size=512, insts=n_cores,
-                                                        channels=1, checksum=True, enq_blocking=True, deq_atomic=False,
-                                                        enq_output=True)
+        TxEnq, TxDeq, TxScan = queue_smart.smart_queue("tx_queue", entry_size=192, size=512, insts=n_cores,
+                                                       channels=1, checksum=True, enq_blocking=True, deq_atomic=False,
+                                                       enq_output=True)
         tx_enq = TxEnq()
         tx_deq = TxDeq()
 
@@ -779,7 +779,7 @@ state.core = cvmx_get_core_num();
                 hash_get = main.HashGet()
                 get_response = main.PrepareGetResp()
                 classifier.out_get >> hash_get >> main.SizeGetResp() >> main.SizePktBuff() >> get_response >> prepare_header
-                get_response >> main.Unref() >> library_dsl2.Drop()
+                get_response >> main.Unref() >> library.Drop()
 
                 # get (null)
                 hash_get.null >> main.SizeGetNullResp() >> main.SizePktBuff() >> main.PrepareGetNullResp() >> prepare_header

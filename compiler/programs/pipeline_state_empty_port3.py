@@ -1,4 +1,4 @@
-from dsl2 import *
+from dsl import *
 from compiler import Compiler
 
 class MyState(State):
@@ -23,24 +23,14 @@ class main(Pipeline):
     class Save(Element):
         def configure(self):
             self.inp = Input(Int, Int)
-            self.out = Output(Int)
+            self.out0 = Output(Int)
+            self.out1 = Output(Int)
 
         def impl(self):
             self.run_c(r'''
             (int a, int b) = inp();
             state.b = b;
-            output { out(a); }
-            ''')
-
-    class Get(Element):
-        def configure(self):
-            self.inp = Input()
-            self.out = Output(Int)
-
-        def impl(self):
-            self.run_c(r'''
-            int b = state.b;
-            output { out(b); }
+            output switch { case (a%2==0): out0(a); else: out1(a); }
             ''')
 
     class Display(Element):
@@ -54,7 +44,11 @@ class main(Pipeline):
 
     class run(API):
         def impl(self):
-            main.Gen() >> main.Save() >> main.Get() >> main.Display()
+            save = main.Save()
+            display = main.Display()
+            main.Gen() >> save
+            save.out0 >> display
+            save.out1 >> display
 
     def impl(self):
         main.run('run')

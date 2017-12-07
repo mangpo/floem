@@ -1,6 +1,6 @@
-from dsl2 import *
+from dsl import *
 from compiler import Compiler
-import queue2
+import queue
 
 MAX_ELEMS = 10
 n_cores = 4
@@ -14,7 +14,7 @@ class Tuple(State):
 
 Inject = create_inject("inject", Pointer(Tuple), 100, "random_count", 100000)
 
-Enq, Deq, DeqRelease = queue2.queue_custom("tx_queue", Tuple, MAX_ELEMS, n_cores, "task")
+Enq, Deq, DeqRelease = queue.queue_custom("tx_queue", Tuple, MAX_ELEMS, n_cores, "task")
 
 class GetCore(Element):
     def configure(self):

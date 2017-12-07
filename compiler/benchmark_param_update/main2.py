@@ -1,6 +1,6 @@
-from dsl2 import *
+from dsl import *
 from compiler import Compiler
-import net_real, library_dsl2
+import net_real, library
 
 n_cores = 1
 
@@ -101,7 +101,7 @@ class main(Pipeline):
                 copy = Copy()
                 fork = Fork()
 
-                from_net.nothing >> library_dsl2.Drop()
+                from_net.nothing >> library.Drop()
 
                 #from_net >> update >> library_dsl2.Drop()
                 from_net >> update >> fork
@@ -112,7 +112,7 @@ class main(Pipeline):
                 fork.out5 >> net_alloc
 
                 net_alloc >> copy >> to_net2
-                net_alloc.oom >> library_dsl2.Drop()
+                net_alloc.oom >> library.Drop()
 
                 from_net >> Reply() >> to_net1
 

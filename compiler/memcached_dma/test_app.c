@@ -1,11 +1,12 @@
 #include "app.h"
 #include "iokvs.h"
+#include <unistd.h>
 
 static struct item_allocator **iallocs;
 
 void run_app(void *threadid) {
   long tid = (long)threadid;
-  printf("Worker %ld: segmaxnum = %d\n", tid, settings.segmaxnum);
+  printf("Worker %ld: segmaxnum = %ld\n", tid, settings.segmaxnum);
   struct item_allocator ia;
   ialloc_init_allocator(&ia, tid);
   iallocs[tid] = &ia;
@@ -39,7 +40,7 @@ int main(int argc, char *argv[]) {
   ialloc_init();
   hasht_init();
   iallocs = calloc(NUM_THREADS, sizeof(*iallocs));
-  printf("main: segmaxnum = %d\n", settings.segmaxnum);
+  printf("main: segmaxnum = %ld\n", settings.segmaxnum);
 
   pthread_t threads[NUM_THREADS];
   for(int t=0;t<NUM_THREADS;t++) {

@@ -1,6 +1,6 @@
-from dsl2 import *
+from dsl import *
 from compiler import Compiler
-import target, queue2, net_real, library_dsl2, queue_smart2
+import target, queue, net_real, library, queue_smart
 
 n_cores = 1
 
@@ -13,9 +13,9 @@ class main(Pipeline):
     state = PerPacket(MyState)
 
     def impl(self):
-        RxEnq, RxDeq, RxScan = queue_smart2.smart_queue("rx_queue", entry_size=32, size=32 * 1024, insts=n_cores,
-                                                        channels=1, enq_blocking=True, enq_atomic=False,
-                                                        enq_output=False)
+        RxEnq, RxDeq, RxScan = queue_smart.smart_queue("rx_queue", entry_size=32, size=32 * 1024, insts=n_cores,
+                                                       channels=1, enq_blocking=True, enq_atomic=False,
+                                                       enq_output=False)
         rx_enq = RxEnq()
         rx_deq = RxDeq()
 
@@ -123,7 +123,7 @@ class main(Pipeline):
                 # copy = Copy()
                 # fork = Fork()
 
-                from_net.nothing >> library_dsl2.Drop()
+                from_net.nothing >> library.Drop()
 
                 from_net >> prep >> rx_enq
 

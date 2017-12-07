@@ -1,7 +1,7 @@
-from dsl2 import *
+from dsl import *
 from compiler import Compiler
-import target, queue2, net_real, library_dsl2
-import queue_smart2
+import target, queue, net_real, library
+import queue_smart
 
 MAX_ELEMS = 64
 n_cores = 1
@@ -21,13 +21,13 @@ class main(Pipeline):
 
     def impl(self):
         # Queue
-        RxEnq, RxDeq, RxScan = queue_smart2.smart_queue("rx_queue", entry_size=64, size=32 * 1024, insts=n_cores,
-                                                        channels=1, enq_blocking=True, enq_atomic=True, enq_output=True)
+        RxEnq, RxDeq, RxScan = queue_smart.smart_queue("rx_queue", entry_size=64, size=32 * 1024, insts=n_cores,
+                                                       channels=1, enq_blocking=True, enq_atomic=True, enq_output=True)
         rx_enq = RxEnq()
         rx_deq = RxDeq()
 
-        TxEnq, TxDeq, TxScan = queue_smart2.smart_queue("tx_queue", entry_size=64, size=32 * 1024, insts=n_cores,
-                                                        channels=1, enq_blocking=True, deq_atomic=True)
+        TxEnq, TxDeq, TxScan = queue_smart.smart_queue("tx_queue", entry_size=64, size=32 * 1024, insts=n_cores,
+                                                       channels=1, enq_blocking=True, deq_atomic=True)
         tx_enq = TxEnq()
         tx_deq = TxDeq()
 
@@ -95,12 +95,12 @@ class main(Pipeline):
                 from_net >> MakeKey() >> rx_enq.inp[0]
                 rx_enq.done >> Free()
                 rx_enq.done >> GetPktBuff() >> from_net_free
-                from_net.nothing >> library_dsl2.Drop()
+                from_net.nothing >> library.Drop()
 
         class nic_tx(InternalLoop):
             def impl(self):
                 Scheduler() >> tx_deq
-                tx_deq.out[0] >> Display() >> library_dsl2.Drop()
+                tx_deq.out[0] >> Display() >> library.Drop()
 
         ############################ CPU #############################
 

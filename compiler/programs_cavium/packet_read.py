@@ -1,5 +1,5 @@
 import net_real, target
-from dsl2 import *
+from dsl import *
 from compiler import Compiler
 
 class Display(Element):

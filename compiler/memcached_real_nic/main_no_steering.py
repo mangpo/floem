@@ -1,6 +1,6 @@
-from dsl2 import *
+from dsl import *
 from compiler import Compiler
-import net_real, library_dsl2
+import net_real, library
 
 n_cores = 11
 
@@ -564,7 +564,7 @@ state.core = cvmx_get_core_num();
                 hash_get = main.HashGet()
                 get_response = main.PrepareGetResp()
                 classifier.out_get >> hash_get >> main.SizeGetResp() >> main.SizePktBuff() >> get_response >> prepare_header
-                get_response >> main.Unref() >> library_dsl2.Drop()
+                get_response >> main.Unref() >> library.Drop()
 
                 # get (null)
                 hash_get.null >> main.SizeGetNullResp() >> main.SizePktBuff() >> main.PrepareGetNullResp() >> prepare_header

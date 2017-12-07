@@ -1,6 +1,6 @@
-from dsl2 import *
+from dsl import *
 from compiler import Compiler
-import target, queue2, net_real, library_dsl2
+import target, queue, net_real, library
 
 class Reply(Element):
 
@@ -50,7 +50,7 @@ class nic_rx(InternalLoop):
         from_net = net_real.FromNet()
         to_net = net_real.ToNet()
 
-        from_net.nothing >> library_dsl2.Drop()
+        from_net.nothing >> library.Drop()
 
         from_net >> Reply() >> to_net
 

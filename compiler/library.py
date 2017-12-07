@@ -1,4 +1,4 @@
-from dsl2 import *
+from dsl import *
 
 
 class Identity(Element):

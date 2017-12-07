@@ -1,4 +1,4 @@
-from library_dsl2 import *
+from library import *
 from compiler import Compiler
 
 Inject = create_inject("inject", "int", 10, "gen_func")

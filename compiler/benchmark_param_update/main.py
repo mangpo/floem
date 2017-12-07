@@ -1,6 +1,6 @@
-from dsl2 import *
+from dsl import *
 from compiler import Compiler
-import net_real, library_dsl2
+import net_real, library
 
 n_cores = 1
 
@@ -67,7 +67,7 @@ class run(InternalLoop):
         from_net = net_real.FromNet()
         to_net = net_real.ToNet()
 
-        from_net.nothing >> library_dsl2.Drop()
+        from_net.nothing >> library.Drop()
 
         from_net >> Update()
         from_net >> Reply() >> to_net

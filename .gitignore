@@ -4,3 +4,6 @@
 *.o
 tmp.c
 tmp
+CAVIUM.*
+app.*
+dpdk.*

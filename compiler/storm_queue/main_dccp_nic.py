@@ -1,5 +1,5 @@
-import queue2, net_real
-from dsl2 import *
+import queue, net_real
+from dsl import *
 from compiler import Compiler
 
 nic = 'CAVIUM' #'dpdk'
@@ -683,7 +683,7 @@ class AddNullAddr(Element):
 
 class SaveBuff(Element):
     def configure(self):
-        self.inp = Input(queue2.q_buffer)
+        self.inp = Input(queue.q_buffer)
         self.out = Output("struct tuple*")
 
     def impl(self):
@@ -696,7 +696,7 @@ class SaveBuff(Element):
 class GetBuff(Element):
     def configure(self):
         self.inp = Input()
-        self.out = Output(queue2.q_buffer)
+        self.out = Output(queue.q_buffer)
 
     def impl(self):
         self.run_c(r'''
@@ -721,12 +721,12 @@ import target
 MAX_ELEMS = 256 #(4 * 1024)
 
 rx_enq_creator, rx_deq_creator, rx_release_creator = \
-    queue2.queue_custom("rx_queue", "struct tuple", MAX_ELEMS, n_cores, "status", enq_blocking=False,
-                        deq_blocking=True, enq_atomic=True, enq_output=True)
+    queue.queue_custom("rx_queue", "struct tuple", MAX_ELEMS, n_cores, "status", enq_blocking=False,
+                       deq_blocking=True, enq_atomic=True, enq_output=True)
 
 tx_enq_creator, tx_deq_creator, tx_release_creator = \
-    queue2.queue_custom("tx_queue", "struct tuple", MAX_ELEMS, n_cores, "status", checksum="checksum",
-                        enq_blocking=True, deq_atomic=True)
+    queue.queue_custom("tx_queue", "struct tuple", MAX_ELEMS, n_cores, "status", checksum="checksum",
+                       enq_blocking=True, deq_atomic=True)
 
 
 class RxState(State):
@@ -785,14 +785,14 @@ class NicRxPipeline(Pipeline):
 class inqueue_get(API):
     def configure(self):
         self.inp = Input(Size)
-        self.out = Output(queue2.q_buffer)
+        self.out = Output(queue.q_buffer)
 
     def impl(self): self.inp >> rx_deq_creator() >> self.out
 
 
 class inqueue_advance(API):
     def configure(self):
-        self.inp = Input(queue2.q_buffer)
+        self.inp = Input(queue.q_buffer)
 
     def impl(self): self.inp >> rx_release_creator()
 
@@ -807,7 +807,7 @@ class TxState(State):
     worker = Field(Int)
     myworker = Field(Int)
     tx_net_buf = Field("void *")
-    q_buf = Field(queue2.q_buffer)
+    q_buf = Field(queue.q_buffer)
 
 class NicTxPipeline(Pipeline):
     state = PerPacket(TxState)

@@ -2,12 +2,12 @@ from program import *
 from pipeline_state import find_all_fields, analyze_pipeline_states, pipeline_state_pass
 import unittest
 import graph_ir
-import dsl2
+import dsl
 
 
 class TestPipelineState(unittest.TestCase):
     def setUp(self):
-        dsl2.reset()
+        dsl.reset()
 
     def check_live_all(self, g, live_list):
         visit = []

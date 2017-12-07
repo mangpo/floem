@@ -1,13 +1,13 @@
-from dsl2 import *
+from dsl import *
 from compiler import Compiler
-import target, queue2, net_real, library_dsl2
+import target, queue, net_real, library
 
 MAX_ELEMS = 64
 n_cores = 1
 
 Enq, Deq, DeqRelease = \
-    queue2.queue_custom("rx_queue", "struct tuple", MAX_ELEMS, n_cores, "task",
-                        enq_blocking=True, enq_atomic=True, deq_atomic=True, enq_output=True)
+    queue.queue_custom("rx_queue", "struct tuple", MAX_ELEMS, n_cores, "task",
+                       enq_blocking=True, enq_atomic=True, deq_atomic=True, enq_output=True)
 
 class MakeTuple(Element):
     def configure(self):
@@ -54,8 +54,8 @@ class Scheduler(Element):
 
 class Display(Element):
     def configure(self):
-        self.inp = Input(queue2.q_buffer)
-        self.out = Output(queue2.q_buffer)
+        self.inp = Input(queue.q_buffer)
+        self.out = Output(queue.q_buffer)
 
     def impl(self):
         self.run_c(r'''
@@ -132,7 +132,7 @@ class nic_rx(InternalLoop):
         make_tuple = MakeTuple()
         free = Free()
 
-        from_net.nothing >> library_dsl2.Drop()
+        from_net.nothing >> library.Drop()
 
         from_net >> make_tuple >> enq >> free
         from_net >> DropSize() >> from_net_free

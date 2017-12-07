@@ -1,4 +1,4 @@
-from dsl2 import *
+from dsl import *
 import net_real
 import target
 from compiler import Compiler

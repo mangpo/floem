@@ -1,5 +1,6 @@
 #include "dpdk.h"
 #include "iokvs.h"
+#include <unistd.h>
 
 void maintenance(struct item_allocator *iallocs)
 {

@@ -1,6 +1,6 @@
-from dsl2 import *
+from dsl import *
 from compiler import Compiler
-import target, queue2, net_real, library_dsl2
+import target, queue, net_real, library
 
 class Filter(Element):
 
@@ -162,7 +162,7 @@ class nic_rx(InternalLoop):
         classify = Classify()
         reply = Reply()
 
-        from_net.nothing >> library_dsl2.Drop()
+        from_net.nothing >> library.Drop()
 
         from_net >> filter
         filter.other >> net_free

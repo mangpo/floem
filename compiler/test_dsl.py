@@ -1,8 +1,8 @@
-from dsl2 import *
+from dsl import *
 import unittest
 import os
-import queue_smart2
-import library_dsl2
+import queue_smart
+import library
 from compiler import Compiler
 
 class Nop(Element):
@@ -39,7 +39,7 @@ class NopPipe(Composite):
         self.inp >> a >> b >> self.out
 
 
-class TestDSL2(unittest.TestCase):
+class TestDSL(unittest.TestCase):
     def setUp(self):
         reset()
 
@@ -66,15 +66,15 @@ class TestDSL2(unittest.TestCase):
                  ]
 
         for test in tests1:
-            status = os.system("cd programs_dsl2; python " + test + "; cd ..")
+            status = os.system("cd programs; python " + test + "; cd ..")
             self.assertEqual(status, 0, "Error at " + test)
 
 
     def test_run2(self):
-        tests2 = ["queue_shared_pointer2.py",
-                  "queue_shared_data2.py",
+        tests2 = ["queue_shared_pointer.py",
+                  "queue_shared_data.py",
                   "auto_inserted_queue.py",
-                  "smart_queue_entry2.py",
+                  "smart_queue_entry.py",
                   "smart_queue_many2one.py", ]
 
         for test in tests2:
@@ -212,7 +212,7 @@ class TestDSL2(unittest.TestCase):
             def impl(self):
                 self.run_c(r'''state.core = 0;''')
 
-        Enq, Deq, Scan = queue_smart2.smart_queue("queue", entry_size=16, size=256, insts=1, channels=2)
+        Enq, Deq, Scan = queue_smart.smart_queue("queue", entry_size=16, size=256, insts=1, channels=2)
 
         class run1(API):
             def configure(self):
@@ -264,7 +264,7 @@ class TestDSL2(unittest.TestCase):
         reset()
 
         def get_element_instance():
-            return library_dsl2.Inc(configure=[Int])
+            return library.Inc(configure=[Int])
 
         def get_composite_instance():
             class My(Composite):
@@ -273,8 +273,8 @@ class TestDSL2(unittest.TestCase):
                     self.out = Output(Int)
 
                 def impl(self):
-                    f1 = library_dsl2.Inc(configure=[Int])
-                    f2 = library_dsl2.Inc(configure=[Int])
+                    f1 = library.Inc(configure=[Int])
+                    f2 = library.Inc(configure=[Int])
                     self.inp >> f1 >> f2 >> self.out
 
             return My()
@@ -287,7 +287,7 @@ class TestDSL2(unittest.TestCase):
                 e1 = get_element_instance()
                 e2 = get_element_instance()
                 compo = get_composite_instance()
-                self.inp >> e1 >> compo >> e2 >> library_dsl2.Print()
+                self.inp >> e1 >> compo >> e2 >> library.Print()
 
         f('f')
 

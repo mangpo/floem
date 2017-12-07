@@ -1,10 +1,10 @@
 #include "iokvs.h"
+#include "util.h"
 
 #ifdef CAVIUM
 #include "cvmx.h"
 #include "cvmx-atomic.h"
 #include "shared-mm.h"
-#include "util.h"
 #else
 #include <stdio.h>
 #include <stdlib.h>
@@ -56,7 +56,7 @@ static struct segment_header *segment_alloc(uint32_t core_id)
     i = seg_alloced;
     if (i >= settings.segmaxnum) {
         spinlock_unlock(&segalloc_lock);
-	printf("i = %ld >= settings.segmaxnum = %d(1)\n", i, settings.segmaxnum);
+	printf("i = %ld >= settings.segmaxnum = %ld(1)\n", i, settings.segmaxnum);
 	exit(1);
         return NULL;
     }
