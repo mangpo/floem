@@ -646,13 +646,13 @@ class RxState(State):
     tx_net_buf = Field("void *")
 
 
-class NicRxPipeline(Pipeline):
+class NicRxFlow(Flow):
     state = PerPacket(RxState)
 
     def impl(self):
         from_net = net_real.FromNet(configure=[64])
         from_net_free = net_real.FromNetFree()
-        class nic_rx(InternalLoop):
+        class nic_rx(Pipeline):
 
             def impl_basic(self):
                 # Notice that it's okay to connect non-empty port to an empty port.
@@ -691,7 +691,7 @@ class NicRxPipeline(Pipeline):
         #nic_rx('nic_rx', device=target.CAVIUM, cores=[0,1,2,3])
 
 
-class inqueue_get(API):
+class inqueue_get(CallablePipeline):
     def configure(self):
         self.inp = Input(Size)
         self.out = Output(queue.q_buffer)
@@ -699,20 +699,20 @@ class inqueue_get(API):
     def impl(self): self.inp >> rx_deq_creator() >> self.out
 
 
-class inqueue_advance(API):
+class inqueue_advance(CallablePipeline):
     def configure(self):
         self.inp = Input(queue.q_buffer)
 
     def impl(self): self.inp >> rx_release_creator()
 
 
-class outqueue_put(API):
+class outqueue_put(CallablePipeline):
     def configure(self):
         self.inp = Input("struct tuple*", Size)
 
     def impl(self): self.inp >> tx_enq_creator()
 
-class get_dccp_stat(API):
+class get_dccp_stat(CallablePipeline):
     def configure(self):
         self.inp = Input()
         self.out = Output(Pointer(DccpInfo))
@@ -725,7 +725,7 @@ class TxState(State):
     tx_net_buf = Field("void *")
     q_buf = Field(queue.q_buffer)
 
-class NicTxPipeline(Pipeline):
+class NicTxFlow(Flow):
     state = PerPacket(TxState)
 
     def impl(self):
@@ -768,7 +768,7 @@ class NicTxPipeline(Pipeline):
                 nop >> self.out
 
 
-        class nic_tx(InternalLoop):
+        class nic_tx(Pipeline):
             def impl(self):
                 tx_deq = tx_deq_creator()
                 rx_enq = rx_enq_creator()
@@ -795,7 +795,7 @@ outqueue_put('outqueue_put', process='dpdk')
 get_dccp_stat('get_dccp_stat', process='dpdk')
 
 
-c = Compiler(NicRxPipeline, NicTxPipeline)
+c = Compiler(NicRxFlow, NicTxFlow)
 c.include = r'''
 #include <rte_memcpy.h>
 #include "worker.h"

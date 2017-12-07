@@ -9,7 +9,7 @@ class MyState(State):
     p = Field(Pointer(Int), shared='data_region')
 
 
-class main(Pipeline):
+class main(Flow):
     state = PerPacket(MyState)
 
     class Save(Element):
@@ -43,14 +43,14 @@ class main(Pipeline):
 
     Enq, Deq, Scan = queue_smart.smart_queue("queue", 32, 128, 2, 1)
 
-    class push(API):
+    class push(CallablePipeline):
         def configure(self):
             self.inp = Input(Int, Uint(8))
 
         def impl(self):
             self.inp >> main.Save() >> main.Enq()
 
-    class pop(InternalLoop):
+    class pop(Pipeline):
         # def configure(self):
         #     self.inp = Input(Size)
 

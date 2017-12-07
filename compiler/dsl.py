@@ -503,7 +503,7 @@ class Runnable(Composite):
         elif not cores == [0]:
             scope_append(program.DeviceMap(target.CPU, name, self.cores))
 
-class API(Runnable):
+class CallablePipeline(Runnable):
     def __init__(self, name, default_return=None, process=None):
         self.default_return = default_return
         Runnable.__init__(self, name, process)
@@ -631,7 +631,7 @@ class API(Runnable):
             inports[i].element_ports = [start.inp[i]]
 
 
-class InternalLoop(Runnable):
+class Pipeline(Runnable):
     def __init__(self, name, process=None, device=None, cores=[0]):
         self.core_id = ID()
         Runnable.__init__(self, name, process, device, cores)

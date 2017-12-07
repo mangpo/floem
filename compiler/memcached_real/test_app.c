@@ -1,5 +1,6 @@
 #include "app.h"
 #include "iokvs.h"
+#include <unistd.h>
 
 static struct item_allocator **iallocs;
 

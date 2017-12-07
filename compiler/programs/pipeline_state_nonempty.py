@@ -4,7 +4,7 @@ from compiler import Compiler
 class MyState(State):
     b = Field(Int)
 
-class main(Pipeline):
+class main(Flow):
     state = PerPacket(MyState)
 
     class Gen(Element):
@@ -64,7 +64,7 @@ class main(Pipeline):
             printf("%d\n", inp());
             ''')
 
-    class run(API):
+    class run(CallablePipeline):
         def impl(self):
             main.Gen() >> main.Save() >> main.Get() >> main.Get2() >> main.Display()
 

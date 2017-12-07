@@ -9,7 +9,7 @@ class MyState(State):
     core = Field(Size)
     payload = Field(Pointer(Uint(8)), copysize='sizeof(param_entry)')
 
-class main(Pipeline):
+class main(Flow):
     state = PerPacket(MyState)
 
     def impl(self):
@@ -108,12 +108,12 @@ class main(Pipeline):
         output { out(size); }
                 ''')
 
-        class run(InternalLoop):
+        class run(Pipeline):
             def impl(self):
                 self.core_id >> rx_deq
                 rx_deq.out[0] >> Update()
 
-        class nic_rx(InternalLoop):
+        class nic_rx(Pipeline):
             def impl(self):
                 from_net = net_real.FromNet()
                 to_net1 = net_real.ToNet(configure=["from_net"])

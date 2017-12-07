@@ -16,7 +16,7 @@ class MyState(State):
     core = Field(Size)
 
 
-class main(Pipeline):
+class main(Flow):
     state = PerPacket(MyState)
 
     def impl(self):
@@ -87,7 +87,7 @@ class main(Pipeline):
             free(state.key);
                 ''')
 
-        class nic_rx(InternalLoop):
+        class nic_rx(Pipeline):
             def impl(self):
                 from_net = net_real.FromNet()
                 from_net_free = net_real.FromNetFree()
@@ -97,7 +97,7 @@ class main(Pipeline):
                 rx_enq.done >> GetPktBuff() >> from_net_free
                 from_net.nothing >> library.Drop()
 
-        class nic_tx(InternalLoop):
+        class nic_tx(Pipeline):
             def impl(self):
                 Scheduler() >> tx_deq
                 tx_deq.out[0] >> Display() >> library.Drop()
@@ -151,7 +151,7 @@ class main(Pipeline):
         output { out(); }
                 ''')
 
-        class run(InternalLoop):
+        class run(Pipeline):
             def impl(self):
                 Scheduler() >> rx_deq
                 rx_deq.out[0] >> Display() >> tx_enq.inp[0]

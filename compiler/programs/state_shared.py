@@ -28,7 +28,7 @@ class Counter(Element):
 a = A(init=[0])
 
 
-class Shared(API):
+class Shared(CallablePipeline):
     def configure(self):
         self.inp = Input(Int)
         self.out = Output(Int)
@@ -42,7 +42,7 @@ run1 = Shared('run1')
 run2 = Shared('run2')
 
 
-class Local(API):
+class Local(CallablePipeline):
     def configure(self):
         self.inp = Input(Int)
         self.out = Output(Int)

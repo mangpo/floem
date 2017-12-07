@@ -1,4 +1,5 @@
 #include "queue_shared_data2.h"
+#include <unistd.h>
 
 int main(int argc, char *argv[]) {
   init(argv);

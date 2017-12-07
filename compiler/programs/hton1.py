@@ -71,7 +71,7 @@ class Drop(Element):
     def impl(self):
         self.run_c("")
 
-class run(InternalLoop):
+class run(Pipeline):
     def impl(self):
         from_net = net_real.FromNet()
         from_net_free = net_real.FromNetFree()

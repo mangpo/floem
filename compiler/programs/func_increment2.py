@@ -1,7 +1,7 @@
 from library import *
 from compiler import Compiler
 
-class add2(API):
+class add2(CallablePipeline):
     def configure(self):
         self.inp = Input(Int)
         self.out = Output(Int)

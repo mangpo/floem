@@ -53,13 +53,13 @@ class B1(Element):
     def impl(self):
         self.run_c(r'''printf("b1 %d\n", state.b0);''')
 
-class main(Pipeline):
+class main(Flow):
     state = PerPacket(MyState)
 
     def impl(self):
         Enq, Deq, Clean = queue_smart.smart_queue("queue", 32, 16, 1, 2)
 
-        class run1(API):
+        class run1(CallablePipeline):
             def configure(self):
                 self.inp = Input(Int)
 
@@ -72,7 +72,7 @@ class main(Pipeline):
                 classify.out1 >> A0() >> enq.inp[0]
                 classify.out2 >> B0() >> enq.inp[1]
 
-        class run2(API):
+        class run2(CallablePipeline):
             def configure(self):
                 self.inp = Input(Size)
 

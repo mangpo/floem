@@ -7,7 +7,7 @@ n_cores = 1
 class MyState(State):
     pkt = Field('void*')
 
-class main(Pipeline):
+class main(Flow):
     state = PerPacket(MyState)
 
     def impl(self):
@@ -91,7 +91,7 @@ class main(Pipeline):
         output { out(size); }
                 ''')
 
-        class run(InternalLoop):
+        class run(Pipeline):
             def impl(self):
                 from_net = net_real.FromNet()
                 update = Update()

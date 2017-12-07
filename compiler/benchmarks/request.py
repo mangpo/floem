@@ -78,7 +78,7 @@ output { out(pkt, buff); }
         ''')
 
 
-class gen(InternalLoop):
+class gen(Pipeline):
     def impl(self):
         net_alloc = net_real.NetAlloc()
         to_net = net_real.ToNet(configure=["net_alloc"])
@@ -87,7 +87,7 @@ class gen(InternalLoop):
         net_alloc.oom >> library.Drop()
         net_alloc.out >> Request() >> to_net
 
-class recv(InternalLoop):
+class recv(Pipeline):
     def impl(self):
         from_net = net_real.FromNet()
         free = net_real.FromNetFree()

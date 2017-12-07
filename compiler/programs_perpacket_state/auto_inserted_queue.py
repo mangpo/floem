@@ -20,7 +20,7 @@ class Display(Element):
     def impl(self):
         self.run_c(r'''printf("%d\n", state.a);''')
 
-class main(Pipeline):
+class main(Flow):
     state = PerPacket(MyState)
 
     def impl(self):

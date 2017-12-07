@@ -90,7 +90,7 @@ class segment_holders(State):
         self.len = 16
         self.lock = lambda x: 'qlock_init(&%s)' % x
 
-class main(Pipeline):
+class main(Flow):
     state = PerPacket(MyState)
 
     class SaveState(Element):
@@ -955,7 +955,7 @@ output switch { case segment: out(); else: null(); }
         log_out_deq = LogOutDeq()
 
         ######################## NIC Rx #######################
-        class nic_rx(InternalLoop):
+        class nic_rx(Pipeline):
             def impl(self):
                 from_net = net_real.FromNet('from_net')
                 from_net_free = net_real.FromNetFree('from_net_free')
@@ -1003,7 +1003,7 @@ output switch { case segment: out(); else: null(); }
 
 
         ######################## APP #######################
-        class process_eq(API):
+        class process_eq(CallablePipeline):
             def configure(self):
                 self.inp = Input(Size)
 
@@ -1026,14 +1026,14 @@ output switch { case segment: out(); else: null(); }
                 tx_enq.done >> main.Unref() >> main.Free()
 
 
-        class init_segment(API):
+        class init_segment(CallablePipeline):
             def configure(self):
                 self.inp = Input(Size)
 
             def impl(self):
                 self.inp >> main.FirstSegment() >> log_out_enq.inp[0]
 
-        class create_segment(API):
+        class create_segment(CallablePipeline):
             def impl(self):
                 new_segment = main.NewSegment()
                 library.Constant(configure=[0]) >> log_in_deq
@@ -1041,7 +1041,7 @@ output switch { case segment: out(); else: null(); }
                 new_segment.null >> main.Drop()
 
         ####################### NIC Tx #######################
-        class nic_tx(InternalLoop):
+        class nic_tx(Pipeline):
             def impl(self):
                 scheduler = main.Scheduler()
                 to_net = net_real.ToNet('to_net', configure=['from_net'])

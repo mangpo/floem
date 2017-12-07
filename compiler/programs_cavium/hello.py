@@ -10,7 +10,7 @@ class Hello(Element):
         ''')
 
 
-class run(InternalLoop):
+class run(Pipeline):
     def impl(self):
         Hello()
 

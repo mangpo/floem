@@ -735,13 +735,13 @@ class RxState(State):
     tx_net_buf = Field("void *")
 
 
-class NicRxPipeline(Pipeline):
+class NicRxFlow(Flow):
     state = PerPacket(RxState)
 
     def impl(self):
         from_net = net_real.FromNet()
         from_net_free = net_real.FromNetFree()
-        class nic_rx(InternalLoop):
+        class nic_rx(Pipeline):
 
             def impl_basic(self):
                 # Notice that it's okay to connect non-empty port to an empty port.
@@ -782,7 +782,7 @@ class NicRxPipeline(Pipeline):
             nic_rx('nic_rx', device=target.CAVIUM, cores=[n_nic_tx + x for x in range(n_nic_rx)])
 
 
-class inqueue_get(API):
+class inqueue_get(CallablePipeline):
     def configure(self):
         self.inp = Input(Size)
         self.out = Output(queue.q_buffer)
@@ -790,14 +790,14 @@ class inqueue_get(API):
     def impl(self): self.inp >> rx_deq_creator() >> self.out
 
 
-class inqueue_advance(API):
+class inqueue_advance(CallablePipeline):
     def configure(self):
         self.inp = Input(queue.q_buffer)
 
     def impl(self): self.inp >> rx_release_creator()
 
 
-class outqueue_put(API):
+class outqueue_put(CallablePipeline):
     def configure(self):
         self.inp = Input("struct tuple*", Size)
 
@@ -809,7 +809,7 @@ class TxState(State):
     tx_net_buf = Field("void *")
     q_buf = Field(queue.q_buffer)
 
-class NicTxPipeline(Pipeline):
+class NicTxFlow(Flow):
     state = PerPacket(TxState)
 
     def impl(self):
@@ -852,7 +852,7 @@ class NicTxPipeline(Pipeline):
                 nop >> self.out
 
 
-        class nic_tx(InternalLoop):
+        class nic_tx(Pipeline):
             def impl(self):
                 tx_deq = tx_deq_creator()
                 rx_enq = rx_enq_creator()
@@ -875,12 +875,12 @@ class NicTxPipeline(Pipeline):
             nic_tx('nic_tx', device=target.CAVIUM, cores=range(n_nic_tx))
 
 if nic == 'dpdk':
-    class dccp_print_stat(API):
+    class dccp_print_stat(CallablePipeline):
         def impl(self):
             DccpPrintStat()
     dccp_print_stat('dccp_print_stat', process='dpdk') 
 else:
-    class dccp_print_stat(InternalLoop):
+    class dccp_print_stat(Pipeline):
         def impl(self):
             DccpPrintStat()
     dccp_print_stat('dccp_print_stat', device=target.CAVIUM, cores=[8])
@@ -891,7 +891,7 @@ outqueue_put('outqueue_put', process='app')
 master_process('app')
 
 
-c = Compiler(NicRxPipeline, NicTxPipeline)
+c = Compiler(NicRxFlow, NicTxFlow)
 c.include = r'''
 #include "worker.h"
 #include "storm.h"

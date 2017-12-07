@@ -76,7 +76,7 @@ class segments_holder(State):
     next = Field('struct _segments_holder*')
     last = Field('struct _segments_holder*')
 
-class main(Pipeline):
+class main(Flow):
     state = PerPacket(MyState)
 
     class SaveState(Element):
@@ -707,7 +707,7 @@ state.core = cvmx_get_core_num();
         tx_deq = TxDeq()
 
         ######################## CPU #######################
-        class process_eq(API):
+        class process_eq(CallablePipeline):
             def configure(self):
                 self.inp = Input(Size)
 
@@ -741,7 +741,7 @@ state.core = cvmx_get_core_num();
                 tx_enq.done >> main.Unref() >> main.Free()
 
         ####################### NIC Tx #######################
-        class nic_tx(InternalLoop):
+        class nic_tx(Pipeline):
             def impl(self):
                 scheduler = main.Scheduler()
                 to_net = net_real.ToNet('to_net', configure=['from_net'])
@@ -754,7 +754,7 @@ state.core = cvmx_get_core_num();
 
 
         ######################## NIC Rx #######################
-        class process_one_pkt(InternalLoop):
+        class process_one_pkt(Pipeline):
             def impl(self):
                 from_net = net_real.FromNet('from_net')
                 from_net_free = net_real.FromNetFree('from_net_free')
@@ -812,7 +812,7 @@ state.core = cvmx_get_core_num();
         nic_tx('nic_tx', device=target.CAVIUM, cores=[n_cores])
         process_eq('process_eq', process='app')
 
-class maintenance(InternalLoop):
+class maintenance(Pipeline):
     def impl(self):
 
         class Schedule(Element):

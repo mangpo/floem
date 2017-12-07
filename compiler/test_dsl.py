@@ -44,9 +44,9 @@ class TestDSL(unittest.TestCase):
         reset()
 
     def test_run(self):
-        tests1 = ["API_increment1.py",
-                 "API_increment2.py",
-                 "API_insert_start_element.py",
+        tests1 = ["func_increment1.py",
+                 "func_increment2.py",
+                 "func_insert_start_element.py",
                  "pipeline_state_simple.py",
                  "pipeline_state_nonempty.py",
                  "queue_owner_bit.py",
@@ -151,15 +151,15 @@ class TestDSL(unittest.TestCase):
             def impl(self):
                 self.run_c(r'''int x = state.a; state.a = 0;''')
 
-        class run1(InternalLoop):
+        class run1(Pipeline):
             def impl(self):
                 Dummy1()
 
-        class run2(InternalLoop):
+        class run2(Pipeline):
             def impl(self):
                 Dummy2()
 
-        class main(Pipeline):
+        class main(Flow):
             state = PerPacket(MyState)
 
             def impl(self):
@@ -214,7 +214,7 @@ class TestDSL(unittest.TestCase):
 
         Enq, Deq, Scan = queue_smart.smart_queue("queue", entry_size=16, size=256, insts=1, channels=2)
 
-        class run1(API):
+        class run1(CallablePipeline):
             def configure(self):
                 self.inp = Input(Int)
 
@@ -226,7 +226,7 @@ class TestDSL(unittest.TestCase):
                 choose.out0 >> DefA() >> enq.inp[0]
                 choose.out1 >> DefB() >> enq.inp[1]
 
-        class run2(API):
+        class run2(CallablePipeline):
             def configure(self):
                 self.inp = Input(Int)
 
@@ -244,7 +244,7 @@ class TestDSL(unittest.TestCase):
             b = Field(Int)
             c = Field(Int)
 
-        class main(Pipeline):
+        class main(Flow):
             state = PerPacket(MyState)
 
             def impl(self):
@@ -279,7 +279,7 @@ class TestDSL(unittest.TestCase):
 
             return My()
 
-        class f(API):
+        class f(CallablePipeline):
             def configure(self):
                 self.inp = Input(Int)
 

@@ -59,7 +59,7 @@ class CleanPrint(Element):
         ''')
 
 
-class rx_write(API):
+class rx_write(CallablePipeline):
     def configure(self):
         self.inp  = Input(Int, Size)  # val, core
 
@@ -73,7 +73,7 @@ class rx_write(API):
 
         clean >> CleanPrint()
 
-class rx_read(API):
+class rx_read(CallablePipeline):
     def configure(self):
         self.inp = Input(Size)
         self.out = Output(queue.q_buffer)
@@ -81,7 +81,7 @@ class rx_read(API):
     def impl(self):
         self.inp >> DeqGet() >> self.out
 
-class rx_release(API):
+class rx_release(CallablePipeline):
     def configure(self):
         self.inp = Input(queue.q_buffer)
 

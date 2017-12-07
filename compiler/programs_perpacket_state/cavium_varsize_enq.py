@@ -13,7 +13,7 @@ class Count(State):
     def init(self):
         self.count = 0
 
-class main(Pipeline):
+class main(Flow):
     state = PerPacket(MyState)
 
     class Save(Element):
@@ -98,7 +98,7 @@ class main(Pipeline):
 
     Enq, Deq, Scan = queue_smart.smart_queue("queue", 256, 2, 1, enq_blocking=False)
 
-    class push(InternalLoop):
+    class push(Pipeline):
         def impl(self):
             from_net = net_real.FromNet()
             from_net_free = net_real.FromNetFree()
@@ -108,7 +108,7 @@ class main(Pipeline):
 
             from_net.nothing >> main.Drop()
 
-    class pop(InternalLoop):
+    class pop(Pipeline):
 
         def impl(self):
             self.core_id >> main.Deq() >> main.Display()

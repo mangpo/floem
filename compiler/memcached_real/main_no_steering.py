@@ -78,7 +78,7 @@ class segments_holder(State):
     next = Field('struct _segments_holder*')
     last = Field('struct _segments_holder*')
 
-class main(Pipeline):
+class main(Flow):
     state = PerPacket(MyState)
 
     class SaveID(Element):
@@ -608,7 +608,7 @@ output { out(msglen, (void*) m, buff); }
 
 
         ######################## NIC Rx #######################
-        class process_one_pkt(InternalLoop):
+        class process_one_pkt(Pipeline):
             def impl(self):
                 from_net = net_real.FromNet('from_net')
                 from_net_free = net_real.FromNetFree('from_net_free')

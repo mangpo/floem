@@ -215,7 +215,7 @@ class State(object):
         return content, fields, init, mapping
 
 
-class Pipeline(object):
+class Flow(object):
     id = 0
     state = None
 

@@ -40,11 +40,11 @@ class Display(Element):
         output switch { case t: out(buff); }
         ''')
 
-class app(InternalLoop):
+class app(Pipeline):
     def impl(self):
         Inject() >> GetCore() >> Enq()
 
-class nic(InternalLoop):
+class nic(Pipeline):
     def impl(self):
         self.core_id >> Deq() >> Display() >> DeqRelease()
 

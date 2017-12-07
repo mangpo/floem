@@ -25,7 +25,7 @@ class Display(Element):
 
 Enq, Deq, Release = queue.queue_custom('queue', Tuple, 4, n_cores, Tuple.task)
 
-class RxWrite(API):
+class RxWrite(CallablePipeline):
     def configure(self):
         self.inp = Input(Pointer(Tuple), Size)
 
@@ -34,7 +34,7 @@ class RxWrite(API):
         self.inp >> enq
 
 
-class RxPrint(API):
+class RxPrint(CallablePipeline):
     def configure(self):
         self.inp = Input(Size)
 

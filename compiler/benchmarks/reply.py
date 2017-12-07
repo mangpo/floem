@@ -45,7 +45,7 @@ printf("\n");
 output { out(size, pkt, buff); }
         ''')
 
-class nic_rx(InternalLoop):
+class nic_rx(Pipeline):
     def impl(self):
         from_net = net_real.FromNet()
         to_net = net_real.ToNet()

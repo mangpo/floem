@@ -8,7 +8,7 @@ class MyState(State):
     key = Field(Pointer(Uint(8)), copysize='state.keylen')
     p = Field(Pointer(Int), shared='data_region')
 
-class main(Pipeline):
+class main(Flow):
     state = PerPacket(MyState)
 
     class Save(Element):
@@ -73,7 +73,7 @@ class main(Pipeline):
             output { out(0); }
             ''')
 
-    class push(API):
+    class push(CallablePipeline):
         def configure(self):
             self.inp = Input(Int, Uint(8))
 
@@ -82,7 +82,7 @@ class main(Pipeline):
 
             main.Scan() >> main.DisplayClean()
 
-    class pop(InternalLoop):
+    class pop(Pipeline):
         def impl(self):
             main.Zero() >> main.Deq() >> main.Display()
 

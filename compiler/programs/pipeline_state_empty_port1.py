@@ -24,7 +24,7 @@ class Display(Element):
         printf("1\n");
         ''')
 
-class run(API):
+class run(CallablePipeline):
     def impl(self):
         Gen() >> Display()
 

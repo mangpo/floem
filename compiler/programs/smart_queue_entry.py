@@ -8,7 +8,7 @@ class MyState(State):
     b0 = Field(Int)
     core = Field(Size)
 
-class main(Pipeline):
+class main(Flow):
     state = PerPacket(MyState)
 
     class Save(Element):
@@ -65,7 +65,7 @@ class main(Pipeline):
     Enq, Deq, Scan = queue_smart.smart_queue("queue", entry_size=32, size=3, insts=2, channels=2, clean=True,
                                              enq_output=True)
 
-    class run1(API):
+    class run1(CallablePipeline):
         def configure(self):
             self.inp = Input(Int)
 
@@ -82,7 +82,7 @@ class main(Pipeline):
             scan.out[0] >> main.Clean(configure=['a'])
             scan.out[1] >> main.Clean(configure=['b'])
 
-    class run2(API):
+    class run2(CallablePipeline):
         def configure(self):
             self.inp = Input(Size)
 

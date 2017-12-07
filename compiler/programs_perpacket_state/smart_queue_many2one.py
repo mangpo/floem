@@ -61,13 +61,13 @@ class Print(Element):
     def impl(self):
         self.run_c(r'''printf("clean %s!\n");''' % self.x)
 
-class main(Pipeline):
+class main(Flow):
     state = PerPacket(MyState)
 
     def impl(self):
         Enq, Deq, Clean = queue_smart.smart_queue("queue", 32, 1, 1, 2, clean=True)
 
-        class run1(API):
+        class run1(CallablePipeline):
             def configure(self):
                 self.inp = Input(Int)
 
@@ -86,7 +86,7 @@ class main(Pipeline):
                 clean.out[1] >> Print(configure='b')
 
 
-        class run2(API):
+        class run2(CallablePipeline):
             def configure(self):
                 self.inp = Input(Size)
 
