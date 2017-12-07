@@ -702,12 +702,12 @@ def generate_code_and_run(graph, opt, expect=None):
             for i in range(len(expect)):
                 convert = convert_type(result[i], expect[i])
                 if not expect[i] == convert:
-                    raise Exception("Expect %d. Actual %d." % (expect[i], convert))
+                    raise Exception("Expect %s. Actual %s." % (expect, result))
         except subprocess.CalledProcessError as e:
             print e.output
             raise e
-        except Exception as e:
-            raise e
+        #except Exception as e:
+        #    raise e
 
     else:
         try:

@@ -1,6 +1,6 @@
 from dsl2 import *
 from compiler import Compiler
-import target, queue2, net_real, library_dsl2
+import net_real, library_dsl2
 import queue_smart2
 
 n_cores = 1
@@ -18,9 +18,8 @@ class main(Pipeline):
 
     def impl(self):
         # Queue
-        RxEnq, RxDeq, RxScan = queue_smart2.smart_queue("rx_queue", 64 * 1024, n_cores, 1,
-                                                        overlap=64,
-                                                        enq_output=True, enq_blocking=True, enq_atomic=False)
+        RxEnq, RxDeq, RxScan = queue_smart2.smart_queue("rx_queue", entry_size=64, size=512, insts=n_cores,
+                                                        channels=1, enq_blocking=True, enq_atomic=False, enq_output=True)
         rx_enq = RxEnq()
         rx_deq = RxDeq()
 

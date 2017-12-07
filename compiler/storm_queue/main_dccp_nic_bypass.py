@@ -755,22 +755,16 @@ import target
 MAX_ELEMS = 256 #(4 * 1024)
 
 rx_enq_creator, rx_deq_creator, rx_release_creator = \
-    queue2.queue_custom_owner_bit("rx_queue", "struct tuple", MAX_ELEMS, n_cores,
-                                  "status", Uint(8),
-                                  enq_blocking=False, enq_atomic=True, enq_output=True,
-                                  deq_blocking=False)
+    queue2.queue_custom("rx_queue", "struct tuple", MAX_ELEMS, n_cores, "status", enq_blocking=False,
+                        deq_blocking=False, enq_atomic=True, enq_output=True)
 
 tx_enq_creator, tx_deq_creator, tx_release_creator = \
-    queue2.queue_custom_owner_bit("tx_queue", "struct tuple", MAX_ELEMS, n_cores,
-                                  "status", Uint(8),
-                                  checksum="checksum",
-                                  enq_blocking=True, deq_atomic=True)
+    queue2.queue_custom("tx_queue", "struct tuple", MAX_ELEMS, n_cores, "status", checksum="checksum",
+                        enq_blocking=True, deq_atomic=True)
 
 BypassEnq, BypassDeq, BypassRelease = \
-    queue2.queue_custom_owner_bit("bypass_queue", "struct tuple", MAX_ELEMS, n_cores,
-                                  "status", Uint(8),
-                                  enq_blocking=True, enq_atomic=True,
-                                  deq_blocking=False) # TODO: enq_blocking?
+    queue2.queue_custom("bypass_queue", "struct tuple", MAX_ELEMS, n_cores, "status", enq_blocking=True,
+                        deq_blocking=False, enq_atomic=True)  # TODO: enq_blocking?
 
 
 class RxState(State):

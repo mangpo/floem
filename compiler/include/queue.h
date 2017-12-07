@@ -13,7 +13,8 @@
 
 static inline void clflush(volatile void *__p)
 {
-	asm volatile("clflush %0" : "+m" (*(volatile char __force *)__p));
+	//asm volatile("clflush %0" : "+m" (*(volatile char __force *)__p));
+	asm volatile("clflush %0" : "+m" (*(volatile char *)__p));
 }
 
 static void clflush_cache_range(void *vaddr, unsigned int size)
@@ -145,7 +146,7 @@ static void enqueue_clean(circular_queue* q, void(*clean_func)(q_buffer)) {
       check_flag(eqe, q->clean, "clean");
       __sync_synchronize();
       if (eqe->flag != FLAG_CLEAN) {
-	break;
+	    break;
       }
       q_buffer temp = { eqe, 0 };
       clean_func(temp);

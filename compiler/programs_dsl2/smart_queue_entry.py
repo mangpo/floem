@@ -62,7 +62,8 @@ class main(Pipeline):
         def impl(self):
             self.run_c(r'''printf("done %d\n", state.a);''')
 
-    Enq, Deq, Scan = queue_smart2.smart_queue("queue", 16, 2, 2, clean=True, enq_output=True)
+    Enq, Deq, Scan = queue_smart2.smart_queue("queue", entry_size=32, size=3, insts=2, channels=2, clean=True,
+                                              enq_output=True)
 
     class run1(API):
         def configure(self):
@@ -98,7 +99,6 @@ class main(Pipeline):
 
 
 c = Compiler(main)
-#c.testing = "run1(123); run1(42); run2(0); run2(0);"
 c.testing = "run1(123); run1(42); run2(0); run2(0); run1(1); run1(2);"
-#c.generate_code_and_run(['b1', 246, 'a1', 142])
-c.generate_code_and_run(['done', 123, 'done', 42, 'b1', 246, 'a1', 142, 'clean', 'b!', 'clean', 'a!', 'done', '1', 'done', '2'])
+#c.generate_code_and_run(['done', 123, 'done', 42, 'b1', 246, 'a1', 142, 'clean', 'b!', 'clean', 'a!', 'done', '1', 'done', '2'])
+c.generate_code_and_run(['done', 123, 'done', 42, 'b1', 246, 'a1', 142, 'done', '1', 'clean', 'b!', 'clean', 'a!', 'done', '2'])

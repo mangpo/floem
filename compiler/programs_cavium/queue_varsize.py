@@ -21,9 +21,8 @@ class main(Pipeline):
 
     def impl(self):
         # Queue
-        RxEnq, RxDeq, RxScan = queue_smart2.smart_queue("rx_queue", 32 * 1024, n_cores, 1,
-                                                        overlap=64,
-                                                        enq_output=True, enq_blocking=True, enq_atomic=True)
+        RxEnq, RxDeq, RxScan = queue_smart2.smart_queue("rx_queue", entry_size=64, size=32 * 1024, insts=n_cores,
+                                                        channels=1, enq_blocking=True, enq_atomic=True, enq_output=True)
         rx_enq = RxEnq()
         rx_deq = RxDeq()
 

@@ -2,20 +2,17 @@ from dsl2 import *
 import graph_ir
 
 
-def smart_queue(name, size, n_cores, n_cases,
-                overlap=0, checksum=False,
+def smart_queue(name, entry_size, size, insts, channels, checksum=False,
                 enq_blocking=False, deq_blocking=False,
-                enq_atomic=False, deq_atomic=False, clean=False,
-                enq_output=False):
+                enq_atomic=False, deq_atomic=False, clean=False, enq_output=False):
     prefix = name + "_"
-    queue = graph_ir.Queue(name, size, n_cores, n_cases, checksum=checksum,
-                           enq_blocking=enq_blocking, deq_blocking=deq_blocking,
-                           enq_atomic=enq_atomic, deq_atomic=deq_atomic,
-                           enq_output=enq_output, overlap=overlap)
+    queue = graph_ir.Queue(name, entry_size=entry_size, size=size, insts=insts, channels=channels, checksum=checksum,
+                           enq_blocking=enq_blocking, enq_atomic=enq_atomic, enq_output=enq_output,
+                           deq_blocking=deq_blocking, deq_atomic=deq_atomic)
 
     class Enqueue(Element):
         def configure(self):
-            self.inp = [Input() for i in range(n_cases)]
+            self.inp = [Input() for i in range(channels)]
             self.special = queue
             if enq_output:
                 self.done = Output()
@@ -33,12 +30,12 @@ def smart_queue(name, size, n_cores, n_cases,
     class Dequeue(Element):
         def configure(self):
             self.inp = Input(Size)  # core
-            self.out = [Output() for i in range(n_cases)]
+            self.out = [Output() for i in range(channels)]
             self.special = queue
 
         def impl(self):
             src = ""
-            for i in range(n_cases):
+            for i in range(channels):
                 src += "out%d(); " % i
             self.run_c("output { %s }" % src)
 
@@ -48,12 +45,12 @@ def smart_queue(name, size, n_cores, n_cases,
 
     class Clean(Element):
         def configure(self):
-            self.out = [Output() for i in range(n_cases)]
+            self.out = [Output() for i in range(channels)]
             self.special = queue
 
         def impl(self):
             src = ""
-            for i in range(n_cases):
+            for i in range(channels):
                 src += "out%d(); " % i
             self.run_c("output { %s }" % src)
 

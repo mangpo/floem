@@ -760,20 +760,21 @@ output switch { case segment: out(); else: null(); }
         MemoryRegion('data_region', 2 * 1024 * 1024 * 512) #4 * 1024 * 512)
 
         # Queue
-        RxEnq, RxDeq, RxScan = queue_smart2.smart_queue("rx_queue", 32*1024, n_cores, 2,
-                                                        enq_output=True, enq_blocking=True, enq_atomic=True)
+        RxEnq, RxDeq, RxScan = queue_smart2.smart_queue("rx_queue", 64, 512, n_cores, 2, enq_blocking=True,
+                                                        enq_atomic=True, enq_output=True)
         # ^ if enq_blocking = false, need to call item_unref if queue is full on set_request.
-        TxEnq, TxDeq, TxScan = queue_smart2.smart_queue("tx_queue", 32*1024, n_cores, 3, clean="enq",
-                                                        enq_blocking=True, deq_atomic=True)  # debug: size = 1 KB, real: size = 64 KB
+        TxEnq, TxDeq, TxScan = queue_smart2.smart_queue("tx_queue", 64, 512, n_cores, 3, enq_blocking=True,
+                                                        deq_atomic=True,
+                                                        clean="enq")  # debug: size = 1 KB, real: size = 64 KB
         rx_enq = RxEnq()
         rx_deq = RxDeq()
         tx_enq = TxEnq()
         tx_deq = TxDeq()
         tx_scan = TxScan()
 
-        LogInEnq, LogInDeq, LogInScan = queue_smart2.smart_queue("log_in_queue", 1024, 1, 1,
+        LogInEnq, LogInDeq, LogInScan = queue_smart2.smart_queue("log_in_queue", 32, 256, 1, 1,
                                                                  enq_blocking=True, enq_atomic=True)
-        LogOutEnq, LogOutDeq, LogOutScan = queue_smart2.smart_queue("log_out_queue", 1024, 1, 1,
+        LogOutEnq, LogOutDeq, LogOutScan = queue_smart2.smart_queue("log_out_queue", 32, 256, 1, 1,
                                                                     enq_blocking=True, deq_atomic=True)
         log_in_enq = LogInEnq()
         log_in_deq = LogInDeq()

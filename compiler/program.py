@@ -268,9 +268,10 @@ class GraphGenerator:
         elif isinstance(x, APIFunction):
             global_name = get_resource_name(stack, x.name)
             #global_name = x.name
-            for inst in x.output_elements:
-                new_name = get_node_name(stack, inst.name)
-                self.graph.API_outputs.append(new_name)
+            if x.output_elements:
+                for inst in x.output_elements:
+                    new_name = get_node_name(stack, inst.name)
+                    self.graph.API_outputs.append(new_name)
             self.graph.threads_API.append(APIFunction(global_name, x.call_types, x.return_type, x.default_val))
 
         elif isinstance(x, ResourceMap):

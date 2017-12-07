@@ -98,12 +98,15 @@ def find_pipeline_state(g, instance):
             return state
 
 
-def create_queue(name, size, n_cores, enq_blocking, deq_blocking, enq_atomic, deq_atomic, clean, core, overlap, checksum):
+def create_queue(name, entry_size, size, insts, enq_blocking, deq_blocking, enq_atomic, deq_atomic, clean, qid_output,
+                 checksum):
     workspace.push_decl()
     workspace.push_scope(name)
     EnqAlloc, EnqSubmit, DeqGet, DeqRelease, clean = \
-        queue2.queue_variable_size(name, size, n_cores, enq_blocking, deq_blocking, enq_atomic, deq_atomic, clean, core,
-                                   overlap=overlap, checksum=checksum)
+        queue2.queue_default(name, entry_size, size, insts,
+                             enq_blocking=enq_blocking, deq_blocking=deq_blocking,
+                             enq_atomic=enq_atomic, deq_atomic=deq_atomic,
+                             clean=clean, qid_output=qid_output, checksum=checksum)
     EnqAlloc(create=False)
     EnqSubmit(create=False)
     DeqGet(create=False)
@@ -248,22 +251,20 @@ def compile_smart_queue(g, q, src2fields):
     else:
         prefix = ""
 
-    byte_reverse, size2convert, htons, htonl, htonp = get_size2convert(g, deq_thread, enq_thread)
-
     g_add, enq_alloc, enq_submit, deq_get, deq_release, clean = \
-        create_queue(q.name, q.size, q.n_cores, enq_blocking=q.enq_blocking, deq_blocking=q.deq_blocking,
-                     enq_atomic=q.enq_atomic, deq_atomic=q.deq_atomic,
-                     clean=q.clean, core=True, overlap=q.overlap, checksum=q.checksum)
+        create_queue(q.name, entry_size=q.entry_size, size=q.size, insts=q.insts, enq_blocking=q.enq_blocking,
+                     deq_blocking=q.deq_blocking, enq_atomic=q.enq_atomic, deq_atomic=q.deq_atomic, clean=q.clean,
+                     qid_output=True, checksum=q.checksum)
     g.merge(g_add)
 
     deq_types = ["q_buffer", "size_t"]
 
     src_cases = ""
-    for i in range(q.n_cases):
+    for i in range(q.channels):
         src_cases += "    case (type == %d): out%d(buff,core);\n" % (i + 1, i)
     src_cases += "    case (type == 0): release(buff);\n"
     classify_ele = Element(q.deq.name + "_classify", [Port("in", deq_types)],
-                           [Port("out" + str(i), deq_types) for i in range(q.n_cases)]
+                           [Port("out" + str(i), deq_types) for i in range(q.channels)]
                            + [Port("release", ["q_buffer"])], r'''
        (q_buffer buff, size_t core) = in();
         q_entry* e = buff.entry;
@@ -274,10 +275,10 @@ def compile_smart_queue(g, q, src2fields):
         }''' % src_cases)
 
     src_cases = ""
-    for i in range(q.n_cases):
+    for i in range(q.channels):
         src_cases += "    case (type == %d): out%d(buff);\n" % (i + 1, i)
     scan_classify_ele = Element(q.name + "_scan_classify", [Port("in", ["q_buffer"])],
-                                [Port("out" + str(i), ["q_buffer"]) for i in range(q.n_cases)], r'''
+                                [Port("out" + str(i), ["q_buffer"]) for i in range(q.channels)], r'''
         (q_buffer buff) = in();
         q_entry* e = buff.entry;
         uint16_t type = 0;
@@ -328,7 +329,7 @@ def compile_smart_queue(g, q, src2fields):
     if q.enq_output:
         enq_done = q.enq.output2ele["done"]
 
-    for i in range(q.n_cases):
+    for i in range(q.channels):
         ins = q.enq.input2ele["inp" + str(i)]
         out = q.deq.output2ele["out" + str(i)]
         ins_map.append(ins)
@@ -362,7 +363,7 @@ def compile_smart_queue(g, q, src2fields):
     lives = []
 
     release_vis = set()
-    for i in range(q.n_cases):
+    for i in range(q.channels):
         live = filter_live(q.deq.liveness[i])
         uses = filter_live(q.deq.uses[i])
         extras = uses.difference(live)
@@ -503,7 +504,7 @@ def compile_smart_queue(g, q, src2fields):
 
     # Insert release dequeue
     duplicate_overlapped(g, save_inst_names)
-    for i in range(q.n_cases):
+    for i in range(q.channels):
         node = get_node_before_release(save_inst_names[i], g, lives[i], prefix, release_vis)
         if node not in release_vis:
             release_vis.add(node)

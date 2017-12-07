@@ -1,6 +1,6 @@
 from dsl2 import *
 from compiler import Compiler
-import target, queue2, net_real, library_dsl2, queue_smart2
+import net_real, library_dsl2
 
 n_cores = 1
 

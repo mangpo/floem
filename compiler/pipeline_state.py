@@ -385,7 +385,7 @@ def analyze_fields_liveness_instance(g, name, in_port):
         deq = q.deq
         deq.liveness = {}
         deq.uses = {}
-        for i in range(q.n_cases):
+        for i in range(q.channels):
             out_port = "out" + str(i)
             next_name, next_port = deq.output2ele[out_port]
             ret_live, ret_uses = analyze_fields_liveness_instance(g, next_name, next_port)
@@ -397,7 +397,7 @@ def analyze_fields_liveness_instance(g, name, in_port):
         if "done" in instance.output2ele:
             next_name, next_port = instance.output2ele["done"]
             done_live, done_uses = analyze_fields_liveness_instance(g, next_name, next_port)
-            for i in range(q.n_cases):
+            for i in range(q.channels):
                 instance.uses[i] = instance.uses[i].union(done_uses)
 
         return instance.liveness[no], instance.uses[no]

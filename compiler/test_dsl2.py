@@ -44,7 +44,7 @@ class TestDSL2(unittest.TestCase):
         reset()
 
     def test_run(self):
-        tests = ["API_increment1.py",
+        tests1 = ["API_increment1.py",
                  "API_increment2.py",
                  "API_insert_start_element.py",
                  "pipeline_state_simple.py",
@@ -64,9 +64,23 @@ class TestDSL2(unittest.TestCase):
                  "pipeline_state_empty_port2.py",
                  "pipeline_state_empty_port3.py",
                  ]
-        for test in tests:
+
+        for test in tests1:
             status = os.system("cd programs_dsl2; python " + test + "; cd ..")
             self.assertEqual(status, 0, "Error at " + test)
+
+
+    def test_run2(self):
+        tests2 = ["queue_shared_pointer2.py",
+                  "queue_shared_data2.py",
+                  "auto_inserted_queue.py",
+                  "smart_queue_entry2.py",
+                  "smart_queue_many2one.py", ]
+
+        for test in tests2:
+            status = os.system("cd programs_perpacket_state; python " + test + "; cd ..")
+            self.assertEqual(status, 0, "Error at " + test)
+
 
     def test_connection(self):
         a = Nop(name="a")
@@ -198,7 +212,7 @@ class TestDSL2(unittest.TestCase):
             def impl(self):
                 self.run_c(r'''state.core = 0;''')
 
-        Enq, Deq, Scan = queue_smart2.smart_queue("queue", 256, 1, 2, overlap=16)
+        Enq, Deq, Scan = queue_smart2.smart_queue("queue", entry_size=16, size=256, insts=1, channels=2)
 
         class run1(API):
             def configure(self):

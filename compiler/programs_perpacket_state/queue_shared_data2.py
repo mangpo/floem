@@ -41,7 +41,7 @@ class main(Pipeline):
             fflush(stdout);
             ''')
 
-    Enq, Deq, Scan = queue_smart2.smart_queue("queue", 256, 2, 1, blocking=True)
+    Enq, Deq, Scan = queue_smart2.smart_queue("queue", 32, 128, 2, 1)
 
     class push(API):
         def configure(self):

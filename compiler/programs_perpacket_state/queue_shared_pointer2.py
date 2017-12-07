@@ -31,7 +31,7 @@ class main(Pipeline):
             printf("%d\n", state.p[state.index]); fflush(stdout);
             ''')
 
-    Enq, Deq, Scan = queue_smart2.smart_queue("queue", 256, 2, 1)
+    Enq, Deq, Scan = queue_smart2.smart_queue("queue", 32, 128, 2, 1)
 
 
     class push(API):

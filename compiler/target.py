@@ -17,8 +17,8 @@ def is_dpdk_proc(process):
 
 dpdk = "dpdk"
 dpdk_base = "/opt/dpdk/"
-dpdk_include = dpdk_base + "/include/dpdk"
-#dpdk_include = "/home/mangpo/lib/dpdk-17.05.2/x86_64-native-linuxapp-gcc/include"
+#dpdk_include = dpdk_base + "/include/dpdk"
+dpdk_include = "/home/mangpo/lib/dpdk-17.05.2/x86_64-native-linuxapp-gcc/include"
 dpdk_lib = dpdk_base + "/lib/"
 dpdk_pmds = "-lrte_pmd_ixgbe -lrte_pmd_i40e"
 dpdk_libs = "-Wl,--whole-archive " + dpdk_pmds + " -lrte_eal" + \

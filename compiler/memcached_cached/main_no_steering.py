@@ -695,14 +695,14 @@ state.core = cvmx_get_core_num();
     def impl(self):
 
         # Queue
-        RxEnq, RxDeq, RxScan = queue_smart2.smart_queue("rx_queue", 128 * 192, n_cores, 1, overlap=192, #64
-                                                        enq_output=True, enq_blocking=True, enq_atomic=False)
+        RxEnq, RxDeq, RxScan = queue_smart2.smart_queue("rx_queue", entry_size=192, size=128, insts=n_cores,
+                                                        channels=1, enq_blocking=True, enq_atomic=False, enq_output=True)
         rx_enq = RxEnq()
         rx_deq = RxDeq()
 
-        TxEnq, TxDeq, TxScan = queue_smart2.smart_queue("tx_queue", 512 * 192, n_cores, 1, overlap=192, #160
-                                                        checksum=True,
-                                                        enq_blocking=True, enq_output=True, deq_atomic=False)
+        TxEnq, TxDeq, TxScan = queue_smart2.smart_queue("tx_queue", entry_size=192, size=512, insts=n_cores,
+                                                        channels=1, checksum=True, enq_blocking=True, deq_atomic=False,
+                                                        enq_output=True)
         tx_enq = TxEnq()
         tx_deq = TxDeq()
 

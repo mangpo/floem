@@ -7,15 +7,13 @@ n_cores = 1
 data = 13 #88
 
 Enq, Deq, DeqRelease = \
-    queue2.queue_custom_owner_bit("rx_queue", "struct tuple", MAX_ELEMS, n_cores,
-                                  "task", Uint(32), "0xffffff00", "0x1",
-                                  enq_blocking=False, enq_atomic=True, deq_blocking=True, enq_output=True)
+    queue2.queue_custom("rx_queue", "struct tuple", MAX_ELEMS, n_cores, "task",
+                        enq_blocking=False, deq_blocking=True, enq_atomic=True, enq_output=True)
                                   #enq_blocking=True, enq_atomic=True, enq_output=True,
                                   #deq_blocking=True, deq_atomic=True)
 Enq2, Deq2, DeqRelease2 = \
-    queue2.queue_custom_owner_bit("tx_queue", "struct tuple", MAX_ELEMS, n_cores,
-                                  "task", Uint(32), "0xffffff00", "0x1",
-                                  enq_blocking=True, deq_atomic=True)
+    queue2.queue_custom("tx_queue", "struct tuple", MAX_ELEMS, n_cores, "task",
+                        enq_blocking=True, deq_atomic=True)
                                   #enq_blocking=True, enq_atomic=True,
                                   #deq_atomic=True)
 
@@ -216,9 +214,9 @@ c.include_h = r'''
 struct tuple {
   uint32_t data[%d];
   uint32_t id;
-  uint32_t task;
+  uint8_t task;
   uint8_t checksum;
-  uint8_t pad[3];
+  uint8_t pad[2];
 } __attribute__ ((packed));
 
 ''' % data

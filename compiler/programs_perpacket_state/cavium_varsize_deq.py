@@ -62,7 +62,7 @@ class main(Pipeline):
             fflush(stdout);
             ''')
 
-    Enq, Deq, Scan = queue_smart2.smart_queue("queue", 256, 2, 1, enq_blocking=True, clean=True, deq_atomic=True)
+    Enq, Deq, Scan = queue_smart2.smart_queue("queue", 256, 2, 1, enq_blocking=True, deq_atomic=True, clean=True)
 
     class Zero(Element):
         def configure(self):

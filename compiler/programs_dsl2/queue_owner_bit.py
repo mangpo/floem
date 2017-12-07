@@ -6,8 +6,8 @@ n_cores = 2
 
 
 class Tuple(State):
-    task = Field(Int)
     val = Field(Int)
+    task = Field(Uint(8))
     layout = [val, task]
 
 class Display(Element):
@@ -23,8 +23,7 @@ class Display(Element):
         output switch { case t: out(buff); }
         ''')
 
-Enq, Deq, Release = queue2.queue_custom_owner_bit('queue', Tuple, 4, n_cores,
-                                                                     Tuple.task, Int, "0x00ffffff", "0x80000000")
+Enq, Deq, Release = queue2.queue_custom('queue', Tuple, 4, n_cores, Tuple.task)
 
 class RxWrite(API):
     def configure(self):

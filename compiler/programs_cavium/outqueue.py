@@ -6,7 +6,7 @@ MAX_ELEMS = 10
 n_cores = 4
 
 class Tuple(State):
-    task = Field(Int)
+    task = Field(Uint(8))
     id = Field(Int)
 
     def init(self):
@@ -14,8 +14,7 @@ class Tuple(State):
 
 Inject = create_inject("inject", Pointer(Tuple), 100, "random_count", 100000)
 
-Enq, Deq, DeqRelease, Scan, ScanRelease = \
-    queue2.queue_custom_owner_bit("tx_queue", Tuple, MAX_ELEMS, n_cores, "task", blocking=False)
+Enq, Deq, DeqRelease = queue2.queue_custom("tx_queue", Tuple, MAX_ELEMS, n_cores, "task")
 
 class GetCore(Element):
     def configure(self):
@@ -30,14 +29,15 @@ class GetCore(Element):
 
 class Display(Element):
     def configure(self):
-        self.inp = Input(Pointer(Tuple), 'uintptr_t')
-        self.out = Output(Pointer(Tuple), 'uintptr_t')
+        self.inp = Input('q_buffer')
+        self.out = Output('q_buffer')
 
     def impl(self):
         self.run_c(r'''
-        (Tuple* t, uintptr_t addr) = inp();
+        (q_buffer buff) = inp();
+        Tuple* t = buff.entry;
         if(t) printf("t: id = %d\n", t->id);
-        output switch { case t: out(t, addr); }
+        output switch { case t: out(buff); }
         ''')
 
 class app(InternalLoop):
@@ -55,8 +55,9 @@ c = Compiler()
 c.include = r'''
 #include <rte_memcpy.h>
 
-typedef struct _Tuple { int task;
-int id;
+typedef struct _Tuple { 
+  int id;
+  uint8_t task;
  } Tuple;
 
 Tuple* random_count(size_t i) {
@@ -70,4 +71,3 @@ c.testing = r'''
 while(1);
 '''
 c.generate_code_and_run()
-#c.generate_code_as_header()

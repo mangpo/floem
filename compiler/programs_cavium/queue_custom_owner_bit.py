@@ -6,10 +6,8 @@ MAX_ELEMS = 64
 n_cores = 1
 
 Enq, Deq, DeqRelease = \
-    queue2.queue_custom_owner_bit("rx_queue", "struct tuple", MAX_ELEMS, n_cores,
-                                  "task", Uint(32), "0xffffff00", "0x1",
-                                  enq_blocking=True, enq_atomic=True, enq_output=True,
-                                  deq_atomic=True)
+    queue2.queue_custom("rx_queue", "struct tuple", MAX_ELEMS, n_cores, "task",
+                        enq_blocking=True, enq_atomic=True, deq_atomic=True, enq_output=True)
 
 class MakeTuple(Element):
     def configure(self):
@@ -147,8 +145,8 @@ class run(InternalLoop):
         Scheduler() >> Deq() >> Display() >> DeqRelease()
 
 
-nic_rx('nic_rx', device=target.CAVIUM, cores=range(4))
-#nic_rx('nic_rx', process='test_queue')
+#nic_rx('nic_rx', device=target.CAVIUM, cores=range(4))
+nic_rx('nic_rx', process='test_queue')
 run('run', process='app', cores=range(1))
 
 c = Compiler()
@@ -156,7 +154,8 @@ c.include_h = r'''
 struct tuple {
   uint32_t data[88];
   uint32_t id;
-  uint32_t task;
+  uint8_t task;
+  uint8_t pad[3];
 } __attribute__ ((packed));
 
 '''

@@ -14,12 +14,12 @@ class Queue:
 
 class QueueVariableSizeOne2Many(Queue):
     def __init__(self, name, size, n_cores, n_cases):
-        Queue.__init__(self, name, size, n_cores, n_cases)
+        Queue.__init__(size,, n_cores, n_cases,
 
 
 class QueueVariableSizeMany2One(Queue):
     def __init__(self, name, size, n_cores, n_cases):
-        Queue.__init__(self, name, size, n_cores, n_cases)
+        Queue.__init__(size,, n_cores, n_cases,
 
 
 fresh_id = 0

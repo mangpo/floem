@@ -931,21 +931,23 @@ output switch { case segment: out(); else: null(); }
     def impl(self):
 
         # Queue
-        RxEnq, RxDeq, RxScan = queue_smart2.smart_queue("rx_queue", 512 * 64, n_cores, 2, overlap=64, #64
-                                                        enq_output=True, enq_blocking=True, enq_atomic=True)  # enq_blocking=False?
+        RxEnq, RxDeq, RxScan = queue_smart2.smart_queue("rx_queue", entry_size=64, size=512, insts=n_cores,
+                                                        channels=2, enq_blocking=True, enq_atomic=True,
+                                                        enq_output=True)  # enq_blocking=False?
         rx_enq = RxEnq()
         rx_deq = RxDeq()
 
-        TxEnq, TxDeq, TxScan = queue_smart2.smart_queue("tx_queue", 512 * 160, n_cores, 1, overlap=160, #160
-                                                        checksum=True,
-                                                        enq_blocking=True, enq_output=True, deq_atomic=True)
+        TxEnq, TxDeq, TxScan = queue_smart2.smart_queue("tx_queue", entry_size=160, size=512, insts=n_cores,
+                                                        channels=1, checksum=True, enq_blocking=True, deq_atomic=True,
+                                                        enq_output=True)
         tx_enq = TxEnq()
         tx_deq = TxDeq()
 
-        LogInEnq, LogInDeq, LogInScan = queue_smart2.smart_queue("log_in_queue", 8 * 1024, 1, 1, overlap=32,
-                                                                 enq_blocking=True, enq_atomic=True)
-        LogOutEnq, LogOutDeq, LogOutScan = queue_smart2.smart_queue("log_out_queue", 8 * 1024, 1, 1, overlap=32,
-                                                                    checksum=False,
+        LogInEnq, LogInDeq, LogInScan = queue_smart2.smart_queue("log_in_queue", entry_size=32, size=256,
+                                                                 insts=1, channels=1, enq_blocking=True,
+                                                                 enq_atomic=True)
+        LogOutEnq, LogOutDeq, LogOutScan = queue_smart2.smart_queue("log_out_queue", entry_size=32, size=256,
+                                                                    insts=1, channels=1, checksum=False,
                                                                     enq_blocking=True, deq_atomic=True)
         log_in_enq = LogInEnq()
         log_in_deq = LogInDeq()

@@ -273,7 +273,7 @@ class TestPipelineState(unittest.TestCase):
 
     def test_smart_queue(self):
         n_cases = 2
-        queue = graph_ir.Queue("smart_queue", 16, 4, 2, 4)
+        queue = graph_ir.Queue("smart_queue", 4, 16, 4, 2)
         Enq_ele = Element("smart_enq_ele", [Port("inp" + str(i), []) for i in range(n_cases)], [Port("out", [])],
                           "output { out(); }")
         Deq_ele = Element("smart_deq_ele", [Port("in_core", ["int"]), Port("in", [])],
@@ -346,7 +346,7 @@ class TestPipelineState(unittest.TestCase):
 
     def test_smart_queue2(self):
         n_cases = 2
-        queue = graph_ir.Queue("smart_queue", 16, 4, 2, 4)
+        queue = graph_ir.Queue("smart_queue", 4, 16, 4, 2)
         Enq_ele = Element("smart_enq_ele", [Port("inp" + str(i), []) for i in range(n_cases)], [Port("out", [])],
                           "output { out(); }")
         Deq_ele = Element("smart_deq_ele", [Port("in_core", ["int"]), Port("in", [])],
@@ -461,7 +461,7 @@ class TestPipelineState(unittest.TestCase):
     # TODO: fail
     def test_queue_release(self):
         n_cases = 1
-        queue = graph_ir.Queue("smart_queue", 16, 4, n_cases, overlap=4)
+        queue = graph_ir.Queue("smart_queue", entry_size=4, size=16, insts=4, channels=n_cases)
         Enq_ele = Element("smart_enq_ele", [Port("inp" + str(i), []) for i in range(n_cases)], [Port("out", [])],
                           "output { out(); }")
         Deq_ele = Element("smart_deq_ele", [Port("in_core", ["int"]), Port("in", [])],
@@ -530,7 +530,7 @@ class TestPipelineState(unittest.TestCase):
 
     def test_queue_release2(self):
         n_cases = 1
-        queue = graph_ir.Queue("smart_queue", 16, 4, n_cases, overlap=4)
+        queue = graph_ir.Queue("smart_queue", entry_size=4, size=16, insts=4, channels=n_cases)
         Enq_ele = Element("smart_enq_ele", [Port("inp" + str(i), []) for i in range(n_cases)], [Port("out", [])],
                           "output { out(); }")
         Deq_ele = Element("smart_deq_ele", [Port("in_core", ["int"]), Port("in", [])],

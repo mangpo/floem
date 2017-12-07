@@ -13,9 +13,9 @@ class main(Pipeline):
     state = PerPacket(MyState)
 
     def impl(self):
-        RxEnq, RxDeq, RxScan = queue_smart2.smart_queue("rx_queue", 32 * 1024, n_cores, 1,
-                                                        overlap=32,
-                                                        enq_output=False, enq_blocking=True, enq_atomic=False)
+        RxEnq, RxDeq, RxScan = queue_smart2.smart_queue("rx_queue", entry_size=32, size=32 * 1024, insts=n_cores,
+                                                        channels=1, enq_blocking=True, enq_atomic=False,
+                                                        enq_output=False)
         rx_enq = RxEnq()
         rx_deq = RxDeq()
 

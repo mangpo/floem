@@ -13,18 +13,15 @@ class circular_queue(State):
     id = Field(Int)
     entry_size = Field(Int)
 
-    def init(self, len=0, queue=0, dma_cache=True, overlap=8, ready="NULL", done="NULL"):
+    def init(self, len=0, queue=0, overlap=8, ready="NULL", done="NULL"):
         self.len = len
         self.offset = 0
         self.queue = queue
         self.clean = 0
         self.entry_size = overlap
         self.declare = False
-        if dma_cache:
-            self.id = "create_dma_circular_queue((uint64_t) {0}, sizeof({1}), {2}, {3}, {4})" \
-                .format(queue.name, queue.__class__.__name__, overlap, ready, done)
-        else:
-            self.id = 0
+        self.id = "create_dma_circular_queue((uint64_t) {0}, sizeof({1}), {2}, {3}, {4})"\
+            .format(queue.name, queue.__class__.__name__, overlap, ready, done)
 
 
 class circular_queue_lock(State):
@@ -36,19 +33,16 @@ class circular_queue_lock(State):
     id = Field(Int)
     entry_size = Field(Int)
 
-    def init(self, len=0, queue=0, dma_cache=True, overlap=0, ready="NULL", done="NULL"):
+    def init(self, len=0, queue=0, entry_size=0, ready="NULL", done="NULL"):
         self.len = len
         self.offset = 0
         self.queue = queue
         self.clean = 0
-        self.entry_size = overlap
+        self.entry_size = entry_size
         self.lock = lambda (x): 'qlock_init(&%s)' % x
         self.declare = False
-        if dma_cache:
-            self.id = "create_dma_circular_queue((uint64_t) {0}, sizeof({1}), {2}, {3}, {4})" \
-                .format(queue.name, queue.__class__.__name__, overlap, ready, done)
-        else:
-            self.id = 0
+        self.id = "create_dma_circular_queue((uint64_t) {0}, sizeof({1}), {2}, {3}, {4})" \
+            .format(queue.name, queue.__class__.__name__, entry_size, ready, done)
 
 
 def get_field_name(state, field):
@@ -62,8 +56,8 @@ def get_field_name(state, field):
                 return s
 
 
-def create_queue_states(name, type, size, n_cores, overlap=0, dma_cache=True, nameext="", deqext="",
-                        declare=True, enq_lock=False, deq_lock=False, variable_size=False):
+def create_queue_states(name, type, size, n_cores, entry_size, nameext="", deqext="",
+                        declare=True, enq_lock=False, deq_lock=False):
     prefix = "%s_" % name
 
     class Storage(State): data = Field(Array(type, size))
@@ -82,10 +76,10 @@ def create_queue_states(name, type, size, n_cores, overlap=0, dma_cache=True, na
     else:
         deq = circular_queue
 
-    enq_infos = [enq(init=[size, storages[i], dma_cache, overlap, "enqueue_ready" + nameext, "enqueue_done" + nameext],
+    enq_infos = [enq(init=[size, storages[i], entry_size, "enqueue_ready" + nameext, "enqueue_done" + nameext],
                      declare=declare, packed=False)
                  for i in range(n_cores)]
-    deq_infos = [deq(init=[size, storages[i], dma_cache, overlap, "dequeue_ready" + nameext + deqext, "dequeue_done" + nameext],
+    deq_infos = [deq(init=[size, storages[i], entry_size, "dequeue_ready" + nameext + deqext, "dequeue_done" + nameext],
                      declare=declare, packed=False)
                  for i in range(n_cores)]
 
@@ -109,16 +103,21 @@ def create_queue_states(name, type, size, n_cores, overlap=0, dma_cache=True, na
     return enq_all, deq_all, enq, deq, Storage
 
 
-def queue_variable_size(name, size, n_cores,
-                        enq_blocking=False, deq_blocking=False, enq_atomic=False, deq_atomic=False,
-                        clean=False, core=False, checksum=False,
-                        dma_cache=True, overlap=32):
+def queue_default(name, entry_size, size, insts,
+                  enq_blocking=False, deq_blocking=False, enq_atomic=False, deq_atomic=False,
+                  clean=False, qid_output=False, checksum=False):
     """
     :param name: queue name
-    :param size: number of bytes
-    :param n_cores:
-    :param blocking:
-    :param atomic:
+    :param entry_size:
+    :param size: number of entries
+    :param insts: number of physical queue instances
+    :param enq_blocking:
+    :param deq_blocking:
+    :param enq_atomic:
+    :param deq_atomic:
+    :param clean: True if queue entry needs to be cleaned before being enqueued again.
+    :param qid_output: True if dequeue get element should return queue instance id.
+    :param checksum: True to enable checksum.
     :return:
     """
 
@@ -145,13 +144,10 @@ def queue_variable_size(name, size, n_cores,
         clean_inst = None
         clean_name = "no_clean"
 
-    assert (size % overlap == 0), "queue_variable_size: size must be multiples of overlap parameter."
-
     enq_all, deq_all, EnqQueue, DeqQueue, Storage = \
-        create_queue_states(name, Uint(8), size, n_cores,
-                            overlap=overlap, dma_cache=dma_cache,
-                            nameext="_var", deqext="_checksum" if checksum else "",
-                            declare=False, enq_lock=enq_atomic, deq_lock=deq_atomic) # TODO: scan => clean
+        create_queue_states(name, Uint(8), entry_size * size, insts, entry_size=entry_size, nameext="_var",
+                            deqext="_checksum" if checksum else "", declare=False, enq_lock=enq_atomic,
+                            deq_lock=deq_atomic)  # TODO: scan => clean
 
     class EnqueueAlloc(Element):
         this = Persistent(enq_all.__class__)
@@ -222,7 +218,7 @@ def queue_variable_size(name, size, n_cores,
 
         def configure(self):
             self.inp = Input(Size)
-            self.out = Output(q_buffer, Size) if core else Output(q_buffer)
+            self.out = Output(q_buffer, Size) if qid_output else Output(q_buffer)
 
         def impl(self):
             noblock_noatom = "q_buffer buff = dequeue_get((circular_queue*) q);\n"
@@ -265,11 +261,10 @@ def queue_variable_size(name, size, n_cores,
                     (size_t c) = inp();
                     %s *q = this->cores[c];
                     ''' % DeqQueue.__name__
-                       + src + r'''
-                    //if(c == 3) printf("DEQ core=%ld, queue=%p, entry=%ld\n", c, q->queue, x); '''
+                       + src
                        + r'''
                     output { out(%s); }
-                        ''' % ('buff, c' if core else 'buff'))
+                        ''' % ('buff, c' if qid_output else 'buff'))
 
     class DequeueRelease(Element):
         def configure(self):
@@ -295,24 +290,26 @@ def queue_variable_size(name, size, n_cores,
     return EnqueueAlloc, EnqueueSubmit, DequeueGet, DequeueRelease, clean_inst
 
 
-def queue_custom_owner_bit(name, entry_type, size, n_cores,
-                           owner, owner_type,
-                           checksum=False, dma_cache=True,
-                           enq_blocking=False, deq_blocking=False, enq_atomic=False, deq_atomic=False,
-                           enq_output=False):
+def queue_custom(name, entry_type, size, insts, status_field, checksum=False,
+                 enq_blocking=False, enq_atomic=False, enq_output=False,
+                 deq_blocking=False, deq_atomic=False):
     """
     :param name: queue name
-    :param entry_type: entry type
-    :param size: number of entries of type type
-    :param n_cores:
-    :param owner: ownerbit field in type (owner = 0 --> empty entry)
-    :param blocking:
-    :param atomic:
-    :return:
+    :param entry_type:
+    :param size: number of entries
+    :param insts: number of physical queue instances
+    :param status_field: name of status field in the entry. Status field must be fewer than 1 byte.
+    :param checksum: name of checksum field. False if no checksum is required.
+    :param enq_blocking:
+    :param deq_blocking:
+    :param enq_atomic:
+    :param deq_atomic:
+    :param enq_output: enq element has output port.
+    :return: Enq, Deq, DeqRelease
     """
+
     define_state(entry_type)
-    owner = get_field_name(entry_type, owner)
-    assert owner_type != "bool", "Owner field type should be at least 1 byte."
+    status_field = get_field_name(entry_type, status_field)
 
     entry_type = string_type(entry_type)
     type_star = entry_type + "*"
@@ -320,14 +317,12 @@ def queue_custom_owner_bit(name, entry_type, size, n_cores,
         checksum_offset = "(uint64_t) &((%s) 0)->%s" % (type_star, checksum)
     else:
         checksum_offset = None
-    type_offset = "(uint64_t) &((%s) 0)->%s" % (type_star, owner)
+    type_offset = "(uint64_t) &((%s) 0)->%s" % (type_star, status_field)
     sanitized_name = '_' + entry_type.replace(' ', '_')
 
     enq_all, deq_all, EnqQueue, DeqQueue, Storage = \
-        create_queue_states(name, entry_type, size, n_cores,
-                            overlap="sizeof(%s)" % entry_type, dma_cache=dma_cache,
-                            nameext=sanitized_name, deqext="_checksum" if checksum else "",
-                            declare=True, enq_lock=False, deq_lock=False)
+        create_queue_states(name, entry_type, size, insts, entry_size="sizeof(%s)" % entry_type, nameext=sanitized_name,
+                            deqext="_checksum" if checksum else "", declare=True, enq_lock=False, deq_lock=False)
 
     # Extra functions
     enqueue_ready = r'''
@@ -335,21 +330,21 @@ int enqueue_ready%s(void* buff) {
   %s dummy = (%s) buff;
   return (dummy->%s == 0)? sizeof(%s): 0;
 }
-    ''' % (sanitized_name, type_star, type_star, owner, entry_type)
+    ''' % (sanitized_name, type_star, type_star, status_field, entry_type)
 
     enqueue_done = r'''
 int enqueue_done%s(void* buff) {
     %s dummy = (%s) buff;
     return (dummy->%s)? sizeof(%s): 0;
 }
-        ''' % (sanitized_name, type_star, type_star, owner, entry_type)
+        ''' % (sanitized_name, type_star, type_star, status_field, entry_type)
 
     dequeue_ready = r'''
 int dequeue_ready%s(void* buff) {
     %s dummy = (%s) buff;
     return (dummy->%s & FLAG_OWN)? sizeof(%s): 0;
 }
-''' % (sanitized_name, type_star, type_star, owner, entry_type)
+''' % (sanitized_name, type_star, type_star, status_field, entry_type)
 
     if checksum:
         dequeue_ready += r'''
@@ -366,14 +361,14 @@ int dequeue_ready%s_checksum(void* buff) {
   }
   return 0;
 }
-    ''' % (sanitized_name, type_star, type_star, owner, checksum, checksum_offset, entry_type)
+    ''' % (sanitized_name, type_star, type_star, status_field, checksum, checksum_offset, entry_type)
 
     dequeue_done = r'''
 int dequeue_done%s(void* buff) {
     %s dummy = (%s) buff;
     return (dummy->%s == 0)? sizeof(%s): 0;
 }
-        ''' % (sanitized_name, type_star, type_star, owner, entry_type)
+        ''' % (sanitized_name, type_star, type_star, status_field, entry_type)
 
     if entry_type not in Storage.extra_code or checksum:
         Storage.extra_code[entry_type] = enqueue_ready + enqueue_done + dequeue_ready + dequeue_done
@@ -396,6 +391,7 @@ int dequeue_done%s(void* buff) {
     copy = r'''
     int type_offset = %s;
     assert(type_offset > 0);
+    assert(p->entry_size - type_offset > 0 && p->entry_size - type_offset <= 64);
     %s content = &q->data[old];
     memcpy(content, x, type_offset);
     __SYNC;
@@ -403,7 +399,7 @@ int dequeue_done%s(void* buff) {
     content->%s = FLAG_OWN;
     %s
     __SYNC;
-    ''' % (type_offset, type_star, flush_code, owner, checksum_code)
+    ''' % (type_offset, type_star, flush_code, status_field, checksum_code)
 
     atomic_src = r'''
     __SYNC;
@@ -422,7 +418,7 @@ int dequeue_done%s(void* buff) {
         __SYNC;
     }
     %s
-    '''% (owner, owner, copy)
+    '''% (status_field, status_field, copy)
 
     init_read_cvm = r'''
         uintptr_t addr = (uintptr_t) &q->data[old];
@@ -449,7 +445,7 @@ int dequeue_done%s(void* buff) {
     memcpy(entry, x, size);
     dma_write(addr, size, entry, 1);
 #endif
-        ''' % (owner, owner)
+        ''' % (status_field, status_field)
 
     wait_then_get = r'''
     %s x = &q->data[old];
@@ -459,7 +455,7 @@ int dequeue_done%s(void* buff) {
 #endif
         __SYNC;
     }
-    ''' % (type_star, owner, owner)
+    ''' % (type_star, status_field, status_field)
 
     wait_then_get_cvm = r'''
 #ifdef DMA_CACHE
@@ -470,7 +466,7 @@ int dequeue_done%s(void* buff) {
         while(!dequeue_ready%s(entry)) dma_read_with_buf(addr, size, entry, 1);
 #endif
         %s* x = entry;
-        ''' % (sanitized_name, owner, entry_type)
+        ''' % (sanitized_name, status_field, entry_type)
 
     inc_offset = "p->offset = (p->offset + 1) %s %d;\n" % ('%', size)
 
@@ -512,7 +508,7 @@ int dequeue_done%s(void* buff) {
 #ifdef QUEUE_STAT
             else __sync_fetch_and_add(&drop[c], 1);
 #endif
-                ''' % (owner, copy, '%', size)
+                ''' % (status_field, copy, '%', size)
 
             noblock_atom = stat + r'''
     __SYNC;
@@ -531,7 +527,7 @@ int dequeue_done%s(void* buff) {
 #ifdef QUEUE_STAT
     if(!success) __sync_fetch_and_add(&drop[c], 1);
 #endif
-    ''' % (owner, '%', size, copy, owner)
+    ''' % (status_field, '%', size, copy, status_field)
 
             block_noatom = "size_t old = p->offset;\n" + wait_then_copy + inc_offset
 
@@ -548,7 +544,8 @@ int dequeue_done%s(void* buff) {
             (%s x, size_t c) = inp();
             circular_queue* p = this->cores[c];
             %s* q = p->queue;
-            ''' % (type_star, Storage.__name__)
+            assert(sizeof(q->data[0].%s) == 1);
+            ''' % (type_star, Storage.__name__, status_field)
                        + src + out_src)
 
         def impl_cavium(self):
@@ -562,7 +559,7 @@ int dequeue_done%s(void* buff) {
 #endif
         p->offset = (p->offset + 1) %s %d;
     }
-    ''' % (owner, '%', size)
+    ''' % (status_field, '%', size)
 
             noblock_atom = "size_t old = p->offset;\n" + init_read_cvm + r'''
 #ifdef DMA_CACHE
@@ -583,7 +580,7 @@ int dequeue_done%s(void* buff) {
 #endif
         }
     }
-    ''' % (owner, '%', size, owner)
+    ''' % (status_field, '%', size, status_field)
 
             block_noatom = "size_t old = p->offset;\n" + init_read_cvm + wait_then_copy_cvm + inc_offset
 
@@ -626,7 +623,7 @@ int dequeue_done%s(void* buff) {
                 x = &q->data[p->offset];
                 p->offset = (p->offset + 1) %s %d;
             }
-            ''' % (type_star, owner, '%', size)
+            ''' % (type_star, status_field, '%', size)
 
             noblock_atom = r'''
     %s x = NULL;
@@ -639,7 +636,7 @@ int dequeue_done%s(void* buff) {
         q->data[old].%s = FLAG_OWN;
       }
     }
-    ''' % (type_star, owner, '%', size, owner)
+    ''' % (type_star, status_field, '%', size, status_field)
 
             block_noatom = "size_t old = p->offset;\n" + wait_then_get + inc_offset
 
@@ -696,7 +693,7 @@ int dequeue_done%s(void* buff) {
         dma_free(entry);
 #endif
     }
-    ''' % (type_star, owner, sanitized_name, '%', size)
+    ''' % (type_star, status_field, sanitized_name, '%', size)
 
             noblock_atom = "size_t old = p->offset;\n" + init_read_cvm + r'''
     %s x = NULL;
@@ -720,7 +717,7 @@ int dequeue_done%s(void* buff) {
         dma_free(entry);
 #endif
     }
-    ''' % (type_star, sanitized_name, '%', size, owner)
+    ''' % (type_star, sanitized_name, '%', size, status_field)
 
             block_noatom = "size_t old = p->offset;\n" + init_read_cvm + wait_then_get_cvm + inc_offset
 
@@ -749,7 +746,7 @@ int dequeue_done%s(void* buff) {
             self.inp = Input(q_buffer)
 
         def impl(self):
-            set_owner = "x->%s = 0; __SYNC;" % owner
+            set_owner = "x->%s = 0; __SYNC;" % status_field
             set_checksum = "x->%s = 0; __SYNC;" % checksum if checksum else ""
 
             self.run_c(r'''
@@ -762,7 +759,7 @@ int dequeue_done%s(void* buff) {
     ''' % (type_star, type_star, set_checksum, set_owner))
 
         def impl_cavium(self):
-            set_owner = "x->%s = 0;" % owner
+            set_owner = "x->%s = 0;" % status_field
             set_checksum = "x->%s = 0;" % checksum if checksum else ""
             self.run_c(r'''
     (q_buffer buff) = inp();
@@ -782,8 +779,5 @@ int dequeue_done%s(void* buff) {
 
     return Enqueue, Dequeue, Release
 
-
-def queue_shared_head_tail(name, type, size, n_cores):
-    pass
 
 

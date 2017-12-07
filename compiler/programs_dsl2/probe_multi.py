@@ -18,7 +18,7 @@ class Choice(Element):
 inject = Inject()
 f1 = Identity(configure=[Int])
 f2 = Identity(configure=[Int])
-drop = Drop(configure=[Int])
+drop = Drop()
 
 class test(Composite):
     def spec(self):

@@ -8,7 +8,7 @@ inject = Inject()
 probe = Probe()
 f = Identity(configure=[Int])
 g = Identity(configure=[Int])
-drop = Drop(configure=[Int])
+drop = Drop()
 
 inject >> f >> g >> probe >> drop
 
