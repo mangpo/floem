@@ -7,8 +7,9 @@ cpu_include_c = ["<stdint.h>", "<stdbool.h>", "<stdio.h>", "<stdlib.h>", "<strin
 
 # device = CAVIUM, process = CAVIUM
 CAVIUM = 'CAVIUM'
-cavium_include_h = ['"cvmcs-nic.h"', '"cvmcs-queue.h"']
-cavium_include_c = ['<cvmx-atomic.h>', '"cvmcs-nic.h"', '"cvmcs-dma.h"', '"cvmcs-queue.h"', '"dma-circular-queue.h"', '"util.h"']
+cavium_include_h = ['"cvmcs-nic.h"', '"floem-queue.h"']
+cavium_include_c = ['<cvmx-atomic.h>', '"cvmcs-nic.h"',
+                    '"floem-util.h"', '"floem-dma.h"', '"floem-queue.h"', '"floem-queue-manage.h"']
 
 
 # device = CPU, process = DPDK

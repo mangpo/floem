@@ -8,8 +8,7 @@
 #ifdef CAVIUM
 #include "cvmx.h"
 #include "cvmx-atomic.h"
-#include "shared-mm.h"
-#include "util.h"
+#include "floem-util.h"
 #else
 #include <dpdkif.h>
 #endif
