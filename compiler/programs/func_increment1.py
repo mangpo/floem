@@ -1,5 +1,4 @@
-from library import *
-from compiler import Compiler
+from floem import *
 
 inc1 = Inc('inc1', configure=[Int])
 inc2 = Inc('inc2', configure=[Int])
