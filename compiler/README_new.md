@@ -1,10 +1,21 @@
+# Floem
 Floem is a DSL, compiler, runtime for NIC-accelerated network applications. Currently, the compiler can generate code for
 - a system with only a CPU with DPDK
 - a system with a CPU and Cavium LiquidIO nic
 
 The DSL is a Python Library. The library provides mechanisms to connect elements, mapping elements to hardware resources, and create function interfacess for external applications. An element itself is implemented in C. The compiler then generates C program that can be executed.
 
-# Prerequisites
+# Table of Contents
+A. [Prerequisites](#Prerequisites)
+B. [Language](#Language)
+  1. [State](#State)
+  2. [Element](#Element)
+  3. [Element Connection](#Element-Connection)
+  
+C. [Running on Cavium](#Running-on-Cavium)
+
+
+# A. Prerequisites
 
 ### Dependencies
 
@@ -23,13 +34,13 @@ export PYTHONPATH=/path/to/repo/compiler
 
 ### Import
 
-To use Floem, simply import
+To use Floem, simply import `floem` in your python program.
 
 ```python
 from floem import *
 ```
 
-# Essentials
+# B. Language
 
 ## 1. State
 
@@ -96,9 +107,7 @@ An element retrieves its input(s) by calling its input ports, e.g. `int id = inp
 
 #### Outputs
 
-An element send outputs by calling its output ports `e.g. output{ out(id); }`. The output ports can only be called within the output block `output { ... }` or `output switch { ... }`. An element must fire: (i) all its output ports, (ii) one of its output ports, or (iii) zero or one of its output ports.
-
-With an exception of a *looping* element, which can fire its only one output port many times outside the output block.
+An element sends outputs by calling its output ports `e.g. output{ out(id); }`. The output ports can only be called within the output block `output { ... }` or `output switch { ... }`. An element must fire: (i) all its output ports, (ii) one of its output ports, or (iii) zero or one of its output ports. With an exception of a *looping* element, which can fire its only one output port many times outside the output block.
 
 ##### (i) Fire all output ports
 
@@ -138,7 +147,7 @@ An output port of an element can be connected to an input port of another elemen
 a >> b >> c
 ```
 
-#### Multiple Input Ports
+### Multiple Input Ports
 If an element has multiple input ports, users must specify which port to connect explicitly.
 
 ```python
@@ -146,7 +155,7 @@ a >> c.in0
 b >> c.in1
 ```
 
-#### Multiple Output Ports
+### Multiple Output Ports
 If an element has multiple output ports, users must specify which port to connect explicitly.
 
 ```python
@@ -154,7 +163,8 @@ a.out0 >> b
 a.out1 >> c
 ```
 
-### Example 1
+
+##### Example 1
 
 An output port of an element can be connected to multiple elements.
 
@@ -163,7 +173,7 @@ a >> b
 a >> c
 ```
 
-### Example 2
+##### Example 2
 
 If `a` fires only one of its output port, either `b` or `c` will be executed (not both).
 
@@ -172,7 +182,7 @@ a.out0 >> b
 a.out1 >> c
 ```
 
-### Example 3
+##### Example 3
 
 An input port of an element can be connected from multiple elements.
 
@@ -192,13 +202,17 @@ a >> c1 >> e
 a >> c2 >> e
 ```
 
+### Type Check
+An output port `out` of an element `a` can be connected to an input port `inp` of an element `b` if their data types match. Otherwise, the compiler will throw an exception.
+
+For one special case, an output port `out` of an element `a` can also be connected to an input port `inp` of an element `b` even when their types do not match, with the condition that port `inp` must has zero argument. In this case, the element `a` simply drops arguments that supposed to be sent to the element `b`. We introduce this feature as we find it to be quite convenient.
+
 ## 4. Pipeline
 
 To execute a program, you need to assign an element to a *pipeline* to run. A pipeline is a set of connected elements that starts from a *source element* and ends at leaf elements (elements with no output ports) or queues. Packet handoff along a pipeline is initiated by the source element pushing a packet to subsequent elements. 
 
 ### 4.1 Normal Pipeline
-By default, a pipeline is executed by one dedicated thread on a device, so elements within a pipeline run sequentially with respect to packet-flow dependencies. 
-To create a pipeline and make the pipeline runs elements `a >> b` sequentially, write
+By default, a pipeline is executed by one dedicated thread on a device, so elements within a pipeline run sequentially with respect to packet-flow dependencies. To create a pipeline and make the pipeline runs elements `a >> b` sequentially, write
 
 ```python
 class P(Pipeline):
@@ -208,7 +222,7 @@ class P(Pipeline):
 P('pipeline_name')
 ```
 
-A thread starts invoke the source node (an element that doesn't has any data dependency). Then, the rest of the elements are executed in a topological order according to the dataflow. A thread repeats the execution of the pipeline forever. If an element assigned to a pieline is unreachable (no data dependency) from the source element, the compiler will throw an error. 
+A thread starts invoke the source node (an element that doesn't has any data dependency). Then, the rest of the elements are executed in a topological order according to the dataflow. A thread repeats the execution of the pipeline forever. If an element assigned to a pieline is unreachable (no data dependency) from the source element, the compiler will throw an error. In the current implementation, if there is no dependency between elements `x` and `y` according to the dataflow, `x` is executed before `y` if `x` appears before `y` in the program.
 
 ##### Compile and Run
 To compile all the defined pipelines into an executable file, add the following code in your program:
@@ -320,6 +334,15 @@ Note that multiple pipelines can be compiled into one file; the file name is ind
 
 **See xxx for an example.**
 
+
+##### Default Return
+If a callable pipeline has a return value, but the pipeline may not produce a return value because one or more elements in the pipeline may not fire its output ports, users have to provide a default return value to be used as the return value when the returning element of the API does not produce the return value. The default return value can be provided by assigning the default value to 
+- the field `self.default_return = val` of the pipeline class, or
+- the parameter `default_return` when instantiating the pipeline `pipeline_class(pipeline_name, default_return=val)`
+
+**See xxx for an exmaple.**
+
+
 ### 4.3 run_order
 
 If there are multiple source elements in a pipeline, we have to choose which source element is the starting element of the pipeline, and explicitly create dependency for the other source elements. For example, if we have `a >> b` and `c >> d`, and both `a` and `c` are source elements. We want `a` to be the starting element, and make `c` run after `b`. We can specify this intent using `run_order` as follows:
@@ -331,21 +354,66 @@ class P(Pipeline):
      run_order(b, c)  # run b before c
 ```
 
-### 4.4 Default Return
-If a callable pipeline has a return value, but the pipeline may not produce a return value because one or more elements in the pipeline may not fire its output ports, users have to provide a default return value to be used as the return value when the returning element of the API does not produce the return value. The default return value can be provided by assigning the default value to 
-- the field `self.default_return = val` of the pipeline class, or
-- the parameter `default_return` when instantiating the pipeline `pipeline_class(pipeline_name, default_return=val)`
-**See xxx for an exmaple.**
+In the scenario where there are multiple leaf nodes `l1`, `l1`, ..., `ln` reachable from the starting element, and only one of them will be executed per one packet, we write:
+```python
+run_order([l1, l2, ..., ln], c)  # run c after either l1, l2, .., or ln
+```
 
-### 4.5 Mapping to Device
+### 4.4 Mapping to Device
 By default, a pipeline is executed by one dedicated thread on a CPU. We can map a pipeline to a Cavium NIC by assinging the parameter `device` of the pipeline to `target.CAVIUM`: `pipeline_class(pipeline_name, device=target.CAVIUM)`
 
-### 4.6 Mapping to Multiple Threads
+### 4.5 Mapping to Multiple Threads
 By default, a pipeline is executed by one dedicated thread on a CPU, or one dedicated core on a Cavium NIC. We can run a pipeline on mutiple threads/cores in parallel by assigning parameter `cores` to a list of thread/core ids. For example, `pipeline_class(pipeline_name, device=target.CAVIUM, cores=[0,1,2,3])` runs this pipeline using cores 0--3 on Cavium.
 
 On CPU, we can use an unlimited number of threads. Floem relies on an OS to schedule which threads to run. On Cavium, valid core ids are 0 to 11, as there are 12 cores on Cavium. Assigning the same core id to multiple pipelines leads to undefined behaviors.
 
-## 7. Composite Element
+## 5. Multi-Queue
+
+### 5.1 Basic Queue
+```python
+import queue
+```
+
+##### Default Queue
+
+##### Custom Queue
+
+### 5.2 Smart Queue
+```python
+import queue_smart
+```
+- Compiler infers what to be sent across a queue.
+- Granularity that the compiler considers
+- Byte reorder
+- Compile to the default queue
+
+## 6. State
+
+### 6.1 Persistent State
+
+### 6.2 Flow and Per-Packet State
+
+## 7. Network Elements
+```python
+import queue_smart
+```
+### FromNet
+
+### FromNetFree
+
+### NetAlloc
+
+### ToNet
+
+### Example
+
+## 8. Other Library Elements
+```python
+import library
+```
+
+
+## 9. Composite Element
 
 A composite element is a collection of smaller elements. Unlike a primitive element, the entire composite element may not be executed all at once. For example, a composite element is composed of two different independent elements `a` and `b`; the input to `a` does not come from `b`, and vice versa. In such case, when the input to `a` is ready, `a` is executed; when the input to `b` is ready, `b` is executed; they don't depend on each other. However, normally elements that compose a composite element usally related to each other in some way. For example, a composite element `queue` may be composed from `enqueue` and `dequeue` elements, which share a state storing queue content.
 
@@ -374,31 +442,9 @@ queue = Queue()
 a >> queue >> b
 ```
 
-### 7.1 Mapping Composite to One Thread
-
-If we want to map all elements inside a composite (e.g. `compo`) to one thread (e.g. `t1`), we can simply run `t1.run(compo)`.
-
-### 7.2 Mapping Composite to Multiple Threads
-
-TODO
-
-## 8. Testing Facilities
-
-This section describes elements and features that may be handy for testing your programs.
-
-## 9. Provided Elements
-
-### 9.1 Queue
-
-See `queue2.py`
-
-### 9.2 FROM_NET/TO_NET
-
-See `net2.py`
-
-## 10. Field Extraction
-
 ## 11. Example Application: Memcached
 ## 12. Example Application: Storm
-See `storm_queue/main_socket_local2.py`. Using unix TCP sockets for communication.
+
+# C. Running on Cavium
+
 
