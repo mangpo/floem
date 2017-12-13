@@ -1,6 +1,6 @@
 from dsl import *
 from compiler import Compiler
-import net_real, library, queue_smart
+import net, library, queue_smart
 
 n_cores = 9
 miss_every = 10
@@ -744,9 +744,9 @@ state.core = cvmx_get_core_num();
         class nic_tx(Pipeline):
             def impl(self):
                 scheduler = main.Scheduler()
-                to_net = net_real.ToNet('to_net', configure=['from_net'])
+                to_net = net.ToNet('to_net', configure=['from_net'])
                 display = main.PrintMsg()
-                hton = net_real.HTON(configure=['iokvs_message'])
+                hton = net.HTON(configure=['iokvs_message'])
                 extract_pkt = main.ExtractPkt()
 
                 scheduler >> tx_deq
@@ -756,14 +756,14 @@ state.core = cvmx_get_core_num();
         ######################## NIC Rx #######################
         class process_one_pkt(Pipeline):
             def impl(self):
-                from_net = net_real.FromNet('from_net')
-                from_net_free = net_real.FromNetFree('from_net_free')
-                to_net = net_real.ToNet('to_net', configure=['from_net'])
+                from_net = net.FromNet('from_net')
+                from_net_free = net.FromNetFree('from_net_free')
+                to_net = net.ToNet('to_net', configure=['from_net'])
                 classifier = main.Classifer()
                 check_packet = main.CheckPacket()
                 cache = main.CacheSimulator()
-                hton1 = net_real.HTON(configure=['iokvs_message'])
-                hton2 = net_real.HTON(configure=['iokvs_message'])
+                hton1 = net.HTON(configure=['iokvs_message'])
+                hton2 = net.HTON(configure=['iokvs_message'])
 
                 prepare_header = main.PrepareHeader()
                 display = main.PrintMsg()

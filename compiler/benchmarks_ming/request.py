@@ -1,6 +1,6 @@
 from dsl import *
 from compiler import Compiler
-import target, queue, net_real, library
+import target, queue, net, library
 
 
 class Request(Element):
@@ -119,8 +119,8 @@ output { out(pkt, buff); }
 
 class gen(Pipeline):
     def impl(self):
-        net_alloc = net_real.NetAlloc()
-        to_net = net_real.ToNet(configure=["net_alloc"])
+        net_alloc = net.NetAlloc()
+        to_net = net.ToNet(configure=["net_alloc"])
 
         library.Constant(configure=[80]) >> net_alloc
         net_alloc.oom >> library.Drop()
@@ -128,8 +128,8 @@ class gen(Pipeline):
 
 class recv(Pipeline):
     def impl(self):
-        from_net = net_real.FromNet()
-        free = net_real.FromNetFree()
+        from_net = net.FromNet()
+        free = net.FromNetFree()
 
         from_net.nothing >> library.Drop()
 

@@ -1,5 +1,5 @@
 from dsl import *
-import net_real
+import net
 from compiler import Compiler
 
 
@@ -73,9 +73,9 @@ class Drop(Element):
 
 class run(Pipeline):
     def impl(self):
-        from_net = net_real.FromNet()
-        from_net_free = net_real.FromNetFree()
-        hton = net_real.HTON(configure=['iokvs_message'])
+        from_net = net.FromNet()
+        from_net_free = net.FromNetFree()
+        hton = net.HTON(configure=['iokvs_message'])
 
         from_net.out >> hton >> Display() >> from_net_free
         from_net.nothing >> Drop()

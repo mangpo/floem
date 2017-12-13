@@ -1,6 +1,6 @@
 from dsl import *
 from compiler import Compiler
-import net_real
+import net
 
 n_cores = 1
 
@@ -610,13 +610,13 @@ output { out(msglen, (void*) m, buff); }
         ######################## NIC Rx #######################
         class process_one_pkt(Pipeline):
             def impl(self):
-                from_net = net_real.FromNet('from_net')
-                from_net_free = net_real.FromNetFree('from_net_free')
-                to_net = net_real.ToNet('to_net', configure=['from_net'])
+                from_net = net.FromNet('from_net')
+                from_net_free = net.FromNetFree('from_net_free')
+                to_net = net.ToNet('to_net', configure=['from_net'])
                 classifier = main.Classifer()
                 check_packet = main.CheckPacket()
-                hton1 = net_real.HTON(configure=['iokvs_message'])
-                hton2 = net_real.HTON(configure=['iokvs_message'])
+                hton1 = net.HTON(configure=['iokvs_message'])
+                hton2 = net.HTON(configure=['iokvs_message'])
 
                 prepare_header = main.PrepareHeader()
                 display = main.PrintMsg()

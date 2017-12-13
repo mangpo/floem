@@ -1,6 +1,6 @@
 from dsl import *
 from compiler import Compiler
-import target, queue, net_real, library, queue_smart
+import target, queue, net, library, queue_smart
 
 n_cores = 1
 nic_cores = 1
@@ -78,8 +78,8 @@ class main(Flow):
 
         class nic_rx(Pipeline):
             def impl(self):
-                from_net = net_real.FromNet()
-                to_net = net_real.ToNet()
+                from_net = net.FromNet()
+                to_net = net.ToNet()
 
                 from_net.nothing >> library.Drop()
 

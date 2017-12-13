@@ -1,5 +1,5 @@
 from dsl import *
-import net_real
+import net
 import target
 from compiler import Compiler
 
@@ -60,7 +60,7 @@ class ReadCounter(Element):
 
 class NICRx(Pipeline):
     def impl(self):
-        net_real.FromNet() >> Counter() >> net_real.FromNetFree()
+        net.FromNet() >> Counter() >> net.FromNetFree()
 
 
 class GetCount(CallablePipeline):

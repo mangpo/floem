@@ -1,6 +1,6 @@
 from dsl import *
 from compiler import Compiler
-import target, queue, net_real, library
+import target, queue, net, library
 
 MAX_ELEMS = 64
 n_cores = 1
@@ -126,8 +126,8 @@ class DropSize(Element):
 
 class nic_rx(Pipeline):
     def impl(self):
-        from_net = net_real.FromNet()
-        from_net_free = net_real.FromNetFree()
+        from_net = net.FromNet()
+        from_net_free = net.FromNetFree()
         enq = Enq()
         make_tuple = MakeTuple()
         free = Free()

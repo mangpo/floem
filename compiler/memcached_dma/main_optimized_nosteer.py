@@ -1,5 +1,5 @@
 from dsl import *
-import queue_smart, net_real, library
+import queue_smart, net, library
 from compiler import Compiler
 
 n_cores = 1
@@ -973,9 +973,9 @@ output switch { case segment: out(); else: null(); }
         ######################## NIC Rx #######################
         class nic_rx(Pipeline):
             def impl(self):
-                from_net = net_real.FromNet('from_net')
-                from_net_free = net_real.FromNetFree('from_net_free')
-                to_net = net_real.ToNet('to_net', configure=['from_net'])
+                from_net = net.FromNet('from_net')
+                from_net_free = net.FromNetFree('from_net_free')
+                to_net = net.ToNet('to_net', configure=['from_net'])
 
                 #from_net = main.FromNet()
                 #from_net_free = main.FromNetFree()
@@ -983,8 +983,8 @@ output switch { case segment: out(); else: null(); }
 
                 classifier = main.Classifer()
                 check_packet = main.CheckPacket()
-                hton1 = net_real.HTON(configure=['iokvs_message'])
-                hton2 = net_real.HTON(configure=['iokvs_message'])
+                hton1 = net.HTON(configure=['iokvs_message'])
+                hton2 = net.HTON(configure=['iokvs_message'])
 
                 # from_net
                 from_net.nothing >> main.Drop()
@@ -1060,9 +1060,9 @@ output switch { case segment: out(); else: null(); }
         class nic_tx(Pipeline):
             def impl(self):
                 scheduler = main.Scheduler()
-                to_net = net_real.ToNet('to_net', configure=['from_net'])
+                to_net = net.ToNet('to_net', configure=['from_net'])
                 display = main.PrintMsg()
-                hton = net_real.HTON(configure=['iokvs_message'])
+                hton = net.HTON(configure=['iokvs_message'])
                 extract_pkt = main.ExtractPkt()
 
                 self.core_id >> scheduler >> tx_deq

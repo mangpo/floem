@@ -1,5 +1,5 @@
 from dsl import *
-import queue_smart, net_real
+import queue_smart, net
 from compiler import Compiler
 
 class MyState(State):
@@ -100,8 +100,8 @@ class main(Flow):
 
     class push(Pipeline):
         def impl(self):
-            from_net = net_real.FromNet()
-            from_net_free = net_real.FromNetFree()
+            from_net = net.FromNet()
+            from_net_free = net.FromNetFree()
 
             from_net.out >> main.Save() >> main.Enq()
             from_net.out >> main.DisplayPacket() >> from_net_free

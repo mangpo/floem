@@ -1,5 +1,5 @@
 from dsl import *
-import net_real
+import net
 from compiler import Compiler
 
 class DisplayPacket(Element):
@@ -31,9 +31,9 @@ class Drop(Element):
 
 class test(Pipeline):
     def impl(self):
-        from_net = net_real.FromNet('from_net')
+        from_net = net.FromNet('from_net')
         from_net.out >> DisplayPacket('print_packet') >> \
-                net_real.FromNetFree('from_net_free')
+        net.FromNetFree('from_net_free')
         from_net.nothing >> Drop('drop')
 
 test('test', process='dpdk')

@@ -1,6 +1,6 @@
 from dsl import *
 from compiler import Compiler
-import target, queue, net_real, library
+import target, queue, net, library
 
 class Filter(Element):
 
@@ -155,9 +155,9 @@ output { out(pkt_len, pkt_ptr, buff); }
 
 class nic_rx(Pipeline):
     def impl(self):
-        from_net = net_real.FromNet()
-        to_net = net_real.ToNet()
-        net_free = net_real.FromNetFree()
+        from_net = net.FromNet()
+        to_net = net.ToNet()
+        net_free = net.FromNetFree()
         filter = Filter()
         classify = Classify()
         reply = Reply()

@@ -1,6 +1,6 @@
 from dsl import *
 from compiler import Compiler
-import net_real, library
+import net, library
 import queue_smart
 
 n_cores = 1
@@ -60,8 +60,8 @@ class main(Flow):
 
         class nic_rx(Pipeline):
             def impl(self):
-                from_net = net_real.FromNet()
-                from_net_free = net_real.FromNetFree()
+                from_net = net.FromNet()
+                from_net_free = net.FromNetFree()
 
                 from_net >> MakeKey() >> rx_enq.inp[0]
                 rx_enq.done >> GetPktBuff() >> from_net_free

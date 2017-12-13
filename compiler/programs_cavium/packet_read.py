@@ -1,4 +1,4 @@
-import net_real, target
+import net, target
 from dsl import *
 from compiler import Compiler
 
@@ -54,11 +54,11 @@ class PreparePkt(Element):
     output { out(14 + 20 + 8 + 16, pkt_ptr, buf); }
         ''')
 
-from_net = net_real.FromNet()
-from_net_free = net_real.FromNetFree()
-net_alloc = net_real.NetAlloc()
-net_alloc_free = net_real.NetAllocFree()
-to_net = net_real.ToNet()
+from_net = net.FromNet()
+from_net_free = net.FromNetFree()
+net_alloc = net.NetAlloc()
+net_alloc_free = net.NetAllocFree()
+to_net = net.ToNet()
 
 class test(Pipeline):
     def impl(self):

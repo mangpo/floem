@@ -1,4 +1,4 @@
-import queue, net_real
+import queue, net
 from dsl import *
 from compiler import Compiler
 
@@ -777,8 +777,8 @@ class NicRxFlow(Flow):
     state = PerPacket(RxState)
 
     def impl(self):
-        from_net = net_real.FromNet()
-        from_net_free = net_real.FromNetFree()
+        from_net = net.FromNet()
+        from_net_free = net.FromNetFree()
         class nic_rx(Pipeline):
 
             def impl_basic(self):
@@ -788,8 +788,8 @@ class NicRxFlow(Flow):
                 from_net.nothing >> Drop()
 
             def impl(self):
-                network_alloc = net_real.NetAlloc()
-                to_net = net_real.ToNet(configure=["alloc", True])
+                network_alloc = net.NetAlloc()
+                to_net = net.ToNet(configure=["alloc", True])
                 classifier = Classifier()
                 rx_enq = rx_enq_creator()
                 tx_buf = GetTxBuf(configure=['sizeof(struct pkt_dccp_ack_headers)'])
@@ -873,8 +873,8 @@ class NicTxFlow(Flow):
 
     def impl(self):
         tx_release = tx_release_creator()
-        network_alloc = net_real.NetAlloc()
-        to_net = net_real.ToNet(configure=["alloc", True])
+        network_alloc = net.NetAlloc()
+        to_net = net.ToNet(configure=["alloc", True])
 
         tx_buf = GetTxBuf(configure=['sizeof(struct pkt_dccp_headers) + sizeof(struct tuple)'])
         size_pkt = SizePkt(configure=['sizeof(struct pkt_dccp_headers) + sizeof(struct tuple)'])

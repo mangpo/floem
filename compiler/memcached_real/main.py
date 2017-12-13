@@ -1,5 +1,5 @@
 from dsl import *
-import queue_smart, net_real
+import queue_smart, net
 from compiler import Compiler
 import library
 
@@ -784,13 +784,13 @@ output switch { case segment: out(); else: null(); }
         ######################## NIC Rx #######################
         class nic_rx(Pipeline):
             def impl(self):
-                from_net = net_real.FromNet('from_net')
-                from_net_free = net_real.FromNetFree('from_net_free')
-                to_net = net_real.ToNet('to_net', configure=['from_net'])
+                from_net = net.FromNet('from_net')
+                from_net_free = net.FromNetFree('from_net_free')
+                to_net = net.ToNet('to_net', configure=['from_net'])
                 classifier = main.Classifer()
                 check_packet = main.CheckPacket()
-                hton1 = net_real.HTON(configure=['iokvs_message'])
-                hton2 = net_real.HTON(configure=['iokvs_message'])
+                hton1 = net.HTON(configure=['iokvs_message'])
+                hton2 = net.HTON(configure=['iokvs_message'])
 
                 # from_net
                 from_net.nothing >> main.Drop()
@@ -865,13 +865,13 @@ output switch { case segment: out(); else: null(); }
         class nic_tx(Pipeline):
             def impl(self):
                 scheduler = main.Scheduler()
-                to_net = net_real.ToNet('to_net', configure=['alloc'])
-                net_alloc0 = net_real.NetAlloc('net_alloc0')
-                net_alloc1 = net_real.NetAlloc('net_alloc1')
-                net_alloc3 = net_real.NetAlloc('net_alloc3')
+                to_net = net.ToNet('to_net', configure=['alloc'])
+                net_alloc0 = net.NetAlloc('net_alloc0')
+                net_alloc1 = net.NetAlloc('net_alloc1')
+                net_alloc3 = net.NetAlloc('net_alloc3')
                 prepare_header = main.PrepareHeader()
                 display = main.PrintMsg()
-                hton = net_real.HTON(configure=['iokvs_message'])
+                hton = net.HTON(configure=['iokvs_message'])
                 drop = main.Drop()
 
                 self.core_id >> scheduler >> tx_deq

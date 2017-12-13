@@ -1,6 +1,6 @@
 from dsl import *
 from compiler import Compiler
-import net_real, library
+import net, library
 
 n_cores = 1
 
@@ -64,8 +64,8 @@ update_param(m->pool, m->param);
 
 class run(Pipeline):
     def impl(self):
-        from_net = net_real.FromNet()
-        to_net = net_real.ToNet()
+        from_net = net.FromNet()
+        to_net = net.ToNet()
 
         from_net.nothing >> library.Drop()
 

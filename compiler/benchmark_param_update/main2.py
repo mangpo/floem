@@ -1,6 +1,6 @@
 from dsl import *
 from compiler import Compiler
-import net_real, library
+import net, library
 
 n_cores = 1
 
@@ -93,11 +93,11 @@ class main(Flow):
 
         class run(Pipeline):
             def impl(self):
-                from_net = net_real.FromNet()
+                from_net = net.FromNet()
                 update = Update()
-                to_net1 = net_real.ToNet(configure=["from_net"])
-                to_net2 = net_real.ToNet(configure=["alloc"])
-                net_alloc = net_real.NetAlloc()
+                to_net1 = net.ToNet(configure=["from_net"])
+                to_net2 = net.ToNet(configure=["alloc"])
+                net_alloc = net.NetAlloc()
                 copy = Copy()
                 fork = Fork()
 
