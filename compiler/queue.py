@@ -118,7 +118,7 @@ def queue_default(name, entry_size, size, insts,
     :param clean: True if queue entry needs to be cleaned before being enqueued again.
     :param qid_output: True if dequeue get element should return queue instance id.
     :param checksum: True to enable checksum.
-    :return:
+    :return: EnqueueAlloc, EnqueueSubmit, DequeueGet, DequeueRelease, clean_inst
     """
 
     prefix = name + "_"
@@ -149,7 +149,7 @@ def queue_default(name, entry_size, size, insts,
                             deqext="_checksum" if checksum else "", declare=False, enq_lock=enq_atomic,
                             deq_lock=deq_atomic)  # TODO: scan => clean
 
-    class EnqueueAlloc(Element):
+    class EnqueueReserve(Element):
         this = Persistent(enq_all.__class__)
         def states(self): self.this = enq_all
 
@@ -282,12 +282,12 @@ def queue_default(name, entry_size, size, insts,
                             dequeue_release(buf, 0);
                             ''')
 
-    EnqueueAlloc.__name__ = prefix + EnqueueAlloc.__name__
+    EnqueueReserve.__name__ = prefix + EnqueueReserve.__name__
     EnqueueSubmit.__name__ = prefix + EnqueueSubmit.__name__
     DequeueGet.__name__ = prefix + DequeueGet.__name__
     DequeueRelease.__name__ = prefix + DequeueRelease.__name__
 
-    return EnqueueAlloc, EnqueueSubmit, DequeueGet, DequeueRelease, clean_inst
+    return EnqueueReserve, EnqueueSubmit, DequeueGet, DequeueRelease, clean_inst
 
 
 def queue_custom(name, entry_type, size, insts, status_field, checksum=False,

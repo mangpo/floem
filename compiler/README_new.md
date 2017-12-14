@@ -72,7 +72,16 @@ Input and output ports are defined in `configure` method.
 ```
 self.<port_name> = [Input | Output](arg_type0, arg_type1, ...)
 ```
-Available data types are `Bool`, `Int` `SizeT` (uint64_t), `Void`, `Double`, `Float` (see `compiler/state.py` for a complete list), and [user-defined states](#State) (which are essentially C structs). To refer to a struct type in a C header file defined outside Floem, users can simply use string. For example, `self.inp = Input("struct tuple *")` is an input port that accepts a pointer to `struct tuple` defined outside Floem.
+
+##### Data Type
+Provided data types are 
+- `Void` (void), `Bool` (bool), `Int` (int), `SizeT` (size_t), `Float` (float), and `Double` (double)
+- `Uint(<bits>)` represents uint<bits>_t
+- `Sint(<bits>)` represents int<bits>_t
+- `Pointer(<type>)` represents pointer of <type>
+- `Array(<type>, <size>)` represents array of <type> with size <size>
+
+Users can create a composite data type (struct) using [State](#State). To refer to a struct in a C header file defined outside Floem, users can simply use string. For example, `self.inp = Input("struct tuple *")` is an input port that accepts a pointer to `struct tuple` defined outside Floem.
 
 **See xxx as an example when data type is a state defined using Floem.**
 **See xxx as an exmpale when data type is a struct defined outside Floem.** 
@@ -468,17 +477,192 @@ class MyState(State):
 ```
 
 
-
 ## 5. Multi-Queue
 
-### 5.1 Basic Queue
+A multi-queue, or a logical queue, is a special kind of element. It differs from other elements in the sense that, once it receives a packet, it may not push the packet out to the next element right away; the packet is instead stored inside the queue until the dequeue is invoked. A queue is used to connect and send data from one pipeline to another, either between devices or within the same device. A queue connecting pipelines on the same device can be used as a temporary storage.
+
+### 5.1 Primitive Queue
+
+Floem supports two kinds of primitive multi-queues: a default queue and a custom queue.
+
+##### A. Default Queue (not recommended as it is hard to use)
 ```python
 import queue
+queue.queue_default(name, entry_size, size, insts, checksum=False,
+                    enq_blocking=False, deq_blocking=False, enq_atomic=False, deq_atomic=False,
+                    clean=False, qid_output=False)
+return (EnqueueReserve, EnqueueSubmit, DequeueGet, DequeueRelease, clean_inst)
+```
+**Usage Summary**
+*Enqueuing Routine:*
+- Reserve an available queue entry (`EnqueueReserve`)
+- Construct the queue entry in-place (user-defined elements)
+- Submit the queue when finish constructing (`EnqueueSubmit`)
+- Optionally, clean an old queue entry before enqueuing a new one (`clean_inst` and user-defined elements in its subgraph)
+ 
+*Dequeuing Routine:*
+- Get a ready queue entry (`DequeueGet`)
+- Process the entry (user-defined elements)
+- Release the entry (`DequeueRelease`)
+
+**Requirements**
+An entry of a default queue must be:
+```python
+def entry_t(State):
+  flag = Field(Uint(8))
+  task = Field(Uint(8))
+  len  = Field(Uint(16))
+  checksum = Field(Uint(8))
+  pad  = Field(Uint(8))
+  # and other fields for actual content
+  layout = [flag, task, len, checksu, pad, ...]
+```
+or in C struct format:
+```C
+typedef struct {
+    uint8_t flag;
+    uint8_t task;
+    uint16_t len;
+    uint8_t checksum;
+    uint8_t pad;
+    // and other fields for actual content
+} __attribute__((packed)) entry_t;
+```
+Users are responsible to fill in the content of an entry at the right location, and must not mutate the other fields except the task field.
+
+**Parameters**
+- `name`: name of the queue
+- `entry_size`: maximum size of an entry in bytes (For performance, entry_size should be multiple of 64 bytes.)
+- `size`: number of entries in each physical queue instance
+- `insts`: number of physical queue instances
+- `checksum`: when `True`, checksum is enabled. **`checksum` must be set to `True` for a queue from a CPU to a Cavium NIC, whose `entry_size` > 64 bytes.**
+- `enq_blocking`: when `True` the enqueue routine gaurantees to succesfully enqueue every entry, which requires blocking (waiting) when the queue is full.
+- `deq_blocking`: when `True`, the dequeue routine always returns an entry with content. When `False`, it will returns NULL when the queue is empty.
+- `enq_atomic`: when `True`, the enqueue routine is atomic. If multiple threads may enqueue to the same queue instance, `enq_atomic` should be set to `True`.
+- `deq_atomic`: when `True`, the dequeue routine is atomic. If multiple threads may dequeue from the same queue instance, `deq_atomic` should be set to `True`.
+- `clean`: when `True`, the enqueue routine cleans up an entry before enqueueing a new one.
+- `qid_output`: when `True`, DequeueGet element class outputs qid.
+
+**Returns**
+`EnqueueReserve`: element class to reserve the next emptry entry.
+| Port | Port type | Argument (datatype) | Argument description |
+| ------ | ------ | ------ | ------ |
+| inp | input | entry size (size_t) | size of entry (should not exceed queue's maximum entry size) |
+|  |  | qid (size_t) | queue instance id (valid qids are 0 to `insts-1`) |
+| out | output | entry_buffer (q_buffer) | queue entry with some metadata. entry_buffer.entry is a pointer to an actual entry. |
+
+`EnqueueSubmit`: element class to submit a queue entry when finish filling in the content.
+| Port | Port type | Argument (datatype) | Argument description |
+| ------ | ------ | ------ | ------ |
+| inp | input | entry_buffer (q_buffer) | queue entry |
+
+`DequeueGet`: element class to get the next ready entry when `qid_output=False`.
+| Port | Port type | Argument (datatype) | Argument description |
+| ------ | ------ | ------ | ------ |
+| inp | input | qid (size_t) | queue instance id |
+| out | output | entry_buffer (q_buffer) | queue entry |
+
+`DequeueGet`: element class to get the next ready entry when `qid_output=True`.
+| Port | Port type | Argument (datatype) | Argument description |
+| ------ | ------ | ------ | ------ |
+| inp | input | qid (size_t) | queue instance id |
+| out | output | entry_buffer (q_buffer) | queue entry |
+|  |  | qid (size_t) | queue instance id |
+
+`DequeueRelease`: element class to release a queue entry when working on the entry.
+| Port | Port type | Argument (datatype) | Argument description |
+| ------ | ------ | ------ | ------ |
+| inp | input | entry_buffer (q_buffer) | queue entry |
+
+`clean_inst`: element (not element class) that starts the process for cleaning a queue entry. The subgraph rooted at `clean_inst` is the cleaning routine.
+| Port | Port type | Argument (datatype) | Argument description |
+| ------ | ------ | ------ | ------ |
+| out | output | entry_buffer (q_buffer) | queue entry |
+
+**Example Usage**
+```python
+EnqReserve, EnqSubmit, DeqGet, DeqRelease, clean = \
+    queue.queue_default("myqueue", 32, 16, 4, clean=True)
+    
+'''
+Creating enqueue function involves
+1. reserve a queue entry (using EnqueueReserve)
+2. fill the queue entry (using user-defined elements)
+3. submit the queue entry (using EnqueueReserve)
+4. cleaning the old entry (using clean). (This is optional.)
+'''
+class enqueue(CallablePipeline):
+    def configure(self):
+        self.inp  = Input(Int, SizeT)  # val, core
+
+    def impl(self):
+        # Create elements
+        compute_core = ComputeCore(); fill_entry = FillEntry();
+        enq_reserve = EnqReserve(); enq_submit = EnqSubmit();
+        display = Display();
+        
+        # Enqueuing routine
+        self.inp >> compute_core
+        compute_core.size_qid >> enq_reserve >> fill_entry.size_qid
+        compute_core.val >> fill_entry.size_qid
+        fill_entry >> enq_submit
+
+        # Cleaning routine (display old content before enqueuing a new entry)
+        clean >> display
+        
+'''
+Creating dequeue function involves
+1. get a ready queue entry (using DequeueGet)
+2. process the queue entry (using user-defined elements)
+3. release the queue entry (using DequeueRelease)
+'''
+class dequeue(CallablePipeline):
+    def configure(self):
+        self.inp = Input(SizeT)
+
+    def impl(self):
+        self.inp >> DeqGet() >> Display() >> DequeueRelease()
+```
+**See `compile/programs/queue_variable_size.py` for a full example.**
+
+##### B. Custom Queue
+
+```python
+import queue
+queue.queue_custom(name, entry_type, size, insts, status_field, checksum=False,
+                   enq_blocking=False, deq_blocking=False, enq_atomic=False, deq_atomic=False,
+                   enq_output=False)
+return (Enqueue, DequeueGet, DequeueRelease)
 ```
 
-##### Default Queue
+**Usage Summary**
+*Enqueuing Routine:*
+- Construct a queue entry (user-defined elements)
+- Copy the built queue entry into the queue (`Enqueue`)
+ 
+*Dequeuing Routine:*
+- Get a ready queue entry (`DequeueGet`)
+- Process the entry (user-defined elements)
+- Release the entry (`DequeueRelease`)
 
-##### Custom Queue
+**Requirements**
+Unlike that of the default queue, the fields of an entry of a custom queue is not fixed. However, the entry must meet the following requirements.
+- An entry must contain a field (with any name) for storing an entry's status. This field should come after the other fields in an entry.
+- If checksum is enabled, an entry must contain a field (with any name) of type uint8_t for storing checksum. This field should come after the status field.
+- It is recommended for performance that an entry's size is 32 bytes or a multiple of 64 bytes. Therefore, if the struct/state representing an entry is not 32 bytes or a multiple of 64 bytes, it should be padded. The padding can come after the status and checksum fields.
+
+**Parameters**
+- `name`: name of the queue
+- `entry_type`: entry type
+- `size`: number of entries in each physical queue instance
+- `insts`: number of physical queue instances
+- `status_field`: name of the status field in an entry type
+- `checksum`: name of the checksum field in an entry type. When `checksum` is `False`, checksum is disabled. **Checksum must be enabled for a queue from a CPU to a Cavium NIC, whose `entry_size` > 64 bytes.**
+- `enq_blocking`: when `True` the enqueue routine gaurantees to succesfully enqueue every entry, which requires blocking (waiting) when the queue is full.
+- `deq_blocking`: when `True`, the dequeue routine always returns an entry with content. When `False`, it will returns NULL when the queue is empty.
+- `enq_atomic`: when `True`, the enqueue routine is atomic. If multiple threads may enqueue to the same queue instance, `enq_atomic` should be set to `True`.
+- `deq_atomic`: when `True`, the dequeue routine is atomic. If multiple threads may dequeue from the same queue instance, `deq_atomic` should be set to `True`.
+- `enq_output`: when `True`, `Enqueue` element class outputs the entry being copied to the queue.
 
 ### 5.2 Smart Queue
 ```python
