@@ -4,7 +4,7 @@ from compiler import Compiler
 
 class Display(Element):
     def configure(self):
-        self.inp = Input(Size, 'void *', 'void *')
+        self.inp = Input(SizeT, 'void *', 'void *')
         self.out = Output('void *', 'void *')
 
     def impl(self):
@@ -25,7 +25,7 @@ output { out(p, buff); }
 
 class Const(Element):
     def configure(self):
-        self.out = Output(Size)
+        self.out = Output(SizeT)
 
     def impl(self):
         self.run_c("output { out(14 + 20 + 8 + 16); }")
@@ -40,7 +40,7 @@ class Drop(Element):
 class PreparePkt(Element):
     def configure(self):
         self.inp = Input("void *", "void *")
-        self.out = Output(Size, "void *", "void *")  # size, dest_port, packet, buffer
+        self.out = Output(SizeT, "void *", "void *")  # size, dest_port, packet, buffer
 
     def impl(self):
         self.run_c(r'''

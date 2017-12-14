@@ -5,8 +5,8 @@ import target, queue, net, library
 
 class Request(Element):
     def configure(self):
-        self.inp = Input(Size, "void*", "void*")
-        self.out = Output(Size, "void*", "void*")
+        self.inp = Input(SizeT, "void*", "void*")
+        self.out = Output(SizeT, "void*", "void*")
 
     def impl(self):
         self.run_c(r'''
@@ -40,8 +40,8 @@ output { out(size, pkt, buff); }
         ''')
 
 class Stat(State):
-    count = Field(Size)
-    lasttime = Field(Size)
+    count = Field(SizeT)
+    lasttime = Field(SizeT)
 
     def init(self):
         self.count = 0
@@ -51,7 +51,7 @@ class Recieve(Element):
     this = Persistent(Stat)
 
     def configure(self):
-        self.inp = Input(Size, "void*", "void*")
+        self.inp = Input(SizeT, "void*", "void*")
         self.out = Output("void*", "void*")
 
     def states(self):

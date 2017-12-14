@@ -45,19 +45,19 @@ class item(State):
     def init(self): self.declare = False
 
 class MyState(State):
-    pkt = Field(Pointer(iokvs_message), copysize='state.pkt_size')
+    pkt = Field(Pointer(iokvs_message), size='state.pkt_size')
     pkt_buff = Field('void*')
-    pkt_size = Field(Size)
+    pkt_size = Field(SizeT)
     it = Field(Pointer(item), shared='data_region')
     hash = Field(Uint(32))
     core = Field(Uint(16))
     vallen = Field(Uint(32))
 
-    resp_size = Field(Size)
-    resp = Field(Pointer(iokvs_message), copysize='state.resp_size')  # TODO: make sure vallen is set
+    resp_size = Field(SizeT)
+    resp = Field(Pointer(iokvs_message), size='state.resp_size')  # TODO: make sure vallen is set
 
 class Schedule(State):
-    core = Field(Size)
+    core = Field(SizeT)
     def init(self): self.core = 0
 
 class ItemAllocators(State):
@@ -81,7 +81,7 @@ class main(Flow):
 
     class SaveState(Element):
         def configure(self):
-            self.inp = Input(Size, "void *", "void *")
+            self.inp = Input(SizeT, "void *", "void *")
             self.out = Output()
 
         def impl(self):
@@ -108,8 +108,8 @@ class main(Flow):
 
     class CheckPacket(Element):
         def configure(self):
-            self.inp = Input(Size, 'void*', 'void*')
-            self.out = Output(Size, 'void*', 'void*')
+            self.inp = Input(SizeT, 'void*', 'void*')
+            self.out = Output(SizeT, 'void*', 'void*')
             self.slowpath = Output( 'void*', 'void*')
             self.drop = Output('void*', 'void*')
 
@@ -258,7 +258,7 @@ output { out(); }
     class Scheduler(Element):
 
         def configure(self):
-            self.out = Output(Size)
+            self.out = Output(SizeT)
 
         def impl(self):
             self.run_c(r'''
@@ -268,8 +268,8 @@ output { out(core); }''' % ('%', n_cores))
 
     class Malloc(Element):
         def configure(self):
-            self.inp = Input(Size)
-            self.out = Output(Size, 'void*', 'void*')
+            self.inp = Input(SizeT)
+            self.out = Output(SizeT, 'void*', 'void*')
 
         def impl(self):
             self.run_c(r'''
@@ -281,7 +281,7 @@ output { out(core); }''' % ('%', n_cores))
     class SizeGetResp(Element):
         def configure(self):
             self.inp = Input()
-            self.out = Output(Size)
+            self.out = Output(SizeT)
 
         def impl(self):
             self.run_c(r'''
@@ -294,8 +294,8 @@ output { out(core); }''' % ('%', n_cores))
 
     class PrepareGetResp(Element):
         def configure(self):
-            self.inp = Input(Size, 'void*', 'void*')
-            self.out = Output(Size, Pointer(iokvs_message), 'void*')
+            self.inp = Input(SizeT, 'void*', 'void*')
+            self.out = Output(SizeT, Pointer(iokvs_message), 'void*')
 
         def impl(self):
             self.run_c(r'''
@@ -324,7 +324,7 @@ output { out(msglen, m, pkt_buff); }
     class SizeGetNullResp(Element):
         def configure(self):
             self.inp = Input()
-            self.out = Output(Size)
+            self.out = Output(SizeT)
 
         def impl(self):
             self.run_c(r'''
@@ -336,8 +336,8 @@ output { out(msglen, m, pkt_buff); }
 
     class PrepareGetNullResp(Element):
         def configure(self):
-            self.inp = Input(Size, 'void*', 'void*')
-            self.out = Output(Size, Pointer(iokvs_message), 'void*')
+            self.inp = Input(SizeT, 'void*', 'void*')
+            self.out = Output(SizeT, Pointer(iokvs_message), 'void*')
 
         def impl(self):
             self.run_c(r'''
@@ -363,7 +363,7 @@ output { out(msglen, m, pkt_buff); }
     class SizeSetResp(Element):
         def configure(self):
             self.inp = Input()
-            self.out = Output(Size)
+            self.out = Output(SizeT)
 
         def impl(self):
             self.run_c(r'''
@@ -376,7 +376,7 @@ output { out(msglen, m, pkt_buff); }
     class SizePktBuffSetResp(Element):
         def configure(self):
             self.inp = Input()
-            self.out = Output(Size, 'void*', 'void*')
+            self.out = Output(SizeT, 'void*', 'void*')
 
         def impl(self):
             self.run_c(r'''
@@ -388,8 +388,8 @@ output { out(msglen, m, pkt_buff); }
 
     class PrepareSetResp(Element):
         def configure(self, status):
-            self.inp = Input(Size, 'void*', 'void*')
-            self.out = Output(Size, Pointer(iokvs_message), 'void*')
+            self.inp = Input(SizeT, 'void*', 'void*')
+            self.out = Output(SizeT, Pointer(iokvs_message), 'void*')
             self.status = status
             # PROTOCOL_BINARY_RESPONSE_SUCCESS
             # PROTOCOL_BINARY_RESPONSE_ENOMEM
@@ -416,8 +416,8 @@ output { out(msglen, m, pkt_buff); }
 
     class SizePktBuff(Element):
         def configure(self):
-            self.inp = Input(Size)
-            self.out = Output(Size, 'void*', 'void*')
+            self.inp = Input(SizeT)
+            self.out = Output(SizeT, 'void*', 'void*')
 
         def impl(self):
             self.run_c(r'''
@@ -429,8 +429,8 @@ output { out(msglen, m, pkt_buff); }
 
     class PrepareHeader(Element):
         def configure(self):
-            self.inp = Input(Size, Pointer(iokvs_message), "void *")
-            self.out = Output(Size, "void *", "void *")
+            self.inp = Input(SizeT, Pointer(iokvs_message), "void *")
+            self.out = Output(SizeT, "void *", "void *")
 
         def impl(self):
             self.run_c(r'''
@@ -456,8 +456,8 @@ output { out(msglen, m, pkt_buff); }
 
     class PrepareHeaderCPU(Element):
         def configure(self):
-            self.inp = Input(Size, Pointer(iokvs_message), "void *")
-            self.out = Output(Size, "void *", "void *")
+            self.inp = Input(SizeT, Pointer(iokvs_message), "void *")
+            self.out = Output(SizeT, "void *", "void *")
 
         def impl(self):
             self.run_c(r'''
@@ -483,7 +483,7 @@ output { out(msglen, m, pkt_buff); }
 
     class SaveResponse(Element):
         def configure(self):
-            self.inp = Input(Size, "void *", "void *")
+            self.inp = Input(SizeT, "void *", "void *")
             self.out = Output()
 
         def impl(self):
@@ -496,7 +496,7 @@ output { out(msglen, m, pkt_buff); }
     class HandleArp(Element):
         def configure(self):
             self.inp = Input("void *", "void *")
-            self.out = Output(Size, "void *", "void *")
+            self.out = Output(SizeT, "void *", "void *")
             self.drop = Output("void *", "void *")
 
         def impl(self):
@@ -543,7 +543,7 @@ output { out(msglen, m, pkt_buff); }
     class ExtractPkt(Element):
         def configure(self):
             self.inp = Input()
-            self.out = Output(Size, "void *", "void *")
+            self.out = Output(SizeT, "void *", "void *")
 
         def impl(self):
             self.run_c(r'''
@@ -557,8 +557,8 @@ output { out(msglen, m, pkt_buff); }
 
     class PrintMsg(Element):
         def configure(self):
-            self.inp = Input(Size, "void *", "void *")
-            self.out = Output(Size, "void *", "void *")
+            self.inp = Input(SizeT, "void *", "void *")
+            self.out = Output(SizeT, "void *", "void *")
 
         def impl(self):
             self.run_c(r'''
@@ -709,7 +709,7 @@ state.core = cvmx_get_core_num();
         ######################## CPU #######################
         class process_eq(CallablePipeline):
             def configure(self):
-                self.inp = Input(Size)
+                self.inp = Input(SizeT)
 
             def impl(self):
                 classifier = main.Classifer()

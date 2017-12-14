@@ -147,7 +147,8 @@ def insert_pipeline_state(instance, state, start, g):
                 port.argtypes.append(state + "*")
                 element.reassign_output_values(port.name, "_state")
 
-    element.replace_in_code('[^a-zA-Z_0-9](state.)', '_state->')
+    element.replace_in_code('[^a-zA-Z_0-9](state\.)', '_state->')
+    element.replace_in_code('[^a-zA-Z_0-9](state->)', '_state->')
 
 
 def need_replacement(element, live, extras):
@@ -180,6 +181,7 @@ def replace_var(element, var, src2fields, prefix):
     if var == new_var:
         return
     element.replace_in_code('[^a-zA-Z_0-9]state\.(' + var + ')[^a-zA-Z_0-9]', new_var)
+    element.replace_in_code('[^a-zA-Z_0-9]state->(' + var + ')[^a-zA-Z_0-9]', new_var)
 
 
 def replace_states(element, live, extras, special_fields, src2fields):
@@ -319,7 +321,7 @@ def find_all_fields(code):
 
 
 def find_next_def_use(code):
-    m = re.search('[^a-zA-Z0-9_]state\.', code)
+    m = re.search('[^a-zA-Z0-9_]state(\.|->)', code)
     if not m:
         return None, None, None, None
 

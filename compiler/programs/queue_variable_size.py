@@ -18,8 +18,8 @@ EnqAlloc, EnqSubmit, DeqGet, DeqRelease, clean = \
 
 class ComputeCore(Element):
     def configure(self):
-        self.inp = Input(Int, Size)  # val, core
-        self.out_size_core = Output(Size, Size)  # size, core
+        self.inp = Input(Int, SizeT)  # val, core
+        self.out_size_core = Output(SizeT, SizeT)  # size, core
         self.out_val = Output(Int)
 
     def impl(self):
@@ -61,7 +61,7 @@ class CleanPrint(Element):
 
 class rx_write(CallablePipeline):
     def configure(self):
-        self.inp  = Input(Int, Size)  # val, core
+        self.inp  = Input(Int, SizeT)  # val, core
 
     def impl(self):
         compute_core = ComputeCore()
@@ -75,7 +75,7 @@ class rx_write(CallablePipeline):
 
 class rx_read(CallablePipeline):
     def configure(self):
-        self.inp = Input(Size)
+        self.inp = Input(SizeT)
         self.out = Output(queue.q_buffer)
 
     def impl(self):

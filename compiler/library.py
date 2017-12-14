@@ -52,7 +52,7 @@ class Drop(Element):
 
 class Constant(Element):
     def configure(self, c):
-        self.out = Output(Size)
+        self.out = Output(SizeT)
         self.c = c
 
     def impl(self):
@@ -67,7 +67,7 @@ class Print(Element):
         self.inp = Input(data_type)
 
     def impl(self):
-        if self.data_type in [Size, Uintptr]:
+        if self.data_type in [SizeT, Uintptr]:
             format = "%ld"
         elif self.data_type == Float:
             format = "%f"

@@ -2,7 +2,7 @@ from dsl import *
 
 class FromNet(Element):
     def configure(self, batch_size=32):
-        self.out = Output(Size, "void *", "void *") # packet, buffer
+        self.out = Output(SizeT, "void *", "void *") # packet, buffer
         self.nothing = Output()
         self.special = 'from_net'
         self.batch_size = batch_size
@@ -50,8 +50,8 @@ class FromNetFree(Element):
 
 class NetAlloc(Element):
     def configure(self):
-        self.inp = Input(Size)
-        self.out = Output(Size, "void *", "void *")  # packet, buffer
+        self.inp = Input(SizeT)
+        self.out = Output(SizeT, "void *", "void *")  # packet, buffer
         self.oom = Output()
 
     def impl(self):
@@ -79,7 +79,7 @@ class NetAlloc(Element):
 
 class ToNet(Element):
     def configure(self, buffer="from_net", has_output=False, batch_size=32):
-        self.inp = Input(Size, "void *", "void *")  # size, packet, buffer
+        self.inp = Input(SizeT, "void *", "void *")  # size, packet, buffer
         self.buffer = buffer
         self.has_output = False
         self.batch_size = batch_size
@@ -129,8 +129,8 @@ class ToNet(Element):
 # Convert hton for fields in state_name if this element is on CPU.
 class HTON(Element):
     def configure(self, state_name):
-        self.inp = Input(Size, "void *", "void *")
-        self.out = Output(Size, "void *", "void *")
+        self.inp = Input(SizeT, "void *", "void *")
+        self.out = Output(SizeT, "void *", "void *")
         self.special = ('hton', state_name)
 
     def impl(self):

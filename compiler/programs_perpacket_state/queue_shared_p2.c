@@ -28,9 +28,6 @@ static inline void pipeline_ref(pipeline_state* s) {
     s->refcount++;
 }
 
-
-#include <rte_memcpy.h>
-
 queue_Storage* queue_Storage0;
 
 queue_Storage* queue_Storage1;

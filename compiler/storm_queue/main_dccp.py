@@ -13,7 +13,7 @@ n_nic_tx = 3
 
 class Classifier(Element):
     def configure(self):
-        self.inp = Input(Size, "void*", "void*")
+        self.inp = Input(SizeT, "void*", "void*")
         self.pkt = Output("struct pkt_dccp_headers*")
         self.ack = Output("struct pkt_dccp_headers*")
         self.drop = Output()
@@ -39,7 +39,7 @@ class Classifier(Element):
 
 class Save(Element):
     def configure(self):
-        self.inp = Input(Size, 'void*', 'void*')
+        self.inp = Input(SizeT, 'void*', 'void*')
         self.out = Output("struct pkt_dccp_headers*")
 
     def impl(self):
@@ -70,7 +70,7 @@ class GetCore(Element):
 
     def configure(self):
         self.inp = Input("struct tuple*")
-        self.out = Output("struct tuple*", Size)
+        self.out = Output("struct tuple*", SizeT)
 
     def impl(self):
         self.run_c(r'''
@@ -146,8 +146,8 @@ class DccpInfo(State):
     retrans_timeout = Field(Uint(64))
     link_rtt = Field(Uint(64))
     global_lock = Field("rte_spinlock_t")
-    acks_sent = Field(Size)
-    tuples = Field(Size)
+    acks_sent = Field(SizeT)
+    tuples = Field(SizeT)
 
     def init(self):
         self.header = lambda(x): "init_header_template(&{0})".format(x)
@@ -409,7 +409,7 @@ class Tuple2Pkt(Element):
         self.dccp = dccp_info
 
     def configure(self):
-        self.inp = Input(Size, "void*", "void*")
+        self.inp = Input(SizeT, "void*", "void*")
         self.out = Output("void*")
 
     def impl(self):
@@ -458,7 +458,7 @@ class Pkt2Tuple(Element):
 class SizePkt(Element):
     def configure(self, len):
         self.inp = Input()
-        self.out = Output(Size)
+        self.out = Output(SizeT)
         self.len = len
 
     def impl(self):
@@ -468,7 +468,7 @@ class SizePkt(Element):
 
 class GetBothPkts(Element):
     def configure(self):
-        self.inp = Input(Size, "void*", "void*")
+        self.inp = Input(SizeT, "void*", "void*")
         self.out = Output("struct pkt_dccp_ack_headers*", "struct pkt_dccp_headers*")
 
     def impl(self):
@@ -482,7 +482,7 @@ class GetBothPkts(Element):
 class GetTxBuf(Element):
     def configure(self, len):
         self.inp = Input("void *")
-        self.out = Output(Size, "void *", "void *")
+        self.out = Output(SizeT, "void *", "void *")
         self.len = len
 
     def impl(self):
@@ -512,8 +512,8 @@ class BatchScheduler(Element):
     def states(self): self.this = task_master
 
     def configure(self):
-        self.inp = Input(Size)
-        self.out = Output(Size)
+        self.inp = Input(SizeT)
+        self.out = Output(SizeT)
 
     def impl(self):
         self.run_c(r'''                                   
@@ -693,7 +693,7 @@ class NicRxFlow(Flow):
 
 class inqueue_get(CallablePipeline):
     def configure(self):
-        self.inp = Input(Size)
+        self.inp = Input(SizeT)
         self.out = Output(queue.q_buffer)
 
     def impl(self): self.inp >> rx_deq_creator() >> self.out
@@ -708,7 +708,7 @@ class inqueue_advance(CallablePipeline):
 
 class outqueue_put(CallablePipeline):
     def configure(self):
-        self.inp = Input("struct tuple*", Size)
+        self.inp = Input("struct tuple*", SizeT)
 
     def impl(self): self.inp >> tx_enq_creator()
 

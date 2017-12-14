@@ -27,7 +27,7 @@ Enq, Deq, Release = queue.queue_custom('queue', Tuple, 4, n_cores, Tuple.task)
 
 class RxWrite(CallablePipeline):
     def configure(self):
-        self.inp = Input(Pointer(Tuple), Size)
+        self.inp = Input(Pointer(Tuple), SizeT)
 
     def impl(self):
         enq = Enq()
@@ -36,7 +36,7 @@ class RxWrite(CallablePipeline):
 
 class RxPrint(CallablePipeline):
     def configure(self):
-        self.inp = Input(Size)
+        self.inp = Input(SizeT)
 
     def impl(self):
         deq = Deq()

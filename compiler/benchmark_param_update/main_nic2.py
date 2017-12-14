@@ -6,8 +6,8 @@ n_cores = 1
 
 class MyState(State):
     pkt = Field('void*')
-    core = Field(Size)
-    payload = Field(Pointer(Uint(8)), copysize='sizeof(param_entry)')
+    core = Field(SizeT)
+    payload = Field(Pointer(Uint(8)), size='sizeof(param_entry)')
 
 class main(Flow):
     state = PerPacket(MyState)
@@ -21,8 +21,8 @@ class main(Flow):
 
         class Reply(Element):
             def configure(self):
-                self.inp = Input(Size, "void*", "void*")
-                self.out = Output(Size, "void*", "void*")
+                self.inp = Input(SizeT, "void*", "void*")
+                self.out = Output(SizeT, "void*", "void*")
 
             def impl(self):
                 self.run_c(r'''
@@ -33,8 +33,8 @@ class main(Flow):
 
         class Copy(Element):
             def configure(self):
-                self.inp = Input(Size, "void*", "void*")
-                self.out = Output(Size, "void*", "void*")
+                self.inp = Input(SizeT, "void*", "void*")
+                self.out = Output(SizeT, "void*", "void*")
 
             def impl(self):
                 self.run_c(r'''
@@ -46,12 +46,12 @@ class main(Flow):
 
         class Fork(Element):
             def configure(self):
-                self.inp = Input(Size)
-                self.out1 = Output(Size)
-                self.out2 = Output(Size)
-                self.out3 = Output(Size)
-                self.out4 = Output(Size)
-                self.out5 = Output(Size)
+                self.inp = Input(SizeT)
+                self.out1 = Output(SizeT)
+                self.out2 = Output(SizeT)
+                self.out3 = Output(SizeT)
+                self.out4 = Output(SizeT)
+                self.out5 = Output(SizeT)
 
             def impl(self):
                 self.run_c(r'''
@@ -78,8 +78,8 @@ class main(Flow):
 
         class PrepPkt(Element):
             def configure(self):
-                self.inp = Input(Size, "void *", "void *")
-                self.out = Output(Size)
+                self.inp = Input(SizeT, "void *", "void *")
+                self.out = Output(SizeT)
 
             def impl(self):
                 self.run_c(r'''

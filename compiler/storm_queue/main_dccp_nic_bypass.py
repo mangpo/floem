@@ -65,7 +65,7 @@ class CountPacket(Element):
 
 class Classifier(Element):
     def configure(self):
-        self.inp = Input(Size, "void*", "void*")
+        self.inp = Input(SizeT, "void*", "void*")
         self.pkt = Output("struct pkt_dccp_headers*")
         self.ack = Output("struct pkt_dccp_headers*")
         self.drop = Output()
@@ -90,7 +90,7 @@ class Classifier(Element):
 
 class Save(Element):
     def configure(self):
-        self.inp = Input(Size, 'void*', 'void*')
+        self.inp = Input(SizeT, 'void*', 'void*')
         self.out = Output("struct pkt_dccp_headers*")
 
     def impl(self):
@@ -122,7 +122,7 @@ class GetCore(Element):
 
     def configure(self):
         self.inp = Input("struct tuple*")
-        self.out = Output("struct tuple*", Size)
+        self.out = Output("struct tuple*", SizeT)
 
     def impl(self):
         self.run_c(r'''
@@ -140,7 +140,7 @@ class GetCoreCPU(Element):
 
     def configure(self):
         self.inp = Input("struct tuple*")
-        self.out = Output("struct tuple*", Size)
+        self.out = Output("struct tuple*", SizeT)
 
     def impl(self):
         self.run_c(r'''
@@ -157,8 +157,8 @@ class LocalOrRemote(Element):
     def states(self): self.this = task_master_cpu
 
     def configure(self):
-        self.inp = Input("struct tuple*", Size)
-        self.out_send = Output("struct tuple*", Size)
+        self.inp = Input("struct tuple*", SizeT)
+        self.out_send = Output("struct tuple*", SizeT)
         self.out_local = Output("struct tuple*")
 
     def impl(self):
@@ -500,7 +500,7 @@ class Tuple2Pkt(Element):
         self.dccp = dccp_info
 
     def configure(self):
-        self.inp = Input(Size, "void*", "void*")
+        self.inp = Input(SizeT, "void*", "void*")
         self.out = Output("void*")
 
     def impl(self):
@@ -566,7 +566,7 @@ class Pkt2Tuple(Element):
 class SizePkt(Element):
     def configure(self, len):
         self.inp = Input()
-        self.out = Output(Size)
+        self.out = Output(SizeT)
         self.len = len
 
     def impl(self):
@@ -576,7 +576,7 @@ class SizePkt(Element):
 
 class GetBothPkts(Element):
     def configure(self):
-        self.inp = Input(Size, "void*", "void*")
+        self.inp = Input(SizeT, "void*", "void*")
         self.out = Output("struct pkt_dccp_ack_headers*", "struct pkt_dccp_headers*")
 
     def impl(self):
@@ -590,7 +590,7 @@ class GetBothPkts(Element):
 class GetTxBuf(Element):
     def configure(self, len):
         self.inp = Input("void *")
-        self.out = Output(Size, "void *", "void *")
+        self.out = Output(SizeT, "void *", "void *")
         self.len = len
 
     def impl(self):
@@ -620,8 +620,8 @@ class BatchScheduler(Element):
     def states(self): self.this = task_master
 
     def configure(self):
-        self.inp = Input(Size)
-        self.out = Output(Size)
+        self.inp = Input(SizeT)
+        self.out = Output(SizeT)
 
     def impl(self):
         self.run_c(r'''
@@ -822,7 +822,7 @@ class NicRxFlow(Flow):
 
 class inqueue_get(CallablePipeline):
     def configure(self):
-        self.inp = Input(Size)
+        self.inp = Input(SizeT)
         self.out = Output(queue.q_buffer)
         self.default_return = "{NULL, 0}"
 
@@ -831,7 +831,7 @@ class inqueue_get(CallablePipeline):
 
 class bypass_get(CallablePipeline):
     def configure(self):
-        self.inp = Input(Size)
+        self.inp = Input(SizeT)
         self.out = Output(queue.q_buffer)
         self.default_return = "{NULL, 0}"
 
@@ -851,7 +851,7 @@ class bypass_advance(CallablePipeline):
 
 class outqueue_put(CallablePipeline):
     def configure(self):
-        self.inp = Input("struct tuple*", Size)
+        self.inp = Input("struct tuple*", SizeT)
 
     def impl(self):
         local_or_remote = LocalOrRemote()

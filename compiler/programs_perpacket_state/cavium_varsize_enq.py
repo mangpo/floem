@@ -5,7 +5,7 @@ from compiler import Compiler
 class MyState(State):
     core = Field(Int)
     keylen = Field(Int)
-    key = Field(Pointer(Uint(8)), copysize='state.keylen')
+    key = Field(Pointer(Uint(8)), size='state.keylen')
     p = Field(Pointer(Int), shared='data_region')
 
 class Count(State):
@@ -20,7 +20,7 @@ class main(Flow):
         this = Persistent(Count)
 
         def configure(self):
-            self.inp = Input(Size, 'void*', 'void*')
+            self.inp = Input(SizeT, 'void*', 'void*')
             self.out = Output()
             self.this = Count()
 
@@ -85,7 +85,7 @@ class main(Flow):
 
     class DisplayPacket(Element):
         def configure(self):
-            self.inp = Input(Size, "void *", "void *")
+            self.inp = Input(SizeT, "void *", "void *")
             self.out = Output("void *", "void *")
 
         def impl(self):

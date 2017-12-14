@@ -88,7 +88,7 @@ class main(Flow):
 
         class run2(CallablePipeline):
             def configure(self):
-                self.inp = Input(Size)
+                self.inp = Input(SizeT)
 
             def impl(self):
                 deq = Deq()

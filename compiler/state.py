@@ -7,7 +7,7 @@ from abc import abstractmethod
 
 Bool = 'bool'
 Int = 'int'
-Size = 'size_t'
+SizeT = 'size_t'
 Void = 'void'
 Uintptr = 'uintptr_t'
 Double = 'double'
@@ -61,9 +61,9 @@ def define_state(x):
 
 
 class Field(object):
-    def __init__(self, t, value=None, copysize=None, shared=None):
+    def __init__(self, t, value=None, size=None, shared=None):
         self.value = value
-        self.copysize = copysize
+        self.copysize = size
         self.shared = shared
 
         define_state(t)

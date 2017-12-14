@@ -5,7 +5,7 @@ from compiler import Compiler
 class MyState(State):
     core = Field(Int)
     keylen = Field(Int)
-    key = Field(Pointer(Uint(8)), copysize='state.keylen')
+    key = Field(Pointer(Uint(8)), size='state->keylen')
     p = Field(Pointer(Int), shared='data_region')
 
 
@@ -20,14 +20,14 @@ class main(Flow):
         def impl(self):
             self.run_c(r'''
     (int len, uint8_t data) = inp();
-    state.core = 0;
-    state.key = (uint8_t *) malloc(len);
-    state.keylen = len;
+    state->core = 0;
+    state->key = (uint8_t *) malloc(len);
+    state->keylen = len;
     for(int i=0; i<len ; i++)
         state.key[i] = data;
     int* p = data_region;
     p[data] = 100 + data;
-    state.p = &p[data];
+    state->p = &p[data];
     output { out(); }
             ''')
 
@@ -37,7 +37,7 @@ class main(Flow):
 
         def impl(self):
             self.run_c(r'''
-            printf("%d %d %d %d\n", state.keylen, state.key[0], state.key[state.keylen-1], *state.p);
+            printf("%d %d %d %d\n", state->keylen, state->key[0], state->key[state.keylen-1], *state->p);
             fflush(stdout);
             ''')
 
@@ -65,10 +65,6 @@ class main(Flow):
 master_process("queue_shared_data1")
 
 c = Compiler(main)
-c.include = r'''
-#include <rte_memcpy.h>
-'''
-
 c.generate_code_as_header()
 c.depend = {"queue_shared_data1_main": ['queue_shared_data1'],
             "queue_shared_data2_main": ['queue_shared_data2']}

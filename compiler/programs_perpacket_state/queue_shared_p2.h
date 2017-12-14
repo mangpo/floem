@@ -7,9 +7,6 @@
 #include <queue.h>
 
 
-#include <rte_memcpy.h>
-
-
 typedef struct _MyState { 
 int core;
 int index;

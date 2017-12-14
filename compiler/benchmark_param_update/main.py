@@ -5,14 +5,14 @@ import net, library
 n_cores = 1
 
 class MyState(State):
-    core = Field(Size)
-    payload = Field(Pointer(Uint(8)), copysize='sizeof(param_entry)')
+    core = Field(SizeT)
+    payload = Field(Pointer(Uint(8)), size='sizeof(param_entry)')
 
 
 class Reply(Element):
     def configure(self):
-        self.inp = Input(Size, "void*", "void*")
-        self.out = Output(Size, "void*", "void*")
+        self.inp = Input(SizeT, "void*", "void*")
+        self.out = Output(SizeT, "void*", "void*")
 
     def impl(self):
         self.run_c(r'''
@@ -51,7 +51,7 @@ output { out(size, pkt, buff); }
 
 class Update(Element):
     def configure(self):
-        self.inp = Input(Size, "void *", "void *")
+        self.inp = Input(SizeT, "void *", "void *")
 
     def impl(self):
         self.run_c(r'''

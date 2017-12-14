@@ -37,7 +37,7 @@ class iokvs_message(State):
 
 class Display(Element):
     def configure(self):
-        self.inp = Input(Size, 'void*', 'void*')
+        self.inp = Input(SizeT, 'void*', 'void*')
         self.out = Output('void*', 'void*')
 
     def impl(self):

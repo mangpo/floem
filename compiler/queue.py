@@ -6,10 +6,10 @@ q_entry = 'q_entry'
 
 
 class circular_queue(State):
-    len = Field(Size)
-    offset = Field(Size)
+    len = Field(SizeT)
+    offset = Field(SizeT)
     queue = Field(Pointer(Void))
-    clean = Field(Size)
+    clean = Field(SizeT)
     id = Field(Int)
     entry_size = Field(Int)
 
@@ -25,10 +25,10 @@ class circular_queue(State):
 
 
 class circular_queue_lock(State):
-    len = Field(Size)
-    offset = Field(Size)
+    len = Field(SizeT)
+    offset = Field(SizeT)
     queue = Field(Pointer(Void))
-    clean = Field(Size)
+    clean = Field(SizeT)
     lock = Field('lock_t')
     id = Field(Int)
     entry_size = Field(Int)
@@ -154,7 +154,7 @@ def queue_default(name, entry_size, size, insts,
         def states(self): self.this = enq_all
 
         def configure(self):
-            self.inp = Input(Size, Size)  # len, core
+            self.inp = Input(SizeT, SizeT)  # len, core
             self.out = Output(q_buffer)
 
         def impl(self):
@@ -217,8 +217,8 @@ def queue_default(name, entry_size, size, insts,
         def states(self): self.this = deq_all
 
         def configure(self):
-            self.inp = Input(Size)
-            self.out = Output(q_buffer, Size) if qid_output else Output(q_buffer)
+            self.inp = Input(SizeT)
+            self.out = Output(q_buffer, SizeT) if qid_output else Output(q_buffer)
 
         def impl(self):
             noblock_noatom = "q_buffer buff = dequeue_get((circular_queue*) q);\n"
@@ -476,7 +476,7 @@ int dequeue_done%s(void* buff) {
         def states(self): self.this = enq_all
 
         def configure(self):
-            self.inp = Input(type_star, Size)
+            self.inp = Input(type_star, SizeT)
             if enq_output:
                 self.out = Output(type_star)
 
@@ -612,7 +612,7 @@ int dequeue_done%s(void* buff) {
         def states(self): self.this = deq_all
 
         def configure(self):
-            self.inp = Input(Size)
+            self.inp = Input(SizeT)
             self.out = Output(q_buffer)
 
         def impl(self):

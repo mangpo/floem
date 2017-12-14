@@ -43,7 +43,7 @@ class main(Flow):
 
     class pop(CallablePipeline):
         def configure(self):
-            self.inp = Input(Size)
+            self.inp = Input(SizeT)
 
         def impl(self):
             self.inp >> main.Deq() >> main.Display()
@@ -56,10 +56,6 @@ class main(Flow):
 
 
 c = Compiler(main)
-c.include = r'''
-#include <rte_memcpy.h>
-'''
-
 c.generate_code_as_header()
 c.depend = {"queue_shared_p1_main": ['queue_shared_p1'],
             "queue_shared_p2_main": ['queue_shared_p2']}

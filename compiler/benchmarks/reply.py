@@ -5,8 +5,8 @@ import target, queue, net, library
 class Reply(Element):
 
     def configure(self):
-        self.inp = Input(Size, "void*", "void*")
-        self.out = Output(Size, "void*", "void*")
+        self.inp = Input(SizeT, "void*", "void*")
+        self.out = Output(SizeT, "void*", "void*")
 
     def impl(self):
         self.run_c(r'''

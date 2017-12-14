@@ -8,8 +8,8 @@ n_cores = 9
 class MyState(State):
     pkt = Field('void*')
     pkt_buff = Field('void*')
-    key = Field('void*', copysize=22)
-    core = Field(Size)
+    key = Field('void*', size=22)
+    core = Field(SizeT)
     pool = Field(Int)
 
 
@@ -25,7 +25,7 @@ class main(Flow):
 
         class MakeKey(Element):
             def configure(self):
-                self.inp = Input(Size, "void *", "void *")
+                self.inp = Input(SizeT, "void *", "void *")
                 self.out = Output()
 
             def impl(self):
@@ -67,7 +67,7 @@ class main(Flow):
         ############################ CPU #############################
         class Scheduler(Element):
             def configure(self):
-                self.out = Output(Size)
+                self.out = Output(SizeT)
 
             def impl(self):
                 self.run_c(r'''

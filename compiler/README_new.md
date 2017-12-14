@@ -13,6 +13,7 @@ B. [Language](#Language)
   3. [Element Connection](#Element-Connection)
   
 C. [Running on Cavium](#Running-on-Cavium)
+D. [Compiler's Options](#Compilers-Options)
 
 
 # A. Prerequisites
@@ -22,8 +23,9 @@ C. [Running on Cavium](#Running-on-Cavium)
 - GCC
 - Python 2
 
-For a CPU-only system, you require [DPDK](http://dpdk.org/) to be installed.
-For a system with a Cavium LiquidIO NIC, you require Cavium SDK and this [repository](https://gitlab.cs.washington.edu/mangpo/LiquidIOII-UseCase), containing source and binary for LiquidIO driver and firmware.
+For a CPU-only system, you require [DPDK](http://dpdk.org/) to be installed. Set variable `dpdk_dir` in `compiler/target.py` to DPDK directory's path. If you do not intent to use DPDK, leave the variable as is.
+
+For a system with a Cavium LiquidIO NIC, you require Cavium SDK and this [repository](https://gitlab.cs.washington.edu/mangpo/LiquidIOII-UseCase), containing source and binary for LiquidIO driver and firmware with Floem runtime.
 
 ### Setup
 
@@ -42,27 +44,6 @@ from floem import *
 
 # B. Language
 
-## 1. State
-
-State is like C-language struct. To create an instance of a state, first you need to create a state class and use the state class to instantiate an instance of the state.
-
-#### Example
-
-```python
-class Tracker(State):
-  total = Field(Int)
-  last = Field(Int)
-  
-  def init(self, total=0, last=0):
-    self.total = total
-    self.last = last
-    
-tracker1 = Tracker()
-# ^ use the constructor's init: total = 0, last = 0
-tracker2 = Tracker(init=[10,42])  
-# ^ use this init: total = 10, last = 42
-```
-
 ## 2. Element
 
 An element is an executable piece of code. To create an instance of an element, first you need to create a element class and use the element class to instantiate an instance of the element.
@@ -70,27 +51,20 @@ An element is an executable piece of code. To create an instance of an element, 
 #### Example
 
 ```python
-class Observer(Element):
-  tracker = Persistent(Tracker)  # State of this element that is persist across all packets
-  def states(self, tracker): self.tracker = tracker
-  
+class Inc(Element):
   def configure(self):
     self.inp = Input(Int)   # Input port
     self.out = Output(Int)  # Output port
     
   def impl(self):
     self.run_c(r'''
-      int id = inp();     // Retrieve a value from inp input port.
-      tracker->total++;   // State is referenced as a pointer to a struct.
-      tracker->last = id; 
-      output { out(id); }
+      int x = inp();        // Retrieve a value from input port inp.
+      output { out(x+1); }  // Sent a value to output port out.
     ''')
     
-o1 = Observer(states=[tracker1])  # observer element 1
-o2 = Observer(states=[tracker1])  # observer element 2
+inc = Inc()  # create an element
 ```
 
-Notice that `o1` and `o2` share the same tracker state, so they both contribute to `tracker1->total`. Also notice that there can be a race condition here because of the shared state.
 
 ### 2.1 Element Port
 
@@ -98,6 +72,10 @@ Input and output ports are defined in `configure` method.
 ```
 self.<port_name> = [Input | Output](arg_type0, arg_type1, ...)
 ```
+Available data types are `Bool`, `Int` `SizeT` (uint64_t), `Void`, `Double`, `Float` (see `compiler/state.py` for a complete list), and [user-defined states](#State) (which are essentially C structs). To refer to a struct type in a C header file defined outside Floem, users can simply use string. For example, `self.inp = Input("struct tuple *")` is an input port that accepts a pointer to `struct tuple` defined outside Floem.
+
+**See xxx as an example when data type is a state defined using Floem.**
+**See xxx as an exmpale when data type is a struct defined outside Floem.** 
 
 ### 2.2 Element's Implementation (C Code)
 
@@ -367,6 +345,130 @@ By default, a pipeline is executed by one dedicated thread on a CPU, or one dedi
 
 On CPU, we can use an unlimited number of threads. Floem relies on an OS to schedule which threads to run. On Cavium, valid core ids are 0 to 11, as there are 12 cores on Cavium. Assigning the same core id to multiple pipelines leads to undefined behaviors.
 
+
+## 6. State
+
+State is like C-language struct. To create an instance of a state, first you need to create a state class and use the state class to instantiate an instance of the state.
+
+#### Example
+
+```python
+class Tracker(State):
+  total = Field(Int)
+  last = Field(Int)
+  
+  def init(self, total=0, last=0):
+    self.total = total
+    self.last = last
+    
+tracker1 = Tracker()
+# ^ use the constructor's init: total = 0, last = 0
+tracker2 = Tracker(init=[10,42])  
+# ^ use this init: total = 10, last = 42
+```
+
+### 6.1 Persistent State
+
+State can be used as a global variable shared between multiple elements and persistent across all packets. Users must explicitly define which states an element can access to. Note that an element can access more than one states.
+
+#### Example
+
+```python
+class Observer(Element):
+  tracker = Persistent(Tracker)  # Define a state variable and its type.
+  def states(self, tracker): 
+    self.tracker = tracker       # Initialze a state variable.
+  
+  def configure(self):
+    self.inp = Input(Int)   # Input port
+    self.out = Output(Int)  # Output port
+    
+  def impl(self):
+    self.run_c(r'''
+      int id = inp();     // Retrieve a value from inp input port.
+      tracker->total++;   // State is referenced as a pointer to a struct.
+      tracker->last = id; 
+      output { out(id); }
+    ''')
+    
+o1 = Observer(states=[tracker1])  # observer element 1
+o2 = Observer(states=[tracker1])  # observer element 2
+```
+
+Notice that `o1` and `o2` share the same tracker state, so they both contribute to `tracker1->total`. Also notice that there can be a race condition here because of the shared state.
+
+### 6.2 Flow and Per-Packet State
+
+Floem provides a per-packet state abstraction that a packet and its metadata can be accessed anywhere for the same *flow*. With this abstraction, programmers can access the per-packet state in any element without explicitly passing the per-packet state around. *Flow* is a set of pipelines that connect to each other via (queues)[#Multi-Queue].
+
+
+To use this abstraction, programmers define a flow class, and set the field `state` of the flow class to a per-packet state associated with the flow. The elements and pipelines associated with the flow must be created inside the `impl` method of the flow. 
+
+```python
+class ProtocolBinaryReq(State):
+    ...
+    keylen = Field(Uint(16))
+    extlen = Field(Uint(8))
+    
+class KVSmessage(State):
+    ...
+    mcr = Field(ProtocolBinaryReq)
+    payload = Field(Array(Uint(8)))
+    
+class MyState(State):         
+   pkt = Field(Pointer(KVSmessage))
+   hash = Field(Uint(32))
+   key = Field(Pointer(Uint(8)), size='state->pkt->mcr.keylen')  # variable-size field
+
+class Main(Flow):             # define a flow
+  state = PerPacket(MyState)  # associate per-packet state
+  
+  def impl(self):
+    class Hash(Element):
+      def configure(self):
+        self.inp = Input(SizeT, Pointer(Void), Point(Void))  
+        self.out = Ouput()    # no need to pass per-packet state
+    
+      def impl(self):
+        self.run_c(r'''
+        (size_t size, void* pkt, void* buff) = inp();
+        state->pkt = pkt;      // save pkt in a per-packet state
+        uint8_t* key = state->pkt->payload + state->pkt->mcr.extlen;
+        state->key = key;
+        state->hash = hash(key, pkt->mcr.keylen);
+        output { out(); }
+        ''')
+           
+    class HashtGet(Element):
+      ...
+      def impl(self):
+        self.run_c(r'''       // state refers to per-packet state
+        state.it = hasht_get(state->key, state->pkt->mcr.keylen, state->hash);
+        output { out(); }
+        ''')
+    ...
+```
+
+**See xxx as an example program.**
+
+### 6.3 Special fields: layout, defined, packed
+- `layout` By default, the defined fields in a state is laid out in an artitrary order in a struct. To control the order, we must explicitly assign the `layout` field of the state. 
+- `packed` By default, Floem compiles a defined state to a C struct with `__attribute__ ((packed))`. In some cases, this is undesirable. For example, if the state contains a spin lock, we do not want the struct to be pakced. In such scenario, we can set the `packed` field to `False`.
+- `defined` By default, Floem compiles a defined state to a C struct. However, if that struct has been defined in a C header file somewhere else that we include, we do not want to redefine the struct, but we still want to inform Floem about the struct so that it can reason about the per-packet state. In such case, we can set the `defined` field to `False` so that Floem will not generate code for the struct.
+
+##### Example
+```python
+class MyState(State):         
+   pkt = Field(Pointer(KVSmessage))
+   hash = Field(Uint(32))
+   key = Field(Pointer(Uint(8)), size='state->pkt->mcr.keylen')  # variable-size field
+   layout = [pkt, hash, key]
+   defined = False
+   packed = False
+```
+
+
+
 ## 5. Multi-Queue
 
 ### 5.1 Basic Queue
@@ -387,15 +489,12 @@ import queue_smart
 - Byte reorder
 - Compile to the default queue
 
-## 6. State
+##### Variable-size field & pointer to shared memory region
 
-### 6.1 Persistent State
-
-### 6.2 Flow and Per-Packet State
 
 ## 7. Network Elements
 ```python
-import queue_smart
+import net
 ```
 ### FromNet
 
@@ -447,4 +546,5 @@ a >> queue >> b
 
 # C. Running on Cavium
 
+# D. Compiler's Options
 

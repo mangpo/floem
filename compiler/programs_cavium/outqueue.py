@@ -19,7 +19,7 @@ Enq, Deq, DeqRelease = queue.queue_custom("tx_queue", Tuple, MAX_ELEMS, n_cores,
 class GetCore(Element):
     def configure(self):
         self.inp = Input(Pointer(Tuple))
-        self.out = Output(Pointer(Tuple), Size)
+        self.out = Output(Pointer(Tuple), SizeT)
 
     def impl(self):
         self.run_c(r'''

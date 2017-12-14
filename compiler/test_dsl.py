@@ -18,8 +18,8 @@ class Nop(Element):
 
 class NopSize(Element):
     def configure(self):
-        self.inp = Input(Size)
-        self.out = Output(Size)
+        self.inp = Input(SizeT)
+        self.out = Output(SizeT)
 
     def impl(self):
         self.run_c(r'''

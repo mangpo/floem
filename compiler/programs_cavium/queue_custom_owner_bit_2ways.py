@@ -19,8 +19,8 @@ Enq2, Deq2, DeqRelease2 = \
 
 class MakeTuple(Element):
     def configure(self):
-        self.inp = Input(Size, "void*", "void*")
-        self.out = Output("struct tuple*", Size)
+        self.inp = Input(SizeT, "void*", "void*")
+        self.out = Output("struct tuple*", SizeT)
 
     def impl(self):
         self.run_c(r'''
@@ -54,7 +54,7 @@ class MakeTuple(Element):
 
 class Scheduler(Element):
     def configure(self):
-        self.out = Output(Size)
+        self.out = Output(SizeT)
 
     def impl(self):
         self.run_c(r'''
@@ -64,7 +64,7 @@ class Scheduler(Element):
 class GetTuple(Element):
     def configure(self):
         self.inp = Input(queue.q_buffer)
-        self.out = Output("struct tuple*", Size)
+        self.out = Output("struct tuple*", SizeT)
 
     def impl(self):
         self.run_c(r'''
@@ -160,7 +160,7 @@ class Free(Element):
 
 class DropSize(Element):
     def configure(self):
-        self.inp = Input(Size, 'void*', 'void*')
+        self.inp = Input(SizeT, 'void*', 'void*')
         self.out = Output('void*', 'void*')
 
     def impl(self):

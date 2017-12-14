@@ -32,12 +32,12 @@ class Classify(Element):
 
 class A0(ElementOneInOut):
     def impl(self):
-        self.run_c(r'''state.a0 = state.a + 100; output { out(); }''')
+        self.run_c(r'''state->a0 = state->a + 100; output { out(); }''')
 
 
 class B0(ElementOneInOut):
     def impl(self):
-        self.run_c(r'''state.b0 = state.a * 2; output { out(); }''')
+        self.run_c(r'''state->b0 = state.a * 2; output { out(); }''')
 
 class A1(Element):
     def configure(self):
@@ -51,7 +51,7 @@ class B1(Element):
         self.inp = Input()
 
     def impl(self):
-        self.run_c(r'''printf("b1 %d\n", state.b0);''')
+        self.run_c(r'''printf("b1 %d\n", state->b0);''')
 
 class main(Flow):
     state = PerPacket(MyState)
@@ -74,7 +74,7 @@ class main(Flow):
 
         class run2(CallablePipeline):
             def configure(self):
-                self.inp = Input(Size)
+                self.inp = Input(SizeT)
 
             def impl(self):
                 deq = Deq()

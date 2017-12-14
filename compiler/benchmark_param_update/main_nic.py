@@ -6,8 +6,8 @@ n_cores = 1
 nic_cores = 1
 
 class MyState(State):
-    core = Field(Size)
-    payload = Field(Pointer(Uint(8)), copysize='sizeof(param_entry)')
+    core = Field(SizeT)
+    payload = Field(Pointer(Uint(8)), size='sizeof(param_entry)')
 
 class main(Flow):
     state = PerPacket(MyState)
@@ -21,8 +21,8 @@ class main(Flow):
 
         class Reply(Element):
             def configure(self):
-                self.inp = Input(Size, "void*", "void*")
-                self.out = Output(Size, "void*", "void*")
+                self.inp = Input(SizeT, "void*", "void*")
+                self.out = Output(SizeT, "void*", "void*")
 
             def impl(self):
                 self.run_c(r'''
@@ -60,7 +60,7 @@ class main(Flow):
 
         class Save(Element):
             def configure(self):
-                self.inp = Input(Size, "void *", "void *")
+                self.inp = Input(SizeT, "void *", "void *")
                 self.out = Output()
 
             def impl(self):
@@ -89,7 +89,7 @@ class main(Flow):
         ############################ CPU #############################
         class Scheduler(Element):
             def configure(self):
-                self.out = Output(Size)
+                self.out = Output(SizeT)
 
             def impl(self):
                 self.run_c(r'''

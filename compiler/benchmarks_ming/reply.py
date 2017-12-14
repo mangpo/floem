@@ -5,8 +5,8 @@ import target, queue, net, library
 class Filter(Element):
 
     def configure(self):
-        self.inp = Input(Size, "void*", "void*")
-        self.out = Output(Size, "void*", "void*")
+        self.inp = Input(SizeT, "void*", "void*")
+        self.out = Output(SizeT, "void*", "void*")
         self.other = Output("void*", "void*")
 
     def impl(self):
@@ -23,10 +23,10 @@ output switch {
 class Classify(Element):
 
     def configure(self):
-        self.inp = Input(Size, "void*", "void*")
-        self.hash = Output(Size, "void*", "void*")
-        self.flow = Output(Size, "void*", "void*")
-        self.seq = Output(Size, "void*", "void*")
+        self.inp = Input(SizeT, "void*", "void*")
+        self.hash = Output(SizeT, "void*", "void*")
+        self.flow = Output(SizeT, "void*", "void*")
+        self.seq = Output(SizeT, "void*", "void*")
         self.other = Output("void*", "void*")
 
     def impl(self):
@@ -48,8 +48,8 @@ output switch {
 class Hash(Element):
 
     def configure(self):
-        self.inp = Input(Size, "void*", "void*")
-        self.out = Output(Size, "void*", "void*")
+        self.inp = Input(SizeT, "void*", "void*")
+        self.out = Output(SizeT, "void*", "void*")
 
     def impl(self):
         self.run_c(r'''
@@ -64,8 +64,8 @@ output { out(pkt_len, pkt_ptr, buff); }
 
 class Flow(Element):
     def configure(self):
-        self.inp = Input(Size, "void*", "void*")
-        self.out = Output(Size, "void*", "void*")
+        self.inp = Input(SizeT, "void*", "void*")
+        self.out = Output(SizeT, "void*", "void*")
 
     def impl(self):
         self.run_c(r'''
@@ -102,8 +102,8 @@ class Seq(Element):
     this = Persistent(SeqState)
 
     def configure(self):
-        self.inp = Input(Size, "void*", "void*")
-        self.out = Output(Size, "void*", "void*")
+        self.inp = Input(SizeT, "void*", "void*")
+        self.out = Output(SizeT, "void*", "void*")
         self.this = SeqState()
 
     def impl(self):
@@ -142,8 +142,8 @@ output { out(pkt_len, pkt_ptr, buff); }
 
 class Reply(Element):
     def configure(self):
-        self.inp = Input(Size, "void*", "void*")
-        self.out = Output(Size, "void*", "void*")
+        self.inp = Input(SizeT, "void*", "void*")
+        self.out = Output(SizeT, "void*", "void*")
 
     def impl(self):
         self.run_c(r'''

@@ -5,7 +5,7 @@ from compiler import Compiler
 class MyState(State):
     core = Field(Int)
     keylen = Field(Int)
-    key = Field(Pointer(Uint(8)), copysize='state.keylen')
+    key = Field(Pointer(Uint(8)), size='state.keylen')
     p = Field(Pointer(Int), shared='data_region')
 
 class main(Flow):
@@ -62,11 +62,11 @@ class main(Flow):
             fflush(stdout);
             ''')
 
-    Enq, Deq, Scan = queue_smart.smart_queue("queue", 256, 2, 1, enq_blocking=True, deq_atomic=True, clean=True)
+    Enq, Deq, Scan = queue_smart.smart_queue("queue", 32, 128, 2, 1, enq_blocking=True, deq_atomic=True, clean=True)
 
     class Zero(Element):
         def configure(self):
-            self.out = Output(Size)
+            self.out = Output(SizeT)
 
         def impl(self):
             self.run_c(r'''
