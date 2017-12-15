@@ -44,7 +44,9 @@ class TestDSL(unittest.TestCase):
         reset()
 
     def test_run(self):
-        tests1 = ["func_increment1.py",
+        tests1 = ["inc2_function.py",
+                  "inc2_function_ext.py",
+                  "func_increment1.py",
                  "func_increment2.py",
                  "func_insert_start_element.py",
                  "pipeline_state_simple.py",

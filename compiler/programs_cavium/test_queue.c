@@ -75,7 +75,7 @@ uintptr_t shm_p = (uintptr_t) shm;
 
   rx_queue_EnqueueCollection0 = (rx_queue_EnqueueCollection *) malloc(sizeof(rx_queue_EnqueueCollection));
   memset(rx_queue_EnqueueCollection0, 0, sizeof(rx_queue_EnqueueCollection));
-  rx_queue_EnqueueCollection0->cores[0] = circular_queue0;
+  rx_queue_EnqueueCollection0->insts[0] = circular_queue0;
 
 }
 void finalize_state_instances() {
@@ -92,7 +92,7 @@ void _nic_rx_FromNetFree0_join_buffer__in0_save(_nic_rx_FromNetFree0_join_buffer
 }
 
 void nic_rx_Drop0();
-void nic_rx_Enqueue0(_nic_rx_FromNetFree0_join_buffer*,struct tuple*,size_t);
+void nic_rx_Enqueue0(_nic_rx_FromNetFree0_join_buffer*,struct tuple*,int);
 void nic_rx_FromNetFree0(void*,void*);
 void nic_rx_FromNet0();
 void nic_rx_FromNet0_out_fork0_inst(size_t,void*,void*);
@@ -103,9 +103,9 @@ void nic_rx_Drop0() {
   
 }
 
-void nic_rx_Enqueue0(_nic_rx_FromNetFree0_join_buffer* _p_nic_rx_FromNetFree0, struct tuple* x,  size_t c) {
+void nic_rx_Enqueue0(_nic_rx_FromNetFree0_join_buffer* _p_nic_rx_FromNetFree0, struct tuple* x,  int c) {
 
-            circular_queue* p = rx_queue_EnqueueCollection0->cores[c];
+            circular_queue* p = rx_queue_EnqueueCollection0->insts[c];
             rx_queue_Storage* q = p->queue;
             assert(sizeof(q->data[0].task) == 1);
             

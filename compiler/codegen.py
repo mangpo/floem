@@ -692,10 +692,11 @@ def generate_code_and_run(graph, opt, expect=None):
     generate_code_and_compile(graph, opt)
 
     if expect:
-        assert (len(graph.processes) == 1 and graph.processes == set(["tmp"])), \
+        assert len(graph.processes) == 1, \
             "generate_code_and_run doesn't support multiple processes. Please use generate_code_and_compile()"
+        prog = [x for x in graph.processes][0]
         try:
-            result = subprocess.check_output('./tmp', stderr=subprocess.STDOUT, shell=True)
+            result = subprocess.check_output('./' + prog, stderr=subprocess.STDOUT, shell=True)
             result = result.split()
             if not len(result) == len(expect):
                 raise Exception("Expect %s. Actual %s." % (expect, result))

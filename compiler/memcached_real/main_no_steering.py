@@ -47,7 +47,7 @@ class MyState(State):
     pkt = Field(Pointer(iokvs_message))
     pkt_buff = Field('void*')
     it = Field(Pointer(item), shared='data_region')
-    key = Field('void*', size='state.pkt->mcr.request.keylen')
+    key = Field('void*', size='state->pkt->mcr.request.keylen')
     hash = Field(Uint(32))
     core = Field(Uint(16))
     vallen = Field(Uint(32))
@@ -80,8 +80,8 @@ class main(Flow):
 
         def impl(self):
             self.run_c(r'''
-    state.core = inp();
-    state.pkt = NULL;
+    state->core = inp();
+    state->pkt = NULL;
             ''')
 
     class SaveState(Element):
@@ -93,8 +93,8 @@ class main(Flow):
             self.run_c(r'''
     (size_t size, void* pkt, void* buff) = inp();
     iokvs_message* m = (iokvs_message*) pkt;
-    state.pkt = m;
-    state.pkt_buff = buff;
+    state->pkt = m;
+    state->pkt_buff = buff;
     output { out(); }
                 ''')
 
@@ -105,8 +105,8 @@ class main(Flow):
 
         def impl(self):
             self.run_c(r'''
-    void* pkt = state.pkt;
-    void* pkt_buff = state.pkt_buff;
+    void* pkt = state->pkt;
+    void* pkt_buff = state->pkt_buff;
     output { out(pkt, pkt_buff); }
             ''')
 
@@ -168,7 +168,7 @@ output switch {
 
         def impl(self):
             self.run_c(r'''
-uint8_t cmd = state.pkt->mcr.request.opcode;
+uint8_t cmd = state->pkt->mcr.request.opcode;
 //printf("receive: %d\n", cmd);
 
 output switch{
@@ -181,15 +181,15 @@ output switch{
     class GetKey(ElementOneInOut):
         def impl(self):
             self.run_c(r'''
-state.key = state.pkt->payload + state.pkt->mcr.request.extlen;
+state->key = state->pkt->payload + state->pkt->mcr.request.extlen;
 output { out(); }''')
 
     class GetCore(ElementOneInOut):
         def impl(self):
             self.run_c(r'''
-int core = state.hash %s %d;;
-state.core = core;
-//printf("hash = %s, core = %s\n", state.hash, core);
+int core = state->hash %s %d;;
+state->core = core;
+//printf("hash = %s, core = %s\n", state->hash, core);
             output { out(); }''' % ('%', n_cores, '%d', '%d'))
 
     ######################## hash ########################
@@ -197,7 +197,7 @@ state.core = core;
     class JenkinsHash(ElementOneInOut):
         def impl(self):
             self.run_c(r'''
-state.hash = jenkins_hash(state.key, state.pkt->mcr.request.keylen);
+state->hash = jenkins_hash(state->key, state->pkt->mcr.request.keylen);
 //printf("hash = %d\n", hash);
 output { out(); }
             ''')
@@ -210,9 +210,9 @@ output { out(); }
 
         def impl(self):
             self.run_c(r'''
-item* it = hasht_get(state.key, state.pkt->mcr.request.keylen, state.hash);
+item* it = hasht_get(state->key, state->pkt->mcr.request.keylen, state->hash);
 //printf("hash get\n");
-state.it = it;
+state->it = it;
 
 output switch { case it: out(); else: null(); }
             ''')
@@ -221,7 +221,7 @@ output switch { case it: out(); else: null(); }
         def impl(self):
             self.run_c(r'''
 //printf("hash put\n");
-hasht_put(state.it, NULL);
+hasht_put(state->it, NULL);
 output { out(); }
             ''')
 
@@ -248,17 +248,17 @@ output { out(this->core); }''' % ('%', n_cores))
         def impl(self):
             self.run_c(r'''
 //printf("size get\n");
-    size_t msglen = sizeof(iokvs_message) + 4 + state.it->vallen;
-    state.vallen = state.it->vallen;
+    size_t msglen = sizeof(iokvs_message) + 4 + state->it->vallen;
+    state->vallen = state->it->vallen;
     output { out(msglen); }
             ''')
 
         def impl_cavium(self):
             self.run_c(r'''
     uint32_t* vallen
-    dma_read(&state.it->vallen, sizeof(uint32_t), (void**) &vallen);
+    dma_read(&state->it->vallen, sizeof(uint32_t), (void**) &vallen);
     size_t msglen = sizeof(iokvs_message) + 4 + *vallen;
-    state.vallen = *vallen;
+    state->vallen = *vallen;
     dma_free(vallen);
     output { out(msglen); }
                         ''')
@@ -274,7 +274,7 @@ output { out(this->core); }''' % ('%', n_cores))
 
         iokvs_message *m = pkt;
         //memcpy(m, &iokvs_template, sizeof(iokvs_message));
-        item* it = state.it;
+        item* it = state->it;
 
         m->mcr.request.magic = PROTOCOL_BINARY_RES;
         m->mcr.request.opcode = PROTOCOL_BINARY_CMD_GET;
@@ -285,8 +285,8 @@ m->mcr.request.keylen = 0;
 m->mcr.request.extlen = 4;
 m->mcr.request.bodylen = 4;
 *((uint32_t *)m->payload) = 0;
-m->mcr.request.bodylen = 4 + state.vallen;
-rte_memcpy(m->payload + 4, item_value(it), state.vallen);
+m->mcr.request.bodylen = 4 + state->vallen;
+rte_memcpy(m->payload + 4, item_value(it), state->vallen);
 
 output { out(msglen, m, pkt_buff); }
             ''')
@@ -297,7 +297,7 @@ output { out(msglen, m, pkt_buff); }
         iokvs_message *m = pkt;
         //memcpy(m, &iokvs_template, sizeof(iokvs_message));
         int msglen = sizeof(iokvs_message) + 4;
-        item* it = state.it;
+        item* it = state->it;
 
         m->mcr.request.magic = PROTOCOL_BINARY_RES;
         m->mcr.request.opcode = PROTOCOL_BINARY_CMD_GET;
@@ -308,11 +308,11 @@ m->mcr.request.keylen = 0;
 m->mcr.request.extlen = 4;
 m->mcr.request.bodylen = 4;
 *((uint32_t *)m->payload) = 0;
-m->mcr.request.bodylen = 4 + state.vallen;
+m->mcr.request.bodylen = 4 + state->vallen;
 
 void* value;
-dma_read(item_value(it), state.vallen, (void**) &value);
-rte_memcpy(m->payload + 4, value, state.vallen);
+dma_read(item_value(it), state->vallen, (void**) &value);
+rte_memcpy(m->payload + 4, value, state->vallen);
 dma_free(value);
 
 output { out(msglen, m, pkt_buff); }
@@ -374,8 +374,8 @@ output { out(msglen, m, pkt_buff); }
         def impl(self):
             self.run_c(r'''
             size_t msglen = sizeof(iokvs_message) + 4;
-            void* pkt = state.pkt;
-            void* pkt_buff = state.pkt_buff;
+            void* pkt = state->pkt;
+            void* pkt_buff = state->pkt_buff;
             output { out(msglen, pkt, pkt_buff); }
             ''')
 
@@ -413,8 +413,8 @@ output { out(msglen, m, pkt_buff); }
         def impl(self):
             self.run_c(r'''
             size_t msglen = inp();
-            void* pkt = state.pkt;
-            void* pkt_buff = state.pkt_buff;
+            void* pkt = state->pkt;
+            void* pkt_buff = state->pkt_buff;
             output { out(msglen, pkt, pkt_buff); }
             ''')
 
@@ -527,19 +527,19 @@ output { out(msglen, (void*) m, buff); }
 
         def impl(self):
             self.run_c(r'''
-    size_t totlen = state.pkt->mcr.request.bodylen - state.pkt->mcr.request.extlen;
-    item *it = ialloc_alloc(&this->ia[state.core], sizeof(item) + totlen, false); // TODO
+    size_t totlen = state->pkt->mcr.request.bodylen - state->pkt->mcr.request.extlen;
+    item *it = ialloc_alloc(&this->ia[state->core], sizeof(item) + totlen, false); // TODO
     if(it) {
         it->refcount = 1;
-        uint16_t keylen = state.pkt->mcr.request.keylen;
+        uint16_t keylen = state->pkt->mcr.request.keylen;
 
         //    printf("get_item id: %d, keylen: %ld, totlen: %ld, item: %ld\n",
-        //state.pkt->mcr.request.opaque, state.pkt->mcr.request.keylen, totlen, it);
-        it->hv = state.hash;
+        //state->pkt->mcr.request.opaque, state->pkt->mcr.request.keylen, totlen, it);
+        it->hv = state->hash;
         it->vallen = totlen - keylen;
         it->keylen = keylen;
-        memcpy(item_key(it), state.key, totlen);
-        state.it = it;
+        memcpy(item_key(it), state->key, totlen);
+        state->it = it;
     }
 
     output switch { case it: out();  else: nothing(); }
@@ -549,7 +549,7 @@ output { out(msglen, (void*) m, buff); }
     class Unref(ElementOneInOut):
         def impl(self):
             self.run_c(r'''
-        item_unref(state.it);
+        item_unref(state->it);
         output { out(); }
             ''')
 
@@ -592,7 +592,7 @@ output { out(msglen, (void*) m, buff); }
     count++;
     if(count == 32) {
       count = 0;
-      clean_log(&this->ia[state.core], state.pkt == NULL);
+      clean_log(&this->ia[state->core], state->pkt == NULL);
     }
             ''')
 
