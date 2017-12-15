@@ -7,7 +7,8 @@ The DSL is a Python Library. The library provides mechanisms to connect elements
 
 # Table of Contents
 A. [Prerequisites](#Prerequisites)
-B. [Language](#Language)
+
+B. [Language](#language)
   1. [Element](#Element)
   2. [Element Connection](#Element-Connection)
   3. [Pipeline](#Pipeline)
@@ -47,7 +48,7 @@ To use Floem, simply import `floem` in your python program.
 from floem import *
 ```
 
-<a name="Language"></a>
+<a name="language"></a>
 # B. Language
 
 <a name="Element"></a>
