@@ -8,7 +8,7 @@ The DSL is a Python Library. The library provides mechanisms to connect elements
 # Table of Contents
 A. [Prerequisites](#Prerequisites)
 
-B. [Language](#language)
+B. [Language](#Language)
   1. [Element](#Element)
   2. [Element Connection](#Element-Connection)
   3. [Pipeline](#Pipeline)
@@ -48,7 +48,7 @@ To use Floem, simply import `floem` in your python program.
 from floem import *
 ```
 
-<a name="language"></a>
+<a name="Language"></a>
 # B. Language
 
 <a name="Element"></a>
@@ -839,7 +839,7 @@ return Enqueue, Dequeue, Clean
 - `deq_atomic`: when `True`, the dequeue routine is atomic. If multiple threads may dequeue from the same queue instance, `deq_atomic` should be set to `True`.
 - `enq_output`: when `True`, `Enqueue` element class outputs the entry being copied to the queue.
 - `clean`: when `True`, the enqueue routine cleans up an entry before enqueueing a new one.
-- 
+
 **Returns**
 `Enqueue`: element class to enqueue a per-packet state to a queue when `enq_output=False`.
 | Port | Port type | Argument (datatype) | Argument description |
