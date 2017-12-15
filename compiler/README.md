@@ -7,7 +7,6 @@ The DSL is a Python Library. The library provides mechanisms to connect elements
 
 # Table of Contents
 A. [Prerequisites](#Prerequisites)
-
 B. [Language](#Language)
   1. [Element](#Element)
   2. [Element Connection](#Element-Connection)
@@ -18,7 +17,7 @@ B. [Language](#Language)
   7. [Network Elements](#Network-Elements)
   8. [Other Library Elements](#Other-Library-Elements)
   9. [Composite Element](#Composite-Element)
-  
+
 C. [Running on Cavium](#Running-on-Cavium)
 
 <a name="Prerequisites"></a>
@@ -39,6 +38,9 @@ Add the `compiler` directory into your evironment path.
 ```
 export PYTHONPATH=/path/to/repo/compiler
 ```
+
+### Testing
+Run `compiler/programs/hello.py`. It should print out a bunch of "hello world" before stopping. You should find `tmp` executable binary in `compiler/programs/`. Try running `tmp` via commandline. It should keep printing "hello world" forever.
 
 ### Import
 
@@ -208,17 +210,18 @@ For one special case, an output port `out` of an element `a` can also be connect
 To execute a program, you need to assign an element to a *pipeline* to run. A pipeline is a set of connected elements that starts from a *source element* and ends at leaf elements (elements with no output ports) or queues. Packet handoff along a pipeline is initiated by the source element pushing a packet to subsequent elements. 
 
 ### 3.1 Normal Pipeline
-By default, a pipeline is executed by one dedicated thread on a device, so elements within a pipeline run sequentially with respect to packet-flow dependencies. To create a pipeline and make the pipeline runs elements `a >> b` sequentially, write
+By default, a pipeline is executed by one dedicated thread on a device, so elements within a pipeline run sequentially with respect to packet-flow dependencies. A thread starts invoke the source node (an element that doesn't has any data dependency). Then, the rest of the elements are executed in a topological order according to the dataflow. A thread repeats the execution of the pipeline forever. If an element assigned to a pieline is unreachable (no data dependency) from the source element, the compiler will throw an error. In the current implementation, if there is no dependency between elements `x` and `y` according to the dataflow, `x` is executed before `y` if `x` appears before `y` in the program.
 
+To create a pipeline of connected elements, simply create elements and connect them inside a pipeline. For example:
 ```python
 class P(Pipeline):
-  def impl(self):
-     a >> b
+    def impl(self):
+        Hello()  # one element in this pipeline
      
 P('pipeline_name')
 ```
 
-A thread starts invoke the source node (an element that doesn't has any data dependency). Then, the rest of the elements are executed in a topological order according to the dataflow. A thread repeats the execution of the pipeline forever. If an element assigned to a pieline is unreachable (no data dependency) from the source element, the compiler will throw an error. In the current implementation, if there is no dependency between elements `x` and `y` according to the dataflow, `x` is executed before `y` if `x` appears before `y` in the program.
+
 
 ##### Compile and Run
 To compile all the defined pipelines into an executable file, add the following code in your program:
@@ -236,23 +239,24 @@ Under the hood,
 3. `tmp` is then executed for a few second by the script. 
 
 All the generated files remain after the compilation process is done. Therefore, `tmp` can be executed later using command line.
-**See xxx for an exmaple.**
+
+> See `compiler/programs/hello.py` for a working exmaple.
 
 ##### Dependencies
 
 If the C implemenations of elements require external C header files, we can set the `include` field of the compiler object to include appropriate header files. For example:
 
 ```python
-c.include = "#include "protocol_binary.h"
+c.include = r'''#include "hello.h"'''
 ```
 
-If the C implemenations of elements require external object files, we can set the `depend` field of the compiler object to a list of all object files (without '.o'). For example, we want to compile the program with object files jenkins_hash.o and hashtable.o:
+If the C implemenations of elements require external object files, we can set the `depend` field of the compiler object to a list of all object files (without '.o'). For example, we want to compile the program with object file hello.o:
 
 ```python
-c.depend = ['jenkins_hash', 'hashtable']
+c.depend = ['hello']
 ```
 The compiler will first compile each C program in `c.depend` to an object file, and then compile `tmp.c` with all the object files.
-**See xxx for an exmaple.**
+> See `compiler/programs/hello_depend.py` for a working exmaple.
 
 ##### Testing
 We can provide a list of expected outputs from the program as an argument to `generate_code_and_run(expect)`. For example:
@@ -305,7 +309,7 @@ c.generate_code_and_run()
 ```
 Notice, that the main body can call function `inc2`. The compiler generates executable `tmp` similar to how it is done for normal pipelines. This method for compiling and running is good for testing, but not suitable for an actual use because we want to use function `inc2` in any C program not in `tmp.c` where it is defined.
 
-**See xxx for an exmaple.**
+> See `compiler/programs/inc2_function.py` for a working exmaple.
 
 ##### Compile and Run 2
 To compile callable pipelines to be used in any external C program, we write:
@@ -313,13 +317,15 @@ To compile callable pipelines to be used in any external C program, we write:
 c = Compiler()
 c.generate_code_as_header('simple_math')
 c.depend = ['simple_math']
-c.compile_and_run('external_program')
+c.compile_and_run('simple_math_ext')
 ```
-The code shows how to use Floem to compile an external C program `external_program.c` that calls function `inc2` written in Floem. Under the hood, 
+The code shows how to use Floem to compile an external C program `simple_math_ext.c` that calls function `inc2` written in Floem. Under the hood, 
 1. Floem generates `simple_math.c` that contains actual implementation of `inc2` and `simple_math.h` that contains the function signature. 
 2. GCC compiles all C programs listed in `c.depend` into object files (compiles `simple_math.c` to `simple_math.o`). 
-3. GCC compiles the C program given to `c.compile_and_run` with the object files to generate an executable binary. In this case, it generates binary `external_program` from `external_program.c` and `simple_math.o`. 
-4. Finally, `external_program` is executed.
+3. GCC compiles the C program given to `c.compile_and_run` with the object files to generate an executable binary. In this case, it generates binary `simple_math_ext` from `simple_math_ext.c` and `simple_math.o`. 
+4. Finally, `simple_math_ext` is executed.
+
+> See `compiler/programs/inc2_function_ext.py` for a working exmaple.
 
 ##### External C Program's Initialization
 The external user's application must call the following functions to properly initialize and run the system:
@@ -328,7 +334,8 @@ The external user's application must call the following functions to properly in
 
 Note that multiple pipelines can be compiled into one file; the file name is indicated by the parameter `process` when creating a pipeline. Therefore, a process/file can contains both normal and callable pipelines. In such case, it is crucial to call `run_threads()` in order to start running the normal pipelines.
 
-**See xxx for an example.**
+> See `compiler/programs/simple_math_ext.c` and `compiler/programs/inc2_function_ext.py` for a basic working exmaple.
+> See the main function in`compiler/memcached_real/test_no_steer.c` and the very end of `compiler/memcached_real/test_no_steer.py` for a more complexing exmaple. Do not try to understand the program at this point.
 
 
 ##### Default Return
@@ -336,7 +343,7 @@ If a callable pipeline has a return value, but the pipeline may not produce a re
 - the field `self.default_return = val` of the pipeline class, or
 - the parameter `default_return` when instantiating the pipeline `pipeline_class(pipeline_name, default_return=val)`
 
-**See xxx for an exmaple.**
+> See `compiler/storm/main_nic_dccp_bypass.py` for an exmaple. Search for "inqueue_get(CallablePipeline)". Do not try to understand the program at this point.
 
 
 ### 3.3 run_order
@@ -472,13 +479,13 @@ class Main(Flow):             # define a flow
       ...
       def impl(self):
         self.run_c(r'''       // state refers to per-packet state
-        state.it = hasht_get(state->key, state->pkt->mcr.keylen, state->hash);
+        state->it = hasht_get(state->key, state->pkt->mcr.keylen, state->hash);
         output { out(); }
         ''')
     ...
 ```
 
-**See xxx as an example program.**
+> See `compiler/memcached_real/test_no_steer.py` as a working example.
 
 ### 4.3 Special fields: layout, defined, packed
 - `layout` By default, the defined fields in a state is laid out in an artitrary order in a struct. To control the order, we must explicitly assign the `layout` field of the state. 
@@ -559,7 +566,7 @@ Note that if `impl_cavium` method is unimplementated, Floem uses `impl` method t
 ### 5.2 Shared memory region
 Floem provides another method for sharing a memory region between a CPU and a NIC or between different processes on a CPU without defining state. `MemoryRegion(<name>, <size_in_bytes>)` allocates a memory on host memory. `<name>`can be accessed by any element. For elements on a CPU, `<name>` is a local pointer to the shared region. For elements on a Cavium NIC, `<name>` is a physical address of the shared region, so we must use DMA operations to access the region. `<name>` can also be used in an external C program that includes the header filed generated by Floem.
 
-**See `compiler/programas_perpacket_state/queue_shared_pointer.py` for a working example.** In this example, two external C programs (queue_shared_p1_main.c and queue_shared_p2_main.c) running in separate processes access the shared memory region called *data_region* created in Floem.
+> See `compiler/programas_perpacket_state/queue_shared_pointer.py` for a working example. In this example, two external C programs (queue_shared_p1_main.c and queue_shared_p2_main.c) running in separate processes access the shared memory region called *data_region* created in Floem.
 
 <a name="Multi-Queue"></a>
 ## 6. Multi-Queue
@@ -709,7 +716,7 @@ class dequeue(CallablePipeline):
     def impl(self):
         self.inp >> DeqGet() >> Display() >> DequeueRelease()
 ```
-**See `compile/programs/queue_variable_size.py` for a full example.**
+> See `compile/programs/queue_variable_size.py` for a complete example.
 
 ##### B. Custom Queue
 
@@ -811,6 +818,8 @@ class enqueue(CallablePipeline):
 ```
 Note that if `enq_blocking=False` and the queue is full, `Enq` will still output the pointer to an entry although it does not succesfully copy the entry into the queue.
 
+> See `compile/programs/queue_owner_bit.py` for a complete example.
+
 ### 6.2 Smart Queue
 Smart queue can be used within a [flow and per-packet state](#Flow). Unlike the primitive queue, users do not have to explicitly define the queue entry type. Floem infers which fields in the per-packet state need to be sent to the other side of the queue. Users also do not have to release a queue entry manually. Internally, Floem transforms a smart queue to a [default queue](#Default-Queue) and inserts elements to release a queue entry as earliest as it can.
 
@@ -909,6 +918,16 @@ class main(Flow):
         run2('run2')
 ```
 
+> See `compile/programs_perpacket_state/smart_queue_entry.py` for a complete example.
+
+##### Pointer to shared memory region
+When a pointer to a [shared memory region](#Shared-Memory-Region) it sent over a queue, the compiler needs to convert the address value with respect to the process's and the device's address space. Users must infrom the compiler if a particular field is a pointer to which shared memory region. For example, 
+```python
+class MyState(State):
+    p = Field(Pointer(Int), shared='data_region')  # a pointer to shared memory region 'data_region'
+```
+> See `compile/programs_perpacket_state/queue_shared_pointer.py` for a working example.
+
 ##### Variable-size field
 When a variable-size field is sent over a queue, the compiler needs the information about the size of the field. Users must inform the compiler by annotating the `size` parameter of `Field`. For example, 
 ```python
@@ -917,12 +936,7 @@ class MyState(State):
    key = Field(Pointer(Uint(8)), size='state->pkt->mcr.keylen')  # variable-size field
 ```
 
-##### Pointer to shared memory region
-When a pointer to a [shared memory region](#Shared-Memory-Region) it sent over a queue, the compiler needs to convert the address value with respect to the process's and the device's address space. Users must infrom the compiler if a particular field is a pointer to which shared memory region. For example, 
-```python
-class MyState(State):
-    p = Field(Pointer(Int), shared='data_region')  # a pointer to shared memory region 'data_region'
-```
+> See `compile/programs_perpacket_state/queue_shared_data.py` for a working example.
 
 ##### Field Granularity
 Floem attempts to send the least amount of data across a field with respect to the information provided by the users. For example, assume that the field `state->pkt->mcr.keylen` needs to be sent over a queue.
@@ -992,8 +1006,8 @@ import net
 | inp | input | packet pointer (size_t) | pointer to a packet |
 |  |  | buffer pointer (size_t) | pointer to a packet's buffer |
 
-See `compiler/benchmarks/reply.py` for a basic working example.
-See `compiler/storm/main_dccp.py` for a more sophisticated working example.
+> See `compiler/benchmarks/reply.py` for a basic working example.
+> See `compiler/storm/main_dccp.py` for a more sophisticated working example.
 
 <a name="Other-Library-Elements"></a>
 ## 8. Other Library Elements
@@ -1066,3 +1080,22 @@ Make sure that the CPU executable is running (if there is one) before running th
 ```
 sudo ifconfig eth2 10.3.0.35
 ```
+
+##### Additional object files
+If the code running on the Cavium NIC depends on C functions implemented outside Floem in `xxx.c`, users must
+1. Include those files in `LiquidIOII-Floem/liquidio-linux-driver-fwsrc-1.6.1_rc2/octeon/se/apps/nic` directory.
+2. In the same directory, edit `Makefile`. Search for
+```python
+#Action for making cvmcs-nic
+OBJS =  $(OBJ_DIR)/cvmcs-nic-main.o   \
+		$(OBJ_DIR)/cvmcs-nic-init.o   \
+		$(OBJ_DIR)/cvmcs-nic-printf.o   \
+		...
+```
+and add `xxx.o` to the list. Note that the name `xxx` must match your C file.
+
+##### Queue Management Runtime
+- By default, Floem uses one Cavium LiquidIO core (core 11) to manage the runtime. 
+- To use more than one core for runtime, change `#define RUNTIME_CORES` in `LiquidIOII-Floem/liquidio-linux-driver-fwsrc-1.6.1_rc2/octeon/se/apps/nic/floem-util.h` to the desired number N. Floem will use the last N cores to manage the runtime (i.e. cores 11, 10, .., 12-N). 
+- Instead of using dedicated cores to manage the runtime, the queue managment can also be performed by the cores that use the queues. To use this setting, comment out `#define RUNTIME` in `floem-util.h`. `RUNTIME_CORES` is ignored when `RUNTIME` is not defined.
+
