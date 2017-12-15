@@ -18,13 +18,13 @@ EnqAlloc, EnqSubmit, DeqGet, DeqRelease, clean = \
 
 class ComputeQID(Element):
     def configure(self):
-        self.inp = Input(Int, SizeT)  # val, qid
-        self.out_size_qid = Output(SizeT, SizeT)  # size, qid
+        self.inp = Input(Int, Int)  # val, qid
+        self.out_size_qid = Output(Int, Int)  # size, qid
         self.out_val = Output(Int)
 
     def impl(self):
         self.run_c(r'''
-        (int x, size_t qid) = inp();
+        (int x, int qid) = inp();
         output { out_val(x); out_size_qid(4, qid); }
         ''')
 
@@ -61,7 +61,7 @@ class CleanPrint(Element):
 
 class rx_write(CallablePipeline):
     def configure(self):
-        self.inp  = Input(Int, SizeT)  # val, qid
+        self.inp  = Input(Int, Int)  # val, qid
 
     def impl(self):
         compute_qid = ComputeQID()
@@ -75,7 +75,7 @@ class rx_write(CallablePipeline):
 
 class rx_read(CallablePipeline):
     def configure(self):
-        self.inp = Input(SizeT)
+        self.inp = Input(Int)
         self.out = Output(queue.q_buffer)
 
     def impl(self):

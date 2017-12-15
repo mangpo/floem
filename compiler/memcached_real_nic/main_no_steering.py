@@ -52,9 +52,6 @@ class MyState(State):
     core = Field(Uint(16))
     vallen = Field(Uint(32))
 
-class Schedule(State):
-    core = Field(SizeT)
-    def init(self): self.core = 0
 
 class ItemAllocators(State):
     ia = Field('struct item_allocator*')

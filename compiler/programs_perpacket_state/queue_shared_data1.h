@@ -23,13 +23,13 @@ uint8_t data[4096];
 
 
 typedef struct _queue_EnqueueCollection { 
-circular_queue* cores[2];
+circular_queue* insts[2];
  
 } __attribute__ ((packed)) queue_EnqueueCollection;
 
 
 typedef struct _queue_DequeueCollection { 
-circular_queue* cores[2];
+circular_queue* insts[2];
  
 } __attribute__ ((packed)) queue_DequeueCollection;
 

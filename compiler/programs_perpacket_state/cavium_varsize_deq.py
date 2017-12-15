@@ -66,7 +66,7 @@ class main(Flow):
 
     class Zero(Element):
         def configure(self):
-            self.out = Output(SizeT)
+            self.out = Output(Int)
 
         def impl(self):
             self.run_c(r'''

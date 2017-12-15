@@ -199,7 +199,7 @@ def get_save_state_src(g, deq_thread, enq_thread, live, special, extras,
     byte_reverse, size2convert, htons, htonl, htonp = get_size2convert(g, deq_thread, enq_thread)
 
     if qid:
-        save_src = "(q_buffer buff, size_t qid) = in();"
+        save_src = "(q_buffer buff, int qid) = in();"
     else:
         save_src = "(q_buffer buff) = in();"
 
@@ -257,7 +257,7 @@ def compile_smart_queue(g, q, src2fields):
                      qid_output=True, checksum=q.checksum)
     g.merge(g_add)
 
-    deq_types = ["q_buffer", "size_t"]
+    deq_types = ["q_buffer", "int"]
 
     src_cases = ""
     for i in range(q.channels):
@@ -266,7 +266,7 @@ def compile_smart_queue(g, q, src2fields):
     classify_ele = Element(q.deq.name + "_classify", [Port("in", deq_types)],
                            [Port("out" + str(i), deq_types) for i in range(q.channels)]
                            + [Port("release", ["q_buffer"])], r'''
-       (q_buffer buff, size_t qid) = in();
+       (q_buffer buff, int qid) = in();
         q_entry* e = buff.entry;
         int type = -1;
         if (e != NULL) type = e->task;
@@ -393,7 +393,7 @@ def compile_smart_queue(g, q, src2fields):
             t, name, special_t, info = special[var]
             if special_t == "copysize":
                 size_src += " + %s" % info
-        size_qid_ele = Element(q.name + "_size_qid" + str(i), [Port("in", [])], [Port("out", ["size_t", "size_t"])],
+        size_qid_ele = Element(q.name + "_size_qid" + str(i), [Port("in", [])], [Port("out", ["int", "int"])],
                                 r'''output { out(%s, state.qid); }''' % size_src)
 
         # Create element: fill

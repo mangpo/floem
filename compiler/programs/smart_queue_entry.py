@@ -6,7 +6,7 @@ class MyState(State):
     a = Field(Int)
     a0 = Field(Int)
     b0 = Field(Int)
-    qid = Field(SizeT)
+    qid = Field(Int)
 
 class main(Flow):
     state = PerPacket(MyState)
@@ -84,7 +84,7 @@ class main(Flow):
 
     class run2(CallablePipeline):
         def configure(self):
-            self.inp = Input(SizeT)
+            self.inp = Input(Int)
 
         def impl(self):
             deq = main.Deq()

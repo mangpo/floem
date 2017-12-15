@@ -8,8 +8,8 @@
 
 
 typedef struct _MyState { 
-int core;
 int index;
+int qid;
 int* p;
  
 } __attribute__ ((packed)) MyState;
@@ -22,13 +22,13 @@ uint8_t data[4096];
 
 
 typedef struct _queue_EnqueueCollection { 
-circular_queue* cores[2];
+circular_queue* insts[2];
  
 } __attribute__ ((packed)) queue_EnqueueCollection;
 
 
 typedef struct _queue_DequeueCollection { 
-circular_queue* cores[2];
+circular_queue* insts[2];
  
 } __attribute__ ((packed)) queue_DequeueCollection;
 
@@ -44,8 +44,8 @@ int refcount; q_buffer buffer; entry_queue0* entry; int* p;
 
 
 typedef struct _MyState_compressed0 { 
-int refcount; int core;
-int index;
+int refcount; int index;
+int qid;
 int* p;
  
 } __attribute__ ((packed)) MyState_compressed0;

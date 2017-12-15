@@ -255,7 +255,7 @@ output { out(); }
     class Scheduler(Element):
 
         def configure(self):
-            self.out = Output(SizeT)
+            self.out = Output(Int)
 
         def impl(self):
             self.run_c(r'''
@@ -706,7 +706,7 @@ state.qid = cvmx_get_core_num();
         ######################## CPU #######################
         class process_eq(CallablePipeline):
             def configure(self):
-                self.inp = Input(SizeT)
+                self.inp = Input(Int)
 
             def impl(self):
                 classifier = main.Classifer()

@@ -85,7 +85,7 @@ class gen(Pipeline):
         net_alloc = net.NetAlloc()
         to_net = net.ToNet(configure=["net_alloc"])
 
-        library.Constant(configure=['sizeof(param_message)']) >> net_alloc
+        library.Constant(configure=[SizeT,'sizeof(param_message)']) >> net_alloc
         net_alloc.oom >> library.Drop()
         net_alloc.out >> Request() >> to_net
 

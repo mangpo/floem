@@ -13,7 +13,7 @@ class MyState(State):
     pkt_buff = Field('void*')
     key = Field('void*', size='state.keylen')
     keylen = Field(Uint(16))
-    core = Field(SizeT)
+    qid = Field(Int)
 
 
 class main(Flow):
@@ -52,7 +52,7 @@ class main(Flow):
         for(i=0; i<keylen; i++)
             key[i] = count;
         state.key = key;
-        state.core = 0;
+        state.qid = 0;
 
         output { out(); }
                 ''')
@@ -71,7 +71,7 @@ class main(Flow):
 
         class Scheduler(Element):
             def configure(self):
-                self.out = Output(SizeT)
+                self.out = Output(Int)
 
             def impl(self):
                 self.run_c(r'''

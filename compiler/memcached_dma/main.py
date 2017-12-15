@@ -64,9 +64,6 @@ class MyState(State):
     src_ip = Field('struct ip_addr')
     src_port = Field(Uint(16))
 
-class Schedule(State):
-    core = Field(SizeT)
-    def init(self): self.core = 0
 
 class ItemAllocators(State):
     ia = Field(Array('struct item_allocator*', n_cores))
@@ -240,19 +237,17 @@ output { out(); }
     ######################## responses ########################
 
     class Scheduler(Element):
-        this = Persistent(Schedule)
 
         def configure(self):
-            self.inp = Input(SizeT)
-            self.out = Output(SizeT)
-            self.log = Output(SizeT)
-            self.this = Schedule()
+            self.inp = Input(Int)
+            self.out = Output(Int)
+            self.log = Output(Int)
 
         def impl(self):
             self.run_c(r'''
-    size_t core_id = inp();
-    size_t n_cores = %d;
-    size_t mod = %d;
+    int core_id = inp();
+    int n_cores = %d;
+    int mod = %d;
 
     static __thread int core = -1;
     if(core == -1) core = (core_id * mod)/%d;
@@ -544,12 +539,12 @@ output switch { case state.segfull: out(); }''')
         def states(self): self.this = main.item_allocators
 
         def configure(self):
-            self.inp = Input(SizeT, 'struct item_allocator*')
+            self.inp = Input(Int, 'struct item_allocator*')
             self.out = Output()
 
         def impl(self):
             self.run_c(r'''
-(size_t qid, struct item_allocator* ia) = inp();
+(int qid, struct item_allocator* ia) = inp();
 this->ia[qid] = ia;
 struct segment_header *h = ialloc_nicsegment_alloc(ia);
 //state.qid = qid;
@@ -944,7 +939,7 @@ output switch { case segment: out(); else: null(); }
         ######################## APP #######################
         class process_eq(CallablePipeline):
             def configure(self):
-                self.inp = Input(SizeT)
+                self.inp = Input(Int)
 
             def impl(self):
                 self.inp >> rx_deq
@@ -967,7 +962,7 @@ output switch { case segment: out(); else: null(); }
 
         class init_segment(CallablePipeline):
             def configure(self):
-                self.inp = Input(SizeT)
+                self.inp = Input(Int)
 
             def impl(self):
                 self.inp >> main.FirstSegment() >> log_out_enq.inp[0]
@@ -975,7 +970,7 @@ output switch { case segment: out(); else: null(); }
         class create_segment(CallablePipeline):
             def impl(self):
                 new_segment = main.NewSegment()
-                library.Constant(configure=[0]) >> log_in_deq
+                library.Constant(configure=[Int,0]) >> log_in_deq
                 log_in_deq.out[0] >> new_segment >> log_out_enq.inp[0]
                 new_segment.null >> main.Drop()
 

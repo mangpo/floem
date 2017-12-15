@@ -55,7 +55,7 @@ def get_field_name(state, field):
                 return s
 
 
-def create_queue_states(name, type, size, n_cores, entry_size, nameext="", deqext="",
+def create_queue_states(name, type, size, n_insts, entry_size, nameext="", deqext="",
                         declare=True, enq_lock=False, deq_lock=False):
     prefix = "%s_" % name
 
@@ -63,7 +63,7 @@ def create_queue_states(name, type, size, n_cores, entry_size, nameext="", deqex
 
     Storage.__name__ = prefix + Storage.__name__
 
-    storages = [Storage() for i in range(n_cores)]
+    storages = [Storage() for i in range(n_insts)]
 
     if enq_lock:
         enq = circular_queue_lock
@@ -77,20 +77,20 @@ def create_queue_states(name, type, size, n_cores, entry_size, nameext="", deqex
 
     enq_infos = [enq(init=[size, storages[i], entry_size, "enqueue_ready" + nameext, "enqueue_done" + nameext],
                      declare=declare, packed=False)
-                 for i in range(n_cores)]
+                 for i in range(n_insts)]
     deq_infos = [deq(init=[size, storages[i], entry_size, "dequeue_ready" + nameext + deqext, "dequeue_done" + nameext],
                      declare=declare, packed=False)
-                 for i in range(n_cores)]
+                 for i in range(n_insts)]
 
     class EnqueueCollection(State):
-        cores = Field(Array(Pointer(enq), n_cores))
-        def init(self, cores=[0]): self.cores = cores
+        insts = Field(Array(Pointer(enq), n_insts))
+        def init(self, insts=[0]): self.insts = insts
 
     EnqueueCollection.__name__ = prefix + EnqueueCollection.__name__
 
     class DequeueCollection(State):
-        cores = Field(Array(Pointer(deq), n_cores))
-        def init(self, cores=[0]): self.cores = cores
+        insts = Field(Array(Pointer(deq), n_insts))
+        def init(self, insts=[0]): self.insts = insts
 
     DequeueCollection.__name__ = prefix + DequeueCollection.__name__
 
@@ -153,7 +153,7 @@ def queue_default(name, entry_size, size, insts,
         def states(self): self.this = enq_all
 
         def configure(self):
-            self.inp = Input(SizeT, SizeT)  # len, core
+            self.inp = Input(Int, Int)  # len, core
             self.out = Output(q_buffer)
 
         def impl(self):
@@ -192,8 +192,8 @@ def queue_default(name, entry_size, size, insts,
                 src = noblock_atom if enq_atomic else noblock_noatom
 
             self.run_c(r'''
-                        (size_t len, size_t c) = inp();
-                        %s *q = this->cores[c];
+                        (int len, int c) = inp();
+                        %s *q = this->insts[c];
                         ''' % EnqQueue.__name__
                        + src + r'''
                         //if(entry == NULL) { printf("queue %d is full.\n", c); }
@@ -216,8 +216,8 @@ def queue_default(name, entry_size, size, insts,
         def states(self): self.this = deq_all
 
         def configure(self):
-            self.inp = Input(SizeT)
-            self.out = Output(q_buffer, SizeT) if qid_output else Output(q_buffer)
+            self.inp = Input(Int)
+            self.out = Output(q_buffer, Int) if qid_output else Output(q_buffer)
 
         def impl(self):
             noblock_noatom = "q_buffer buff = dequeue_get((circular_queue*) q);\n"
@@ -257,8 +257,8 @@ def queue_default(name, entry_size, size, insts,
 '''
 
             self.run_c(r'''
-                    (size_t c) = inp();
-                    %s *q = this->cores[c];
+                    (int c) = inp();
+                    %s *q = this->insts[c];
                     ''' % DeqQueue.__name__
                        + src
                        + r'''
@@ -475,7 +475,7 @@ int dequeue_done%s(void* buff) {
         def states(self): self.this = enq_all
 
         def configure(self):
-            self.inp = Input(type_star, SizeT)
+            self.inp = Input(type_star, Int)
             if enq_output:
                 self.done = Output(type_star)
 
@@ -540,8 +540,8 @@ int dequeue_done%s(void* buff) {
             out_src = "output { done(x); }\n" if enq_output else ''
 
             self.run_c(r'''
-            (%s x, size_t c) = inp();
-            circular_queue* p = this->cores[c];
+            (%s x, int c) = inp();
+            circular_queue* p = this->insts[c];
             %s* q = p->queue;
             assert(sizeof(q->data[0].%s) == 1);
             ''' % (type_star, Storage.__name__, status_field)
@@ -599,8 +599,8 @@ int dequeue_done%s(void* buff) {
 
 
             self.run_c(r'''
-            (%s x, size_t c) = inp();
-            circular_queue* p = this->cores[c];
+            (%s x, int c) = inp();
+            circular_queue* p = this->insts[c];
             %s* q = p->queue;
             ''' % (type_star, Storage.__name__)
                        + src + dma_free + out_src)
@@ -611,7 +611,7 @@ int dequeue_done%s(void* buff) {
         def states(self): self.this = deq_all
 
         def configure(self):
-            self.inp = Input(SizeT)
+            self.inp = Input(Int)
             self.out = Output(q_buffer)
 
         def impl(self):
@@ -667,8 +667,8 @@ int dequeue_done%s(void* buff) {
 '''
 
             self.run_c(r'''
-    (size_t c) = inp();
-    circular_queue* p = this->cores[c];
+    (int c) = inp();
+    circular_queue* p = this->insts[c];
     %s* q = p->queue;
     ''' % Storage.__name__
                        + src
@@ -730,8 +730,8 @@ int dequeue_done%s(void* buff) {
             debug = r'''printf("deq %ld\n", c);'''
 
             self.run_c(r'''
-                        (size_t c) = inp();
-                        circular_queue* p = this->cores[c];
+                        (int c) = inp();
+                        circular_queue* p = this->insts[c];
                         %s* q = p->queue;
                         ''' % Storage.__name__
                        #+ debug

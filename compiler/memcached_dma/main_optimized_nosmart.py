@@ -32,15 +32,7 @@ class MyState(State):
     size = Field(SizeT)
     resp_size = Field(SizeT)
     resp = Field('iokvs_message*', size='state.resp_size')  # TODO: make sure vallen is set
-    # key = Field('void*', copysize='state.pkt->mcr.request.keylen')
-    # src_mac = Field('struct eth_addr')
-    # dst_mac = Field('struct eth_addr')
-    # src_ip = Field('struct ip_addr')
-    # src_port = Field(Uint(16))
 
-class Schedule(State):
-    core = Field(SizeT)
-    def init(self): self.core = 0
 
 class ItemAllocators(State):
     ia = Field(Array('struct item_allocator*', n_cores))
@@ -222,13 +214,11 @@ output { out(); }
     ######################## responses ########################
 
     class Scheduler(Element):
-        this = Persistent(Schedule)
 
         def configure(self):
-            self.inp = Input(SizeT)
-            self.out = Output(SizeT)
-            self.log = Output(SizeT)
-            self.this = Schedule()
+            self.inp = Input(Int)
+            self.out = Output(Int)
+            self.log = Output(Int)
 
         def impl(self):
             self.run_c(r'''
@@ -574,12 +564,12 @@ output switch { case state.segfull: out(); }''')
         def states(self): self.this = main.item_allocators
 
         def configure(self):
-            self.inp = Input(SizeT, 'struct item_allocator*')
+            self.inp = Input(Int, 'struct item_allocator*')
             self.out = Output()
 
         def impl(self):
             self.run_c(r'''
-(size_t core, struct item_allocator* ia) = inp();
+(int core, struct item_allocator* ia) = inp();
 this->ia[core] = ia;
 struct segment_header *h = ialloc_nicsegment_alloc(ia);
 //state.qid = core;
@@ -984,7 +974,7 @@ iokvs_message* pkt = state.pkt;
         ######################## APP #######################
         class process_eq(CallablePipeline):
             def configure(self):
-                self.inp = Input(SizeT)
+                self.inp = Input(Int)
 
             def impl(self):
                 prepare_header = main.PrepareHeader()
@@ -1007,7 +997,7 @@ iokvs_message* pkt = state.pkt;
 
         class init_segment(CallablePipeline):
             def configure(self):
-                self.inp = Input(SizeT)
+                self.inp = Input(Int)
 
             def impl(self):
                 self.inp >> main.FirstSegment() >> log_out_enq.inp[0]
@@ -1015,7 +1005,7 @@ iokvs_message* pkt = state.pkt;
         class create_segment(CallablePipeline):
             def impl(self):
                 new_segment = main.NewSegment()
-                library.Constant(configure=[0]) >> log_in_deq
+                library.Constant(configure=[Int,0]) >> log_in_deq
                 log_in_deq.out[0] >> new_segment >> log_out_enq.inp[0]
                 new_segment.null >> main.Drop()
 

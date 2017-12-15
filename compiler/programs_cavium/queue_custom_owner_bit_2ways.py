@@ -20,7 +20,7 @@ Enq2, Deq2, DeqRelease2 = \
 class MakeTuple(Element):
     def configure(self):
         self.inp = Input(SizeT, "void*", "void*")
-        self.out = Output("struct tuple*", SizeT)
+        self.out = Output("struct tuple*", Int)
 
     def impl(self):
         self.run_c(r'''
@@ -54,7 +54,7 @@ class MakeTuple(Element):
 
 class Scheduler(Element):
     def configure(self):
-        self.out = Output(SizeT)
+        self.out = Output(Int)
 
     def impl(self):
         self.run_c(r'''
@@ -64,7 +64,7 @@ class Scheduler(Element):
 class GetTuple(Element):
     def configure(self):
         self.inp = Input(queue.q_buffer)
-        self.out = Output("struct tuple*", SizeT)
+        self.out = Output("struct tuple*", Int)
 
     def impl(self):
         self.run_c(r'''
@@ -187,7 +187,7 @@ class nic_rx(Pipeline):
 
 class nic_tx(Pipeline):
     def impl(self):
-        zero = library.Constant(configure=[0])
+        zero = library.Constant(configure=[Int,0])
         zero >> Deq2() >> Display() >> DeqRelease2()
 
 

@@ -71,8 +71,8 @@ uintptr_t shm_p = (uintptr_t) shm;
 
   queue_DequeueCollection0 = (queue_DequeueCollection *) malloc(sizeof(queue_DequeueCollection));
   memset(queue_DequeueCollection0, 0, sizeof(queue_DequeueCollection));
-  queue_DequeueCollection0->cores[0] = circular_queue2;
-  queue_DequeueCollection0->cores[1] = circular_queue3;
+  queue_DequeueCollection0->insts[0] = circular_queue2;
+  queue_DequeueCollection0->insts[1] = circular_queue3;
 
 }
 void finalize_state_instances() {
@@ -81,18 +81,18 @@ munmap(shm, shm_size);
 
 }
 
-void main_pop_queue_Dequeue0_classify_inst(q_buffer,size_t);
+void main_pop_queue_Dequeue0_classify_inst(q_buffer,int);
 void main_pop_queue_Dequeue0_release(q_buffer);
-void main_pop_queue_Dequeue0_get(size_t);
-void queue_save0_inst(q_buffer,size_t);
+void main_pop_queue_Dequeue0_get(int);
+void queue_save0_inst(q_buffer,int);
 void main_pop_Display0(pipeline_queue0*);
-void main_pop_queue_Dequeue0_classify_inst(q_buffer buff,  size_t core) {
+void main_pop_queue_Dequeue0_classify_inst(q_buffer buff,  int qid) {
 
         q_entry* e = buff.entry;
         int type = -1;
         if (e != NULL) type = e->task;
         
-  if( (type == 1)) { queue_save0_inst(buff,core); }
+  if( (type == 1)) { queue_save0_inst(buff,qid); }
   else if( (type == 0)) { main_pop_queue_Dequeue0_release(buff); }
 }
 
@@ -102,9 +102,9 @@ void main_pop_queue_Dequeue0_release(q_buffer buf) {
                             
 }
 
-void main_pop_queue_Dequeue0_get(size_t c) {
+void main_pop_queue_Dequeue0_get(int c) {
 
-                    circular_queue *q = queue_DequeueCollection0->cores[c];
+                    circular_queue *q = queue_DequeueCollection0->insts[c];
                     
 #ifdef QUEUE_STAT
     static size_t empty = 0;
@@ -126,7 +126,7 @@ q_buffer buff = dequeue_get((circular_queue*) q);
   main_pop_queue_Dequeue0_classify_inst(buff, c);
 }
 
-void queue_save0_inst(q_buffer buff,  size_t core) {
+void queue_save0_inst(q_buffer buff,  int qid) {
   pipeline_queue0 *_state = (pipeline_queue0 *) malloc(sizeof(pipeline_queue0));
   _state->refcount = 1;  _state->buffer = buff;
   _state->entry = (entry_queue0*) buff.entry;
@@ -144,7 +144,7 @@ void main_pop_Display0(pipeline_queue0* _x5) {
   main_pop_queue_Dequeue0_release(_state->buffer);
 }
 
-void pop(size_t arg0) { main_pop_queue_Dequeue0_get(arg0); }
+void pop(int arg0) { main_pop_queue_Dequeue0_get(arg0); }
 
 void init(char *argv[]) {
   init_state_instances(argv);

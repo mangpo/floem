@@ -51,8 +51,8 @@ class Drop(Element):
         self.run_c("")
 
 class Constant(Element):
-    def configure(self, c):
-        self.out = Output(SizeT)
+    def configure(self, t, c):
+        self.out = Output(t)
         self.c = c
 
     def impl(self):

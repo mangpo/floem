@@ -29,7 +29,7 @@ def smart_queue(name, entry_size, size, insts, channels, checksum=False,
 
     class Dequeue(Element):
         def configure(self):
-            self.inp = Input(SizeT)  # core
+            self.inp = Input(Int)  # core
             self.out = [Output() for i in range(channels)]
             self.special = queue
 

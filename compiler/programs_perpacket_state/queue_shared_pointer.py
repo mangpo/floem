@@ -3,7 +3,7 @@ import queue_smart
 from compiler import Compiler
 
 class MyState(State):
-    core = Field(Int)
+    qid = Field(Int)
     index = Field(Int)
     p = Field(Pointer(Int), shared='data_region')  # TODO
 
@@ -17,7 +17,7 @@ class main(Flow):
 
         def impl(self):
             self.run_c(r'''
-    state.index = inp(); state.p = data_region; state.core = 0; output { out(); }
+    state.index = inp(); state.p = data_region; state.qid = 0; output { out(); }
             ''')
 
     class Display(Element):
@@ -41,7 +41,7 @@ class main(Flow):
 
     class pop(CallablePipeline):
         def configure(self):
-            self.inp = Input(SizeT)
+            self.inp = Input(Int)
 
         def impl(self):
             self.inp >> main.Deq() >> main.Display()

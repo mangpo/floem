@@ -122,7 +122,7 @@ class gen(Pipeline):
         net_alloc = net.NetAlloc()
         to_net = net.ToNet(configure=["net_alloc"])
 
-        library.Constant(configure=[80]) >> net_alloc
+        library.Constant(configure=[SizeT,80]) >> net_alloc
         net_alloc.oom >> library.Drop()
         net_alloc.out >> Request() >> PayloadGen() >> to_net
 

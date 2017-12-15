@@ -12,7 +12,7 @@ Enq, Deq, DeqRelease = \
 class MakeTuple(Element):
     def configure(self):
         self.inp = Input(SizeT, "void*", "void*")
-        self.out = Output("struct tuple*", SizeT)
+        self.out = Output("struct tuple*", Int)
 
     def impl(self):
         self.run_c(r'''
@@ -45,7 +45,7 @@ class MakeTuple(Element):
 
 class Scheduler(Element):
     def configure(self):
-        self.out = Output(SizeT)
+        self.out = Output(Int)
 
     def impl(self):
         self.run_c(r'''

@@ -122,7 +122,7 @@ class GetCore(Element):
 
     def configure(self):
         self.inp = Input("struct tuple*")
-        self.out = Output("struct tuple*", SizeT)
+        self.out = Output("struct tuple*", Int)
 
     def impl(self):
         self.run_c(r'''
@@ -140,7 +140,7 @@ class GetCoreCPU(Element):
 
     def configure(self):
         self.inp = Input("struct tuple*")
-        self.out = Output("struct tuple*", SizeT)
+        self.out = Output("struct tuple*", Int)
 
     def impl(self):
         self.run_c(r'''
@@ -157,13 +157,13 @@ class LocalOrRemote(Element):
     def states(self): self.this = task_master_cpu
 
     def configure(self):
-        self.inp = Input("struct tuple*", SizeT)
-        self.out_send = Output("struct tuple*", SizeT)
+        self.inp = Input("struct tuple*", Int)
+        self.out_send = Output("struct tuple*", Int)
         self.out_local = Output("struct tuple*")
 
     def impl(self):
         self.run_c(r'''
-    (struct tuple* t, size_t qid) = inp();
+    (struct tuple* t, int qid) = inp();
     int worker = this->task2worker[nic_htonl(t->task)];
     int myworker = this->task2worker[nic_htonl(t->fromtask)];
     bool local;
@@ -620,12 +620,12 @@ class BatchScheduler(Element):
     def states(self): self.this = task_master
 
     def configure(self):
-        self.inp = Input(SizeT)
-        self.out = Output(SizeT)
+        self.inp = Input(Int)
+        self.out = Output(Int)
 
     def impl(self):
         self.run_c(r'''
-    (size_t core_id) = inp();
+    (int core_id) = inp();
         //printf("schedele begin: core_id = %s\n", core_id);
     int n_cores = %d;
     static __thread int core = -1;
@@ -822,7 +822,7 @@ class NicRxFlow(Flow):
 
 class inqueue_get(CallablePipeline):
     def configure(self):
-        self.inp = Input(SizeT)
+        self.inp = Input(Int)
         self.out = Output(queue.q_buffer)
         self.default_return = "{NULL, 0}"
 
@@ -831,7 +831,7 @@ class inqueue_get(CallablePipeline):
 
 class bypass_get(CallablePipeline):
     def configure(self):
-        self.inp = Input(SizeT)
+        self.inp = Input(Int)
         self.out = Output(queue.q_buffer)
         self.default_return = "{NULL, 0}"
 
@@ -851,7 +851,7 @@ class bypass_advance(CallablePipeline):
 
 class outqueue_put(CallablePipeline):
     def configure(self):
-        self.inp = Input("struct tuple*", SizeT)
+        self.inp = Input("struct tuple*", Int)
 
     def impl(self):
         local_or_remote = LocalOrRemote()

@@ -75,8 +75,8 @@ uintptr_t shm_p = (uintptr_t) shm;
 
   queue_EnqueueCollection0 = (queue_EnqueueCollection *) malloc(sizeof(queue_EnqueueCollection));
   memset(queue_EnqueueCollection0, 0, sizeof(queue_EnqueueCollection));
-  queue_EnqueueCollection0->cores[0] = circular_queue0;
-  queue_EnqueueCollection0->cores[1] = circular_queue1;
+  queue_EnqueueCollection0->insts[0] = circular_queue0;
+  queue_EnqueueCollection0->insts[1] = circular_queue1;
 
 }
 void finalize_state_instances() {
@@ -95,8 +95,8 @@ void _queue_fill0_from_main_push_Save0_join_buffer_in_pkt_save(_queue_fill0_from
 }
 
 void main_push_Save0(int);
-void queue_size_core0_from_main_push_Save0(_queue_fill0_from_main_push_Save0_join_buffer*,MyState_compressed0*);
-void queue_enq_alloc0_from_main_push_Save0(_queue_fill0_from_main_push_Save0_join_buffer*,size_t,size_t,MyState_compressed0*);
+void queue_size_qid0_from_main_push_Save0(_queue_fill0_from_main_push_Save0_join_buffer*,MyState_compressed0*);
+void queue_enq_alloc0_from_main_push_Save0(_queue_fill0_from_main_push_Save0_join_buffer*,int,int,MyState_compressed0*);
 void queue_fill0_from_main_push_Save0(q_buffer,MyState_compressed0*);
 void queue_fork0_from_main_push_Save0(MyState_compressed0*);
 void queue_enq_submit0_from_main_push_Save0(q_buffer);
@@ -104,20 +104,20 @@ void main_push_Save0(int _x0) {
   MyState_compressed0 *_state = (MyState_compressed0 *) malloc(sizeof(MyState_compressed0));
   _state->refcount = 1;
     
-    _state->index = _x0; _state->p = data_region; _state->core = 0; 
+    _state->index = _x0; _state->p = data_region; _state->qid = 0; 
   queue_fork0_from_main_push_Save0(_state);
   pipeline_unref((pipeline_state*) _state);
 }
 
-void queue_size_core0_from_main_push_Save0(_queue_fill0_from_main_push_Save0_join_buffer* _p_queue_fill0_from_main_push_Save0, MyState_compressed0* _x1) {
+void queue_size_qid0_from_main_push_Save0(_queue_fill0_from_main_push_Save0_join_buffer* _p_queue_fill0_from_main_push_Save0, MyState_compressed0* _x1) {
   MyState_compressed0 *_state = _x1;
     
-  queue_enq_alloc0_from_main_push_Save0(_p_queue_fill0_from_main_push_Save0,sizeof(entry_queue0), _state->core, _state);
+  queue_enq_alloc0_from_main_push_Save0(_p_queue_fill0_from_main_push_Save0,sizeof(entry_queue0), _state->qid, _state);
 }
 
-void queue_enq_alloc0_from_main_push_Save0(_queue_fill0_from_main_push_Save0_join_buffer* _p_queue_fill0_from_main_push_Save0, size_t len,  size_t c,  MyState_compressed0* _state) {
+void queue_enq_alloc0_from_main_push_Save0(_queue_fill0_from_main_push_Save0_join_buffer* _p_queue_fill0_from_main_push_Save0, int len,  int c,  MyState_compressed0* _state) {
 
-                        circular_queue *q = queue_EnqueueCollection0->cores[c];
+                        circular_queue *q = queue_EnqueueCollection0->insts[c];
                         q_buffer buff = enqueue_alloc((circular_queue*) q, len, no_clean);
 
                                                                         
@@ -140,7 +140,7 @@ void queue_fork0_from_main_push_Save0(MyState_compressed0* _x4) {
   _queue_fill0_from_main_push_Save0_join_buffer *_p_queue_fill0_from_main_push_Save0 = malloc(sizeof(_queue_fill0_from_main_push_Save0_join_buffer));
   MyState_compressed0 *_state = _x4;
     
-  queue_size_core0_from_main_push_Save0(_p_queue_fill0_from_main_push_Save0,_state);
+  queue_size_qid0_from_main_push_Save0(_p_queue_fill0_from_main_push_Save0,_state);
   _queue_fill0_from_main_push_Save0_join_buffer_in_pkt_save(_p_queue_fill0_from_main_push_Save0, _state);  queue_fill0_from_main_push_Save0(_p_queue_fill0_from_main_push_Save0->in_entry_arg0, _p_queue_fill0_from_main_push_Save0->in_pkt_arg0);
 
   free(_p_queue_fill0_from_main_push_Save0);

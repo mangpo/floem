@@ -53,7 +53,7 @@ class MyState(State):
     vallen = Field(Uint(32))
 
 class Schedule(State):
-    core = Field(SizeT)
+    core = Field(Int)
     def init(self): self.core = 0
 
 class ItemAllocators(State):
@@ -232,7 +232,7 @@ output { out(); }
         this = Persistent(Schedule)
 
         def configure(self):
-            self.out = Output(SizeT)
+            self.out = Output(Int)
             self.this = Schedule()
 
         def impl(self):
