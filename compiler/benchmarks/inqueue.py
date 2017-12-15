@@ -9,7 +9,7 @@ class MyState(State):
     pkt = Field('void*')
     pkt_buff = Field('void*')
     key = Field('void*', size=22)
-    core = Field(SizeT)
+    qid = Field(Int)
     pool = Field(Int)
 
 
@@ -37,7 +37,7 @@ class main(Flow):
 
         state.key = m->payload + m->mcr.request.extlen;;
         state.pool = 0;
-        state.core = cvmx_get_core_num();
+        state.qid = cvmx_get_core_num();
 
         output { out(); }
                 ''')
@@ -67,11 +67,11 @@ class main(Flow):
         ############################ CPU #############################
         class Scheduler(Element):
             def configure(self):
-                self.out = Output(SizeT)
+                self.out = Output(Int)
 
             def impl(self):
                 self.run_c(r'''
-    static size_t core = 0;
+    static int core = 0;
     core = (core+1) %s %d;
                 output { out(core); }
                 ''' % ('%', n_cores))
@@ -107,8 +107,6 @@ class main(Flow):
         nic_rx('nic_rx', device=target.CAVIUM, cores=range(n_cores))
         run('run', process='app', cores=range(1))
 
-
-master_process('app')
 
 c = Compiler(main)
 c.include = r'''

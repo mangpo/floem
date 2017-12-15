@@ -50,6 +50,7 @@ class Drop(Element):
     def impl(self):
         self.run_c("")
 
+
 class Constant(Element):
     def configure(self, t, c):
         self.out = Output(t)
@@ -61,7 +62,7 @@ class Constant(Element):
         ''' % self.c)
 
 
-class Print(Element):
+class PrintNum(Element):
     def configure(self, data_type=Int):
         self.data_type = data_type
         self.inp = Input(data_type)

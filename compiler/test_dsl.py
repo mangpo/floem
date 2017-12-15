@@ -287,7 +287,7 @@ class TestDSL(unittest.TestCase):
                 e1 = get_element_instance()
                 e2 = get_element_instance()
                 compo = get_composite_instance()
-                self.inp >> e1 >> compo >> e2 >> library.Print()
+                self.inp >> e1 >> compo >> e2 >> library.PrintNum()
 
         f('f')
 

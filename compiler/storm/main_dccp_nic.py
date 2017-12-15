@@ -113,7 +113,6 @@ class TaskMaster(State):
         self.executors = "get_executors()"
 
 task_master = TaskMaster('task_master')
-task_master_cpu = TaskMaster('task_master_cpu')
 
 
 class GetCore(Element):
@@ -129,52 +128,32 @@ class GetCore(Element):
     struct tuple* t = inp();
     int id = this->task2executorid[nic_htonl(t->task)];
 #ifdef DEBUG_MP
-    printf("\nget_core: task %d, qid %d\n", nic_htonl(t->task), id);
+    printf("\nreceive: task %d, id %d\n", nic_htonl(t->task), id);
 #endif
     output { out(t, id); }
         ''')
 
-class GetCoreCPU(Element):
-    this = Persistent(TaskMaster)
-    def states(self): self.this = task_master_cpu
-
-    def configure(self):
-        self.inp = Input("struct tuple*")
-        self.out = Output("struct tuple*", Int)
-
-    def impl(self):
-        self.run_c(r'''
-    struct tuple* t = inp();
-    int id = this->task2executorid[nic_htonl(t->task)];
-#ifdef DEBUG_MP
-    printf("\nget_core: task %d, qid %d\n", nic_htonl(t->task), id);
-#endif
-    output { out(t, id); }
-        ''')
 
 class LocalOrRemote(Element):
     this = Persistent(TaskMaster)
-    def states(self): self.this = task_master_cpu
+    def states(self): self.this = task_master
 
     def configure(self):
-        self.inp = Input("struct tuple*", Int)
-        self.out_send = Output("struct tuple*", Int)
+        self.inp = Input("struct tuple*")
+        self.out_send = Output("struct tuple*")
         self.out_local = Output("struct tuple*")
 
     def impl(self):
         self.run_c(r'''
-    (struct tuple* t, int qid) = inp();
-    int worker = this->task2worker[nic_htonl(t->task)];
-    int myworker = this->task2worker[nic_htonl(t->fromtask)];
+    (struct tuple* t) = inp();
     bool local;
-    local = (worker == myworker);
+    local = (state.worker == state.myworker);
     if(local && nic_htonl(t->task) == 30) printf("30: send to myself!\n");
 #ifdef DEBUG_MP
-    //if(local) printf("send to myself!\n");
-    //else printf("remote!\n");
+    if(local) printf("send to myself!\n");
 #endif
 
-    output switch { case local: out_local(t); else: out_send(t, qid); }
+    output switch { case local: out_local(t); else: out_send(t, worker); }
         ''')
 
 
@@ -189,28 +168,6 @@ class PrintTuple(Element):
     def impl(self):
         self.run_c(r'''
     (struct tuple* t) = inp();
-
-#ifdef DEBUG_MP
-  if(t) {
-    uint32_t task = nic_htonl(t->task);
-    if(task == 10 && strcmp(t->v[0].str, "golda")) {
-      printf("print: task = %d, str = %s\n", task, t->v[0].str);
-      assert(strcmp(t->v[0].str, "golda") == 0);
-    }
-    if(task == 11 && strcmp(t->v[0].str, "nathan")) {
-      printf("print: task = %d, str = %s\n", task, t->v[0].str);
-      assert(strcmp(t->v[0].str, "nathan") == 0);
-    }
-    if(task == 12 && strcmp(t->v[0].str, "jackson")) {
-      printf("print: task = %d, str = %s\n", task, t->v[0].str);
-      assert(strcmp(t->v[0].str, "jackson") == 0);
-    }
-    if(task == 13 && strcmp(t->v[0].str, "bertels")) {
-      printf("print: task = %d, str = %s\n", task, t->v[0].str);
-      assert(strcmp(t->v[0].str, "berterls") == 0);
-    }
-  }
-#endif
 
 #ifdef DEBUG_MP
     if(t != NULL) {
@@ -519,28 +476,6 @@ class Tuple2Pkt(Element):
         header->eth.src = workers[state.myworker].mac;
         
         //printf("PREPARE PKT: task = %d, worker = %d\n", nic_hotnl(t->task), state.worker);
-
-#ifdef DEBUG_MP
-        t = (struct tuple*) &header[1];
-    uint32_t task = nic_htonl(t->task);                                                              
-    if(task == 10 && strcmp(t->v[0].str, "golda")) {                                           
-      printf("pkt: task = %d, str = %s\n", task, t->v[0].str);                                     
-      assert(strcmp(t->v[0].str, "golda") == 0);                                                     
-    }                                                                                                
-    if(task == 11 && strcmp(t->v[0].str, "nathan")) {                                                
-      printf("pkt: task = %d, str = %s\n", task, t->v[0].str);                                     
-      assert(strcmp(t->v[0].str, "nathan") == 0);                                                    
-    }                                                                                                
-    if(task == 12 && strcmp(t->v[0].str, "jackson")) {                                               
-      printf("pkt: task = %d, str = %s\n", task, t->v[0].str);                                     
-      assert(strcmp(t->v[0].str, "jackson") == 0);                                                   
-    }                                                                                                
-    if(task == 13 && strcmp(t->v[0].str, "bertels")) {                                               
-      printf("pkt: task = %d, str = %s\n", task, t->v[0].str);                                     
-      assert(strcmp(t->v[0].str, "berterls") == 0);                                                  
-    }   
-#endif
-
         output { out(p); }
         ''')
 
@@ -614,6 +549,37 @@ class GetRxBuf(Element):
 
 
 ############################### Queue #################################
+# class BatchInfo(State):
+#     core = Field(Int)
+#     batch_size = Field(Int)
+#     start = Field(Uint(64))
+#
+#     def init(self):
+#         self.core = 0
+#         self.batch_size = 0
+#         self.start = 0
+#
+# batch_info = BatchInfo()
+#
+# class BatchScheduler(Element):
+#     this = Persistent(BatchInfo)
+#     def states(self):
+#         self.this = batch_info
+#
+#     def configure(self):
+#         self.out = Output(Size)
+#
+#     def impl(self):
+#         self.run_c(r'''
+#     if(this->batch_size >= BATCH_SIZE || rdtsc() - this->start >= BATCH_DELAY) {
+#         this->core = (this->core + 1) %s %d;
+#         this->batch_size = 0;
+#         this->start = rdtsc();
+#         printf("======================= Dequeue core = %d\n", this->core);
+#     }
+#     output { out(this->core); }
+#         ''' % ('%', n_cores))
+
 class BatchScheduler(Element):
     this = Persistent(TaskMaster)
 
@@ -756,15 +722,11 @@ MAX_ELEMS = 256 #(4 * 1024)
 
 rx_enq_creator, rx_deq_creator, rx_release_creator = \
     queue.queue_custom("rx_queue", "struct tuple", MAX_ELEMS, n_cores, "status", enq_blocking=False,
-                       deq_blocking=False, enq_atomic=True, enq_output=True)
+                       deq_blocking=True, enq_atomic=True, enq_output=True)
 
 tx_enq_creator, tx_deq_creator, tx_release_creator = \
     queue.queue_custom("tx_queue", "struct tuple", MAX_ELEMS, n_cores, "status", checksum="checksum",
                        enq_blocking=True, deq_atomic=True)
-
-BypassEnq, BypassDeq, BypassRelease = \
-    queue.queue_custom("bypass_queue", "struct tuple", MAX_ELEMS, n_cores, "status", enq_blocking=True,
-                       deq_blocking=False, enq_atomic=True)  # TODO: enq_blocking?
 
 
 class RxState(State):
@@ -789,7 +751,7 @@ class NicRxFlow(Flow):
 
             def impl(self):
                 network_alloc = net.NetAlloc()
-                to_net = net.ToNet(configure=["alloc", True])
+                to_net = net.ToNet(configure=["alloc"])
                 classifier = Classifier()
                 rx_enq = rx_enq_creator()
                 tx_buf = GetTxBuf(configure=['sizeof(struct pkt_dccp_ack_headers)'])
@@ -824,18 +786,9 @@ class inqueue_get(CallablePipeline):
     def configure(self):
         self.inp = Input(Int)
         self.out = Output(queue.q_buffer)
-        self.default_return = "{NULL, 0}"
 
     def impl(self): self.inp >> rx_deq_creator() >> self.out
 
-
-class bypass_get(CallablePipeline):
-    def configure(self):
-        self.inp = Input(Int)
-        self.out = Output(queue.q_buffer)
-        self.default_return = "{NULL, 0}"
-
-    def impl(self): self.inp >> BypassDeq() >> self.out
 
 class inqueue_advance(CallablePipeline):
     def configure(self):
@@ -843,24 +796,12 @@ class inqueue_advance(CallablePipeline):
 
     def impl(self): self.inp >> rx_release_creator()
 
-class bypass_advance(CallablePipeline):
-    def configure(self):
-        self.inp = Input(queue.q_buffer)
-
-    def impl(self): self.inp >> BypassRelease()
 
 class outqueue_put(CallablePipeline):
     def configure(self):
         self.inp = Input("struct tuple*", Int)
 
-    def impl(self):
-        local_or_remote = LocalOrRemote()
-        self.inp >> local_or_remote
-        # local
-        local_or_remote.out_local >> GetCoreCPU() >> BypassEnq()
-        # remote
-        local_or_remote.out_send >> tx_enq_creator()
-
+    def impl(self): self.inp >> tx_enq_creator()
 
 class TxState(State):
     worker = Field(Int)
@@ -874,7 +815,7 @@ class NicTxFlow(Flow):
     def impl(self):
         tx_release = tx_release_creator()
         network_alloc = net.NetAlloc()
-        to_net = net.ToNet(configure=["alloc", True])
+        to_net = net.ToNet(configure=["alloc"])
 
         tx_buf = GetTxBuf(configure=['sizeof(struct pkt_dccp_headers) + sizeof(struct tuple)'])
         size_pkt = SizePkt(configure=['sizeof(struct pkt_dccp_headers) + sizeof(struct tuple)'])
@@ -914,11 +855,19 @@ class NicTxFlow(Flow):
         class nic_tx(Pipeline):
             def impl(self):
                 tx_deq = tx_deq_creator()
+                rx_enq = rx_enq_creator()
+                local_or_remote = LocalOrRemote()
                 save_buff = SaveBuff()
                 get_buff = GetBuff()
 
-                self.core_id >> queue_schedule >> tx_deq >> save_buff >> PrintTuple() >> SaveWorkerID() \
-                >> PreparePkt() >> get_buff >> tx_release
+                self.core_id >> queue_schedule >> tx_deq >> save_buff >> PrintTuple() >> SaveWorkerID() >> local_or_remote
+                save_buff >> batch_inc
+                # send
+                local_or_remote.out_send >> PreparePkt() >> get_buff
+                # local
+                local_or_remote.out_local >> GetCore() >> rx_enq >> get_buff #CountTuple() >> get_buff
+
+                get_buff >> tx_release
 
         if nic == 'dpdk':
             nic_tx('nic_tx', process='dpdk', cores=range(n_nic_tx))
@@ -938,8 +887,6 @@ else:
 
 inqueue_get('inqueue_get', process='app')
 inqueue_advance('inqueue_advance', process='app')
-bypass_get('bypass_get', process='app')
-bypass_advance('bypass_advance', process='app')
 outqueue_put('outqueue_put', process='app')
 master_process('app')
 
@@ -959,8 +906,8 @@ c.generate_code_as_header()
 
 if nic == 'dpdk':
     c.depend = {"test_storm_nic": ['hash', 'worker', 'dummy', 'dpdk'],
-                "test_storm_bypass_app": ['list', 'hash', 'hash_table', 'spout', 'count', 'rank', 'worker', 'app']}
-    c.compile_and_run([("test_storm_bypass_app", workerid[test]), ("test_storm_nic", workerid[test])])
+                "test_storm_app": ['list', 'hash', 'hash_table', 'spout', 'count', 'rank', 'worker', 'app']}
+    c.compile_and_run([("test_storm_app", workerid[test]), ("test_storm_nic", workerid[test])])
 else:
-    c.depend = {"test_storm_bypass_app": ['list', 'hash', 'hash_table', 'spout', 'count', 'rank', 'worker', 'app']}
-    c.compile_and_run([("test_storm_bypass_app", workerid[test])])
+    c.depend = {"test_storm_app": ['list', 'hash', 'hash_table', 'spout', 'count', 'rank', 'worker', 'app']}
+    c.compile_and_run([("test_storm_app", workerid[test])])

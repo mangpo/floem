@@ -649,7 +649,7 @@ class NicRxFlow(Flow):
 
             def impl(self):
                 network_alloc = net.NetAlloc()
-                to_net = net.ToNet(configure=["alloc", True, 8])
+                to_net = net.ToNet(configure=["alloc", 8])
                 classifier = Classifier()
                 rx_enq = rx_enq_creator()
                 tx_buf = GetTxBuf(configure=['sizeof(struct pkt_dccp_ack_headers)'])
@@ -718,7 +718,7 @@ class NicTxFlow(Flow):
     def impl(self):
         tx_release = tx_release_creator()
         network_alloc = net.NetAlloc()
-        to_net = net.ToNet(configure=["alloc", True, 8])
+        to_net = net.ToNet(configure=["alloc", 8])
 
         tx_buf = GetTxBuf(configure=['sizeof(struct pkt_dccp_headers) + sizeof(struct tuple)'])
         size_pkt = SizePkt(configure=['sizeof(struct pkt_dccp_headers) + sizeof(struct tuple)'])

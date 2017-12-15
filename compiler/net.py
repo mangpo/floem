@@ -78,14 +78,11 @@ class NetAlloc(Element):
 
 
 class ToNet(Element):
-    def configure(self, buffer="from_net", has_output=False, batch_size=32):
+    def configure(self, buffer="from_net", batch_size=32):
         self.inp = Input(SizeT, "void *", "void *")  # size, packet, buffer
         self.buffer = buffer
         self.has_output = False
         self.batch_size = batch_size
-        # self.has_output = has_output
-        # if has_output:
-        #     self.out = Output("void *", "void *")
 
     def impl(self):
         out = r'''
