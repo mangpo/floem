@@ -6,7 +6,7 @@ class MyState(State):
     a = Field(Int)
     a0 = Field(Int)
     b0 = Field(Int)
-    core = Field(Int)
+    qid = Field(Int)
 
 
 class Save(Element):
@@ -15,7 +15,7 @@ class Save(Element):
         self.out = Output()
 
     def impl(self):
-        self.run_c(r'''state.a = inp(); state.core = 0; output { out(); }''')
+        self.run_c(r'''state.a = inp(); state.qid = 0; output { out(); }''')
 
 class Classify(Element):
     def configure(self):

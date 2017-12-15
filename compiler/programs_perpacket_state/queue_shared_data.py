@@ -3,7 +3,7 @@ import queue_smart
 from compiler import Compiler
 
 class MyState(State):
-    core = Field(Int)
+    qid = Field(Int)
     keylen = Field(Int)
     key = Field(Pointer(Uint(8)), size='state->keylen')
     p = Field(Pointer(Int), shared='data_region')
@@ -20,7 +20,7 @@ class main(Flow):
         def impl(self):
             self.run_c(r'''
     (int len, uint8_t data) = inp();
-    state->core = 0;
+    state->qid = 0;
     state->key = (uint8_t *) malloc(len);
     state->keylen = len;
     for(int i=0; i<len ; i++)

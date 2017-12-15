@@ -195,16 +195,16 @@ def get_fill_entry_src(g, deq_thread, enq_thread, live, special, extras,
 
 
 def get_save_state_src(g, deq_thread, enq_thread, live, special, extras,
-                       state_entry, src2fields, mapping, pipeline_state, core=True):
+                       state_entry, src2fields, mapping, pipeline_state, qid=True):
     byte_reverse, size2convert, htons, htonl, htonp = get_size2convert(g, deq_thread, enq_thread)
 
-    if core:
-        save_src = "(q_buffer buff, size_t core) = in();"
+    if qid:
+        save_src = "(q_buffer buff, size_t qid) = in();"
     else:
         save_src = "(q_buffer buff) = in();"
 
-    if core and 'core' in extras:
-        save_src += "  state.core = core;\n"
+    if qid and 'qid' in extras:
+        save_src += "  state.qid = qid;\n"
     save_src += "  state.buffer = buff;\n"
     save_src += "  state.entry = (%s*) buff.entry;\n" % state_entry.name
     for var in live:
@@ -261,12 +261,12 @@ def compile_smart_queue(g, q, src2fields):
 
     src_cases = ""
     for i in range(q.channels):
-        src_cases += "    case (type == %d): out%d(buff,core);\n" % (i + 1, i)
+        src_cases += "    case (type == %d): out%d(buff,qid);\n" % (i + 1, i)
     src_cases += "    case (type == 0): release(buff);\n"
     classify_ele = Element(q.deq.name + "_classify", [Port("in", deq_types)],
                            [Port("out" + str(i), deq_types) for i in range(q.channels)]
                            + [Port("release", ["q_buffer"])], r'''
-       (q_buffer buff, size_t core) = in();
+       (q_buffer buff, size_t qid) = in();
         q_entry* e = buff.entry;
         int type = -1;
         if (e != NULL) type = e->task;
@@ -367,13 +367,12 @@ def compile_smart_queue(g, q, src2fields):
         live = filter_live(q.deq.liveness[i])
         uses = filter_live(q.deq.uses[i])
         extras = uses.difference(live)
-        core_uses = copy.copy(uses).union(set(['core']))
+        qid_uses = copy.copy(uses).union(set(['qid']))
         save_uses = copy.copy(uses).union(set(['buffer']))
 
-        #if isinstance(q, queue_ast.QueueVariableSizeOne2Many) and 'core' in live:
-        if 'core' in live:
-            live = live.difference(set(['core']))
-            extras.add('core')
+        if 'qid' in live:
+            live = live.difference(set(['qid']))
+            extras.add('qid')
 
         ins = ins_map[i]
         out = out_map[i]
@@ -394,8 +393,8 @@ def compile_smart_queue(g, q, src2fields):
             t, name, special_t, info = special[var]
             if special_t == "copysize":
                 size_src += " + %s" % info
-        size_core_ele = Element(q.name + "_size_core" + str(i), [Port("in", [])], [Port("out", ["size_t", "size_t"])],
-                                r'''output { out(%s, state.core); }''' % size_src)
+        size_qid_ele = Element(q.name + "_size_qid" + str(i), [Port("in", [])], [Port("out", ["size_t", "size_t"])],
+                                r'''output { out(%s, state.qid); }''' % size_src)
 
         # Create element: fill
         fill_src = get_fill_entry_src(g, enq_thread, deq_thread, live, special, extras,
@@ -403,14 +402,14 @@ def compile_smart_queue(g, q, src2fields):
         fill_extra_port = [Port("done", [])] if q.enq_output else []
         fill_ele = Element(q.name + "_fill" + str(i), [Port("in_entry", ["q_buffer"]), Port("in_pkt", [])],
                            [Port("out", ["q_buffer"])] + fill_extra_port, fill_src)
-        fork = Element(q.name + "_fork" + str(i), [Port("in", [])], [Port("out_size_core", []), Port("out_fill", [])],
-                       r'''output { out_size_core(); out_fill(); }''')
+        fork = Element(q.name + "_fork" + str(i), [Port("in", [])], [Port("out_size_qid", []), Port("out_fill", [])],
+                       r'''output { out_size_qid(); out_fill(); }''')
 
         # Create element: save
         save_src = get_save_state_src(g, deq_thread, enq_thread, live, special, extras,
-                                      state_entry, src2fields, mapping, pipeline_state, core=True)
+                                      state_entry, src2fields, mapping, pipeline_state, qid=True)
         save = Element(q.name + "_save" + str(i), [Port("in", deq_types)], [Port("out", [])], save_src)
-        g.addElement(size_core_ele)
+        g.addElement(size_qid_ele)
         g.addElement(fill_ele)
         g.addElement(fork)
         g.addElement(save)
@@ -422,18 +421,18 @@ def compile_smart_queue(g, q, src2fields):
             # Enqueue instances
             enq_alloc_inst = enq_alloc(prefix + q.name + "_enq_alloc" + str(i) + "_from_" + in_inst, create=False).instance
             enq_submit_inst = enq_submit(prefix + q.name + "_enq_submit" + str(i) + "_from_" + in_inst, create=False).instance
-            size_core = ElementInstance(size_core_ele.name, prefix + size_core_ele.name + "_from_" + in_inst)
+            size_qid = ElementInstance(size_qid_ele.name, prefix + size_qid_ele.name + "_from_" + in_inst)
             fill_inst = ElementInstance(fill_ele.name, prefix + fill_ele.name + "_from_" + in_inst)
             fork_inst = ElementInstance(fork.name, prefix + fork.name + "_from_" + in_inst)
-            new_instances_live = [enq_alloc_inst, size_core, fill_inst, fork_inst]
+            new_instances_live = [enq_alloc_inst, size_qid, fill_inst, fork_inst]
             for inst in new_instances_live:
                 g.newElementInstance(inst.element, inst.name, inst.args)
                 g.set_thread(inst.name, in_thread)
                 instance = g.instances[inst.name]
                 instance.liveness = live
                 instance.uses = uses
-            g.instances[size_core.name].uses = core_uses
-            g.instances[fork_inst.name].uses = core_uses
+            g.instances[size_qid.name].uses = qid_uses
+            g.instances[fork_inst.name].uses = qid_uses
 
             new_instances_nolive = [enq_submit_inst]
             for inst in new_instances_nolive:
@@ -445,8 +444,8 @@ def compile_smart_queue(g, q, src2fields):
 
             # Enqueue connection
             g.connect(in_inst, fork_inst.name, in_port)
-            g.connect(fork_inst.name, size_core.name, "out_size_core")
-            g.connect(size_core.name, enq_alloc_inst.name)
+            g.connect(fork_inst.name, size_qid.name, "out_size_qid")
+            g.connect(size_qid.name, enq_alloc_inst.name)
             g.connect(enq_alloc_inst.name, fill_inst.name, "out", "in_entry")
             g.connect(fork_inst.name, fill_inst.name, "out_fill", "in_pkt")
             g.connect(fill_inst.name, enq_submit_inst.name, "out")
@@ -483,7 +482,7 @@ def compile_smart_queue(g, q, src2fields):
         if clean:
             # Create scan save
             scan_save_src = get_save_state_src(g, clean_thread, enq_thread, live, special, extras,
-                                               state_entry, src2fields, mapping, pipeline_state, core=False)
+                                               state_entry, src2fields, mapping, pipeline_state, qid=False)
             scan_save = Element(q.name + "_scan_save" + str(i), [Port("in", ["q_buffer"])], [Port("out", [])],
                                 scan_save_src)
             scan_save_inst = ElementInstance(scan_save.name, prefix + scan_save.name + "_inst")

@@ -2,8 +2,6 @@ from dsl import *
 import queue_smart
 from compiler import Compiler
 
-
-
 class MyState(State):
     core = Field(Int)
     index = Field(Int)

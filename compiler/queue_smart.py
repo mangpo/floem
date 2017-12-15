@@ -19,9 +19,9 @@ def smart_queue(name, entry_size, size, insts, channels, checksum=False,
 
         def impl(self):
             if enq_output:
-                self.run_c("state.core; output { done(); }")
+                self.run_c("state.qid; output { done(); }")
             else:
-                self.run_c("state.core;")
+                self.run_c("state.qid;")
 
         def __init__(self, name=None, create=True):
             Element.__init__(self, name=name, create=create)

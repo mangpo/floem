@@ -1,5 +1,4 @@
 from dsl import *
-import workspace
 
 q_buffer = 'q_buffer'
 q_entry = 'q_entry'
@@ -478,7 +477,7 @@ int dequeue_done%s(void* buff) {
         def configure(self):
             self.inp = Input(type_star, SizeT)
             if enq_output:
-                self.out = Output(type_star)
+                self.done = Output(type_star)
 
         def impl(self):
 
@@ -538,7 +537,7 @@ int dequeue_done%s(void* buff) {
             else:
                 src = noblock_atom if enq_atomic else noblock_noatom
 
-            out_src = "output { out(x); }\n" if enq_output else ''
+            out_src = "output { done(x); }\n" if enq_output else ''
 
             self.run_c(r'''
             (%s x, size_t c) = inp();
@@ -596,7 +595,7 @@ int dequeue_done%s(void* buff) {
     dma_free(entry);
 #endif
     '''
-            out_src = "output { out(x); }\n" if enq_output else ""
+            out_src = "output { done(x); }\n" if enq_output else ""
 
 
             self.run_c(r'''

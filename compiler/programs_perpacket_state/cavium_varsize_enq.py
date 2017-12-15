@@ -3,7 +3,7 @@ import queue_smart, net
 from compiler import Compiler
 
 class MyState(State):
-    core = Field(Int)
+    qid = Field(Int)
     keylen = Field(Int)
     key = Field(Pointer(Uint(8)), size='state.keylen')
     p = Field(Pointer(Int), shared='data_region')
@@ -29,7 +29,7 @@ class main(Flow):
     inp();
     this->count++;
     printf("inject = %d\n", this->count);
-    state.core = 0;
+    state.qid = 0;
     state.key = (uint8_t *) malloc(this->count);
     state.keylen = this->count;
     int i;
@@ -47,7 +47,7 @@ class main(Flow):
     inp();
     this->count++;
     printf("inject = %d\n", this->count);
-    state.core = 0;
+    state.qid = 0;
     state.key = (uint8_t *) malloc(this->count);
     state.keylen = this->count;
     int i;

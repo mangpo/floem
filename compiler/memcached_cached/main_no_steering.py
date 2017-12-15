@@ -50,15 +50,12 @@ class MyState(State):
     pkt_size = Field(SizeT)
     it = Field(Pointer(item), shared='data_region')
     hash = Field(Uint(32))
-    core = Field(Uint(16))
+    qid = Field(Uint(16))
     vallen = Field(Uint(32))
 
     resp_size = Field(SizeT)
     resp = Field(Pointer(iokvs_message), size='state.resp_size')  # TODO: make sure vallen is set
 
-class Schedule(State):
-    core = Field(SizeT)
-    def init(self): self.core = 0
 
 class ItemAllocators(State):
     ia = Field('struct item_allocator*')
@@ -119,7 +116,7 @@ class main(Flow):
 iokvs_message* m = (iokvs_message*) pkt;
 
 state.pkt = NULL;
-state.core = cvmx_get_core_num();
+state.qid = cvmx_get_core_num();
 int type; // 0 = normal, 1 = slow, 2 = drop
 
 if (m->ether.type == htons(ETHERTYPE_IPv4) &&
@@ -597,7 +594,7 @@ output { out(msglen, (void*) m, buff); }
     size_t totlen = htonl(pkt->mcr.request.bodylen) - pkt->mcr.request.extlen;
 
 #ifdef CAVIUM
-    item *it = ialloc_alloc(&this->ia[state.core], sizeof(item) + totlen, false);
+    item *it = ialloc_alloc(&this->ia[state.qid], sizeof(item) + totlen, false);
 #else
     item *it = ialloc_alloc(&this->ia[0], sizeof(item) + totlen, false);
 #endif
@@ -645,7 +642,7 @@ output { out(msglen, (void*) m, buff); }
         def impl(self):
             self.run_c(r'''
 state.pkt = NULL;
-state.core = cvmx_get_core_num();
+state.qid = cvmx_get_core_num();
             ''')
 
     class Free(Element):
@@ -678,7 +675,7 @@ state.core = cvmx_get_core_num();
     count++;
     if(count == 32) {
       count = 0;
-      clean_log(&this->ia[state.core], state.pkt == NULL);
+      clean_log(&this->ia[state.qid], state.pkt == NULL);
     }
             ''')
 

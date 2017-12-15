@@ -56,7 +56,7 @@ class MyState(State):
     segbase = Field(Uint(64))
     segaddr = Field(Uint(64))
     seglen = Field(Uint(64))
-    core = Field(Uint(16))
+    qid = Field(Uint(16))
     vallen = Field(Uint(32))
     keylen = Field(Uint(16))
     src_mac = Field('struct eth_addr')
@@ -200,7 +200,7 @@ output { out(); }''')
         def impl(self):
             self.run_c(r'''
 int core = state.hash %s %d;;
-state.core = core;
+state.qid = core;
 //printf("hash = %s, core = %s\n", state.hash, core);
             output { out(); }''' % ('%', n_cores, '%d', '%d'))
 
@@ -535,7 +535,7 @@ output { out(msglen, (void*) m, buff); }
     class FilterFull(ElementOneInOut):
         def impl(self):
             self.run_c(r'''
-state.core = 0;
+state.qid = 0;
 output switch { case state.segfull: out(); }''')
 
 
@@ -549,11 +549,11 @@ output switch { case state.segfull: out(); }''')
 
         def impl(self):
             self.run_c(r'''
-(size_t core, struct item_allocator* ia) = inp();
-this->ia[core] = ia;
+(size_t qid, struct item_allocator* ia) = inp();
+this->ia[qid] = ia;
 struct segment_header *h = ialloc_nicsegment_alloc(ia);
-//state.core = core;
-state.core = 0;
+//state.qid = qid;
+state.qid = 0;
 state.segbase = (uint64_t) h->data;
 state.segaddr = h->addr;
 state.seglen = h->size;
@@ -582,7 +582,7 @@ if(segment == NULL) {
     state.segbase = segment->data;
     state.segaddr = segment->addr;
     state.seglen = segment->size;
-    state.core = 0;
+    state.qid = 0;
 }
 output switch { case segment: out(); else: null(); }
             ''')

@@ -26,7 +26,7 @@ class MyState(State):
     segbase = Field(Uint(64))
     segaddr = Field(Uint(64))
     seglen = Field(Uint(64))
-    core = Field(Uint(16))
+    qid = Field(Uint(16))
     vallen = Field(Uint(32))
     keylen = Field(Uint(16))
     size = Field(SizeT)
@@ -171,7 +171,7 @@ output { out(); }''')
         def impl(self):
             self.run_c(r'''
 int core = state.hash %s %d;;
-state.core = core;
+state.qid = core;
 #ifdef DEBUG
 iokvs_message* pkt = state.pkt;
 printf("hash = %s, keylen = %s, core = %s\n", pkt->mcr.request.keylen, state.hash, core);
@@ -565,7 +565,7 @@ output { out(msglen, (void*) m, buff); }
     class FilterFull(ElementOneInOut):
         def impl(self):
             self.run_c(r'''
-state.core = 0;
+state.qid = 0;
 output switch { case state.segfull: out(); }''')
 
 
@@ -582,8 +582,8 @@ output switch { case state.segfull: out(); }''')
 (size_t core, struct item_allocator* ia) = inp();
 this->ia[core] = ia;
 struct segment_header *h = ialloc_nicsegment_alloc(ia);
-//state.core = core;
-state.core = 0;
+//state.qid = core;
+state.qid = 0;
 state.segbase = (uint64_t) h->data;
 state.segaddr = h->addr;
 state.seglen = h->size;
@@ -612,7 +612,7 @@ if(segment == NULL) {
     state.segbase = segment->data;
     state.segaddr = segment->addr;
     state.seglen = segment->size;
-    state.core = 0;
+    state.qid = 0;
 }
 output switch { case segment: out(); else: null(); }
             ''')

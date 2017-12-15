@@ -8,7 +8,7 @@
 
 
 typedef struct _MyState { 
-int core;
+int qid;
 int* p;
 uint8_t* key;
 int keylen;
@@ -45,7 +45,7 @@ int refcount; q_buffer buffer; entry_queue0* entry; int* p; uint8_t* key;
 
 
 typedef struct _MyState_compressed0 { 
-int refcount; int core;
+int refcount; int qid;
 int* p;
 uint8_t* key;
 int keylen;

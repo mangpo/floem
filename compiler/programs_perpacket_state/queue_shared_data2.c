@@ -86,13 +86,13 @@ void main_pop_queue_Dequeue0_release(q_buffer);
 void main_pop_queue_Dequeue0_get(size_t);
 void queue_save0_inst(q_buffer,size_t);
 void main_pop_Display0(pipeline_queue0*);
-void main_pop_queue_Dequeue0_classify_inst(q_buffer buff,  size_t core) {
+void main_pop_queue_Dequeue0_classify_inst(q_buffer buff,  size_t qid) {
 
         q_entry* e = buff.entry;
         int type = -1;
         if (e != NULL) type = e->task;
         
-  if( (type == 1)) { queue_save0_inst(buff,core); }
+  if( (type == 1)) { queue_save0_inst(buff,qid); }
   else if( (type == 0)) { main_pop_queue_Dequeue0_release(buff); }
 }
 
@@ -126,7 +126,7 @@ q_buffer buff = dequeue_get((circular_queue*) q);
   main_pop_queue_Dequeue0_classify_inst(buff, c);
 }
 
-void queue_save0_inst(q_buffer buff,  size_t core) {
+void queue_save0_inst(q_buffer buff,  size_t qid) {
   pipeline_queue0 *_state = (pipeline_queue0 *) malloc(sizeof(pipeline_queue0));
   _state->refcount = 1;  _state->buffer = buff;
   _state->entry = (entry_queue0*) buff.entry;

@@ -186,7 +186,7 @@ class TestDSL(unittest.TestCase):
                 self.run_c(r'''
                 int x = in(); 
                 state.a = x; 
-                state.core = 0; 
+                state.qid = 0; 
                 output switch { case (x % 2 == 0): out0(); else: out1(); }''')
 
         class DefA(ElementOneInOut):
@@ -210,7 +210,7 @@ class TestDSL(unittest.TestCase):
                 self.inp = Input()
 
             def impl(self):
-                self.run_c(r'''state.core = 0;''')
+                self.run_c(r'''state.qid = 0;''')
 
         Enq, Deq, Scan = queue_smart.smart_queue("queue", entry_size=16, size=256, insts=1, channels=2)
 
@@ -239,7 +239,7 @@ class TestDSL(unittest.TestCase):
                 deq.out[1] >> UseB() >> f
 
         class MyState(State):
-            core = Field(Int)
+            qid = Field(Int)
             a  = Field(Int)
             b = Field(Int)
             c = Field(Int)
@@ -254,11 +254,11 @@ class TestDSL(unittest.TestCase):
         c = Compiler(main)
         g = c.generate_graph()
         choose = g.instances["main_run1_Choose0"]
-        self.assertEqual(choose.uses, set(['a', 'b', 'core']))
+        self.assertEqual(choose.uses, set(['a', 'b', 'qid']))
         self.assertEqual(choose.liveness, set())
         defb = g.instances["main_run1_DefB0"]
-        self.assertEqual(defb.uses, set(['b', 'core']))
-        self.assertEqual(defb.liveness, set(['core']))
+        self.assertEqual(defb.uses, set(['b', 'qid']))
+        self.assertEqual(defb.liveness, set(['qid']))
 
     def test_connect_ele_compo(self):
         reset()

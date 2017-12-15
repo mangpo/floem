@@ -6,7 +6,7 @@ class MyState(State):
     a = Field(Int)
     a0 = Field(Int)
     b0 = Field(Int)
-    core = Field(SizeT)
+    qid = Field(SizeT)
 
 class main(Flow):
     state = PerPacket(MyState)
@@ -19,7 +19,7 @@ class main(Flow):
         def impl(self):
             self.run_c(r'''
             state.a = inp();
-            state.core = 0;
+            state.qid = 0;
             output { out(); }
             ''')
 

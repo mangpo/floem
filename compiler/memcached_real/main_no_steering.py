@@ -49,15 +49,8 @@ class MyState(State):
     it = Field(Pointer(item), shared='data_region')
     key = Field('void*', size='state.pkt->mcr.request.keylen')
     hash = Field(Uint(32))
-    # segfull = Field(Uint(64))
-    # segbase = Field(Uint(64))
-    # seglen = Field(Uint(64))
     core = Field(Uint(16))
     vallen = Field(Uint(32))
-    # src_mac = Field('struct ether_addr')
-    # dst_mac = Field('struct ether_addr')
-    # src_ip = Field(Uint(32))
-    # src_port = Field(Uint(16))  # TODO: remove some fields
 
 class Schedule(State):
     core = Field(SizeT)

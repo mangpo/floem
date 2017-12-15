@@ -16,16 +16,16 @@ class Entry(State):
 EnqAlloc, EnqSubmit, DeqGet, DeqRelease, clean = \
     queue.queue_default("queue", 32, 3, n_cores, enq_atomic=True, deq_atomic=True, clean=True)
 
-class ComputeCore(Element):
+class ComputeQID(Element):
     def configure(self):
-        self.inp = Input(Int, SizeT)  # val, core
-        self.out_size_core = Output(SizeT, SizeT)  # size, core
+        self.inp = Input(Int, SizeT)  # val, qid
+        self.out_size_qid = Output(SizeT, SizeT)  # size, qid
         self.out_val = Output(Int)
 
     def impl(self):
         self.run_c(r'''
-        (int x, size_t core) = inp();
-        output { out_val(x); out_size_core(4, core); }
+        (int x, size_t qid) = inp();
+        output { out_val(x); out_size_qid(4, qid); }
         ''')
 
 class FillEntry(Element):
@@ -61,14 +61,14 @@ class CleanPrint(Element):
 
 class rx_write(CallablePipeline):
     def configure(self):
-        self.inp  = Input(Int, SizeT)  # val, core
+        self.inp  = Input(Int, SizeT)  # val, qid
 
     def impl(self):
-        compute_core = ComputeCore()
+        compute_qid = ComputeQID()
         fill_entry = FillEntry()
-        self.inp >> compute_core
-        compute_core.out_size_core >> EnqAlloc() >> fill_entry.in_entry
-        compute_core.out_val >> fill_entry.in_val
+        self.inp >> compute_qid
+        compute_qid.out_size_qid >> EnqAlloc() >> fill_entry.in_entry
+        compute_qid.out_val >> fill_entry.in_val
         fill_entry >> EnqSubmit()
 
         clean >> CleanPrint()

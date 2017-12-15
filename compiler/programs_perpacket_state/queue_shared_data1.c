@@ -95,7 +95,7 @@ void _queue_fill0_from_main_push_Save0_join_buffer_in_pkt_save(_queue_fill0_from
 }
 
 void main_push_Save0(int,uint8_t);
-void queue_size_core0_from_main_push_Save0(_queue_fill0_from_main_push_Save0_join_buffer*,MyState_compressed0*);
+void queue_size_qid0_from_main_push_Save0(_queue_fill0_from_main_push_Save0_join_buffer*,MyState_compressed0*);
 void queue_enq_alloc0_from_main_push_Save0(_queue_fill0_from_main_push_Save0_join_buffer*,size_t,size_t,MyState_compressed0*);
 void queue_fill0_from_main_push_Save0(q_buffer,MyState_compressed0*);
 void queue_fork0_from_main_push_Save0(MyState_compressed0*);
@@ -103,7 +103,7 @@ void queue_enq_submit0_from_main_push_Save0(q_buffer);
 void main_push_Save0(int len,  uint8_t data) {
   MyState_compressed0 *_state = (MyState_compressed0 *) malloc(sizeof(MyState_compressed0));
   _state->refcount = 1;
-    _state->core = 0;
+    _state->qid = 0;
     _state->key = (uint8_t *) malloc(len);
     _state->keylen = len;
     for(int i=0; i<len ; i++)
@@ -116,10 +116,10 @@ void main_push_Save0(int len,  uint8_t data) {
   pipeline_unref((pipeline_state*) _state);
 }
 
-void queue_size_core0_from_main_push_Save0(_queue_fill0_from_main_push_Save0_join_buffer* _p_queue_fill0_from_main_push_Save0, MyState_compressed0* _x0) {
+void queue_size_qid0_from_main_push_Save0(_queue_fill0_from_main_push_Save0_join_buffer* _p_queue_fill0_from_main_push_Save0, MyState_compressed0* _x0) {
   MyState_compressed0 *_state = _x0;
     
-  queue_enq_alloc0_from_main_push_Save0(_p_queue_fill0_from_main_push_Save0,sizeof(entry_queue0) + _state->keylen, _state->core, _state);
+  queue_enq_alloc0_from_main_push_Save0(_p_queue_fill0_from_main_push_Save0,sizeof(entry_queue0) + _state->keylen, _state->qid, _state);
 }
 
 void queue_enq_alloc0_from_main_push_Save0(_queue_fill0_from_main_push_Save0_join_buffer* _p_queue_fill0_from_main_push_Save0, size_t len,  size_t c,  MyState_compressed0* _state) {
@@ -148,7 +148,7 @@ void queue_fork0_from_main_push_Save0(MyState_compressed0* _x3) {
   _queue_fill0_from_main_push_Save0_join_buffer *_p_queue_fill0_from_main_push_Save0 = malloc(sizeof(_queue_fill0_from_main_push_Save0_join_buffer));
   MyState_compressed0 *_state = _x3;
     
-  queue_size_core0_from_main_push_Save0(_p_queue_fill0_from_main_push_Save0,_state);
+  queue_size_qid0_from_main_push_Save0(_p_queue_fill0_from_main_push_Save0,_state);
   _queue_fill0_from_main_push_Save0_join_buffer_in_pkt_save(_p_queue_fill0_from_main_push_Save0, _state);  queue_fill0_from_main_push_Save0(_p_queue_fill0_from_main_push_Save0->in_entry_arg0, _p_queue_fill0_from_main_push_Save0->in_pkt_arg0);
 
   free(_p_queue_fill0_from_main_push_Save0);
