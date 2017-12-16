@@ -257,7 +257,7 @@ Note that if `enq_blocking=False` and the queue is full, `Enq` will still output
 > See `compile/programs/queue_custom.py` for a complete example.
 
 ### 1.2 Smart Queue
-Smart queue can be used within a [flow and per-packet state](../REAMD.md#Flow). Unlike the primitive queue, users do not have to explicitly define the queue entry type. Floem infers which fields in the per-packet state need to be sent to the other side of the queue. Users also do not have to release a queue entry manually. Internally, Floem transforms a smart queue to a [default queue](../REAMD.md#Default-Queue) and inserts elements to release a queue entry as earliest as it can.
+Smart queue can be used within a [flow and per-packet state](../README.md#Flow). Unlike the primitive queue, users do not have to explicitly define the queue entry type. Floem infers which fields in the per-packet state need to be sent to the other side of the queue. Users also do not have to release a queue entry manually. Internally, Floem transforms a smart queue to a [default queue](../README.md#Default-Queue) and inserts elements to release a queue entry as earliest as it can.
 
 ```python
 import queue_smart
@@ -357,7 +357,7 @@ class main(Flow):
 > See `compile/programs_perpacket_state/smart_queue_entry.py` for a complete example.
 
 ##### Pointer to shared memory region
-When a pointer to a [shared memory region](../REAMD.md#Shared-Memory-Region) it sent over a queue, the compiler needs to convert the address value with respect to the process's and the device's address space. Users must infrom the compiler if a particular field is a pointer to which shared memory region. For example, 
+When a pointer to a [shared memory region](../README.md#Shared-Memory-Region) it sent over a queue, the compiler needs to convert the address value with respect to the process's and the device's address space. Users must infrom the compiler if a particular field is a pointer to which shared memory region. For example, 
 ```python
 class MyState(State):
     p = Field(Pointer(Int), shared='data_region')  # a pointer to shared memory region 'data_region'
