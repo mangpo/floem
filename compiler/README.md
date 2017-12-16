@@ -17,7 +17,7 @@ B. [Language](#Language)
 
 C. [Running on Cavium](#Running-on-Cavium)
 D. [Library of Elements](doc/library-of-elements.md)
-E. [Library of C Functions](doc/library-of-c-funcions.md)
+E. [Library of C Functions](doc/library-of-c-functions.md)
 
 
 <a name="Prerequisites"></a>
