@@ -4,7 +4,7 @@ from compiler import Compiler
 
 n_cores = 7
 nic_rx_threads = 5
-nic_tx_threads = 3
+nic_tx_threads = 2
 
 class protocol_binary_request_header_request(State):
     magic = Field(Uint(8))
@@ -261,7 +261,7 @@ output { out(); }
 
     core = (core + 1) %s mod;
     output switch {
-      case((size_t) core < n_cores): out(core);
+      case(core < n_cores): out(core);
       else: log(0);
       }''' % (n_cores, n_cores + 1, nic_tx_threads, '%'))
 
@@ -1062,7 +1062,6 @@ master_process('app')
 ######################## Run test #######################
 c = Compiler(main)
 c.include = r'''
-#include "nicif.h"
 #include "iokvs.h"
 #include "protocol_binary.h"
 '''
