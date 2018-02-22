@@ -40,6 +40,7 @@ class Compiler:
         hton.hton_pass(g)
         thread_allocation.insert_resource_order(g)
         pipeline_state.pipeline_state_pass(g, pktstate)
+        # TODO: transform cache elements here
         return g
 
     def generate_graph(self, filename="tmp"):
