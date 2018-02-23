@@ -1,4 +1,5 @@
 from floem import *
+import cache_smart
 
 class Mult2(Element):
     def configure(self, *params):
@@ -22,13 +23,15 @@ class OnlyVal(Element):
         output { out(val); }
         ''')
 
+CacheGetStart, CacheGetEnd = cache_smart.smart_cache('MyCache', Int, [Int])
+
 class func(CallablePipeline):
     def configure(self):
         self.inp = Input(Int)
         self.out = Output(Int)
 
     def impl(self):
-        self.inp >> Mult2() >> OnlyVal() >> self.out
+        self.inp >> CacheGetStart() >> Mult2() >> CacheGetEnd() >> OnlyVal() >> self.out
 
 func('func')
 

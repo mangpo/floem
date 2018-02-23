@@ -548,3 +548,13 @@ class Queue:
 
 def is_queue_clean(instance):
     return instance.element.special == 'clean'
+
+
+class Cache:
+    def __init__(self, name, key_type, val_type):
+        self.name = name
+        self.key_type = key_type
+        self.val_type = val_type
+
+        self.get_start = None
+        self.get_end = None
