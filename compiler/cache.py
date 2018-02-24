@@ -2,7 +2,7 @@ from dsl import *
 import common
 
 
-def cache_default(name, key_type, val_type, hash_value=False, var_size=False, release_type=[]):
+def cache_default(name, key_type, val_type, hash_value=False, var_size=False, release_type=[], update_func='f'):
     prefix = name + '_'
 
     if not var_size:
@@ -27,6 +27,14 @@ def cache_default(name, key_type, val_type, hash_value=False, var_size=False, re
         key_arg = '&key'
         keylen_arg = 'sizeof({0})'.format(key_type)
 
+    # Value base type
+    val_base_type = []
+    for i in range(len(val_type)):
+        if common.is_pointer(val_type[i]):
+            val_base_type.append(val_type[i][:-1])
+        else:
+            val_base_type.append(val_type[i])
+
     # Value
     return_vals = []
     val_src = "uint8_t* p;"
@@ -36,13 +44,6 @@ def cache_default(name, key_type, val_type, hash_value=False, var_size=False, re
 if(it != NULL) {
     p = ((uint8_t*) it->content) + %s;
                 ''' % keylen_arg
-
-    val_base_type = []
-    for i in range(len(val_type)):
-        if common.is_pointer(val_type[i]):
-            val_base_type.append(val_type[i][:-1])
-        else:
-            val_base_type.append(val_type[i])
 
     for i in range(len(val_type)):
         if common.is_pointer(val_type[i]):
@@ -54,6 +55,37 @@ if(it != NULL) {
 
     val_src += "}\n"
 
+    # Update
+    pointer_vals = []
+    update_vals = []
+    update_src = "uint8_t* p;"
+    update_after = ""
+    for i in range(len(val_type)):
+        update_src += " {0}* p{1} = 0;".format(val_base_type[i], i)
+        update_src += " {0} update{1} = 0;".format(val_type[i], i)
+
+    update_src += r'''
+    if(it != NULL) {
+        p = ((uint8_t*) it->content) + %s;
+        ''' % keylen_arg
+
+    for i in range(len(val_type)):
+        update_src += "p{1} = ({0}*) p;\n".format(val_base_type[i], i)
+        update_src += "p += sizeof({0});\n".format(val_base_type[i])
+        pointer_vals.append("p{0}".format(i))
+
+        if common.is_pointer(val_type[i]):
+            update_after += "update{0} = p{0};\n".format(i)
+        else:
+            update_after += "update{0} = *p{0};\n".format(i)
+        update_vals.append("update{0}".format(i))
+
+    if not var_size:
+        update_src += "%s(%s, %s);\n" % (update_func, ','.join(pointer_vals), ','.join(return_vals))
+    else:
+        update_src += "%s(last_vallen, %s, %s);\n" % (update_func, ','.join(pointer_vals), ','.join(return_vals))
+    update_src += update_after
+    update_src += "}\n"
 
     class CacheGet(Element):
         this = Persistent(hash_table)
@@ -181,6 +213,62 @@ if(it != NULL) {
 
             self.run_c(input_src + compute_hash + item_src + output_src)
 
+    class CacheUpdate(Element):
+        this = Persistent(hash_table)
+
+        def configure(self):
+            if not var_size:
+                self.inp = Input(key_type, *val_type)
+                self.hit = Output(key_type, *val_type)
+                self.miss = Output(key_type, *val_type)
+            else:
+                self.inp = Input(key_type, Int, Int, *val_type)
+                self.hit = Output(key_type, Int, Int, *val_type)
+                self.miss = Output(key_type, Int, Int, *val_type)
+            self.this = my_hash_table
+
+        def impl(self):
+            if hash_value:
+                compute_hash = "uint32_t hv = state->%s;" % hash_value
+            else:
+                compute_hash = "uint32_t hv = jenkins_hash(%s, %s);" % (key_arg, keylen_arg)
+
+            if not var_size:
+                input_src = r'''
+                (%s key, %s) = inp();
+                int keylen = %s;
+                int last_vallen = %s;
+                ''' % (key_type, ','.join(type_vals), keylen_arg, last_vallen_arg)
+            else:
+                input_src = r'''
+                (%s key, int keylen, int last_vallen, %s) = inp();
+                '''% (key_type, ','.join(type_vals))
+
+            get_src = "citem *it = cache_get(this->buckets, %d, %s, %s, hv);\n" % (n_buckets, key_arg, keylen_arg)
+
+            if not var_size:
+                rel_src = "cache_release(it);\n"
+            else:
+                rel_src = "state->cache_item = it;\n"
+
+
+            if not var_size:
+                output_src = r'''
+                output switch { 
+                    case it: hit(key, %s); 
+                    else: miss(key, %s); 
+                }
+                ''' % (','.join(update_vals), ','.join(return_vals))
+            else:
+                output_src = r'''
+                output switch { 
+                    case it: hit(key, keylen, last_vallen, %s); 
+                    else: miss(key, keylen, last_vallen, %s); 
+                }
+                ''' % (','.join(update_vals), ','.join(return_vals))
+
+            self.run_c(input_src + compute_hash + get_src + update_src + rel_src + output_src)
+
     # Release
     release_args = []
     release_vals = []
@@ -198,11 +286,13 @@ if(it != NULL) {
             self.run_c(r'''
             (%s) = inp();
             cache_release(state->cache_item);
+            state->cache_item = NULL;
             output { out(%s); }
             ''' % (','.join(release_args), ','.join(release_vals)))
 
     CacheGet.__name__ = prefix + CacheGet.__name__
     CacheSet.__name__ = prefix + CacheSet.__name__
+    CacheUpdate.__name__ = prefix + CacheUpdate.__name__
     CacheRelease.__name__ = prefix + CacheRelease.__name__
 
-    return CacheGet, CacheSet, CacheRelease if var_size else None
+    return CacheGet, CacheSet, CacheUpdate, CacheRelease if var_size else None

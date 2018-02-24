@@ -23,7 +23,7 @@ class OnlyVal(Element):
         output { out(val); }
         ''')
 
-CacheGet,CacheSet,CacheRelease = cache.cache_default('MyCache', Int, [Int], hash_value=False, var_size=False)
+CacheGet,CacheSet,CacheUpdate,CacheRelease = cache.cache_default('MyCache', Int, [Int], hash_value=False, var_size=False)
 
 
 class compute(CallablePipeline):

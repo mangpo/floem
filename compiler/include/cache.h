@@ -181,9 +181,8 @@ done:
     return;
 }
 
-static void cache_release(citem *it) {
-    if(it)
-        lock_unlock(&it->bucket->lock);
+static inline void cache_release(citem *it) {
+    if(it) lock_unlock(&it->bucket->lock);
 }
 
 #endif
