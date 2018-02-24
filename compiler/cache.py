@@ -71,7 +71,7 @@ if(it != NULL) {
 
         def impl(self):
             if hash_value:
-                compute_hash = "uint32_t hv = state.%s;" % hash_value
+                compute_hash = "uint32_t hv = state->%s;" % hash_value
             else:
                 compute_hash = "uint32_t hv = jenkins_hash(%s, %s);" % (key_arg, keylen_arg)
 
@@ -158,7 +158,7 @@ if(it != NULL) {
 
         def impl(self):
             if hash_value:
-                compute_hash = "uint32_t hv = state.%s;" % hash_value
+                compute_hash = "uint32_t hv = state->%s;" % hash_value
             else:
                 compute_hash = "uint32_t hv = jenkins_hash(%s, %s);" % (key_arg, keylen_arg)
 

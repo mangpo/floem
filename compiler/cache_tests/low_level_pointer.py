@@ -4,6 +4,7 @@ import cache, library
 
 class MyState(State):
     cache_item = Field('citem*')
+    hash = Field(Uint(32))
 
 
 class Mult2(Element):
@@ -39,6 +40,7 @@ class Scalar2Pointer(Element):
     def impl(self):
         self.run_c(r'''
         (int x) = inp();
+        state->hash = jenkins_hash(&x, sizeof(int));
         output { out(&x, sizeof(int)); }
         ''')
 
@@ -51,12 +53,13 @@ class Scalar2Pointer2(Element):
     def impl(self):
         self.run_c(r'''
         (int key, int val) = inp();
+        state->hash = jenkins_hash(&key, sizeof(int));
         output { out(&key, sizeof(int), sizeof(int), &val); }
         ''')
 
 
 CacheGet,CacheSet,CacheRelease = cache.cache_default('MyCache', Pointer(Int), [Pointer(Int)],
-                                                     hash_value=False, var_size=True, release_type=[Int])
+                                                     hash_value='hash', var_size=True, release_type=[Int])
 
 
 class MyPipeline(Flow):
