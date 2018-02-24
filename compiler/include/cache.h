@@ -4,58 +4,77 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+#ifdef DPDK
 #include <rte_spinlock.h>
+#define lock_init(x) rte_spinlock_init(x)
+#define lock_lock(x) rte_spinlock_lock(x)
+#define lock_unlock(x) rte_spinlock_unlock(x)
+typedef rte_spinlock_t lock_t;
+#else
+#include <pthread.h>
+#define lock_init(x) pthread_mutex_init(x, NULL)
+#define lock_lock(x) pthread_mutex_lock(x)
+#define lock_unlock(x) pthread_mutex_unlock(x)
+typedef pthread_mutex_t lock_t;
+#endif
 
+//#define DEBUG
 #define BUCKET_NITEMS 5
 
-typedef struct _hitem {
-    htime* next;
-    hash_bucket* bucket;
+typedef struct _cache_bucket cache_bucket;
+
+typedef struct _citem {
+    struct _citem* next;
+    cache_bucket* bucket;
     uint32_t hv;
     uint16_t keylen, last_vallen;
     uint8_t content[];
-} __attribute__((packed)) hitem;
+} __attribute__((packed)) citem;
 
-typedef struct _hash_bucket {
-    hitem *items[BUCKET_NITEMS];
+typedef struct _cache_bucket {
+    citem *items[BUCKET_NITEMS];
     uint32_t hashes[BUCKET_NITEMS];
-    rte_spinlock_t lock;
-} __attribute__((packed)) hash_bucket;
+    lock_t lock;
+} __attribute__((packed)) cache_bucket;
 
-static inline bool item_key_matches(hitem *it, const void *key, int klen)
+static inline bool citem_key_matches(citem *it, const void *key, int klen)
 {
     return klen == it->keylen && !__builtin_memcmp(it->content, key, klen);
 }
 
-static inline bool item_hkey_matches(hitem *it, const void *key, int klen, uint32_t hv)
+static inline bool citem_hkey_matches(citem *it, const void *key, int klen, uint32_t hv)
 {
-    return it->hv == hv && item_key_matches(it, key, klen);
+    return it->hv == hv && citem_key_matches(it, key, klen);
 }
 
-static inline void *item_key(hitem *it) {
+static inline void *citem_key(citem *it) {
     return it->content;
 }
 
-void hasht_init(hash_bucket *buckets, int n)
+static inline void *citem_value(citem *it) {
+    uint8_t *p = it->content;
+    return (p + it->keylen);
+}
+
+void cache_init(cache_bucket *buckets, int n)
 {
     for (int i = 0; i < n; i++) {
-        rte_spinlock_init(&buckets[i].lock);
+        lock_init(&buckets[i].lock);
     }
 }
 
-hitem *hasht_get(const void *key, int klen, uint32_t hv)
+static citem *cache_get(cache_bucket *buckets, int nbuckets, const void *key, int klen, uint32_t hv)
 {
-    struct hash_bucket *b;
-    hitem *it;
+    citem *it = NULL;
     size_t i;
 
-    b = buckets + (hv % nbuckets);
-    rte_spinlock_lock(&b->lock);
+    cache_bucket *b = buckets + (hv % nbuckets);
+    lock_lock(&b->lock);
 
     for (i = 0; i < BUCKET_NITEMS; i++) {
         if (b->items[i] != NULL && b->hashes[i] == hv) {
             it = b->items[i];
-            if (item_key_matches(it, key, klen)) {
+            if (citem_key_matches(it, key, klen)) {
                 goto done;
             }
         }
@@ -63,29 +82,37 @@ hitem *hasht_get(const void *key, int klen, uint32_t hv)
     it = b->items[BUCKET_NITEMS - 1];
     if (it != NULL) {
         it = it->next;
-        while (it != NULL && !item_hkey_matches(it, key, klen, hv)) {
+        while (it != NULL && !citem_hkey_matches(it, key, klen, hv)) {
             it = it->next;
         }
     }
+
 done:
-    //rte_spinlock_unlock(&b->lock);
+#ifdef DEBUG
+    printf("cache_get: key = %d, hash = %d, it = %p\n", *((int*) key), hv, it);
+#endif
+    if(it == NULL)
+        lock_unlock(&b->lock);
     return it;
 }
 
 
-void hasht_put(hitem *nit, item *cas)
+static void cache_put(cache_bucket *buckets, int nbuckets, citem *nit, citem *cas)
 {
-    struct hash_bucket *b;
-    item *it, *prev;
+    citem *it, *prev;
     size_t i, di;
     bool has_direct = false;
     uint32_t hv = nit->hv;
-    void *key = item_key(nit);
+    void *key = citem_key(nit);
     size_t klen = nit->keylen;
 
+    int *val = citem_value(nit);
+#ifdef DEBUG
+    printf("cache_put: hash = %d, key = %d, val = %d, it = %p\n", hv, *((int*) key), *val, nit);
+#endif
 
-    b = buckets + (hv % nbuckets);
-    rte_spinlock_lock(&b->lock);
+    cache_bucket *b = buckets + (hv % nbuckets);
+    lock_lock(&b->lock);
 
     // Check if we need to replace an existing item
     for (i = 0; i < BUCKET_NITEMS; i++) {
@@ -94,7 +121,7 @@ void hasht_put(hitem *nit, item *cas)
             di = i;
         } else if (b->hashes[i] == hv) {
             it = b->items[i];
-            if (item_key_matches(it, key, klen)) {
+            if (citem_key_matches(it, key, klen)) {
                 // Were doing a compare and set
                 if (cas != NULL && cas != it) {
                     goto done;
@@ -102,6 +129,9 @@ void hasht_put(hitem *nit, item *cas)
                 assert(nit != it);
                 nit->next = it->next;
                 b->items[i] = nit;
+#ifdef DEBUG
+                printf("free %p\n", it);
+#endif
                 free(it);
                 nit->bucket = b;
                 goto done;
@@ -119,7 +149,7 @@ void hasht_put(hitem *nit, item *cas)
     if (it != NULL) {
         prev = it;
         it = it->next;
-        while (it != NULL && !item_hkey_matches(it, key, klen, hv)) {
+        while (it != NULL && !citem_hkey_matches(it, key, klen, hv)) {
             prev = it;
             it = it->next;
         }
@@ -127,6 +157,9 @@ void hasht_put(hitem *nit, item *cas)
         if (it != NULL) {
             nit->next = it->next;
             prev->next = nit;
+#ifdef DEBUG
+            printf("free %p\n", it);
+#endif
             free(it);
             nit->bucket = b;
             goto done;
@@ -144,14 +177,13 @@ void hasht_put(hitem *nit, item *cas)
     nit->bucket = b;
 
 done:
-    //rte_spinlock_unlock(&b->lock);
+    lock_unlock(&b->lock);
     return;
 }
 
-void hasht_release(hitem *it) {
-    rte_spinlock_unlock(&it->bucket->lock);
+static void cache_release(citem *it) {
+    if(it)
+        lock_unlock(&it->bucket->lock);
 }
-
-uint32_t hash(uint8_t* key, int keylen);
 
 #endif

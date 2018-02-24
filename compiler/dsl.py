@@ -303,7 +303,7 @@ class Connectable(object):
 
     def rshift__reversed(self, other):
         assert len(self.inports) == 1, \
-            "Attempt to connect '%s' to '%s', which has zero or multiple input ports." % (self.name, other)
+            "Attempt to connect '%s' to '%s', which has zero or multiple input ports." % (other, self.name)
         other >> self.inports[0]
         return self
 

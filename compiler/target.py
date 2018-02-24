@@ -1,15 +1,15 @@
 # device = CPU
 HOST = 'CPU'
 CPU = 'CPU'
-cpu_include_h = ["<stdint.h>", "<stdbool.h>", "<stdio.h>", "<stdlib.h>", '<queue.h>']
-cpu_include_c = ["<stdint.h>", "<stdbool.h>", "<stdio.h>", "<stdlib.h>", "<string.h>", 
-                 "<stddef.h>", "<unistd.h>", "<pthread.h>", '<queue.h>', '<shm.h>', '<util.h>', '<arpa/inet.h>']
+cpu_include_h = ["<stdint.h>", "<stdbool.h>", "<stdio.h>", "<stdlib.h>", '<queue.h>', '<cache.h>', '<jenkins_hash.h>']
+cpu_include_c = cpu_include_h + \
+                ["<string.h>", "<stddef.h>", "<unistd.h>", "<pthread.h>", '<shm.h>', '<util.h>', '<arpa/inet.h>']
 
 # device = CAVIUM, process = CAVIUM
 CAVIUM = 'CAVIUM'
 cavium_include_h = ['"cvmcs-nic.h"', '"floem-queue.h"']
-cavium_include_c = ['<cvmx-atomic.h>', '"cvmcs-nic.h"',
-                    '"floem-util.h"', '"floem-dma.h"', '"floem-queue.h"', '"floem-queue-manage.h"']
+cavium_include_c = cavium_include_h +\
+                   ['<cvmx-atomic.h>', '"floem-util.h"', '"floem-dma.h"', '"floem-queue-manage.h"']
 
 
 # device = CPU, process = DPDK
