@@ -3,26 +3,38 @@ import pipeline_state_join
 from program import *
 
 
-def dfs_same_thread(g, s, t, vis, queues=[]):
+def dfs_same_thread(g, s, t, vis, prev=None, queues=[]):
     if s.name in vis:
         return vis[s.name]
     if s == t:
         return queues
+
+    vis[s.name] = False
     q = s.element.special
     if isinstance(q, graph_ir.Queue):
         queues.append(q)
 
-    vis[s.name] = False
-    ans = False
-    for inst_name, port in s.output2ele.values():
-        next = g.instances[inst_name]
-        ret = dfs_same_thread(g, next, t, vis, queues)
-        if ans is False:
-            ans = ret
-        else:
-            assert ret == ans, \
-                "All output ports of CacheStart must reach CacheEnd, or all reach the same queue. %s does not meet this property." \
-                % s.name
+        id = None
+        for port_name in q.enq.input2ele:
+            prev_name, prev_port = q.enq.input2ele[port_name]
+            if prev_name == prev:
+                id = int(port_name[3:])
+                break
+
+        next_name, next_port = q.deq.output2ele['out' + str(id)]
+        ans = dfs_same_thread(g, g.instances[next_name], t, vis, s.name, queues)
+
+    else:
+        ans = False
+        for inst_name, port in s.output2ele.values():
+            next = g.instances[inst_name]
+            ret = dfs_same_thread(g, next, t, vis, s.name, queues)
+            if ans is False:
+                ans = ret
+            else:
+                assert ret == ans, \
+                    "All output ports of CacheStart must reach CacheEnd, or all reach the same queue. %s does not meet this property." \
+                    % s.name
 
     assert ans is not False, "Some outputs of %s do not reach %s or queue." % (s.name, t.name)
     vis[s.name] = ans
