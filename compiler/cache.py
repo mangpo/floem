@@ -19,6 +19,13 @@ def cache_default(name, key_type, val_type, hash_value=False, var_size=False, re
     hash_table.__name__ = prefix + hash_table.__name__
     my_hash_table = hash_table()
 
+    if not var_size:
+        key_params = [key_type]
+        kv_params =  [key_type] + val_type
+    else:
+        key_params = [key_type, Int]
+        kv_params = [key_type, Int, Int] + val_type
+
     # Key
     if common.is_pointer(key_type):
         key_arg = 'key'
@@ -37,23 +44,28 @@ def cache_default(name, key_type, val_type, hash_value=False, var_size=False, re
 
     # Value
     return_vals = []
-    val_src = "uint8_t* p;"
-    for i in range(len(val_type)):
-        val_src += " {0} val{1} = 0;".format(val_type[i], i)
-    val_src += r'''
-if(it != NULL) {
+    val_assign_src = r'''
+    uint8_t* p;
     p = ((uint8_t*) it->content) + %s;
-                ''' % keylen_arg
+    ''' % keylen_arg
 
     for i in range(len(val_type)):
         if common.is_pointer(val_type[i]):
-            val_src += "val{1} = ({0}*) p;\n".format(val_base_type[i], i)
+            val_assign_src += "val{1} = ({0}*) p;\n".format(val_base_type[i], i)
         else:
-            val_src += "val{1} = *(({0}*) p);\n".format(val_base_type[i], i)
-        val_src += "p += sizeof({0});\n".format(val_base_type[i])
+            val_assign_src += "val{1} = *(({0}*) p);\n".format(val_base_type[i], i)
+            val_assign_src += "p += sizeof({0});\n".format(val_base_type[i])
         return_vals.append("val{0}".format(i))
 
-    val_src += "}\n"
+
+    val_src = ""
+    for i in range(len(val_type)):
+        val_src += " {0} val{1} = 0;".format(val_type[i], i)
+    val_src += r'''
+    if(it != NULL) {
+        %s
+    }
+                ''' % val_assign_src
 
     # Update
     pointer_vals = []
@@ -91,14 +103,9 @@ if(it != NULL) {
         this = Persistent(hash_table)
 
         def configure(self):
-            if not var_size:
-                self.inp = Input(key_type)
-                self.hit = Output(key_type, *val_type)
-                self.miss = Output(key_type)
-            else:
-                self.inp = Input(key_type, Int)
-                self.hit = Output(key_type, Int, Int, *val_type)
-                self.miss = Output(key_type, Int)
+            self.inp = Input(*key_params)
+            self.hit = Output(*kv_params)
+            self.miss = Output(*key_params)
             self.this = my_hash_table
 
         def impl(self):
@@ -173,19 +180,27 @@ if(it != NULL) {
     else:
         item_src += "memcpy(p, &val{0}, last_vallen);\n".format(len(val_type) - 1)
 
+    item_src2 = item_src
     item_src += "cache_put(this->buckets, %d, it, NULL);\n" % n_buckets
+
+    cache_release = "state->cache_item = it;" if var_size else ''
+    item_src2 += r'''
+    citem* rit = cache_put_or_get(this->buckets, %d, it);
+    if(rit) {
+        free(it);
+        it = rit;
+        %s
+        %s
+    }
+    ''' % (n_buckets, cache_release, val_assign_src)
 
 
     class CacheSet(Element):
         this = Persistent(hash_table)
 
         def configure(self):
-            if not var_size:
-                self.inp = Input(key_type, *val_type)
-                self.out = Output(key_type, *val_type)
-            else:
-                self.inp = Input(key_type, Int, Int, *val_type)
-                self.out = Output(key_type, Int, Int, *val_type)
+            self.inp = Input(*kv_params)
+            self.out = Output(*kv_params)
             self.this = my_hash_table
 
         def impl(self):
@@ -212,6 +227,39 @@ if(it != NULL) {
             ''' % (extra_return, ','.join(return_vals))
 
             self.run_c(input_src + compute_hash + item_src + output_src)
+
+    class CacheSetGet(Element):
+        this = Persistent(hash_table)
+
+        def configure(self):
+            self.inp = Input(*kv_params)
+            self.out = Output(*kv_params)
+            self.this = my_hash_table
+
+        def impl(self):
+            if hash_value:
+                compute_hash = "uint32_t hv = state->%s;" % hash_value
+            else:
+                compute_hash = "uint32_t hv = jenkins_hash(%s, %s);" % (key_arg, keylen_arg)
+
+            extra_return = 'keylen, last_vallen,' if var_size else ''
+
+            if not var_size:
+                input_src = r'''
+                (%s key, %s) = inp();
+                int keylen = %s;
+                int last_vallen = %s;
+                ''' % (key_type, ','.join(type_vals), keylen_arg, last_vallen_arg)
+            else:
+                input_src = r'''
+                (%s key, int keylen, int last_vallen, %s) = inp();
+                '''% (key_type, ','.join(type_vals))
+
+            output_src = r'''
+            output { out(key, %s %s); }
+            ''' % (extra_return, ','.join(return_vals))
+
+            self.run_c(input_src + compute_hash + item_src2 + output_src)
 
     class CacheUpdate(Element):
         this = Persistent(hash_table)
@@ -295,4 +343,4 @@ if(it != NULL) {
     CacheUpdate.__name__ = prefix + CacheUpdate.__name__
     CacheRelease.__name__ = prefix + CacheRelease.__name__
 
-    return CacheGet, CacheSet, CacheUpdate, CacheRelease if var_size else None
+    return CacheGet, CacheSet, CacheSetGet, CacheUpdate, CacheRelease if var_size else None

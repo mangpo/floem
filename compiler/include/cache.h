@@ -181,6 +181,78 @@ done:
     return;
 }
 
+static citem *cache_put_or_get(cache_bucket *buckets, int nbuckets, citem *nit)
+{
+    citem *it, *prev;
+    size_t i, di;
+    bool has_direct = false;
+    uint32_t hv = nit->hv;
+    void *key = citem_key(nit);
+    size_t klen = nit->keylen;
+
+    int *val = citem_value(nit);
+#ifdef DEBUG
+    printf("cache_put: hash = %d, key = %d, val = %d, it = %p\n", hv, *((int*) key), *val, nit);
+#endif
+
+    cache_bucket *b = buckets + (hv % nbuckets);
+    lock_lock(&b->lock);
+
+    // Check if we need to replace an existing item
+    for (i = 0; i < BUCKET_NITEMS; i++) {
+        if (b->items[i] == NULL) {
+            has_direct = true;
+            di = i;
+        } else if (b->hashes[i] == hv) {
+            it = b->items[i];
+            if (citem_key_matches(it, key, klen)) {
+                assert(nit != it);
+                nit->next = it->next;
+                b->items[i] = nit;
+#ifdef DEBUG
+                printf("exist %p\n", it);
+#endif
+                return it;
+            }
+        }
+    }
+
+    // Note it does not match, otherwise we would have already bailed in the for
+    // loop
+    it = b->items[BUCKET_NITEMS - 1];
+    if (it != NULL) {
+        prev = it;
+        it = it->next;
+        while (it != NULL && !citem_hkey_matches(it, key, klen, hv)) {
+            prev = it;
+            it = it->next;
+        }
+
+        if (it != NULL) {
+            nit->next = it->next;
+            prev->next = nit;
+#ifdef DEBUG
+            printf("exist %p\n", it);
+#endif
+            return it;
+        }
+    }
+
+    // We did not find an existing entry to replace, just stick it in wherever
+    // we find room
+    if (!has_direct) {
+        di = BUCKET_NITEMS - 1;
+    }
+    nit->next = b->items[di];
+    b->hashes[di] = hv;
+    b->items[di] = nit;
+    nit->bucket = b;
+
+done:
+    lock_unlock(&b->lock);
+    return NULL;
+}
+
 static inline void cache_release(citem *it) {
     if(it) lock_unlock(&it->bucket->lock);
 }

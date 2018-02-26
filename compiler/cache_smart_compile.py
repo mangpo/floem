@@ -3,20 +3,20 @@ import pipeline_state_join
 from program import *
 
 
-def dfs_same_thread(g, s, t, vis):
+def dfs_same_thread(g, s, t, vis, queues=[]):
     if s.name in vis:
         return vis[s.name]
     if s == t:
-        return True
+        return queues
     q = s.element.special
     if isinstance(q, graph_ir.Queue):
-        return q
+        queues.append(q)
 
     vis[s.name] = False
     ans = False
     for inst_name, port in s.output2ele.values():
         next = g.instances[inst_name]
-        ret = dfs_same_thread(g, next, t, vis)
+        ret = dfs_same_thread(g, next, t, vis, queues)
         if ans is False:
             ans = ret
         else:
@@ -29,7 +29,7 @@ def dfs_same_thread(g, s, t, vis):
     return ans
 
 
-def transform_get(g, s, t, CacheGet, CacheSet, CacheRelease):
+def transform_get(g, s, t, CacheGet, CacheSetGet, CacheRelease):
     # 1. Check that get_start and get_end is on the same device.
     if s.thread in g.thread2process:
         p1 = g.thread2process[s.thread]
@@ -50,24 +50,23 @@ def transform_get(g, s, t, CacheGet, CacheSet, CacheRelease):
             API_return = dup_nodes[-1]
         pipeline_state_join.duplicate_subgraph(g, dup_nodes, suffix='_cache', copy=2)
 
-        rel_after = dup_nodes[0] + '_cache1'  # hit
-        subgraph = g.find_subgraph_list(rel_after, [])
+        hit_start = dup_nodes[0] + '_cache1'  # hit
+        subgraph = g.find_subgraph_list(hit_start, [])
         for name in subgraph:
             g.instances[name].thread = s.thread
+
+        rel_after = [dup_nodes[0] + '_cache0', dup_nodes[0] + '_cache1']
     else:
-        rel_after = t.output2ele['out'][0]
+        hit_start = t.output2ele['out'][0]
+        rel_after = [hit_start]
 
     # 3. Insert cache_rel
     if CacheRelease:
         cache_rel_inst = CacheRelease(create=False).instance
-
         rel_element = cache_rel_inst.element
         rel_element = rel_element.clone(rel_element.name + "_for_get")
         g.addElement(rel_element)
         cache_rel_inst.element = rel_element
-
-        g.newElementInstance(cache_rel_inst.element, cache_rel_inst.name, cache_rel_inst.args)
-        g.set_thread(cache_rel_inst.name, s.therad)
 
         if API_return:
             # Adjust release element
@@ -80,6 +79,9 @@ def transform_get(g, s, t, CacheGet, CacheSet, CacheRelease):
             rel_element.reassign_output_values('out', args)
 
             # Connect release element
+            g.newElementInstance(cache_rel_inst.element, cache_rel_inst.name, cache_rel_inst.args)
+            g.set_thread(cache_rel_inst.name, s.therad)
+
             g.connect(API_return, cache_rel_inst.name, API_instance.element.outports[0].name)
             index = g.API_outputs.index(API_return)
             g.API_outputs[index] = cache_rel_inst.name
@@ -88,8 +90,11 @@ def transform_get(g, s, t, CacheGet, CacheSet, CacheRelease):
             rel_element.remove_outport('out')
 
             # Connect release element
-            node = pipeline_state_join.get_node_before_release_nolive(rel_after, g, '', {})
-            g.connect(node.name, cache_rel_inst.name, 'release')
+            for i in range(len(rel_after)):
+                g.newElementInstance(cache_rel_inst.element, cache_rel_inst.name + str(i), cache_rel_inst.args)
+                g.set_thread(cache_rel_inst.name+ str(i), node.therad)
+                node = pipeline_state_join.get_node_before_release_nolive(rel_after, g, '', {})
+                g.connect(node.name, cache_rel_inst.name, 'release')
 
     # 4. Insert cache_get
     cache_get_inst = CacheGet(create=False).instance
@@ -109,12 +114,12 @@ def transform_get(g, s, t, CacheGet, CacheSet, CacheRelease):
     next_name, next_port = s.output2ele[outport]
     g.disconnect(s.name, next_name, outport, next_port)
     g.connect(cache_get_inst.name, next_name, 'miss', next_port)
-    g.connect(cache_get_inst.name, rel_after, 'hit', 'inp')
+    g.connect(cache_get_inst.name, hit_start, 'hit', 'inp')
 
     g.deleteElementInstance(s.name)
 
     # 5. Insert cache_set
-    cache_set_inst = CacheSet(create=False).instance
+    cache_set_inst = CacheSetGet(create=False).instance
     g.newElementInstance(cache_set_inst.element, cache_set_inst.name, cache_set_inst.args)
     g.set_thread(cache_set_inst.name, s.thread)
 
@@ -134,16 +139,21 @@ def transform_get(g, s, t, CacheGet, CacheSet, CacheRelease):
     g.deleteElementInstance(t.name)
 
 
+def transform_set(g, set_start, set_end, CacheGet, CacheSet, CacheRelease, write_policy, write_miss):
+    pass
+
+
 def create_cache(cache_high):
     workspace.push_decl()
     workspace.push_scope(cache_high.name)
-    CacheGet, CacheSet, CacheUpdate, CacheRelease = \
+    CacheGet, CacheSet, CacheSetGet, CacheUpdate, CacheRelease = \
         cache.cache_default(cache_high.name, cache_high.key_type, cache_high.val_type,
                             var_size=cache_high.var_size, hash_value=cache_high.hash_value,
                             update_func=cache_high.update_func, release_type=[])
 
     CacheGet(create=False)
     CacheSet(create=False)
+    CacheSetGet(create=False)
     CacheUpdate(create=False)
     if CacheRelease:
         CacheRelease(create=False)
@@ -154,7 +164,7 @@ def create_cache(cache_high):
     dp = desugaring.desugar(p)
     g = program_to_graph_pass(dp, default_process='tmp')
 
-    return g, CacheGet, CacheSet, CacheUpdate, CacheRelease
+    return g, CacheGet, CacheSet, CacheSetGet, CacheUpdate, CacheRelease
 
 
 def cache_pass(g):
@@ -166,11 +176,25 @@ def cache_pass(g):
                 caches.append(c)
 
     for cache_high in caches:
-        get_start = g.instances[cache_high.get_start.name]
-        get_end = g.instances[cache_high.get_end.name]
-        #get_reach = dfs_same_thread(g, get_start, get_end, {})
-
-        g_add, CacheGet, CacheSet, CacheUpdate, CacheRelease = create_cache(cache_high)
+        g_add, CacheGet, CacheSet, CacheSetGet, CacheUpdate, CacheRelease = create_cache(cache_high)
         g.merge(g_add)
 
-        transform_get(g, get_start, get_end, CacheGet, CacheSet, CacheRelease)
+        get_reach = None
+        set_reach = None
+        if cache_high.get_start:
+            get_start = g.instances[cache_high.get_start.name]
+            get_end = g.instances[cache_high.get_end.name]
+            get_reach = dfs_same_thread(g, get_start, get_end, {})
+
+            transform_get(g, get_start, get_end, CacheGet, CacheSetGet, CacheRelease)
+
+        if cache_high.set_start:
+            set_start = g.instances[cache_high.set_start.name]
+            set_end = g.instances[cache_high.set_end.name]
+            set_reach = dfs_same_thread(g, set_start, set_end, {})
+
+            transform_set(g, set_start, set_end, CacheGet, CacheSet, CacheRelease,
+                          cache_high.write_policy, cache_high.write_miss)
+
+        if get_reach and set_reach:
+            assert get_reach == set_reach

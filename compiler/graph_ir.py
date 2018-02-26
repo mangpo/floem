@@ -588,7 +588,13 @@ def is_queue_clean(instance):
 
 
 class Cache:
-    def __init__(self, name, key_type, val_type, var_size, hash_value, update_func):
+    write_through = 'write_through'
+    write_back = 'write_back'
+    no_write_alloc = 'no_write_alloc'
+    write_alloc = 'write_alloc'
+
+    def __init__(self, name, key_type, val_type, var_size, hash_value, update_func,
+                 write_policy=write_through, write_miss=no_write_alloc):
         self.name = name
         self.key_type = key_type
         self.val_type = val_type
@@ -596,5 +602,10 @@ class Cache:
         self.hash_value = hash_value
         self.update_func = update_func
 
+        self.write_policy = write_policy
+        self.write_miss = write_miss
+
         self.get_start = None
         self.get_end = None
+        self.set_start = None
+        self.set_end = None
