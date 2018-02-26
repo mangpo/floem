@@ -56,7 +56,7 @@ static inline void *citem_value(citem *it) {
     return (p + it->keylen);
 }
 
-void cache_init(cache_bucket *buckets, int n)
+static void cache_init(cache_bucket *buckets, int n)
 {
     for (int i = 0; i < n; i++) {
         lock_init(&buckets[i].lock);

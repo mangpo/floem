@@ -23,6 +23,7 @@ def filter_live(vars):
 
     return set(vars)
 
+
 def get_entry_content(vars, pipeline_state, g, src2fields):
     # content of struct
     content = " "
@@ -512,6 +513,7 @@ def compile_smart_queue(g, q, src2fields):
 
 def code_change(instance):
     return len(instance.uses) > 0
+
 
 def duplicate_overlapped(g, save_inst_names):
     parents = {}

@@ -305,6 +305,17 @@ class Element:
             (self.code_cavium, self.output_code_cavium) = \
                 self.reassign_output_values_internal(portname, args, self.code_cavium, self.output_code_cavium)
 
+    def reassign_input_values_internal(self, portname, types, args, code):
+        types_args = ['{0} {1}'.format(types[i], args[i]) for i in range(len(types))]
+        m = re.search('\([^)]*\)[ ]*=[ ]*' + portname + '[ ]*\([^;];', code)
+        code = code[:m.start(0)] + '({0}) = {1}({2});'.format(','.join(types_args), portname) + code[m.end(0):]
+        return code
+
+    def reassign_input_values(self, portname, types, args):
+        self.code = self.reassign_input_values_internal(portname, types, args, self.code)
+        if self.code_cavium is not None:
+            self.code_cavium = self.reassign_input_values_internal(portname, types, args, self.code_cavium)
+
     def add_output_value_internal(self, portname, arg, code, output_code):
         if self.output_fire == "all":
             src = output_code[portname]
@@ -332,6 +343,32 @@ class Element:
 
         if self.code_cavium is not None:
             self.add_output_value_internal(portname, arg, self.code_cavium, self.output_code_cavium)
+
+    def remove_outport_internal(self, portname, code, output_code):
+        if self.output_fire == "all":
+            del output_code[portname]
+        elif self.output_fire == "multi":
+            m = re.search('[^a-zA-Z0-9_](' + portname + '[ ]*\([^;];)', code)
+            while m:
+                code = code[:m.start(1)] +  code[m.end(1):]
+                m = re.search('[^a-zA-Z0-9_](' + portname + '[ ]*\([^;];)', code)
+        else:
+            cases_exprs = output_code
+            for i in range(len(cases_exprs)):
+                expr = cases_exprs[i][1]
+                m = re.match(portname + '[ ]*\(', expr)
+                if m:
+                    cases_exprs.remove(cases_exprs[i])
+                    break
+        return code, output_code
+
+    def remove_outport(self, portname):
+        port = [x for x in self.outports if x.name == portname][0]
+        self.outports.remove(port)
+
+        self.remove_outport_internal(portname, self.code, self.output_code)
+        if self.code_cavium is not None:
+            self.remove_outport_internal(portname, self.code_cavium, self.output_code_cavium)
 
     def replace_recursive(self, code, var, new_var):
         m = re.search(var, code)
@@ -551,10 +588,13 @@ def is_queue_clean(instance):
 
 
 class Cache:
-    def __init__(self, name, key_type, val_type):
+    def __init__(self, name, key_type, val_type, var_size, hash_value, update_func):
         self.name = name
         self.key_type = key_type
         self.val_type = val_type
+        self.var_size = var_size
+        self.hash_value = hash_value
+        self.update_func = update_func
 
         self.get_start = None
         self.get_end = None

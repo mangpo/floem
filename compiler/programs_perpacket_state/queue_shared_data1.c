@@ -3,11 +3,13 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <queue.h>
+#include <cache.h>
+#include <jenkins_hash.h>
 #include <string.h>
 #include <stddef.h>
 #include <unistd.h>
 #include <pthread.h>
-#include <queue.h>
 #include <shm.h>
 #include <util.h>
 #include <arpa/inet.h>

@@ -83,6 +83,7 @@ class ToNet(Element):
         self.buffer = buffer
         self.has_output = False
         self.batch_size = batch_size
+        self.special = 'ToNet'
 
     def impl(self):
         out = r'''

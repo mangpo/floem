@@ -7,6 +7,7 @@ import join_handling
 import empty_port
 import hton
 import thread_allocation
+import cache_smart_compile
 
 class Compiler:
     def __init__(self, *pipelines):
@@ -39,8 +40,8 @@ class Compiler:
         empty_port.nonempty_to_empty_port_pass(g)
         hton.hton_pass(g)
         thread_allocation.insert_resource_order(g)
+        cache_smart_compile.cache_pass(g)
         pipeline_state.pipeline_state_pass(g, pktstate)
-        # TODO: transform cache elements here
         return g
 
     def generate_graph(self, filename="tmp"):

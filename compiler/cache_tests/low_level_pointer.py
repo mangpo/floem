@@ -40,7 +40,7 @@ class Scalar2Pointer(Element):
     def impl(self):
         self.run_c(r'''
         (int x) = inp();
-        state->hash = jenkins_hash(&x, sizeof(int));
+        state->hash = 0; //jenkins_hash(&x, sizeof(int));
         output { out(&x, sizeof(int)); }
         ''')
 
@@ -53,7 +53,7 @@ class Scalar2Pointer2(Element):
     def impl(self):
         self.run_c(r'''
         (int key, int val) = inp();
-        state->hash = jenkins_hash(&key, sizeof(int));
+        state->hash = 0; //jenkins_hash(&key, sizeof(int));
         output { out(&key, sizeof(int), sizeof(int), &val); }
         ''')
 
@@ -130,6 +130,6 @@ void inc(int vallen, int* old_val, int* new_val) {
 c.testing = r'''
 out(compute(11)); out(compute(1)); out(compute(11)); out(compute(1)); 
 set(11, 222); out(compute(11)); out(compute(1));
-out(update(1, 100)); out(update(123, 100));
+out(update(1, 100)); out(compute(1)); out(update(123, 100));
 '''
-c.generate_code_and_run([22,2,22,2, 222, 2, 102, 246])
+c.generate_code_and_run([22,2,22,2, 222, 2, 102, 102, 246])

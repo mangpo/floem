@@ -38,5 +38,7 @@ compute('compute')
 
 
 c = Compiler()
-c.testing = "out(compute(11)); out(compute(0));"
-c.generate_code_and_run([22,0])
+c.testing = r'''
+out(compute(11)); out(compute(1)); out(compute(11)); out(compute(1)); 
+'''
+c.generate_code_and_run([22,2,22,2])
