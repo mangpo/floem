@@ -28,6 +28,7 @@ typedef struct _citem {
     cache_bucket* bucket;
     uint32_t hv;
     uint16_t keylen, last_vallen;
+    uint8_t evicted;
     uint8_t content[];
 } __attribute__((packed)) citem;
 
@@ -35,6 +36,7 @@ typedef struct _cache_bucket {
     citem *items[BUCKET_NITEMS];
     uint32_t hashes[BUCKET_NITEMS];
     lock_t lock;
+    int replace;
 } __attribute__((packed)) cache_bucket;
 
 static inline bool citem_key_matches(citem *it, const void *key, int klen)
@@ -60,6 +62,7 @@ static void cache_init(cache_bucket *buckets, int n)
 {
     for (int i = 0; i < n; i++) {
         lock_init(&buckets[i].lock);
+        buckets[i].replace = 0;
     }
 }
 
@@ -97,7 +100,7 @@ done:
 }
 
 
-static void cache_put(cache_bucket *buckets, int nbuckets, citem *nit, citem *cas)
+static citem *cache_put(cache_bucket *buckets, int nbuckets, citem *nit, bool replace)
 {
     citem *it, *prev;
     size_t i, di;
@@ -122,10 +125,6 @@ static void cache_put(cache_bucket *buckets, int nbuckets, citem *nit, citem *ca
         } else if (b->hashes[i] == hv) {
             it = b->items[i];
             if (citem_key_matches(it, key, klen)) {
-                // Were doing a compare and set
-                if (cas != NULL && cas != it) {
-                    goto done;
-                }
                 assert(nit != it);
                 nit->next = it->next;
                 b->items[i] = nit;
@@ -134,13 +133,9 @@ static void cache_put(cache_bucket *buckets, int nbuckets, citem *nit, citem *ca
 #endif
                 free(it);
                 nit->bucket = b;
-                goto done;
+                return nit;
             }
         }
-    }
-
-    if (cas != NULL) {
-        goto done;
     }
 
     // Note it does not match, otherwise we would have already bailed in the for
@@ -162,23 +157,38 @@ static void cache_put(cache_bucket *buckets, int nbuckets, citem *nit, citem *ca
 #endif
             free(it);
             nit->bucket = b;
-            goto done;
+            return nit;
         }
     }
 
     // We did not find an existing entry to replace, just stick it in wherever
     // we find room
-    if (!has_direct) {
-        di = BUCKET_NITEMS - 1;
-    }
-    nit->next = b->items[di];
-    b->hashes[di] = hv;
-    b->items[di] = nit;
-    nit->bucket = b;
 
-done:
-    lock_unlock(&b->lock);
-    return;
+    if(has_direct) {
+        nit->next = b->items[di];
+        b->hashes[di] = hv;
+        b->items[di] = nit;
+        nit->bucket = b;
+        return nit;
+    }
+
+    if(replace) {
+        citem *evict;
+        // evict
+        di = b->replace;
+        b->replace = (b->replace + 1) % BUCKET_NITEMS;
+        evict = b->items[di];
+        evict->evicted |= 2;
+        b->items[di] = NULL;
+
+        nit->next = b->items[di];
+        b->hashes[di] = hv;
+        b->items[di] = nit;
+        nit->bucket = b;
+        return evict;
+    }
+
+    return NULL;
 }
 
 static citem *cache_put_or_get(cache_bucket *buckets, int nbuckets, citem *nit)

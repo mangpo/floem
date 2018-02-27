@@ -1,8 +1,9 @@
 from dsl import *
-import common
+import common, graph_ir
 
 
-def cache_default(name, key_type, val_type, hash_value=False, var_size=False, release_type=[], update_func='f'):
+def cache_default(name, key_type, val_type, hash_value=False, var_size=False, release_type=[], update_func='f',
+                  write_policy=graph_ir.Cache.write_through, write_miss=graph_ir.Cache.no_write_alloc):
     prefix = name + '_'
 
     if not var_size:
@@ -181,10 +182,30 @@ def cache_default(name, key_type, val_type, hash_value=False, var_size=False, re
         item_src += "memcpy(p, &val{0}, last_vallen);\n".format(len(val_type) - 1)
 
     item_src2 = item_src
-    item_src += "cache_put(this->buckets, %d, it, NULL);\n" % n_buckets
+    replace = 'true' if write_miss==graph_ir.Cache.write_alloc else 'false'
+    item_src += r'''
+    it->evicted = 1; 
+    citem *rit = cache_put(this->buckets, %d, it, %s);
+    ''' % (n_buckets, replace)
+
+    if write_policy == graph_ir.Cache.write_back and write_miss == graph_ir.Cache.no_write_alloc:
+        item_src += r'''
+        if(rit && rit->evicted == 3) state->cache_item = rit;  // to be evict, release, & free.
+        else if(rit) cache_release(rit);
+        '''
+    else:
+        item_src += r'''
+        if(rit) cache_release(rit);
+        '''
+
+        if write_policy == graph_ir.Cache.write_back and write_miss == graph_ir.Cache.write_alloc:
+            item_src += r'''
+            if(rit && rit->evicted & 2) free(rit);
+            '''
 
     cache_release = "state->cache_item = it;" if var_size else ''
     item_src2 += r'''
+    it->evicted = 0; 
     citem* rit = cache_put_or_get(this->buckets, %d, it);
     if(rit) {
         free(it);

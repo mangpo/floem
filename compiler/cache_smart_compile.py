@@ -161,7 +161,8 @@ def create_cache(cache_high):
     CacheGet, CacheSet, CacheSetGet, CacheUpdate, CacheRelease = \
         cache.cache_default(cache_high.name, cache_high.key_type, cache_high.val_type,
                             var_size=cache_high.var_size, hash_value=cache_high.hash_value,
-                            update_func=cache_high.update_func, release_type=[])
+                            update_func=cache_high.update_func, release_type=[],
+                            write_policy=cache_high.write_policy, write_miss=cache_high.write_miss)
 
     CacheGet(create=False)
     CacheSet(create=False)
