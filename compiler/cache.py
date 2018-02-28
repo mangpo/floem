@@ -189,18 +189,18 @@ def cache_default(name, key_type, val_type, hash_value=False, var_size=False, re
     ''' % (n_buckets, replace)
 
     if write_policy == graph_ir.Cache.write_back:
-        item_src += "if(rit) state->cache_item = rit;  // to be evict, release, & free."
+        item_src += "state->cache_item = rit;  // to be evict, release, & free."
         if write_miss == graph_ir.Cache.no_write_alloc:
             item_src += "if(rit) cache_release(rit);\n"
     else:
         item_src += "if(rit) cache_release(rit);\n"
+        item_src += "if(rit & rit->evicted | 2) free(rit);\n"
 
     state_item = "state->cache_item = it;" if var_size else ''
     item_src2 += r'''
-    citem* rit = cache_put_or_get(this->buckets, %d, it);
+    citem* rit = cache_put_or_get(this->buckets, %d, it, %s);
     if(rit) {
       if(rit->evicted == 1) {
-        free(it);
         it = rit;
         %s
         %s
@@ -212,7 +212,7 @@ def cache_default(name, key_type, val_type, hash_value=False, var_size=False, re
         %s
       }
     }
-    ''' % (n_buckets, state_item, val_assign_src, state_item)
+    ''' % (n_buckets, replace, state_item, val_assign_src, state_item)
 
 
     class CacheSet(Element):
@@ -362,7 +362,7 @@ def cache_default(name, key_type, val_type, hash_value=False, var_size=False, re
             self.out = Output(*kv_params)
 
         def impl(self):
-            extra_return = 'keylen, it->last_vallen' if var_size else ''
+            extra_return = 'keylen, it->last_vallen,' if var_size else ''
             self.run_c(r'''
             citem *it = tate->cache_item;
             bool evict = false;
@@ -373,6 +373,19 @@ def cache_default(name, key_type, val_type, hash_value=False, var_size=False, re
             output switch { case evict: out(key, %s %s); }
             ''' % (val_src, extra_return, ','.join(return_vals)))
 
+    class Miss(Element):
+        def configure(self):
+            self.inp = Input(*kv_params)
+            self.out = Output(*kv_params)
+
+        def impl(self):
+            extra_args = 'int keylen, int last_vallen,' if var_size else ''
+            extra_return = 'keylen, last_vallen,' if var_size else ''
+            self.run_c(r'''
+            (%s key, %s %s) = inp();
+            bool miss = (state->cache_item == NULL);
+            output switch { case miss: out(key, %s %s); }
+            ''' % (key_type, extra_args, ','.join(type_vals), extra_return, ','.join(return_vals)))
 
     class ForkGet(Element):
         def configure(self):
@@ -401,21 +414,24 @@ def cache_default(name, key_type, val_type, hash_value=False, var_size=False, re
                 self.out = Output(*kv_params)
             else:
                 self.out = Output(*key_params)
-            self.miss = Output()
+            if write_miss==graph_ir.Cache.write_alloc:
+                self.miss = Output()
+            else:
+                self.miss = Output(*kv_params)
 
         def impl(self):
             if not var_size:
                 return_src = 'key, ' + ','.join(return_vals) if set_return_val else 'key'
                 self.run_c(r'''
                 (%s key, %s) = inp();
-                output { miss(); out(%s); }
-                ''' % (key_type, ','.join(type_vals), return_src))
+                output { miss(key, %s); out(%s); }
+                ''' % (key_type, ','.join(type_vals), ','.join(return_vals), return_src))
             else:
                 return_src = 'key, keylen, last_vallen, ' + ','.join(return_vals) if set_return_val else 'key, keylen'
                 self.run_c(r'''
                 (%s key, int keylen, int last_vallen, %s) = inp();
-                output { miss(); out(%s); }
-                ''' % (key_type, ','.join(type_vals), return_src))
+                output { miss(key, keylen, last_vallen, %s); out(%s); }
+                ''' % (key_type, ','.join(type_vals), ','.join(return_vals), return_src))
 
     class GetComposite(Composite):
         def configure(self):
@@ -457,14 +473,15 @@ def cache_default(name, key_type, val_type, hash_value=False, var_size=False, re
 
         def impl(self):
             cache_set = CacheSet()
-            cache_release = CacheRelease()
             fork = ForkSet()
 
             self.inp >> cache_set >> fork >> self.out
 
             if write_miss == graph_ir.Cache.write_alloc:
                 fork.miss >> Evict() >> self.query_begin
-                fork.miss >> cache_release
+                fork.miss >> CacheRelease()
+            else:
+                fork.miss >> Miss() >> self.query_begin
 
     class SetWriteThrough(Composite):
         def configure(self):

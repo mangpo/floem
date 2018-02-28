@@ -205,6 +205,8 @@ def transform_set_write_back(g, set_start, set_end, set_composite):
     g.deleteElementInstance(set_start.name)
     g.deleteElementInstance(set_end.name)
 
+    # Does not work for API.
+
 
 def transform_set_write_through(g, set_start, set_end, set_composite):
     # A >> set.begin
@@ -323,6 +325,11 @@ def cache_pass(g):
                 for inst_name in subgraph:
                     g.deleteElementInstance(inst_name, force=True)
             q0.rename_ports(g)
+        elif set_start and cache_high.write_policy == graph_ir.Cache.write_back:
+            l = set_end.input2ele['inp']
+            while len(l) > 0:
+                prev_name, prev_port = l[0]
+                g.disconnect(prev_name, set_end.name, prev_port)
 
         if get_start:
             transform_get(g, get_start, get_end, get_composite, set_start)

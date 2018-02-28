@@ -189,10 +189,11 @@ static citem *cache_put(cache_bucket *buckets, int nbuckets, citem *nit, bool re
         return evict;
     }
 
+    lock_unlock(&b->lock);
     return NULL;
 }
 
-static citem *cache_put_or_get(cache_bucket *buckets, int nbuckets, citem *nit)
+static citem *cache_put_or_get(cache_bucket *buckets, int nbuckets, citem *nit, bool replace)
 {
     citem *it, *prev;
     size_t i, di;
@@ -224,6 +225,7 @@ static citem *cache_put_or_get(cache_bucket *buckets, int nbuckets, citem *nit)
 #ifdef DEBUG
                 printf("exist %p\n", it);
 #endif
+                free(nit);
                 return it;
             }
         }
@@ -246,19 +248,37 @@ static citem *cache_put_or_get(cache_bucket *buckets, int nbuckets, citem *nit)
 #ifdef DEBUG
             printf("exist %p\n", it);
 #endif
+            free(nit);
             return it;
         }
     }
 
     // We did not find an existing entry to replace, just stick it in wherever
     // we find room
-    if (!has_direct) {
-        di = BUCKET_NITEMS - 1;
+    if(has_direct) {
+        nit->next = b->items[di];
+        b->hashes[di] = hv;
+        b->items[di] = nit;
+        nit->bucket = b;
+        lock_unlock(&b->lock);
+        return NULL;
     }
-    nit->next = b->items[di];
-    b->hashes[di] = hv;
-    b->items[di] = nit;
-    nit->bucket = b;
+
+    if(replace) {
+        citem *evict;
+        // evict
+        di = b->replace;
+        b->replace = (b->replace + 1) % BUCKET_NITEMS;
+        evict = b->items[di];
+        evict->evicted |= 2;
+        b->items[di] = NULL;
+
+        nit->next = b->items[di];
+        b->hashes[di] = hv;
+        b->items[di] = nit;
+        nit->bucket = b;
+        return evict;
+    }
 
 done:
     lock_unlock(&b->lock);
