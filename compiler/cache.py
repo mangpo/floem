@@ -4,7 +4,7 @@ import common, graph_ir
 
 def cache_default(name, key_type, val_type, hash_value=False, var_size=False, release_type=[], update_func='f',
                   write_policy=graph_ir.Cache.write_through, write_miss=graph_ir.Cache.no_write_alloc,
-                  set_query=True):
+                  set_query=True, set_return_val=False):
     prefix = name + '_'
 
     if not var_size:
@@ -374,7 +374,7 @@ def cache_default(name, key_type, val_type, hash_value=False, var_size=False, re
             ''' % (val_src, extra_return, ','.join(return_vals)))
 
 
-    class Fork(Element):
+    class ForkGet(Element):
         def configure(self):
             self.inp = Input(*key_params)
             self.out = Output(*key_params)
@@ -394,6 +394,29 @@ def cache_default(name, key_type, val_type, hash_value=False, var_size=False, re
                 output { out(key, keylen); release(); }
                 ''' % key_type)
 
+    class ForkSet(Element):
+        def configure(self):
+            self.inp = Input(*kv_params)
+            if set_return_val:
+                self.out = Output(*kv_params)
+            else:
+                self.out = Output(*key_params)
+            self.miss = Output()
+
+        def impl(self):
+            if not var_size:
+                return_src = 'key, ' + ','.join(return_vals) if set_return_val else 'key'
+                self.run_c(r'''
+                (%s key, %s) = inp();
+                output { miss(); out(%s); }
+                ''' % (key_type, ','.join(type_vals), return_src))
+            else:
+                return_src = 'key, keylen, last_vallen, ' + ','.join(return_vals) if set_return_val else 'key, keylen'
+                self.run_c(r'''
+                (%s key, int keylen, int last_vallen, %s) = inp();
+                output { miss(); out(%s); }
+                ''' % (key_type, ','.join(type_vals), return_src))
+
     class GetComposite(Composite):
         def configure(self):
             self.inp = Input(*key_params)
@@ -409,7 +432,7 @@ def cache_default(name, key_type, val_type, hash_value=False, var_size=False, re
         def impl(self):
             cache_get = CacheGet()
             cache_set_get = CacheSetGet()
-            fork = Fork()
+            fork = ForkGet()
 
             self.inp >> fork >> cache_get
             cache_get.hit >> self.out
@@ -423,4 +446,32 @@ def cache_default(name, key_type, val_type, hash_value=False, var_size=False, re
             if var_size:
                 fork.release >> self.release_inst
 
-    return GetComposite
+    class SetWriteBack(Composite):
+        def configure(self):
+            self.inp = Input(*kv_params)
+            if set_return_val:
+                self.out = Output(*kv_params)
+            else:
+                self.out = Output(*key_params)
+            self.query_begin = Output(*kv_params)
+
+        def impl(self):
+            cache_set = CacheSet()
+            cache_release = CacheRelease()
+            fork = ForkSet()
+
+            self.inp >> cache_set >> fork >> self.out
+
+            if write_miss == graph_ir.Cache.write_alloc:
+                fork.miss >> Evict() >> self.query_begin
+                fork.miss >> cache_release
+
+    class SetWriteThrough(Composite):
+        def configure(self):
+            self.inp = Input(*kv_params)
+            self.out = Output(*kv_params)
+
+        def impl(self):
+            self.inp >> CacheSet() >> self.out
+
+    return GetComposite, SetWriteBack if write_policy==graph_ir.Cache.write_back else SetWriteThrough

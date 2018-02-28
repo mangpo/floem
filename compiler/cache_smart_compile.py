@@ -335,7 +335,7 @@ def transform_set(g, s, t, CacheGet, CacheSet, CacheRelease, cache_high, queues)
 def create_cache(cache_high, set):
     workspace.push_decl()
     workspace.push_scope(cache_high.name)
-    GetComposite = \
+    GetComposite, SetComposite = \
         cache.cache_default(cache_high.name, cache_high.key_type, cache_high.val_type,
                             var_size=cache_high.var_size, hash_value=cache_high.hash_value,
                             update_func=cache_high.update_func, release_type=[],
