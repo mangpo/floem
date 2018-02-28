@@ -39,8 +39,9 @@ class Compiler:
         g = program.program_to_graph_pass(dp, default_process=filename, original=original)
         empty_port.nonempty_to_empty_port_pass(g)
         hton.hton_pass(g)
-        thread_allocation.insert_resource_order(g)
         cache_smart_compile.cache_pass(g)
+        empty_port.nonempty_to_empty_port_pass(g)
+        thread_allocation.insert_resource_order(g)
         pipeline_state.pipeline_state_pass(g, pktstate)
         return g
 

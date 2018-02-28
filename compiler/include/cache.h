@@ -108,6 +108,7 @@ static citem *cache_put(cache_bucket *buckets, int nbuckets, citem *nit, bool re
     uint32_t hv = nit->hv;
     void *key = citem_key(nit);
     size_t klen = nit->keylen;
+    nit->evicted = 1;
 
     int *val = citem_value(nit);
 #ifdef DEBUG
@@ -199,6 +200,7 @@ static citem *cache_put_or_get(cache_bucket *buckets, int nbuckets, citem *nit)
     uint32_t hv = nit->hv;
     void *key = citem_key(nit);
     size_t klen = nit->keylen;
+    nit->evicted = 0;
 
     int *val = citem_value(nit);
 #ifdef DEBUG

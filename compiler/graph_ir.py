@@ -583,6 +583,41 @@ class Queue:
         self.entry_size = entry_size
         self.checksum = checksum
 
+    def rename_ports(self, g):
+        assert len(self.enq.input2ele) == len(self.deq.output2ele)
+
+        id = 0
+        for i in range(len(self.channels)):
+            port = 'inp' + str(i)
+            if port in self.enq.input2ele and i > id:
+                l = self.enq.input2ele[port]
+                self.enq.input2ele['inp' + str(id)] = l
+                del self.enq.input2ele[port]
+                id += 1
+
+                for prev_name, prev_port in l:
+                    prev = g.instances[prev_name]
+                    prev.output2ele[prev_port] = (self.enq.name, port)
+
+        id = 0
+        for i in range(len(self.channels)):
+            port = 'out' + str(i)
+            if port in self.deq.output2ele and i > id:
+                next_name, next_port = self.deq.output2ele[port]
+                self.deq.input2ele['out' + str(id)] = l
+                del self.deq.output2ele[port]
+                id += 1
+
+                next = g.instances[next_name]
+                l = next.input2ele[next_port]
+                for i in range(len(l)):
+                    myname, myport = l[i]
+                    if myname == self.deq.name and myport == port:
+                        l[i] = (myname, 'out' + str(id))
+
+        self.channels = len(self.enq.input2ele)
+
+
 def is_queue_clean(instance):
     return instance.element.special == 'clean'
 

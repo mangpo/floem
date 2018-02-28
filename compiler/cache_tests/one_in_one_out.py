@@ -24,7 +24,8 @@ class OnlyVal(Element):
         output { out(val); }
         ''')
 
-CacheGetStart, CacheGetEnd, CacheSetStart, CacheSetEnd = cache_smart.smart_cache('MyCache', Int, [Int])
+CacheGetStart, CacheGetEnd, CacheSetStart, CacheSetEnd = \
+    cache_smart.smart_cache('MyCache', Int, [Int], write_policy=Cache.write_back, write_miss=Cache.write_alloc)
 
 class compute(CallablePipeline):
     def configure(self):
