@@ -215,12 +215,13 @@ class Graph:
 
         return ret
 
-    def deleteElementInstance(self, name):
+    def deleteElementInstance(self, name, force=False):
         instance = self.instances[name]
-        for l in instance.input2ele.values():
-            assert len(l) == 0, "Cannot delete Element '%s' because it is still connected from %s." % (name, l)
-        for next, port in instance.output2ele.values():
-            raise Exception("Cannot delete Element '%s' because it is still connected to %s." % (name, next))
+        if not force:
+            for l in instance.input2ele.values():
+                assert len(l) == 0, "Cannot delete Element '%s' because it is still connected from %s." % (name, l)
+            for next, port in instance.output2ele.values():
+                raise Exception("Cannot delete Element '%s' because it is still connected to %s." % (name, next))
         del self.instances[name]
 
     def copy_node_and_element(self, inst_name, suffix):
@@ -350,11 +351,14 @@ class Graph:
         roots = set(self.instances.keys()).difference(not_roots)
         return roots
 
-    def find_subgraph_list(self, root, subgraph):
+    def find_subgraph_list(self, root, subgraph, until=None):
+        if root == until:
+            return
+
         instance = self.instances[root]
         if instance.name not in subgraph:
             for inst,port in instance.output2ele.values():
-                self.find_subgraph_list(inst, subgraph)
+                self.find_subgraph_list(inst, subgraph, until)
             subgraph.append(instance.name)
         return subgraph
 

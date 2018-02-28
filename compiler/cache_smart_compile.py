@@ -72,117 +72,6 @@ def find_last_queue(g, s, t, vis, prev=None):
     vis[s.name] = ans
     return ans
 
-#
-# def transform_get(g, s, t, CacheGet, CacheSetGet, CacheRelease):
-#     # 1. Check that get_start and get_end is on the same device.
-#     if s.thread in g.thread2process:
-#         p1 = g.thread2process[s.thread]
-#     else:
-#         p1 = 'main'
-#     if t.thread in g.thread2process:
-#         p2 = g.thread2process[t.thread]
-#     else:
-#         p2 = 'main'
-#     assert p1 == p2, "%s and %s must be running the same device." % (s.name, t.name)
-#
-#     # 2. Duplicate everything after t if s and t are on different threads (queue in between)
-#     API_return = None
-#     if s.thread != t.thread:
-#         subgraph = g.find_subgraph_list(t.name, [])
-#         dup_nodes = reversed(subgraph[:-1])
-#         if dup_nodes[-1] in g.API_outputs:
-#             API_return = dup_nodes[-1]
-#         pipeline_state_join.duplicate_subgraph(g, dup_nodes, suffix='_cache', copy=2)
-#
-#         hit_start = dup_nodes[0] + '_cache1'  # hit
-#         subgraph = g.find_subgraph_list(hit_start, [])
-#         for name in subgraph:
-#             g.instances[name].thread = s.thread
-#
-#         rel_after = [dup_nodes[0] + '_cache0', dup_nodes[0] + '_cache1']
-#     else:
-#         hit_start = t.output2ele['out'][0]
-#         rel_after = [hit_start]
-#
-#     # 3. Insert cache_rel
-#     if CacheRelease:
-#         cache_rel_inst = CacheRelease(create=False).instance
-#         rel_element = cache_rel_inst.element
-#         rel_element = rel_element.clone(rel_element.name + "_for_get")
-#         g.addElement(rel_element)
-#         cache_rel_inst.element = rel_element
-#
-#         if API_return:
-#             # Adjust release element
-#             API_instance = g.instances[API_return]
-#             types = API_instance.element.outports[0].argtypes
-#             args = ['ret{0}'.format(i) for i in range(len(types))]
-#             rel_element.inports = [Port('inp', types, rel_element.inports[0].pipeline)]
-#             rel_element.outports = [Port('out', types, rel_element.outports[0].pipeline)]
-#             rel_element.reassign_input_values('inp', types, args)
-#             rel_element.reassign_output_values('out', args)
-#
-#             # Connect release element
-#             g.newElementInstance(cache_rel_inst.element, cache_rel_inst.name, cache_rel_inst.args)
-#             g.set_thread(cache_rel_inst.name, s.therad)
-#
-#             g.connect(API_return, cache_rel_inst.name, API_instance.element.outports[0].name)
-#             index = g.API_outputs.index(API_return)
-#             g.API_outputs[index] = cache_rel_inst.name
-#         else:
-#             # Adjust release element
-#             rel_element.remove_outport('out')
-#
-#             # Connect release element
-#             for i in range(len(rel_after)):
-#                 g.newElementInstance(cache_rel_inst.element, cache_rel_inst.name + str(i), cache_rel_inst.args)
-#                 g.set_thread(cache_rel_inst.name+ str(i), node.therad)
-#                 node = pipeline_state_join.get_node_before_release_nolive(rel_after, g, '', {})
-#                 g.connect(node.name, cache_rel_inst.name, 'release')
-#
-#     # 4. Insert cache_get
-#     cache_get_inst = CacheGet(create=False).instance
-#     g.newElementInstance(cache_get_inst.element, cache_get_inst.name, cache_get_inst.args)
-#     g.set_thread(cache_get_inst.name, s.thread)
-#
-#     # replace dummy get_start with real get
-#     if len(s.input2ele) > 0:
-#         inport = 'inp'
-#         l = s.input2ele[inport]
-#         while len(l) > 0:
-#             prev_name, prev_port = l[0]  # index = 0 because l is mutated (first element is popped).
-#             g.disconnect(prev_name, s.name, prev_port, inport)
-#             g.connect(prev_name, cache_get_inst.name, prev_port, 'inp')
-#
-#     outport = 'out'
-#     next_name, next_port = s.output2ele[outport]
-#     g.disconnect(s.name, next_name, outport, next_port)
-#     g.connect(cache_get_inst.name, next_name, 'miss', next_port)
-#     g.connect(cache_get_inst.name, hit_start, 'hit', 'inp')
-#
-#     g.deleteElementInstance(s.name)
-#
-#     # 5. Insert cache_set
-#     cache_set_inst = CacheSetGet(create=False).instance
-#     g.newElementInstance(cache_set_inst.element, cache_set_inst.name, cache_set_inst.args)
-#     g.set_thread(cache_set_inst.name, s.thread)
-#
-#     # replace dummy get_end with real set
-#     inport = 'inp'
-#     l = t.input2ele[inport]
-#     while len(l) > 0:
-#         prev_name, prev_port = l[0]  # index = 0 because l is mutated (first element is popped).
-#         g.disconnect(prev_name, t.name, prev_port, inport)
-#         g.connect(prev_name, cache_set_inst.name, prev_port, 'inp')
-#
-#     outport = 'out'
-#     next_name, next_port = t.output2ele[outport]
-#     g.disconnect(t.name, next_name, outport, next_port)
-#     g.connect(cache_set_inst.name, next_name, 'out', next_port)
-#
-#     g.deleteElementInstance(t.name)
-#
-
 
 def get_element_ports(port):
     return port.spec.element_ports
@@ -221,7 +110,7 @@ def transform_get(g, get_start, get_end, get_composite, set_start):
         g.disconnect(prev_name, get_end.name, prev_port, 'inp')
         g.connect(prev_name, query_end.element.name, prev_port, query_end.name)
 
-    # get.end >> GetQuery
+    # get.end >> B
     ports = get_element_ports(get_composite.out)
 
     next_name, next_port = get_end.output2ele['out']
@@ -283,56 +172,66 @@ def transform_get(g, get_start, get_end, get_composite, set_start):
                 g.threads_order.append(get_composite.release_inst.name, out_inst)
                 break
 
-def transform_set(g, s, t, CacheGet, CacheSet, CacheRelease, cache_high, queues):
-    argtypes = s.element.inports['inp'].argtypes
-    type_args = []
-    args = []
+def transform_set_write_back(g, set_start, set_end, set_composite):
+    # A >> set.begin
+    if len(set_start.input2ele) > 0:
+        ports = get_element_ports(set_composite.inp)
+        assert len(ports) == 1
+        inp = ports[0]
 
-    for i in range(len(argtypes)):
-        type_args.append('{0} x{1}'.format(argtypes[i], i))
-        args.append('x{0}'.format(i))
-
-    n_out = len(t.element.inports['inp'].argtypes)
-
-    # 1. Disconnect A from s, connect A to cache_set
-    cache_set_inst = CacheSet(create=False).instance
-    g.newElementInstance(cache_set_inst.element, cache_set_inst.name, cache_set_inst.args)
-    g.set_thread(cache_set_inst.name, s.thread)
-
-    if len(s.input2ele) > 0:
-        inport = 'inp'
-        l = s.input2ele[inport]
+        l = set_start.input2ele['inp']
         while len(l) > 0:
             prev_name, prev_port = l[0]  # index = 0 because l is mutated (first element is popped).
-            g.disconnect(prev_name, s.name, prev_port, inport)
-            g.connect(prev_name, cache_set_inst, prev_port)
+            g.disconnect(prev_name, set_start.name, prev_port, 'inp')
+            g.connect(prev_name, inp.element.name, prev_port, inp.name)
+
+    # get.query_begin >> GetQuery
+    ports = get_element_ports(set_composite.query_begin)
+    assert len(ports) == 1
+    query_begin = ports[0]
+
+    next_name, next_port = set_start.output2ele['out']
+    g.disconnect(set_start.name, next_name, 'out', next_port)
+    g.connect(query_begin.element.name, next_name, query_begin.name, next_port)
+
+    # get.end >> B
+    ports = get_element_ports(set_composite.out)
+
+    next_name, next_port = set_end.output2ele['out']
+    g.disconnect(set_end.name, next_name, 'out', next_port)
+    for out in ports:
+        g.connect(out.element.name, next_name, out.name, next_port)
+
+    g.deleteElementInstance(set_start.name)
+    g.deleteElementInstance(set_end.name)
 
 
-    # 2. Write-back
-    if cache_high.write_policy == graph_ir.Cache.write_back:
-        # 2.1 Connect evict case (write-back & write-allocate)
-        if cache_high.write_miss == graph_ir.Cache.write_alloc:
-            check_evict_src = r'''
-            (%s) = inp();
-            bool evict = state->cache_item && state->cache_item->evicted;
-            
-            output switch { case evict: out(?); }
-            ''' % (type_args)
+def transform_set_write_through(g, set_start, set_end, set_composite):
+    # A >> set.begin
+    if len(set_start.input2ele) > 0:
+        ports = get_element_ports(set_composite.inp)
+        assert len(ports) == 1
+        inp = ports[0]
 
-        fill_ele = Element(q.name + "_fill" + str(i), [Port("in_entry", ["q_buffer"]), Port("in_pkt", [])],
-                           [Port("out", ["q_buffer"])] + fill_extra_port, fill_src)
-        g.addElement(fill_ele)
-        fill_inst = ElementInstance(fill_ele.name, prefix + fill_ele.name + "_from_" + in_inst)
+        l = set_start.input2ele['inp']
+        while len(l) > 0:
+            prev_name, prev_port = l[0]  # index = 0 because l is mutated (first element is popped).
+            g.disconnect(prev_name, set_start.name, prev_port, 'inp')
+            g.connect(prev_name, inp.element.name, prev_port, inp.name)
 
-        # 2.2 Connect conditional set query (write-back & no-allocate)
+    # get.end >> SetQuery
+    ports = get_element_ports(set_composite.out)
 
-        # Then, connect cache_set to B
+    next_name, next_port = set_start.output2ele['out']
+    g.disconnect(set_start.name, next_name, 'out', next_port)
+    for out in ports:
+        g.connect(out.element.name, next_name, out.name, next_port)
 
-    # 4. Connect always set query (write-through)
+    g.deleteElementInstance(set_start.name)
+    # Keep set_end because it is just nop.
 
 
-
-def create_cache(cache_high, set):
+def create_cache(cache_high, get, set):
     workspace.push_decl()
     workspace.push_scope(cache_high.name)
     GetComposite, SetComposite = \
@@ -342,7 +241,12 @@ def create_cache(cache_high, set):
                             write_policy=cache_high.write_policy, write_miss=cache_high.write_miss,
                             set_query=set)
 
-    get_composite = GetComposite()
+    get_composite = None
+    set_composite = None
+    if get:
+        get_composite = GetComposite()
+    if set:
+        set_composite = SetComposite()
     library.Drop(create=False)
 
     decl = workspace.pop_decl()
@@ -351,7 +255,7 @@ def create_cache(cache_high, set):
     dp = desugaring.desugar(p)
     g = program_to_graph_pass(dp, default_process='tmp')
 
-    return g, get_composite, library.Drop
+    return g, get_composite, set_composite, library.Drop
 
 
 def cache_pass(g):
@@ -390,11 +294,12 @@ def cache_pass(g):
         if get_reach and set_reach:
             assert get_reach == set_reach
 
-        g_add, get_composite, Drop = create_cache(cache_high, set_start)
+        g_add, get_composite, set_composite, Drop = create_cache(cache_high, get_start, set_start)
         for instance in g_add.instances.values():
             instance.thread = get_start.thread
         g.merge(g_add)
 
+        # Remove connection at set_end for write-back policy
         if set_start and len(set_reach) > 1 and cache_high.write_policy == graph_ir.Cache.write_back:
             queues = find_last_queue(g, set_start, set_end, {})
             (q0, id0, prev0) = queues[0]
@@ -413,10 +318,16 @@ def cache_pass(g):
                 next_name, next_port = q.enq.output2ele['out' + str(id)]
                 g.disconnect(q.deq.name, next_name, 'out' + str(id), next_port)
 
-                subgraph = g.find_subgraph_list(next_name, [])
+                set_end.input2ele = {}
+                subgraph = g.find_subgraph_list(next_name, [], set_end.name)
                 for inst_name in subgraph:
-                    g.deleteElementInstance(inst_name)
+                    g.deleteElementInstance(inst_name, force=True)
             q0.rename_ports(g)
 
         if get_start:
             transform_get(g, get_start, get_end, get_composite, set_start)
+        if set_start:
+            if cache_high.write_policy==graph_ir.Cache.write_back:
+                transform_set_write_back(g, set_start, set_end, set_composite)
+            else:
+                transform_set_write_through(g, set_start, set_end, set_composite)
