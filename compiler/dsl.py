@@ -248,6 +248,7 @@ class SpecImplOutput(SpecImplPort):
 
 class Connectable(object):
     id = 0
+    outports_order = None
 
     def __str__(self):
         return self.name
@@ -284,6 +285,16 @@ class Connectable(object):
                         self.inports.append(p)
                     else:
                         self.outports.append(p)
+
+        if self.outports_order:
+            outports = []
+            for name in self.outports_order:
+                for port in self.outports:
+                    if port.name == name:
+                        outports.append(port)
+                        self.outports.remove(port)
+                        break
+            self.outports =  outports + self.outports
 
     def configure(self, *params):
         pass
@@ -347,6 +358,8 @@ class Element(Connectable):
             Element.all_defined.add(unique)
             inports = [graph.Port(p.name, p.args) for p in self.inports]
             outports = [graph.Port(p.name, p.args) for p in self.outports]
+            if len(outports) > 1:
+                print
             e = graph.Element(unique, inports, outports, self.code, states_decls, code_cavium=self.code_cavium)
             e.special = self.special
             decl_append(e)

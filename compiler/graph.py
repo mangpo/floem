@@ -279,11 +279,18 @@ class Graph:
             for port_name in in2:
                 i2.connect_input_port(port_name, i1.name, out1)
 
-    def disconnect(self, name1, name2, out1, in2):
+    def disconnect(self, name1, name2, out1, in2=None):
         i1 = self.instances[name1]
         i2 = self.instances[name2]
 
+        in_name, in_port = i1.output2ele[out1]
         del i1.output2ele[out1]
+
+        assert name2 == in_name
+        if in2:
+            assert in2 == in_port
+        else:
+            in2 = in_port
         i2.input2ele[in2].remove((name1, out1))
 
     def delete_instance(self, name):

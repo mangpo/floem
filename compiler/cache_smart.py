@@ -1,12 +1,17 @@
 from dsl import *
 import graph_ir
 
+class CacheState(State):
+    cache_item = Field('citem*')
+    hash = Field(Uint(32))
 
 def smart_cache(name, key_type, val_type,
                 var_size=False, hash_value=False, update_func='f', set_return_value=False,
                 write_policy=graph_ir.Cache.write_through, write_miss=graph_ir.Cache.no_write_alloc):
     prefix = name + "_"
-    cache = graph_ir.Cache(name, key_type, val_type, var_size, hash_value, update_func, write_policy, write_miss)
+    cache = graph_ir.Cache(name, key_type, val_type, var_size, hash_value, update_func,
+                           set_return_value,
+                           write_policy, write_miss)
 
     args = []
     vals = []

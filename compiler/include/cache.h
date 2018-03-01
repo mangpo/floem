@@ -117,6 +117,7 @@ static citem *cache_put(cache_bucket *buckets, int nbuckets, citem *nit, bool re
 
     cache_bucket *b = buckets + (hv % nbuckets);
     lock_lock(&b->lock);
+    //printf("lock\n");
 
     // Check if we need to replace an existing item
     for (i = 0; i < BUCKET_NITEMS; i++) {
@@ -134,6 +135,7 @@ static citem *cache_put(cache_bucket *buckets, int nbuckets, citem *nit, bool re
 #endif
                 free(it);
                 nit->bucket = b;
+                lock_unlock(&b->lock);
                 return nit;
             }
         }
@@ -158,6 +160,7 @@ static citem *cache_put(cache_bucket *buckets, int nbuckets, citem *nit, bool re
 #endif
             free(it);
             nit->bucket = b;
+            lock_unlock(&b->lock);
             return nit;
         }
     }
@@ -170,6 +173,7 @@ static citem *cache_put(cache_bucket *buckets, int nbuckets, citem *nit, bool re
         b->hashes[di] = hv;
         b->items[di] = nit;
         nit->bucket = b;
+        lock_unlock(&b->lock);
         return nit;
     }
 
@@ -186,6 +190,7 @@ static citem *cache_put(cache_bucket *buckets, int nbuckets, citem *nit, bool re
         b->hashes[di] = hv;
         b->items[di] = nit;
         nit->bucket = b;
+        lock_unlock(&b->lock);
         return evict;
     }
 
@@ -205,7 +210,7 @@ static citem *cache_put_or_get(cache_bucket *buckets, int nbuckets, citem *nit, 
 
     int *val = citem_value(nit);
 #ifdef DEBUG
-    printf("cache_put: hash = %d, key = %d, val = %d, it = %p\n", hv, *((int*) key), *val, nit);
+    printf("cache_put_get: hash = %d, key = %d, val = %d, it = %p\n", hv, *((int*) key), *val, nit);
 #endif
 
     cache_bucket *b = buckets + (hv % nbuckets);
@@ -249,7 +254,7 @@ static citem *cache_put_or_get(cache_bucket *buckets, int nbuckets, citem *nit, 
             printf("exist %p\n", it);
 #endif
             free(nit);
-            return it;
+            return it; // need to release later
         }
     }
 
@@ -261,6 +266,9 @@ static citem *cache_put_or_get(cache_bucket *buckets, int nbuckets, citem *nit, 
         b->items[di] = nit;
         nit->bucket = b;
         lock_unlock(&b->lock);
+#ifdef DEBUG
+        printf("insert success %p\n", nit);
+#endif
         return NULL;
     }
 
@@ -277,11 +285,18 @@ static citem *cache_put_or_get(cache_bucket *buckets, int nbuckets, citem *nit, 
         b->hashes[di] = hv;
         b->items[di] = nit;
         nit->bucket = b;
+        lock_unlock(&b->lock);
+#ifdef DEBUG
+        printf("insert & evict %p\n", it);
+#endif
         return evict;
     }
 
 done:
     lock_unlock(&b->lock);
+#ifdef DEBUG
+    printf("insert fail %p\n", nit);
+#endif
     return NULL;
 }
 

@@ -77,7 +77,7 @@ def get_element_ports(port):
     return port.spec.element_ports
 
 
-def transform_get(g, get_start, get_end, get_composite, set_start):
+def transform_get(g, get_start, get_end, get_composite, set_start, Drop):
     # A >> get.begin
     if len(get_start.input2ele) > 0:
         ports = get_element_ports(get_composite.inp)
@@ -120,20 +120,28 @@ def transform_get(g, get_start, get_end, get_composite, set_start):
 
     # get.evict >> SetQuery
     if set_start:
-        subgraph = g.find_subgraph_list(set_start.name, [])
-        dup_nodes = reversed(subgraph[:-1])
-        pipeline_state_join.duplicate_subgraph(g, dup_nodes, suffix='_get', copy=1)
-        start = dup_nodes[0] + '_get0'
+        dup_nodes = g.find_subgraph_list(set_start.name, [])
+        dup_nodes = dup_nodes[:-1]
 
-        subgraph = g.find_subgraph_list(start, [])
-        for name in subgraph:
-            g.instances[name].thread = get_start.thread
-
-        g.disconnect(set_start.name, start)
         ports = get_element_ports(get_composite.evict_begin)
         assert len(ports) == 1
         evict_begin = ports[0]
-        g.connect(evict_begin.element.name, start, evict_begin.name)
+
+        if len(dup_nodes) > 0:
+            dup_nodes.reverse()
+            pipeline_state_join.duplicate_subgraph(g, dup_nodes, suffix='_get', copy=2)
+            start = dup_nodes[0] + '_get1'
+
+            subgraph = g.find_subgraph_list(start, [])
+            for name in subgraph:
+                g.instances[name].thread = get_start.thread
+
+            g.connect(evict_begin.element.name, start, evict_begin.name)
+        else:
+            drop_inst = Drop(create=False).instance
+            g.newElementInstance(drop_inst.element, drop_inst.name, drop_inst.args)
+            g.set_thread(drop_inst.name, get_start.thread)
+            g.connect(evict_begin.element.name, drop_inst.name, evict_begin.name)
 
     # 1. Check that get_start and get_end is on the same device.
     if get_start.thread in g.thread2process:
@@ -149,8 +157,9 @@ def transform_get(g, get_start, get_end, get_composite, set_start):
     # 2. Duplicate everything after t if s and t are on different threads (queue in between)
     API_return = None
     if get_start.thread != get_end.thread:
-        subgraph = g.find_subgraph_list(get_end.name, [])
-        dup_nodes = reversed(subgraph[:-1])
+        dup_nodes = g.find_subgraph_list(get_end.name, [])
+        dup_nodes = dup_nodes[:-1]
+        dup_nodes.reverse()
         if dup_nodes[-1] in g.API_outputs:
             API_return = dup_nodes[-1]
         pipeline_state_join.duplicate_subgraph(g, dup_nodes, suffix='_cache', copy=2)
@@ -164,13 +173,13 @@ def transform_get(g, get_start, get_end, get_composite, set_start):
     g.deleteElementInstance(get_end.name)
 
     # Order release before API return
-    if get_composite.release_inst:
-        for i in len(g.threads_API):
-            api = g.threads_API[i]
-            if get_start.thread == api.name:
-                out_inst = g.API_outputs[i]
-                g.threads_order.append(get_composite.release_inst.name, out_inst)
-                break
+    # if get_composite.release_inst:
+    #     for i in range(len(g.threads_API)):
+    #         api = g.threads_API[i]
+    #         if get_start.thread == api.name:
+    #             out_inst = g.API_outputs[i]
+    #             g.threads_order.append(get_composite.release_inst.name, out_inst)
+    #             break
 
 def transform_set_write_back(g, set_start, set_end, set_composite):
     # A >> set.begin
@@ -185,7 +194,7 @@ def transform_set_write_back(g, set_start, set_end, set_composite):
             g.disconnect(prev_name, set_start.name, prev_port, 'inp')
             g.connect(prev_name, inp.element.name, prev_port, inp.name)
 
-    # get.query_begin >> GetQuery
+    # get.query_begin >> SetQuery
     ports = get_element_ports(set_composite.query_begin)
     assert len(ports) == 1
     query_begin = ports[0]
@@ -241,7 +250,7 @@ def create_cache(cache_high, get, set):
                             var_size=cache_high.var_size, hash_value=cache_high.hash_value,
                             update_func=cache_high.update_func, release_type=[],
                             write_policy=cache_high.write_policy, write_miss=cache_high.write_miss,
-                            set_query=set)
+                            set_query=set, set_return_val=cache_high.set_return_val)
 
     get_composite = None
     set_composite = None
@@ -257,6 +266,12 @@ def create_cache(cache_high, get, set):
     dp = desugaring.desugar(p)
     g = program_to_graph_pass(dp, default_process='tmp')
 
+    for instance in g.instances.values():
+        if instance.name.find(GetComposite.__name__) >= 0:
+            instance.thread = get.thread
+        else:
+            instance.thread = set.thread
+
     return g, get_composite, set_composite, library.Drop
 
 
@@ -269,13 +284,11 @@ def cache_pass(g):
                 caches.append(c)
 
     for cache_high in caches:
-        thread = None
         if cache_high.get_start:
             get_start = g.instances[cache_high.get_start.name]
             get_end = g.instances[cache_high.get_end.name]
             get_reach = dfs_same_thread(g, get_start, get_end, {})
             assert get_start.thread == get_end.thread
-            thread = get_start.thread
         else:
             get_start = None
             get_end = None
@@ -285,10 +298,6 @@ def cache_pass(g):
             set_end = g.instances[cache_high.set_end.name]
             set_reach = dfs_same_thread(g, set_start, set_end, {})
             assert set_start.thread == set_end.thread
-            if thread:
-                assert set_start.thread == thread
-            else:
-                thread = set_start.thread
         else:
             set_start = None
             set_end = None
@@ -297,8 +306,6 @@ def cache_pass(g):
             assert get_reach == set_reach
 
         g_add, get_composite, set_composite, Drop = create_cache(cache_high, get_start, set_start)
-        for instance in g_add.instances.values():
-            instance.thread = get_start.thread
         g.merge(g_add)
 
         # Remove connection at set_end for write-back policy
@@ -329,12 +336,19 @@ def cache_pass(g):
             l = set_end.input2ele['inp']
             while len(l) > 0:
                 prev_name, prev_port = l[0]
-                g.disconnect(prev_name, set_end.name, prev_port)
+                prev = g.instances[prev_name]
+                g.disconnect(prev_name, set_end.name, prev_port, 'inp')
+                drop_inst = Drop(create=False).instance
+                g.newElementInstance(drop_inst.element, drop_inst.name, drop_inst.args)
+                g.set_thread(drop_inst.name, prev.thread)
+                g.connect(prev_name, drop_inst.name, prev_port)
 
         if get_start:
-            transform_get(g, get_start, get_end, get_composite, set_start)
+            transform_get(g, get_start, get_end, get_composite, set_start, Drop)
         if set_start:
             if cache_high.write_policy==graph_ir.Cache.write_back:
                 transform_set_write_back(g, set_start, set_end, set_composite)
             else:
                 transform_set_write_through(g, set_start, set_end, set_composite)
+
+        # g.print_graphviz()
