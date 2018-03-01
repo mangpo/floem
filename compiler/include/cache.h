@@ -190,7 +190,7 @@ static citem *cache_put(cache_bucket *buckets, int nbuckets, citem *nit, bool re
         b->hashes[di] = hv;
         b->items[di] = nit;
         nit->bucket = b;
-        lock_unlock(&b->lock);
+        //lock_unlock(&b->lock);
 #ifdef DEBUG
         printf("insert & evict %p , flag = %d\n", evict, evict->evicted);
 #endif
@@ -291,7 +291,7 @@ static citem *cache_put_or_get(cache_bucket *buckets, int nbuckets, citem *nit, 
         b->hashes[di] = hv;
         b->items[di] = nit;
         nit->bucket = b;
-        lock_unlock(&b->lock);
+        //lock_unlock(&b->lock);
 #ifdef DEBUG
         printf("insert & evict %p , flag = %d\n", evict, evict->evicted);
 #endif

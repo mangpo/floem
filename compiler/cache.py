@@ -191,14 +191,15 @@ def cache_default(name, key_type, val_type, hash_value=False, var_size=False, re
     ''' % (n_buckets, replace)
 
     if write_policy == graph_ir.Cache.write_back:
-        item_src += "if(rit && (rit->evicted & 2)) state->cache_item = rit;  // to be evict & free."
+        item_src += "if(rit && (rit->evicted & 2)) state->cache_item = rit;  // to be evict & release & free."
     else:
-        item_src += "if(rit && (rit->evicted & 2)) free(rit);\n"
+        item_src += "if(rit && (rit->evicted & 2)) { cache_release(rit); free(rit); }\n"
 
     item_src2 += r'''
     citem* rit = cache_put_or_get(this->buckets, %d, it, true);
     if(rit) {
       if(rit->evicted == 2) {
+        cache_release(rit);
         free(rit);
       } else if(rit->evicted == 3) {
         state->cache_item = rit;
@@ -351,6 +352,7 @@ def cache_default(name, key_type, val_type, hash_value=False, var_size=False, re
             if(it) {
                 //printf("it->evicted = %d\n", it->evicted);
                 if(it->evicted & 2) { 
+                    cache_release(it); 
                     free(it); 
                     //printf("free %p\n", it); 
                 }
@@ -370,8 +372,11 @@ def cache_default(name, key_type, val_type, hash_value=False, var_size=False, re
         def impl(self):
             self.run_c(r'''
             citem* it = state->cache_item;
-            if(it && it->evicted & 2) free(it);
-            state->cache_item = NULL;
+            if(it && it->evicted & 2) { 
+                cache_release(it); 
+                free(it);
+                state->cache_item = NULL;
+            }
             ''')
 
     class Evict(Element):

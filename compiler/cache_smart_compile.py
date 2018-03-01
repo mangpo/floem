@@ -288,7 +288,7 @@ def cache_pass(g):
             get_start = g.instances[cache_high.get_start.name]
             get_end = g.instances[cache_high.get_end.name]
             get_reach = dfs_same_thread(g, get_start, get_end, {})
-            assert get_start.thread == get_end.thread
+            assert g.process_of_thread(get_start.thread) == g.process_of_thread(get_end.thread)
         else:
             get_start = None
             get_end = None
@@ -297,13 +297,16 @@ def cache_pass(g):
             set_start = g.instances[cache_high.set_start.name]
             set_end = g.instances[cache_high.set_end.name]
             set_reach = dfs_same_thread(g, set_start, set_end, {})
-            assert set_start.thread == set_end.thread
+            assert g.process_of_thread(set_start.thread) == g.process_of_thread(set_end.thread)
         else:
             set_start = None
             set_end = None
 
         if get_reach and set_reach:
-            assert get_reach == set_reach
+            n = min(len(get_reach), len(set_reach))
+            if n > 1:
+                n -= 1
+                assert get_reach[:n] == set_reach[:n]
 
         g_add, get_composite, set_composite, Drop = create_cache(cache_high, get_start, set_start)
         g.merge(g_add)
