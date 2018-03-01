@@ -178,6 +178,10 @@ def transform_get(g, get_start, get_end, get_composite, set_start, Drop, write_p
         for name in subgraph:
             g.instances[name].thread = get_start.thread
 
+        subgraph = g.find_subgraph_list(query_end.element.name, [])
+        for name in subgraph:
+            g.instances[name].thread = get_end.thread
+
     g.deleteElementInstance(get_start.name)
     g.deleteElementInstance(get_end.name)
 

@@ -588,9 +588,10 @@ def compile_pipeline_states(g, pktstate):
     if pktstate:
         insert_starting_point(g, pktstate)  # TODO: clean
 
-    graphviz = False
+    graphviz = True
 
     if graphviz:
+        print "-------------------- before smart queue ----------------------"
         g.print_graphviz()
 
     src2fields = analyze_pipeline_states(g)

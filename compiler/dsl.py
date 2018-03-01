@@ -248,7 +248,7 @@ class SpecImplOutput(SpecImplPort):
 
 class Connectable(object):
     id = 0
-    outports_order = None
+    outports_order = []
 
     def __str__(self):
         return self.name
@@ -286,7 +286,7 @@ class Connectable(object):
                     else:
                         self.outports.append(p)
 
-        if self.outports_order:
+        if len(self.outports_order) > 0:
             outports = []
             for name in self.outports_order:
                 for port in self.outports:
@@ -294,7 +294,7 @@ class Connectable(object):
                         outports.append(port)
                         self.outports.remove(port)
                         break
-            self.outports =  outports + self.outports
+            self.outports = outports + self.outports
 
     def configure(self, *params):
         pass

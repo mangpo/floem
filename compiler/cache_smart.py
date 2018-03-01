@@ -138,10 +138,10 @@ def smart_cache(name, key_type, val_type,
 
     class CacheState(State):
         cache_item = Field('citem*')
-        hash = Field(Uint(32))
         qid = Field(Uint(8))
-        key = Field(key_type)
+        hash = Field(Uint(32))
 
+        key = Field(key_type)
         if var_size:
             keylen = Field(Int)
             vallen = Field(Int)
@@ -155,12 +155,6 @@ def smart_cache(name, key_type, val_type,
             val3 = Field(val_type[3])
 
     assert len(val_type) <= 4
-
-    class QID(ElementOneInOut):
-        def impl(self):
-            self.run_c(r'''
-            state->qid = state->hash %s %s;
-            ''' % ('%', queue_insts))
 
     # CacheGetStart.__name__ = prefix + CacheGetStart.__name__
     # CacheGetEnd.__name__ = prefix + CacheGetEnd.__name__

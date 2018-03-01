@@ -1,6 +1,6 @@
 import queue, workspace, desugaring, graph_ir
 from program import *
-from pipeline_state_join import get_node_before_release, duplicate_subgraph
+from pipeline_state_join import get_node_before_release, duplicate_subgraph, add_release_entry_port
 
 
 def filter_live(vars):
@@ -490,10 +490,8 @@ def compile_smart_queue(g, q, src2fields):
         # Dequeue release connection
         lives.append(live)
         save_inst_names.append(save_inst.name)
-        # node = get_node_before_release(save_inst.name, g, live, prefix, release_vis)
-        # if node not in release_vis:
-        #     release_vis.add(node)
-        #     g.connect(node.name, deq_release_inst.name, "release")
+        add_release_entry_port(g, save_inst)
+        g.connect(save_inst.name, deq_release_inst.name, "release")
 
         if clean:
             # Create scan save
@@ -518,12 +516,13 @@ def compile_smart_queue(g, q, src2fields):
             g.connect(scan_save_inst.name, clean_inst, "out", clean_port)
 
     # Insert release dequeue
-    duplicate_overlapped(g, save_inst_names)
-    for i in range(q.channels):
-        node = get_node_before_release(save_inst_names[i], g, lives[i], prefix, release_vis)
-        if node not in release_vis:
-            release_vis.add(node)
-            g.connect(node.name, deq_release_inst.name, "release")
+    # duplicate_overlapped(g, save_inst_names)
+
+    # for i in range(q.channels):
+    #     node = get_node_before_release(save_inst_names[i], g, lives[i], prefix, release_vis)
+    #     if node not in release_vis:
+    #         release_vis.add(node)
+    #         g.connect(node.name, deq_release_inst.name, "release")
 
 
 def code_change(instance):

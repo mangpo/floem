@@ -117,6 +117,14 @@ class DisplaySet(Element):
         printf("conf%d\n", x);
         ''')
 
+n_queues = 1
+class QID(ElementOneInOut):
+    def impl(self):
+        self.run_c(r'''
+        state->qid = state->hash %s %s;
+        output { out(); }
+        ''' % ('%', n_queues))
+
 
 CacheGetStart, CacheGetEnd, CacheSetStart, CacheSetEnd, \
 CacheState, Key2State, KV2State, State2Key, State2KV = \
@@ -124,8 +132,8 @@ CacheState, Key2State, KV2State, State2Key, State2KV = \
                             var_size=True, set_return_value=True, hash_value='hash', queue_insts=1,
                             write_policy=Cache.write_through, write_miss=Cache.no_write_alloc)
 
-InEnq, InDeq, InClean = queue_smart.smart_queue("inqueue", 32, 16, 1, 2)
-OutEnq, OutDeq, OutClean = queue_smart.smart_queue("outqueue", 32, 16, 1, 2)
+InEnq, InDeq, InClean = queue_smart.smart_queue("inqueue", 32, 16, n_queues, 2)
+OutEnq, OutDeq, OutClean = queue_smart.smart_queue("outqueue", 32, 16, n_queues, 2)
 
 class main(Flow):
     state = PerPacket(CacheState)
@@ -140,7 +148,7 @@ class main(Flow):
 
             def impl(self):
                 enq = InEnq()
-                self.inp >> Key2Pointer() >> CacheGetStart() >> Key2State() >> enq.inp[0]
+                self.inp >> Key2Pointer() >> CacheGetStart() >> Key2State() >> QID() >> enq.inp[0]
 
         class set(CallablePipeline):
             def configure(self):
@@ -148,7 +156,7 @@ class main(Flow):
 
             def impl(self):
                 enq = InEnq()
-                self.inp >> KV2Pointer() >> CacheSetStart() >> KV2State() >> enq.inp[1]
+                self.inp >> KV2Pointer() >> CacheSetStart() >> KV2State() >> QID() >> enq.inp[1]
 
         class nic_tx(Pipeline):
             def impl(self):

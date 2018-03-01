@@ -4,7 +4,7 @@ import graph_ir
 
 def add_release_port(g, instance):
     new_element = instance.element.clone(instance.name + "_merge_version")
-    new_element.outports.insert(0, Port("release", []))  # TODO: make sure this is correct.
+    new_element.outports.append(Port("release", []))  # TODO: make sure this is correct.
     new_element.reassign_output_values("release", '')
     g.addElement(new_element)
     instance.element = new_element
@@ -12,7 +12,7 @@ def add_release_port(g, instance):
 
 def add_release_entry_port(g, instance):
     new_element = instance.element.clone(instance.element.name + "_release_version")
-    new_element.outports.insert(0, Port("release", ["q_buffer"]))
+    new_element.outports.append(Port("release", ["q_buffer"]))  # execute according to this order.
     new_element.reassign_output_values("release", "state.buffer")
     g.addElement(new_element)
     instance.element = new_element
