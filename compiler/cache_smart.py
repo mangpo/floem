@@ -1,12 +1,10 @@
 from dsl import *
 import graph_ir
 
-class CacheState(State):
-    cache_item = Field('citem*')
-    hash = Field(Uint(32))
+
 
 def smart_cache(name, key_type, val_type,
-                var_size=False, hash_value=False, update_func='f', set_return_value=False,
+                var_size=False, hash_value=False, update_func='f', set_return_value=False, queue_insts=1,
                 write_policy=graph_ir.Cache.write_through, write_miss=graph_ir.Cache.no_write_alloc):
     prefix = name + "_"
     cache = graph_ir.Cache(name, key_type, val_type, var_size, hash_value, update_func,
@@ -21,27 +19,31 @@ def smart_cache(name, key_type, val_type,
         vals.append('val{0}'.format(i))
 
     if not var_size:
-        key_src = r'''
-                (%s x) = inp();
-                output { out(x); }
-                ''' % key_type
-        kv_src = r'''
-                (%s key, %s) = inp();
-                output { out(key, %s); }
-                ''' % (key_type, ','.join(args), ','.join(vals))
         key_params = [key_type]
         kv_params =  [key_type] + val_type
+
+        keys = ['key']
+        kvs = ['key'] + vals
+
     else:
-        key_src = r'''
-                (%s x, int keylen) = inp();
-                output { out(x, keylen); }
-                ''' % key_type
-        kv_src = r'''
-                (%s key, int keylen, int vallen, %s) = inp();
-                output { out(key, keylen, vallen, %s); }
-                ''' % (key_type, ','.join(args), ','.join(vals))
         key_params = [key_type, Int]
         kv_params = [key_type, Int, Int] + val_type
+
+        keys = ['key', 'keylen']
+        kvs = ['key', 'keylen', 'vallen'] + vals
+
+    key_input = "(%s) = inp();\n" % ','.join(["{1} {0}".format(x, t) for x,t in zip(keys, key_params)])
+    key_output = "output { out(%s); }\n" % ','.join(keys)
+    key_src = key_input + key_output
+
+    kv_input = "(%s) = inp();\n" % ','.join(["{1} {0}".format(x, t) for x, t in zip(kvs, kv_params)])
+    kv_output = "output { out(%s); }\n" % ','.join(kvs)
+    kv_src = kv_input + kv_output
+
+    key2state = ' '.join(["state->{0} = {0};".format(x) for x in keys])
+    kv2state = ' '.join(["state->{0} = {0};".format(x) for x in kvs])
+    state2key = ' '.join(["{1} {0} = state->{0};".format(x, t) for x, t in zip(keys, key_params)])
+    state2kv = ' '.join(["{1} {0} = state->{0};".format(x, t) for x, t in zip(kvs, kv_params)])
 
     class CacheKey(Element):
         def configure(self):
@@ -88,10 +90,82 @@ def smart_cache(name, key_type, val_type,
             SetEndType.__init__(self, name=name, create=create)
             cache.set_end = self.instance
 
-    CacheGetStart.__name__ = prefix + CacheGetStart.__name__
-    CacheGetEnd.__name__ = prefix + CacheGetEnd.__name__
-    CacheSetStart.__name__ = prefix + CacheSetStart.__name__
-    CacheSetEnd.__name__ = prefix + CacheSetEnd.__name__
+    class Key2State(Element):
+        def configure(self):
+            self.inp = Input(*key_params)
+            self.out = Output()
 
-    return CacheGetStart, CacheGetEnd, CacheSetStart, CacheSetEnd
+        def impl(self):
+            self.run_c(r'''
+            %s
+            %s
+            output { out(); }
+            ''' % (key_input, key2state))
+
+    class KV2State(Element):
+        def configure(self):
+            self.inp = Input(*kv_params)
+            self.out = Output()
+
+        def impl(self):
+            self.run_c(r'''
+            %s
+            %s
+            output { out(); }
+            ''' % (kv_input, kv2state))
+
+    class State2Key(Element):
+        def configure(self):
+            self.inp = Input()
+            self.out = Output(*key_params)
+
+        def impl(self):
+            self.run_c(r'''
+            %s
+            %s
+            ''' % (state2key, key_output))
+
+    class State2KV(Element):
+        def configure(self):
+            self.inp = Input()
+            self.out = Output(*kv_params)
+
+        def impl(self):
+            self.run_c(r'''
+            %s
+            %s
+            ''' % (state2kv, kv_output))
+
+    class CacheState(State):
+        cache_item = Field('citem*')
+        hash = Field(Uint(32))
+        qid = Field(Uint(8))
+        key = Field(key_type)
+
+        if var_size:
+            keylen = Field(Int)
+            vallen = Field(Int)
+
+        val0 = Field(val_type[0])
+        if len(val_type) > 1:
+            val1 = Field(val_type[1])
+        if len(val_type) > 2:
+            val2 = Field(val_type[2])
+        if len(val_type) > 3:
+            val3 = Field(val_type[3])
+
+    assert len(val_type) <= 4
+
+    class QID(ElementOneInOut):
+        def impl(self):
+            self.run_c(r'''
+            state->qid = state->hash %s %s;
+            ''' % ('%', queue_insts))
+
+    # CacheGetStart.__name__ = prefix + CacheGetStart.__name__
+    # CacheGetEnd.__name__ = prefix + CacheGetEnd.__name__
+    # CacheSetStart.__name__ = prefix + CacheSetStart.__name__
+    # CacheSetEnd.__name__ = prefix + CacheSetEnd.__name__
+
+    return CacheGetStart, CacheGetEnd, CacheSetStart, CacheSetEnd, CacheState, Key2State, KV2State, State2Key, State2KV
 

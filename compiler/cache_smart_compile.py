@@ -17,9 +17,12 @@ def dfs_same_thread(g, s, t, vis, prev=None, queues=[]):
         id = None
         for enq in q.enq:
             for port_name in enq.input2ele:
-                prev_name, prev_port = enq.input2ele[port_name]
-                if prev_name == prev:
-                    id = int(port_name[3:])
+                l = enq.input2ele[port_name]
+                for prev_name, prev_port in l:
+                    if prev_name == prev:
+                        id = int(port_name[3:])
+                        break
+                if id:
                     break
             if id:
                 break
@@ -123,6 +126,7 @@ def transform_get(g, get_start, get_end, get_composite, set_start, Drop, write_p
     g.disconnect(get_end.name, next_name, 'out', next_port)
     for out in ports:
         g.connect(out.element.name, next_name, out.name, next_port)
+    B = next_name
 
     # get.evict >> SetQuery
     if write_policy == graph_ir.Cache.write_back and set_start:
@@ -163,11 +167,10 @@ def transform_get(g, get_start, get_end, get_composite, set_start, Drop, write_p
     # 2. Duplicate everything after t if s and t are on different threads (queue in between)
     API_return = None
     if get_start.thread != get_end.thread:
-        dup_nodes = g.find_subgraph_list(get_end.name, [])
-        dup_nodes = dup_nodes[:-1]
+        dup_nodes = g.find_subgraph_list(B, [])
         dup_nodes.reverse()
-        if dup_nodes[-1] in g.API_outputs:
-            API_return = dup_nodes[-1]
+        # if dup_nodes[-1] in g.API_outputs:
+        #     API_return = dup_nodes[-1]
         pipeline_state_join.duplicate_subgraph(g, dup_nodes, suffix='_cache', copy=2)
 
         hit_start = dup_nodes[0] + '_cache0'  # hit
@@ -363,4 +366,4 @@ def cache_pass(g):
             else:
                 transform_set_write_through(g, set_start, set_end, set_composite)
 
-        # g.print_graphviz()
+        g.print_graphviz()

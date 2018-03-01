@@ -114,9 +114,9 @@ def cache_default(name, key_type, val_type, hash_value=False, var_size=False, re
 
         def impl(self):
             if hash_value:
-                compute_hash = "uint32_t hv = state->%s;" % hash_value
+                compute_hash = "uint32_t hv = state->hash;"
             else:
-                compute_hash = "uint32_t hv = jenkins_hash(%s, %s);" % (key_arg, keylen_arg)
+                compute_hash = "uint32_t hv = jenkins_hash(%s, %s); state->hash = hv;" % (key_arg, keylen_arg)
 
             if not var_size:
                 self.run_c(r'''
@@ -222,9 +222,9 @@ def cache_default(name, key_type, val_type, hash_value=False, var_size=False, re
 
         def impl(self):
             if hash_value:
-                compute_hash = "uint32_t hv = state->%s;" % hash_value
+                compute_hash = "uint32_t hv = state->hash;"
             else:
-                compute_hash = "uint32_t hv = jenkins_hash(%s, %s);" % (key_arg, keylen_arg)
+                compute_hash = "uint32_t hv = jenkins_hash(%s, %s); state->hash = hv;" % (key_arg, keylen_arg)
 
             extra_return = 'keylen, last_vallen,' if var_size else ''
 

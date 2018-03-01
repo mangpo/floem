@@ -1,5 +1,5 @@
 from floem import *
-import cache_smart, library
+import cache_smart, queue_smart
 
 class Storage(State):
     mem = Field(Array(Int, 100))
@@ -93,7 +93,20 @@ class KV2Pointer(Element):
         ''')
 
 
-class Display(Element):
+class DisplayGet(Element):
+    def configure(self):
+        self.inp = Input(Pointer(Int), Int, Int, Pointer(Int))
+
+    def impl(self):
+        self.run_c(r'''
+        (int* key, int keylen, int vallen, int* val) = inp();
+        int x = *key;
+        int y = *val;
+        printf("get%d val%d\n", x, y);
+        ''')
+
+
+class DisplaySet(Element):
     def configure(self):
         self.inp = Input(Pointer(Int), Int, Int, Pointer(Int))
 
@@ -108,37 +121,56 @@ class Display(Element):
 CacheGetStart, CacheGetEnd, CacheSetStart, CacheSetEnd, \
 CacheState, Key2State, KV2State, State2Key, State2KV = \
     cache_smart.smart_cache('MyCache', Pointer(Int), [Pointer(Int)],
-                            var_size=True, set_return_value=True, hash_value='hash',
+                            var_size=True, set_return_value=True, hash_value='hash', queue_insts=1,
                             write_policy=Cache.write_through, write_miss=Cache.no_write_alloc)
 
-
-class MyState(CacheState):
-    pass
-
+InEnq, InDeq, InClean = queue_smart.smart_queue("inqueue", 32, 16, 1, 2)
+OutEnq, OutDeq, OutClean = queue_smart.smart_queue("outqueue", 32, 16, 1, 2)
 
 class main(Flow):
-    state = PerPacket(MyState)
+    state = PerPacket(CacheState)
 
     def impl(self):
         storage = Storage()
 
+
         class compute(CallablePipeline):
             def configure(self):
                 self.inp = Input(Int)
-                self.out = Output(Int)
 
             def impl(self):
-                self.inp >> Key2Pointer() >> CacheGetStart() >> Mult2(states=[storage]) >> CacheGetEnd() >> OnlyVal() >> self.out
+                enq = InEnq()
+                self.inp >> Key2Pointer() >> CacheGetStart() >> Key2State() >> enq.inp[0]
 
         class set(CallablePipeline):
             def configure(self):
                 self.inp = Input(Int, Int)
 
             def impl(self):
-                self.inp >> KV2Pointer() >> CacheSetStart() >> LookUp(states=[storage]) >> CacheSetEnd() >> Display()
+                enq = InEnq()
+                self.inp >> KV2Pointer() >> CacheSetStart() >> KV2State() >> enq.inp[1]
+
+        class nic_tx(Pipeline):
+            def impl(self):
+                deq = OutDeq()
+
+                self.core_id >> deq
+                deq.out[0] >> State2KV() >> CacheGetEnd() >> DisplayGet()
+                deq.out[1] >> State2KV() >> CacheSetEnd() >> DisplaySet()
+
+        class server(Pipeline):
+            def impl(self):
+                deq = InDeq()
+                enq = OutEnq()
+
+                self.core_id >> deq
+                deq.out[0] >> State2Key() >> Mult2(states=[storage]) >> KV2State() >> enq.inp[0]
+                deq.out[1] >> State2KV() >> LookUp(states=[storage]) >> KV2State() >> enq.inp[1]
 
         compute('compute')
         set('set')
+        nic_tx('nic_tx', cores=[0])
+        server('server', cores=[0])
 
 
 c = Compiler(main)
@@ -151,8 +183,7 @@ void init_mem(int* mem, int n) {
 '''
 c.testing = r'''
 set(1, 100);
-out(compute(11)); out(compute(1)); out(compute(11)); out(compute(1)); 
-set(11, 222); out(compute(11)); out(compute(1));
+compute(11); compute(1); compute(11); compute(1); 
+set(11, 222); compute(11); compute(1);
 '''
-c.generate_code_and_run(['conf1',22,100,22,100,
-                         'conf11', 222, 100])
+c.generate_code_and_run()

@@ -337,11 +337,12 @@ def compile_smart_queue(g, q, src2fields):
     for i in range(q.channels):
         ins = []
         for enq in q.enq:
-            add = enq.input2ele["inp" + str(i)]
-            ins += add
-            for x in ins:
-                if q.enq_output:
-                    enq_done[x] = enq.output2ele["done"]
+            if "inp" + str(i) in enq.input2ele:
+                add = enq.input2ele["inp" + str(i)]
+                ins += add
+                for x in ins:
+                    if q.enq_output:
+                        enq_done[x] = enq.output2ele["done"]
         ins_map.append(ins)
 
         out = q.deq.output2ele["out" + str(i)]
