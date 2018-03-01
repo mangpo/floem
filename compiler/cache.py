@@ -60,14 +60,16 @@ def cache_default(name, key_type, val_type, hash_value=False, var_size=False, re
         return_vals.append("val{0}".format(i))
 
 
-    val_src = ""
+    val_decl = ""
     for i in range(len(val_type)):
-        val_src += " {0} val{1} = 0;".format(val_type[i], i)
-    val_src += r'''
+        val_decl += "{0} val{1} = 0; ".format(val_type[i], i)
+    val_src = r'''
+    %s
     if(it != NULL) {
         %s
     }
-                ''' % val_assign_src
+                ''' % (val_decl, val_assign_src)
+
 
     # Update
     pointer_vals = []
@@ -194,7 +196,7 @@ def cache_default(name, key_type, val_type, hash_value=False, var_size=False, re
         item_src += "if(rit && (rit->evicted & 2)) free(rit);\n"
 
     item_src2 += r'''
-    citem* rit = cache_put_or_get(this->buckets, %d, it, %s);
+    citem* rit = cache_put_or_get(this->buckets, %d, it, true);
     if(rit) {
       if(rit->evicted == 2) {
         free(rit);
@@ -206,7 +208,7 @@ def cache_default(name, key_type, val_type, hash_value=False, var_size=False, re
         %s
       }
     }
-    ''' % (n_buckets, replace, val_assign_src)
+    ''' % (n_buckets, val_assign_src)
 
 
     class CacheSet(Element):
@@ -378,18 +380,19 @@ def cache_default(name, key_type, val_type, hash_value=False, var_size=False, re
             self.out = Output(*kv_params)
 
         def impl(self):
-            extra_return = 'keylen, it->last_vallen,' if var_size else ''
+            extra_return = 'it->keylen, it->last_vallen,' if var_size else ''
             self.run_c(r'''
             inp();
             citem *it = state->cache_item;
             bool evict = false;
+            %s
             if(it && it->evicted == 3) {
                 evict = true;
                 int keylen = it->keylen;
                 %s
             }
-            output switch { case evict: out(key, %s %s); }
-            ''' % (val_src, extra_return, ','.join(return_vals)))
+            output switch { case evict: out((int*) it->content, %s %s); }
+            ''' % (val_decl, val_assign_src, extra_return, ','.join(return_vals)))
 
     class Miss(Element):
         def configure(self):
@@ -468,8 +471,8 @@ def cache_default(name, key_type, val_type, hash_value=False, var_size=False, re
             self.out = Output(*kv_params)
             self.query_begin = Output(*key_params)
             self.query_end = Input(*kv_params)
-            self.evict_begin = Output(*kv_params)
-            #self.release_inst = FreeOrRelease()
+            if write_policy == graph_ir.Cache.write_back and set_query:
+                self.evict_begin = Output(*kv_params)
 
         def impl(self):
             cache_get = CacheGet()

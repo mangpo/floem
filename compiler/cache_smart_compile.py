@@ -77,7 +77,7 @@ def get_element_ports(port):
     return port.spec.element_ports
 
 
-def transform_get(g, get_start, get_end, get_composite, set_start, Drop):
+def transform_get(g, get_start, get_end, get_composite, set_start, Drop, write_policy):
     # A >> get.begin
     if len(get_start.input2ele) > 0:
         ports = get_element_ports(get_composite.inp)
@@ -119,7 +119,7 @@ def transform_get(g, get_start, get_end, get_composite, set_start, Drop):
         g.connect(out.element.name, next_name, out.name, next_port)
 
     # get.evict >> SetQuery
-    if set_start:
+    if write_policy == graph_ir.Cache.write_back and set_start:
         dup_nodes = g.find_subgraph_list(set_start.name, [])
         dup_nodes = dup_nodes[:-1]
 
@@ -344,7 +344,7 @@ def cache_pass(g):
                 g.connect(prev_name, drop_inst.name, prev_port)
 
         if get_start:
-            transform_get(g, get_start, get_end, get_composite, set_start, Drop)
+            transform_get(g, get_start, get_end, get_composite, set_start, Drop, cache_high.write_policy)
         if set_start:
             if cache_high.write_policy==graph_ir.Cache.write_back:
                 transform_set_write_back(g, set_start, set_end, set_composite)

@@ -19,7 +19,7 @@ typedef pthread_mutex_t lock_t;
 #endif
 
 //#define DEBUG
-#define BUCKET_NITEMS 5
+#define BUCKET_NITEMS 1
 
 typedef struct _cache_bucket cache_bucket;
 
@@ -191,10 +191,16 @@ static citem *cache_put(cache_bucket *buckets, int nbuckets, citem *nit, bool re
         b->items[di] = nit;
         nit->bucket = b;
         lock_unlock(&b->lock);
+#ifdef DEBUG
+        printf("insert & evict %p , flag = %d\n", evict, evict->evicted);
+#endif
         return evict;
     }
 
     lock_unlock(&b->lock);
+#ifdef DEBUG
+        printf("insert fail (no replace)\n");
+#endif
     return NULL;
 }
 
@@ -287,7 +293,7 @@ static citem *cache_put_or_get(cache_bucket *buckets, int nbuckets, citem *nit, 
         nit->bucket = b;
         lock_unlock(&b->lock);
 #ifdef DEBUG
-        printf("insert & evict %p\n", it);
+        printf("insert & evict %p , flag = %d\n", evict, evict->evicted);
 #endif
         return evict;
     }
