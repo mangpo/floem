@@ -15,10 +15,13 @@ def dfs_same_thread(g, s, t, vis, prev=None, queues=[]):
         queues.append(q)
 
         id = None
-        for port_name in q.enq.input2ele:
-            prev_name, prev_port = q.enq.input2ele[port_name]
-            if prev_name == prev:
-                id = int(port_name[3:])
+        for enq in q.enq:
+            for port_name in enq.input2ele:
+                prev_name, prev_port = enq.input2ele[port_name]
+                if prev_name == prev:
+                    id = int(port_name[3:])
+                    break
+            if id:
                 break
 
         next_name, next_port = q.deq.output2ele['out' + str(id)]
@@ -50,10 +53,13 @@ def find_last_queue(g, s, t, vis, prev=None):
     q = s.element.special
     if isinstance(q, graph_ir.Queue):
         id = None
-        for port_name in q.enq.input2ele:
-            prev_name, prev_port = q.enq.input2ele[port_name]
-            if prev_name == prev:
-                id = int(port_name[3:])
+        for enq in q.enq:
+            for port_name in enq.input2ele:
+                prev_name, prev_port = enq.input2ele[port_name]
+                if prev_name == prev:
+                    id = int(port_name[3:])
+                    break
+            if id:
                 break
 
         next_name, next_port = q.deq.output2ele['out' + str(id)]
@@ -317,17 +323,20 @@ def cache_pass(g):
             (q0, id0, prev0) = queues[0]
             for q, id, prev in queues:
                 assert q == q0
-                l = q.enq.input2ele['inp' + str(id)]
-                while len(l) > 0:
-                    prev_name, prev_port = l[0]
-                    g.disconnect(prev_name, q.enq.name, prev_port, 'inp' + str(id))
+                for enq in q.enq:
+                    if 'inp' + str(id) in enq.input2ele:
+                        l = enq.input2ele['inp' + str(id)]
+                        while len(l) > 0:
+                            prev_name, prev_port = l[0]
+                            prev = g.instances[prev_name]
+                            g.disconnect(prev_name, enq.name, prev_port, 'inp' + str(id))
 
-                    drop_inst = Drop(create=False).instance
-                    g.newElementInstance(drop_inst.element, drop_inst.name, drop_inst.args)
-                    g.set_thread(drop_inst.name, prev.thread)
-                    g.connect(prev_name, drop_inst.name, prev_port)
+                            drop_inst = Drop(create=False).instance
+                            g.newElementInstance(drop_inst.element, drop_inst.name, drop_inst.args)
+                            g.set_thread(drop_inst.name, prev.thread)
+                            g.connect(prev_name, drop_inst.name, prev_port)
 
-                next_name, next_port = q.enq.output2ele['out' + str(id)]
+                next_name, next_port = q.deq.output2ele['out' + str(id)]
                 g.disconnect(q.deq.name, next_name, 'out' + str(id), next_port)
 
                 set_end.input2ele = {}

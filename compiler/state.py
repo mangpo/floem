@@ -162,21 +162,21 @@ class State(object):
         else:
             return x
 
-    def get_layout(self, c):
+    def get_fields(self, c):
         if c == State:
             return []
 
         all_layout = []
         for parent in c.__bases__:
-            all_layout += self.get_layout(parent)
+            all_layout += self.get_fields(parent)
 
-        if c.layout:
-            all_layout += c.layout
-        else:
-            for s in c.__dict__:
-                o = object.__getattribute__(self, s)
-                if isinstance(o, Field):
-                    all_layout.append(s)
+        # if c.layout:
+        #     all_layout += c.layout
+        # else:
+        for s in c.__dict__:
+            o = object.__getattribute__(self, s)
+            if isinstance(o, Field):
+                all_layout.append(s)
         return all_layout
 
     def get_content(self):
@@ -184,7 +184,7 @@ class State(object):
         fields = []
         init = []
         mapping = {}
-        layout = self.get_layout(self.__class__)
+        all_fields = self.get_fields(self.__class__)
         # if self.layout:
         #     layout = self.layout
         # else:
@@ -193,6 +193,14 @@ class State(object):
         #         o = object.__getattribute__(self, s)
         #         if isinstance(o, Field):
         #             layout.append(s)
+
+        if self.layout:
+            layout = self.layout
+            for f in all_fields:
+                if f not in layout:
+                    layout.append(f)
+        else:
+            layout = all_fields
 
         for s in layout:
             o = object.__getattribute__(self, s)

@@ -5,6 +5,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <queue.h>
+#include <cache.h>
+#include <jenkins_hash.h>
 
 
 typedef struct _MyState { 

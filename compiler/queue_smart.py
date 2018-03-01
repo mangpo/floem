@@ -25,7 +25,7 @@ def smart_queue(name, entry_size, size, insts, channels, checksum=False,
 
         def __init__(self, name=None, create=True):
             Element.__init__(self, name=name, create=create)
-            queue.enq = self.instance
+            queue.enq.append(self.instance)
 
     class Dequeue(Element):
         def configure(self):

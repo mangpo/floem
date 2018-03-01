@@ -192,8 +192,9 @@ class Graph:
 
         # Smart queue
         if isinstance(e.special, Queue):
-            if e.special.enq == user_instance:
-                e.special.enq = ret
+            if user_instance in e.special.enq:
+                index = e.special.enq.index(user_instance)
+                e.special.enq[index] = ret
             elif e.special.deq == user_instance:
                 e.special.deq = ret
             elif e.special.clean == user_instance:
@@ -384,7 +385,7 @@ class Graph:
             for inst, port in instance.output2ele.values():
                 self.find_subgraph_with_queue(inst, subgraph)
             if isinstance(instance.element.special, Queue):
-                if instance == instance.element.special.enq:
+                if instance in instance.element.special.enq:
                     self.find_subgraph(instance.element.special.deq.name, subgraph)
         return subgraph
 

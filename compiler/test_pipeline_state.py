@@ -282,7 +282,7 @@ class TestPipelineState(unittest.TestCase):
         Deq_ele.special = queue
         enq = ElementInstance("smart_enq_ele", "smart_enq")
         deq = ElementInstance("smart_deq_ele", "smart_deq")
-        queue.enq = enq
+        queue.enq = [enq]
         queue.deq = deq
         p = Program(
             State("mystate", "int a; int a0; int b0; int post;"),
@@ -355,7 +355,7 @@ class TestPipelineState(unittest.TestCase):
         Deq_ele.special = queue
         enq = ElementInstance("smart_enq_ele", "smart_enq")
         deq = ElementInstance("smart_deq_ele", "smart_deq")
-        queue.enq = enq
+        queue.enq = [enq]
         queue.deq = deq
         p = Program(
             State("mystate", "int a; int a0; int b0;"),
@@ -470,7 +470,7 @@ class TestPipelineState(unittest.TestCase):
         Deq_ele.special = queue
         enq = ElementInstance("smart_enq_ele", "smart_enq")
         deq = ElementInstance("smart_deq_ele", "smart_deq")
-        queue.enq = enq
+        queue.enq = [enq]
         queue.deq = deq
         p = Program(
             State("mystate", "int a;"),
@@ -539,7 +539,7 @@ class TestPipelineState(unittest.TestCase):
         Deq_ele.special = queue
         enq = ElementInstance("smart_enq_ele", "smart_enq")
         deq = ElementInstance("smart_deq_ele", "smart_deq")
-        queue.enq = enq
+        queue.enq = [enq]
         queue.deq = deq
         p = Program(
             State("mystate", "int a;"),

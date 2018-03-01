@@ -77,7 +77,8 @@ class TestDSL(unittest.TestCase):
                   "queue_shared_data.py",
                   "auto_inserted_queue.py",
                   "smart_queue_entry.py",
-                  "smart_queue_many2one.py", ]
+                  "smart_queue_many2one.py",
+                  "smart_queue_multi_funcs.py"]
 
         for test in tests2:
             status = os.system("cd programs_perpacket_state; python " + test + "; cd ..")

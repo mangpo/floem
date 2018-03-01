@@ -358,8 +358,6 @@ class Element(Connectable):
             Element.all_defined.add(unique)
             inports = [graph.Port(p.name, p.args) for p in self.inports]
             outports = [graph.Port(p.name, p.args) for p in self.outports]
-            if len(outports) > 1:
-                print
             e = graph.Element(unique, inports, outports, self.code, states_decls, code_cavium=self.code_cavium)
             e.special = self.special
             decl_append(e)

@@ -239,15 +239,20 @@ def get_save_state_src(g, deq_thread, enq_thread, live, special, extras,
 
 
 def compile_smart_queue(g, q, src2fields):
-    pipeline_state = find_pipeline_state(g, q.enq)
-    enq_thread = g.get_thread_of(q.enq.name)
+    pipeline_state = find_pipeline_state(g, q.enq[0])
+    enq_thread = g.get_thread_of(q.enq[0].name)
     deq_thread = g.get_thread_of(q.deq.name)
     if q.clean:
         clean_thread = g.get_thread_of(q.clean.name)
 
-    if re.match("_impl", q.enq.name):
+    enq_device = g.get_device_from_thread(enq_thread)
+    for enq in q.enq:
+        t = g.get_thread_of(enq.name)
+        assert enq_device == g.get_device_from_thread(t)
+
+    if re.match("_impl", q.deq.name):
         prefix = "_impl_"
-    elif re.match("_spec", q.enq.name):
+    elif re.match("_spec", q.deq.name):
         prefix = "_spec_"
     else:
         prefix = ""
@@ -327,29 +332,37 @@ def compile_smart_queue(g, q, src2fields):
     ins_map = []
     out_map = []
     scan_map = []
-    if q.enq_output:
-        enq_done = q.enq.output2ele["done"]
+    enq_done = {}
 
     for i in range(q.channels):
-        ins = q.enq.input2ele["inp" + str(i)]
-        out = q.deq.output2ele["out" + str(i)]
+        ins = []
+        for enq in q.enq:
+            add = enq.input2ele["inp" + str(i)]
+            ins += add
+            for x in ins:
+                if q.enq_output:
+                    enq_done[x] = enq.output2ele["done"]
         ins_map.append(ins)
+
+        out = q.deq.output2ele["out" + str(i)]
         out_map.append(out)
         if clean:
             x = q.clean.output2ele["out" + str(i)]
             scan_map.append(x)
 
     # Delete dummy dequeue and enqueue instances
-    g.delete_instance(q.enq.name)
+    for enq in q.enq:
+        g.delete_instance(enq.name)
     g.delete_instance(q.deq.name)
     if clean:
         g.delete_instance(q.clean.name)
 
     # Preserve original dequeue connection
+    q_enq_names = [x.name for x in q.enq]
     for port in q.deq.input2ele:
         l = q.deq.input2ele[port]
         for prev_inst, prev_port in l:
-            if not prev_inst == q.enq.name:
+            if prev_inst not in q_enq_names:
                 g.connect(prev_inst, deq_get_inst.name, prev_port, port)
 
     # Preserve original clean connection
@@ -452,7 +465,8 @@ def compile_smart_queue(g, q, src2fields):
             g.connect(fill_inst.name, enq_submit_inst.name, "out")
 
             if q.enq_output:
-                g.connect(fill_inst.name, enq_done[0], "done", enq_done[1])
+                done = enq_done[(in_inst, in_port)]
+                g.connect(fill_inst.name, done[0], "done", done[1])
 
         # Create deq instances
         save_inst = ElementInstance(save.name, prefix + save.name + "_inst")
@@ -546,7 +560,7 @@ def order_smart_queues(name, vis, order, g):
         order_smart_queues(next_name, vis, order, g)
 
     q = instance.element.special
-    if isinstance(q, graph_ir.Queue) and q.enq == instance:
+    if isinstance(q, graph_ir.Queue) and (instance in q.enq) and (q not in order):
         order.append(q)
 
 
@@ -556,8 +570,8 @@ def compile_smart_queues(g, src2fields):
     vis = set()
     for instance in g.instances.values():
         q = instance.element.special
-        if isinstance(q, graph_ir.Queue) and q.enq == instance:
-            order_smart_queues(q.enq.name, vis, order, g)
+        if isinstance(q, graph_ir.Queue) and instance in q.enq:
+            order_smart_queues(instance.name, vis, order, g)
 
     for q in order:
         compile_smart_queue(g, q, src2fields)

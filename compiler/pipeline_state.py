@@ -377,7 +377,7 @@ def analyze_fields_liveness_instance(g, name, in_port):
 
     # Smart queue
     q = instance.element.special
-    if isinstance(q, graph_ir.Queue) and q.enq == instance:
+    if isinstance(q, graph_ir.Queue) and instance in q.enq:
         no = int(in_port[3:])
         if instance.liveness:
             return instance.liveness[no], instance.uses[no]
@@ -526,7 +526,7 @@ def is_valid_start(g, name):
     instance = g.instances[name]
 
     if isinstance(instance.element.special, graph_ir.Queue):
-        if instance.element.special.enq == instance:
+        if instance in instance.element.special.enq:
             return True
         else:
             return False
