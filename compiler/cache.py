@@ -4,7 +4,11 @@ import common, graph_ir, library
 
 def cache_default(name, key_type, val_type, hash_value=False, var_size=False, release_type=[], update_func='f',
                   write_policy=graph_ir.Cache.write_through, write_miss=graph_ir.Cache.no_write_alloc,
-                  set_query=True, set_return_val=False):
+                  set_query=True):
+    if write_policy == graph_ir.Cache.write_back:
+        assert write_miss == graph_ir.Cache.write_alloc, \
+            "Cache: cannot use write-back policy with no write allocation on write misses."
+
     prefix = name + '_'
 
     if not var_size:
@@ -31,7 +35,7 @@ def cache_default(name, key_type, val_type, hash_value=False, var_size=False, re
     # Key
     if common.is_pointer(key_type):
         key_arg = 'key'
-        keylen_arg = 'keylen' if var_size else 'sizeof({0})'.format(key_type[0:-1])
+        keylen_arg = 'keylen' if var_size else 'sizeof({0})'.format(key_type[:-1])
     else:
         key_arg = '&key'
         keylen_arg = 'sizeof({0})'.format(key_type)
@@ -103,6 +107,14 @@ def cache_default(name, key_type, val_type, hash_value=False, var_size=False, re
     update_src += update_after
     update_src += "}\n"
 
+    # Compute hash
+    if hash_value:
+        compute_hash = "uint32_t hv = state->hash;"
+    else:
+        compute_hash = "uint32_t hv = jenkins_hash(%s, %s); state->hash = hv;" % (key_arg, keylen_arg)
+
+    extra_return = 'keylen, last_vallen,' if var_size else ''
+
     class CacheGet(Element):
         this = Persistent(hash_table)
 
@@ -113,11 +125,6 @@ def cache_default(name, key_type, val_type, hash_value=False, var_size=False, re
             self.this = my_hash_table
 
         def impl(self):
-            if hash_value:
-                compute_hash = "uint32_t hv = state->hash;"
-            else:
-                compute_hash = "uint32_t hv = jenkins_hash(%s, %s); state->hash = hv;" % (key_arg, keylen_arg)
-
             if not var_size:
                 self.run_c(r'''
                 (%s key) = inp();
@@ -218,6 +225,21 @@ def cache_default(name, key_type, val_type, hash_value=False, var_size=False, re
     }
     ''' % (n_buckets, val_assign_src)
 
+    # key-value input/out src
+    if not var_size:
+        kv_input_src = r'''
+        (%s key, %s) = inp();
+        int keylen = %s;
+        int last_vallen = %s;
+        ''' % (key_type, ','.join(type_vals), keylen_arg, last_vallen_arg)
+    else:
+        kv_input_src = r'''
+        (%s key, int keylen, int last_vallen, %s) = inp();
+        ''' % (key_type, ','.join(type_vals))
+
+    kv_output_src = r'''
+    output { out(key, %s %s); }
+    ''' % (extra_return, ','.join(return_vals))
 
     class CacheSet(Element):
         this = Persistent(hash_table)
@@ -228,29 +250,7 @@ def cache_default(name, key_type, val_type, hash_value=False, var_size=False, re
             self.this = my_hash_table
 
         def impl(self):
-            if hash_value:
-                compute_hash = "uint32_t hv = state->hash;"
-            else:
-                compute_hash = "uint32_t hv = jenkins_hash(%s, %s); state->hash = hv;" % (key_arg, keylen_arg)
-
-            extra_return = 'keylen, last_vallen,' if var_size else ''
-
-            if not var_size:
-                input_src = r'''
-                (%s key, %s) = inp();
-                int keylen = %s;
-                int last_vallen = %s;
-                ''' % (key_type, ','.join(type_vals), keylen_arg, last_vallen_arg)
-            else:
-                input_src = r'''
-                (%s key, int keylen, int last_vallen, %s) = inp();
-                '''% (key_type, ','.join(type_vals))
-
-            output_src = r'''
-            output { out(key, %s %s); }
-            ''' % (extra_return, ','.join(return_vals))
-
-            self.run_c(input_src + compute_hash + item_src + output_src)
+            self.run_c(kv_input_src + compute_hash + item_src + kv_output_src)
 
     class CacheSetGet(Element):
         this = Persistent(hash_table)
@@ -261,29 +261,27 @@ def cache_default(name, key_type, val_type, hash_value=False, var_size=False, re
             self.this = my_hash_table
 
         def impl(self):
-            if hash_value:
-                compute_hash = "uint32_t hv = state->%s;" % hash_value
+            self.run_c(kv_input_src + compute_hash + item_src2 + kv_output_src)
+
+    class CacheDelete(Element):
+        this = Persistent(hash_table)
+
+        def configure(self):
+            self.inp = Input(*kv_params)
+            self.out = Output(*kv_params)
+            self.this = my_hash_table
+
+        def impl(self):
+            if common.is_pointer(key_type):
+                del_src = r'''
+                cache_delete(this->buckets, %d, key, keylen, hv);
+                ''' % n_buckets
             else:
-                compute_hash = "uint32_t hv = jenkins_hash(%s, %s);" % (key_arg, keylen_arg)
+                del_src = r'''
+                cache_delete(this->buckets, %d, &key, keylen, hv);
+                ''' % n_buckets
 
-            extra_return = 'keylen, last_vallen,' if var_size else ''
-
-            if not var_size:
-                input_src = r'''
-                (%s key, %s) = inp();
-                int keylen = %s;
-                int last_vallen = %s;
-                ''' % (key_type, ','.join(type_vals), keylen_arg, last_vallen_arg)
-            else:
-                input_src = r'''
-                (%s key, int keylen, int last_vallen, %s) = inp();
-                '''% (key_type, ','.join(type_vals))
-
-            output_src = r'''
-            output { out(key, %s %s); }
-            ''' % (extra_return, ','.join(return_vals))
-
-            self.run_c(input_src + compute_hash + item_src2 + output_src)
+            self.run_c(kv_input_src + compute_hash + del_src + kv_output_src)
 
     class CacheUpdate(Element):
         this = Persistent(hash_table)
@@ -443,26 +441,23 @@ def cache_default(name, key_type, val_type, hash_value=False, var_size=False, re
     class ForkSet(Element):
         def configure(self):
             self.inp = Input(*kv_params)
-            if set_return_val:
-                self.out = Output(*kv_params)
-            else:
-                self.out = Output(*key_params)
-            self.miss = Output(*kv_params)
-            self.outports_order = ['miss', 'out']
+            self.out1 = Output(*kv_params)
+            self.out2 = Output(*kv_params)
+            self.outports_order = ['out1', 'out2']
 
         def impl(self):
             if not var_size:
-                return_src = 'key, ' + ','.join(return_vals) if set_return_val else 'key'
+                return_src = 'key, ' + ','.join(return_vals)
                 self.run_c(r'''
                 (%s key, %s) = inp();
-                output { miss(key, %s); out(%s); }
-                ''' % (key_type, ','.join(type_vals), ','.join(return_vals), return_src))
+                output { out1(%s); out2(%s); }
+                ''' % (key_type, ','.join(type_vals), return_src, return_src))
             else:
-                return_src = 'key, keylen, last_vallen, ' + ','.join(return_vals) if set_return_val else 'key, keylen'
+                return_src = 'key, keylen, last_vallen, ' + ','.join(return_vals)
                 self.run_c(r'''
                 (%s key, int keylen, int last_vallen, %s) = inp();
-                output { miss(key, keylen, last_vallen, %s); out(%s); }
-                ''' % (key_type, ','.join(type_vals), ','.join(return_vals), return_src))
+                output { out1(%s); out2(%s); }
+                ''' % (key_type, ','.join(type_vals), return_src, return_src))
 
     class ForkEvictFree(Element):
         def configure(self):
@@ -501,40 +496,53 @@ def cache_default(name, key_type, val_type, hash_value=False, var_size=False, re
 
             if write_policy == graph_ir.Cache.write_back and set_query:
                 fork3 = ForkSet()
-                fork2 >> fork3 >> self.out
-                fork3.miss >> Evict() >> self.evict_begin
+                fork2 >> fork3
+                fork3.out2 >> self.out
+                fork3.out1 >> Evict() >> self.evict_begin
             else:
                 fork2 >> self.out
 
     class SetWriteBack(Composite):
         def configure(self):
             self.inp = Input(*kv_params)
-            if set_return_val:
-                self.out = Output(*kv_params)
-            else:
-                self.out = Output(*key_params)
+            self.out = Output(*kv_params)
             self.query_begin = Output(*kv_params)
 
         def impl(self):
             cache_set = CacheSet()
             fork = ForkSet()
 
-            self.inp >> cache_set >> fork >> self.out
+            self.inp >> cache_set >> fork
+            fork.out2 >> self.out
 
             if write_miss == graph_ir.Cache.write_alloc:
                 evict_then_free = ForkEvictFree()
-                fork.miss >> evict_then_free
+                fork.out1 >> evict_then_free
                 evict_then_free.evict >> Evict() >> self.query_begin
                 evict_then_free.free >> Free()
             else:
-                fork.miss >> Miss() >> self.query_begin
+                fork.out1 >> Miss() >> self.query_begin
+
+    # class SetWriteThrough(Composite):
+    #     def configure(self):
+    #         self.inp = Input(*kv_params)
+    #         self.out = Output(*kv_params)
+    #
+    #     def impl(self):
+    #         self.inp >> CacheSet() >> self.out
 
     class SetWriteThrough(Composite):
         def configure(self):
             self.inp = Input(*kv_params)
             self.out = Output(*kv_params)
+            self.query_begin = Output(*kv_params)
+            self.query_end = Input(*kv_params)
 
         def impl(self):
-            self.inp >> CacheSet() >> self.out
+            fork = ForkSet()
+            self.inp >> CacheDelete() >> self.query_begin
+            self.query_end >> fork
+            fork.out1 >> self.out
+            fork.out2 >> CacheSet() >> library.Drop()
 
     return GetComposite, SetWriteBack if write_policy==graph_ir.Cache.write_back else SetWriteThrough

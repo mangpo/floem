@@ -4,11 +4,14 @@ import graph_ir
 
 
 def smart_cache(name, key_type, val_type,
-                var_size=False, hash_value=False, update_func='f', set_return_value=False, queue_insts=1,
+                var_size=False, hash_value=False, update_func='f',
                 write_policy=graph_ir.Cache.write_through, write_miss=graph_ir.Cache.no_write_alloc):
+    if write_policy == graph_ir.Cache.write_back:
+        assert write_miss == graph_ir.Cache.write_alloc, \
+            "Cache: cannot use write-back policy with no write allocation on write misses."
+
     prefix = name + "_"
     cache = graph_ir.Cache(name, key_type, val_type, var_size, hash_value, update_func,
-                           set_return_value,
                            write_policy, write_miss)
 
     args = []
@@ -84,7 +87,7 @@ def smart_cache(name, key_type, val_type,
             CacheKeyValue.__init__(self, name=name, create=create)
             cache.set_start = self.instance
 
-    SetEndType = CacheKeyValue if set_return_value else CacheKey
+    SetEndType = CacheKeyValue
     class CacheSetEnd(SetEndType):
         def __init__(self, name=None, create=True):
             SetEndType.__init__(self, name=name, create=create)

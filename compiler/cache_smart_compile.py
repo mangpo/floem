@@ -237,6 +237,30 @@ def transform_set_write_back(g, set_start, set_end, set_composite):
     # Does not work for API.
 
 
+# def transform_set_write_through(g, set_start, set_end, set_composite):
+#     # A >> set.begin
+#     if len(set_start.input2ele) > 0:
+#         ports = get_element_ports(set_composite.inp)
+#         assert len(ports) == 1
+#         inp = ports[0]
+#
+#         l = set_start.input2ele['inp']
+#         while len(l) > 0:
+#             prev_name, prev_port = l[0]  # index = 0 because l is mutated (first element is popped).
+#             g.disconnect(prev_name, set_start.name, prev_port, 'inp')
+#             g.connect(prev_name, inp.element.name, prev_port, inp.name)
+#
+#     # get.end >> SetQuery
+#     ports = get_element_ports(set_composite.out)
+#
+#     next_name, next_port = set_start.output2ele['out']
+#     g.disconnect(set_start.name, next_name, 'out', next_port)
+#     for out in ports:
+#         g.connect(out.element.name, next_name, out.name, next_port)
+#
+#     g.deleteElementInstance(set_start.name)
+#     # Keep set_end because it is just nop.
+
 def transform_set_write_through(g, set_start, set_end, set_composite):
     # A >> set.begin
     if len(set_start.input2ele) > 0:
@@ -250,16 +274,39 @@ def transform_set_write_through(g, set_start, set_end, set_composite):
             g.disconnect(prev_name, set_start.name, prev_port, 'inp')
             g.connect(prev_name, inp.element.name, prev_port, inp.name)
 
-    # get.end >> SetQuery
-    ports = get_element_ports(set_composite.out)
+    # set.query_begin >> SetQuery
+    ports = get_element_ports(set_composite.query_begin)
 
     next_name, next_port = set_start.output2ele['out']
     g.disconnect(set_start.name, next_name, 'out', next_port)
     for out in ports:
         g.connect(out.element.name, next_name, out.name, next_port)
 
+    # SetQuery >> set.query_end
+    ports = get_element_ports(set_composite.query_end)
+    assert len(ports) == 1
+    query_end = ports[0]
+
+    l = set_end.input2ele['inp']
+    while len(l) > 0:
+        prev_name, prev_port = l[0]  # index = 0 because l is mutated (first element is popped).
+        g.disconnect(prev_name, set_end.name, prev_port, 'inp')
+        g.connect(prev_name, query_end.element.name, prev_port, query_end.name)
+
+    # set.end >> B
+    ports = get_element_ports(set_composite.out)
+
+    next_name, next_port = set_end.output2ele['out']
+    g.disconnect(set_end.name, next_name, 'out', next_port)
+    for out in ports:
+        g.connect(out.element.name, next_name, out.name, next_port)
+
+    subgraph = g.find_subgraph_list(query_end.element.name, [])
+    for name in subgraph:
+        g.instances[name].thread = set_end.thread
+
     g.deleteElementInstance(set_start.name)
-    # Keep set_end because it is just nop.
+    g.deleteElementInstance(set_end.name)
 
 
 def create_cache(cache_high, get, set):
@@ -270,7 +317,7 @@ def create_cache(cache_high, get, set):
                             var_size=cache_high.var_size, hash_value=cache_high.hash_value,
                             update_func=cache_high.update_func, release_type=[],
                             write_policy=cache_high.write_policy, write_miss=cache_high.write_miss,
-                            set_query=set, set_return_val=cache_high.set_return_val)
+                            set_query=set)
 
     get_composite = None
     set_composite = None

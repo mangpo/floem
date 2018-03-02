@@ -137,8 +137,8 @@ class DebugSet(ElementOneInOut):
 CacheGetStart, CacheGetEnd, CacheSetStart, CacheSetEnd, \
 CacheState, Key2State, KV2State, State2Key, State2KV = \
     cache_smart.smart_cache('MyCache', Pointer(Int), [Pointer(Int)],
-                            var_size=True, set_return_value=True, hash_value='hash', queue_insts=1,
-                            write_policy=Cache.write_through, write_miss=Cache.no_write_alloc)
+                            var_size=True, hash_value='hash',
+                            write_policy=Cache.write_back, write_miss=Cache.write_alloc)
 
 InEnq, InDeq, InClean = queue_smart.smart_queue("inqueue", 32, 16, n_queues, 2)
 OutEnq, OutDeq, OutClean = queue_smart.smart_queue("outqueue", 32, 16, n_queues, 2)
@@ -199,7 +199,8 @@ void init_mem(int* mem, int n) {
 '''
 c.testing = r'''
 set(1, 100);
-compute(11); compute(1); compute(11); compute(1); 
+compute(11); compute(1); 
+compute(11); compute(1); 
 set(11, 222); compute(11); compute(1);
 sleep(1);
 '''

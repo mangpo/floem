@@ -308,6 +308,57 @@ done:
     return NULL;
 }
 
+static void cache_delete(cache_bucket *buckets, int nbuckets, void* key, int klen, uint32_t hv)
+{
+    citem *it, *prev;
+    size_t i, di;
+
+#ifdef DEBUG
+    printf("cache_delete: hash = %d, key = %d\n", hv, *((int*) key));
+#endif
+
+    cache_bucket *b = buckets + (hv % nbuckets);
+    lock_lock(&b->lock);
+    printf("lock\n");
+
+    // Check if we need to replace an existing item
+    for (i = 0; i < BUCKET_NITEMS; i++) {
+        if (b->items[i] && b->hashes[i] == hv) {
+            it = b->items[i];
+            if (citem_key_matches(it, key, klen)) {
+                printf("delete %p\n", it);
+                b->items[i] = it->next;
+                if(b->items[i]) b->hashes[i] = b->items[i]->hv;
+                free(it);
+                goto done;
+            }
+        }
+    }
+
+    // Note it does not match, otherwise we would have already bailed in the for
+    // loop
+    it = b->items[BUCKET_NITEMS - 1];
+    if (it != NULL) {
+        prev = it;
+        it = it->next;
+        while (it != NULL && !citem_hkey_matches(it, key, klen, hv)) {
+            prev = it;
+            it = it->next;
+        }
+
+        if (it != NULL) {
+            printf("delete %p\n", it);
+            prev->next = it->next;
+            free(it);
+            goto done;
+        }
+    }
+
+
+done:
+    lock_unlock(&b->lock);
+}
+
 static inline void cache_release(citem *it) {
     if(it) {
         printf("unlock %p\n", it);
