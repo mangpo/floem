@@ -372,25 +372,52 @@ def kill_live(live, defs):
     return ret
 
 
-def analyze_fields_liveness_instance(g, name, in_port):
+def analyze_fields_liveness_instance(g, name, in_port, vis, change):
     instance = g.instances[name]
+    q = instance.element.special
+
+    if name in vis:
+        if isinstance(q, graph_ir.Queue) and instance in q.enq:
+            no = int(in_port[3:])
+            if no in instance.liveness:
+                return instance.liveness[no], instance.uses[no]
+            else:
+                return set(), set()
+        elif isinstance(q, graph_ir.Queue) and q.deq == instance:
+            return set(), set()
+        elif instance.uses:
+            if instance.dominants:
+                return set(), instance.uses
+            else:
+                return instance.liveness, instance.uses
+        else:
+            return set(), set()
+
+    vis[name] = True
+    print instance.name
 
     # Smart queue
-    q = instance.element.special
     if isinstance(q, graph_ir.Queue) and instance in q.enq:
         no = int(in_port[3:])
         if instance.liveness:
             return instance.liveness[no], instance.uses[no]
 
-        instance.liveness = {}
-        instance.uses = {}
         deq = q.deq
-        deq.liveness = {}
-        deq.uses = {}
+        if instance.liveness is None:
+            instance.liveness = {}
+            instance.uses = {}
+            deq.liveness = {}
+            deq.uses = {}
+
         for i in range(q.channels):
             out_port = "out" + str(i)
             next_name, next_port = deq.output2ele[out_port]
-            ret_live, ret_uses = analyze_fields_liveness_instance(g, next_name, next_port)
+            print "  deq:", next_name, next_port
+            ret_live, ret_uses = analyze_fields_liveness_instance(g, next_name, next_port, vis, change)
+
+            if i not in deq.liveness or deq.liveness[i] != ret_live or deq.uses[i] != ret_uses:
+                change[0] = True
+
             deq.liveness[i] = ret_live
             deq.uses[i] = ret_uses
             instance.liveness[i] = ret_live.union(instance.element.uses)
@@ -398,7 +425,8 @@ def analyze_fields_liveness_instance(g, name, in_port):
 
         if "done" in instance.output2ele:
             next_name, next_port = instance.output2ele["done"]
-            done_live, done_uses = analyze_fields_liveness_instance(g, next_name, next_port)
+            print "  done:", next_name, next_port
+            done_live, done_uses = analyze_fields_liveness_instance(g, next_name, next_port, vis, change)
             for i in range(q.channels):
                 instance.uses[i] = instance.uses[i].union(done_uses)
 
@@ -406,20 +434,13 @@ def analyze_fields_liveness_instance(g, name, in_port):
     elif isinstance(q, graph_ir.Queue) and q.deq == instance:
         return set(), set()
 
-    # Other elements
-    if instance.uses:
-        # visited
-        if instance.dominants:
-            return set(), instance.uses
-        else:
-            return instance.liveness, instance.uses
-
     # Union its children
     live = set()
     uses = set()
     for out_port in instance.output2ele:
         next_name, next_port = instance.output2ele[out_port]
-        ret_live, ret_uses = analyze_fields_liveness_instance(g, next_name, next_port)
+        print "  >", next_name, next_port
+        ret_live, ret_uses = analyze_fields_liveness_instance(g, next_name, next_port, vis, change)
         live = live.union(ret_live)
         uses = uses.union(ret_uses)
 
@@ -432,6 +453,10 @@ def analyze_fields_liveness_instance(g, name, in_port):
     live = live.union(instance.element.uses)
     uses = uses.union(instance.element.defs)
     uses = uses.union(instance.element.uses)
+
+    if instance.liveness != live or instance.uses != uses:
+        change[0] = True
+
     instance.liveness = live
     instance.uses = uses
 
@@ -442,18 +467,28 @@ def analyze_fields_liveness_instance(g, name, in_port):
             kills = instance.dominant2kills[dominant]
             updated_live = live.difference(kills)
             if dom.liveness:
+                before = len(dom.liveness)
                 dom.liveness = dom.liveness.union(updated_live)
+                after = len(dom.liveness)
+                if before != after:
+                    change[0] = True
             else:
                 dom.liveness = updated_live
+                change[0] = True
         return set(), uses
     else:
         return live, uses
 
 
 def analyze_fields_liveness(g):
+    print"---------------------- analyze_fields_liveness ------------------------"
+    vis = {}
+    change = [False]
     for instance in g.instances.values():
         if len(instance.input2ele) == 0:
-            analyze_fields_liveness_instance(g, instance.name, None)
+            analyze_fields_liveness_instance(g, instance.name, None, vis, change)
+    if change[0]:
+        analyze_fields_liveness(g)
 
 
 def join_collect_killset(g, inst_name, target, inst2kill, scope):

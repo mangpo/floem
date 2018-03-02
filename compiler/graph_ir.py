@@ -434,6 +434,7 @@ class ElementNode:
         self.API_default_val = None   # default return value
 
         # Liveness analysis
+        self.fix = False
         self.liveness = None
         self.dominants = None
         self.passing_nodes = None
@@ -586,39 +587,40 @@ class Queue:
     def rename_ports(self, g):
 
         id = 0
-        for i in range(len(self.channels)):
+        for i in range(self.channels):
             port = 'inp' + str(i)
             exist = False
             for enq in self.enq:
-                if port in enq.input2ele and i > id:
+                if port in enq.input2ele:
                     exist = True
-                    l = enq.input2ele[port]
-                    enq.input2ele['inp' + str(id)] = l
-                    del enq.input2ele[port]
+                    if i > id:
+                        l = enq.input2ele[port]
+                        enq.input2ele['inp' + str(id)] = l
+                        del enq.input2ele[port]
 
-                    for prev_name, prev_port in l:
-                        prev = g.instances[prev_name]
-                        prev.output2ele[prev_port] = (enq.name, port)
-
+                        for prev_name, prev_port in l:
+                            prev = g.instances[prev_name]
+                            prev.output2ele[prev_port] = (enq.name, port)
             if exist:
                 id += 1
         n_enq = id
 
         id = 0
-        for i in range(len(self.channels)):
+        for i in range(self.channels):
             port = 'out' + str(i)
-            if port in self.deq.output2ele and i > id:
-                next_name, next_port = self.deq.output2ele[port]
-                self.deq.input2ele['out' + str(id)] = l
-                del self.deq.output2ele[port]
-                id += 1
+            if port in self.deq.output2ele:
+                if i > id:
+                    next_name, next_port = self.deq.output2ele[port]
+                    self.deq.input2ele['out' + str(id)] = l
+                    del self.deq.output2ele[port]
 
-                next = g.instances[next_name]
-                l = next.input2ele[next_port]
-                for i in range(len(l)):
-                    myname, myport = l[i]
-                    if myname == self.deq.name and myport == port:
-                        l[i] = (myname, 'out' + str(id))
+                    next = g.instances[next_name]
+                    l = next.input2ele[next_port]
+                    for i in range(len(l)):
+                        myname, myport = l[i]
+                        if myname == self.deq.name and myport == port:
+                            l[i] = (myname, 'out' + str(id))
+                id += 1
         n_deq = id
 
         assert n_enq == n_deq

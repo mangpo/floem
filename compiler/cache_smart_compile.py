@@ -58,15 +58,18 @@ def find_last_queue(g, s, t, vis, prev=None):
         id = None
         for enq in q.enq:
             for port_name in enq.input2ele:
-                prev_name, prev_port = enq.input2ele[port_name]
-                if prev_name == prev:
-                    id = int(port_name[3:])
+                l = enq.input2ele[port_name]
+                for prev_name, prev_port in l:
+                    if prev_name == prev:
+                        id = int(port_name[3:])
+                        break
+                if id:
                     break
             if id:
                 break
 
         next_name, next_port = q.deq.output2ele['out' + str(id)]
-        ans = dfs_same_thread(g, g.instances[next_name], t, vis, s.name)
+        ans = find_last_queue(g, g.instances[next_name], t, vis, s.name)
         if len(ans) == 0:
             ans = [(q, id, prev)]
 
@@ -74,7 +77,7 @@ def find_last_queue(g, s, t, vis, prev=None):
         ans = []
         for inst_name, port in s.output2ele.values():
             next = g.instances[inst_name]
-            ret = dfs_same_thread(g, next, t, vis, s.name)
+            ret = find_last_queue(g, next, t, vis, s.name)
             if ret not in ans:
                 ans += ret
 
@@ -224,6 +227,10 @@ def transform_set_write_back(g, set_start, set_end, set_composite):
     for out in ports:
         g.connect(out.element.name, next_name, out.name, next_port)
 
+    subgraph = g.find_subgraph_list(next_name, [])
+    for name in subgraph:
+        g.instances[name].thread = set_start.thread
+
     g.deleteElementInstance(set_start.name)
     g.deleteElementInstance(set_end.name)
 
@@ -289,6 +296,7 @@ def create_cache(cache_high, get, set):
 
 
 def cache_pass(g):
+    g.print_graphviz()
     caches = []
     for instance in g.instances.values():
         c = instance.element.special
@@ -370,4 +378,5 @@ def cache_pass(g):
             else:
                 transform_set_write_through(g, set_start, set_end, set_composite)
 
+        print "------------------------- adding cache --------------------------"
         g.print_graphviz()

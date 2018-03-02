@@ -225,12 +225,25 @@ class Graph:
                 raise Exception("Cannot delete Element '%s' because it is still connected to %s." % (name, next))
         del self.instances[name]
 
+        q = instance.element.special
+        if isinstance(q, Queue):
+            if instance in q.enq:
+                q.enq.remove(instance)
+
     def copy_node_and_element(self, inst_name, suffix):
         instance = self.instances[inst_name]
         new_instance = instance.deep_clone(suffix)
         new_element = new_instance.element
         self.instances[new_instance.name] = new_instance
         self.elements[new_element.name] = new_element
+
+        # Update instance in queue
+        q = new_element.special
+        if isinstance(q, Queue):
+            if instance in q.enq:
+                q.enq.append(new_instance)
+            if instance == q.deq:
+                q.deq = instance
 
     def connect(self, name1, name2, out1=None, in2=None, overwrite=False):
         i1 = self.instances[name1]
@@ -293,6 +306,8 @@ class Graph:
         else:
             in2 = in_port
         i2.input2ele[in2].remove((name1, out1))
+        if len(i2.input2ele[in2]) == 0:
+            del i2.input2ele[in2]
 
     def delete_instance(self, name):
         instance = self.instances[name]

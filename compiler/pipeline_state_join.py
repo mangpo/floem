@@ -218,7 +218,7 @@ def duplicate_subgraph(g, node_list, suffix='_dup', copy=None):
         for i in range(n):
             g.copy_node_and_element(inst_name, suffix + str(i))
 
-        for inport in instance.input2ele:
+        for inport in instance.input2ele.keys():
             l = instance.input2ele[inport]
             assert len(l) == ref, "len(l) != ref"
             for i in range(n):
