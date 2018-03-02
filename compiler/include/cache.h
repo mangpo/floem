@@ -231,9 +231,10 @@ static citem *cache_put_or_get(cache_bucket *buckets, int nbuckets, citem *nit, 
         } else if (b->hashes[i] == hv) {
             it = b->items[i];
             if (citem_key_matches(it, key, klen)) {
+                if(nit == it) printf("assert fail: nit = %p, it = %p\n", nit, it);
                 assert(nit != it);
-                nit->next = it->next;
-                b->items[i] = nit;
+                //nit->next = it->next;
+                //b->items[i] = nit;
 #ifdef DEBUG
                 printf("exist %p\n", it);
 #endif
@@ -255,8 +256,8 @@ static citem *cache_put_or_get(cache_bucket *buckets, int nbuckets, citem *nit, 
         }
 
         if (it != NULL) {
-            nit->next = it->next;
-            prev->next = nit;
+            //nit->next = it->next;
+            //prev->next = nit;
 #ifdef DEBUG
             printf("exist %p\n", it);
 #endif
@@ -308,7 +309,11 @@ done:
 }
 
 static inline void cache_release(citem *it) {
-    if(it) lock_unlock(&it->bucket->lock);
+    if(it) {
+        printf("unlock %p\n", it);
+        lock_unlock(&it->bucket->lock);
+        printf("unlock done %p\n", it);
+    }
 }
 
 #endif

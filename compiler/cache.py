@@ -191,11 +191,18 @@ def cache_default(name, key_type, val_type, hash_value=False, var_size=False, re
     ''' % (n_buckets, replace)
 
     if write_policy == graph_ir.Cache.write_back:
-        item_src += "if(rit && (rit->evicted & 2)) state->cache_item = rit;  // to be evict & release & free."
+        item_src += r'''
+        state->cache_item = NULL;
+        if(rit && (rit->evicted & 2)) state->cache_item = rit;  // to be evict & release & free.
+        '''
     else:
-        item_src += "if(rit && (rit->evicted & 2)) { cache_release(rit); free(rit); }\n"
+        item_src += r'''
+        state->cache_item = NULL;
+        if(rit && (rit->evicted & 2)) { cache_release(rit); free(rit); }
+        '''
 
     item_src2 += r'''
+    state->cache_item = NULL;
     citem* rit = cache_put_or_get(this->buckets, %d, it, true);
     if(rit) {
       if(rit->evicted == 2) {
@@ -311,10 +318,10 @@ def cache_default(name, key_type, val_type, hash_value=False, var_size=False, re
 
             get_src = "citem *it = cache_get(this->buckets, %d, %s, %s, hv);\n" % (n_buckets, key_arg, keylen_arg)
 
-            if not var_size:
-                rel_src = "cache_release(it);\n"
-            else:
-                rel_src = "state->cache_item = it;\n"
+            # if not var_size:
+            #     rel_src = "cache_release(it);\n"
+            # else:
+            rel_src = "state->cache_item = it;\n"
 
 
             if not var_size:

@@ -201,6 +201,6 @@ c.testing = r'''
 set(1, 100);
 compute(11); compute(1); compute(11); compute(1); 
 set(11, 222); compute(11); compute(1);
-sleep(3);
+sleep(1);
 '''
 c.generate_code_and_run()
