@@ -136,23 +136,34 @@ def smart_cache(name, key_type, val_type,
             %s
             ''' % (state2kv, kv_output))
 
+    sizes = []
+    for type in val_type:
+        if type[-1] == "*":
+            non_pointer = type[:-1]
+            sizes.append('sizeof(%s)' % non_pointer)
+        else:
+            sizes.append(None)
+
+    if var_size:
+        sizes[-1] = 'state->vallen'
+
     class CacheState(State):
         cache_item = Field('citem*')
         qid = Field(Uint(8))
         hash = Field(Uint(32))
 
-        key = Field(key_type)
+        key = Field(key_type, size='state->keylen')
         if var_size:
             keylen = Field(Int)
             vallen = Field(Int)
 
-        val0 = Field(val_type[0])
+        val0 = Field(val_type[0], size=sizes[0])
         if len(val_type) > 1:
-            val1 = Field(val_type[1])
+            val1 = Field(val_type[1], size=sizes[1])
         if len(val_type) > 2:
-            val2 = Field(val_type[2])
+            val2 = Field(val_type[2], size=sizes[2])
         if len(val_type) > 3:
-            val3 = Field(val_type[3])
+            val3 = Field(val_type[3], size=sizes[3])
 
     assert len(val_type) <= 4
 

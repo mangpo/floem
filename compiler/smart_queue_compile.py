@@ -57,9 +57,11 @@ def get_entry_content(vars, pipeline_state, g, src2fields):
             content += "uint64_t %s; " % fields[-1]  # convert pointer to number
             special[var] = (current_type, fields[-1], "shared", current_info[3])
         elif annotation is "copysize":
-            if end is not "":
-                raise Exception("Currently do not support copying multiple variable-length fields over smart queue.")
-            end = "uint8_t %s[]; " % fields[-1]
+            # if end is not "":
+            #     raise Exception("Currently do not support copying multiple variable-length fields over smart queue.")
+            # if end is "":
+            #     end = "uint8_t %s[]; " % fields[-1]
+            end = "uint8_t _content[]; "
             special[var] = (current_type, fields[-1], "copysize", current_info[3])
         else:
             raise Exception("Unknown type annotation '%s' for field '%s' of type '%s'." %
@@ -155,6 +157,7 @@ def get_fill_entry_src(g, deq_thread, enq_thread, live, special, extras,
     fill_src = "  q_buffer buff = in_entry();\n"
     fill_src += "  %s* e = (%s*) buff.entry;\n" % (state_entry.name, state_entry.name)
     fill_src += "  if(e) {\n"
+    copysize = ""
     for var in live:
         field = get_entry_field(var, src2fields)
         if var in special:
@@ -167,7 +170,10 @@ def get_fill_entry_src(g, deq_thread, enq_thread, live, special, extras,
                 # assert t == "void*" or common.sizeof(t[:-1]) == 1, \
                 #     "Smart queue: field '%s' of per-packet state '%s' must be a pointer to uint8_t array." % \
                 #     (field, pipeline_state)
-                fill_src += "    memcpy(e->%s, state.%s, %s);\n" % (field, var, info)
+                #fill_src += "    memcpy(e->%s, state.%s, %s);\n" % (field, var, info)
+
+                fill_src += "    memcpy(e->_content %s, state.%s, %s);\n" % (copysize, var, info)
+                copysize += "+ %s" % info
         else:
             try:
                 t = mapping[var]
@@ -208,6 +214,7 @@ def get_save_state_src(g, deq_thread, enq_thread, live, special, extras,
         save_src += "  state.qid = qid;\n"
     save_src += "  state.buffer = buff;\n"
     save_src += "  state.entry = (%s*) buff.entry;\n" % state_entry.name
+    copysize = ""
     for var in live:
         field = get_entry_field(var, src2fields)
         if var in special:
@@ -221,7 +228,10 @@ def get_save_state_src(g, deq_thread, enq_thread, live, special, extras,
                 # assert t == "void*" or common.sizeof(t[:-1]) == 1, \
                 #     "Smart queue: field '%s' of per-packet state '%s' must be a pointer to uint8_t array." % \
                 #     (field, pipeline_state)
-                save_src += "  state.{0} = ({1}) state.entry->{0};\n".format(name, t)
+                #save_src += "  state.{0} = ({1}) state.entry->{0};\n".format(name, t)
+
+                save_src += "  state.{0} = ({1}) (state.entry->_content {2});\n".format(name, t, copysize)
+                copysize += "+ %s" % info
         elif byte_reverse:
             try:
                 t = mapping[var]

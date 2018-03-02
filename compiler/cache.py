@@ -358,8 +358,10 @@ def cache_default(name, key_type, val_type, hash_value=False, var_size=False, re
                 }
                 else { 
                     cache_release(it); 
-                    //printf("release %p\n", it); 
                 }
+#ifdef DEBUG
+                printf("release %p\n", it); 
+#endif
                 state->cache_item = NULL;
             }
             ''')
@@ -375,6 +377,9 @@ def cache_default(name, key_type, val_type, hash_value=False, var_size=False, re
             if(it && it->evicted & 2) { 
                 cache_release(it); 
                 free(it);
+#ifdef DEBUG
+                printf("release %p\n", it); 
+#endif
                 state->cache_item = NULL;
             }
             ''')
@@ -415,24 +420,18 @@ def cache_default(name, key_type, val_type, hash_value=False, var_size=False, re
 
     class ForkGet(Element):
         def configure(self):
-            self.inp = Input(*key_params)
-            self.out = Output(*key_params)
+            self.inp = Input(*kv_params)
+            self.out = Output(*kv_params)
             self.release = Output()
             self.outports_order = ['out', 'release']
 
         def impl(self):
-            if not var_size:
-                self.run_c(r'''
-                (%s key) = inp();
-                state->cache_item = NULL;
-                output { out(key); release(); }
-                ''' % key_type)
-            else:
-                self.run_c(r'''
-                (%s key, int keylen) = inp();
-                state->cache_item = NULL;
-                output { out(key, keylen); release(); }
-                ''' % key_type)
+            extra_args = 'int keylen, int last_vallen,' if var_size else ''
+            extra_return = 'keylen, last_vallen,' if var_size else ''
+            self.run_c(r'''
+            (%s key, %s %s) = inp();
+            output { out(key, %s %s); release(); }
+            ''' % (key_type, extra_args, ','.join(type_vals), extra_return, ','.join(return_vals)))
 
     class ForkSet(Element):
         def configure(self):
@@ -484,18 +483,21 @@ def cache_default(name, key_type, val_type, hash_value=False, var_size=False, re
             cache_set_get = CacheSetGet()
             fork = ForkGet()
 
-            self.inp >> fork >> cache_get
-            cache_get.hit >> self.out
+            self.inp >> cache_get
+            cache_get.hit >> fork >> self.out
+            fork.release >> FreeOrRelease()
+
+            fork2 = ForkGet()
             cache_get.miss >> self.query_begin
+            self.query_end >> cache_set_get >> fork2
+            fork2.release >> FreeOrRelease()
 
             if write_policy == graph_ir.Cache.write_back and set_query:
-                fork2 = ForkSet()
-                self.query_end >> cache_set_get >> fork2 >> self.out
-                fork2.miss >> Evict() >> self.evict_begin
+                fork3 = ForkSet()
+                fork2 >> fork3 >> self.out
+                fork3.miss >> Evict() >> self.evict_begin
             else:
-                self.query_end >> cache_set_get >> self.out
-
-            fork.release >> FreeOrRelease()
+                fork2 >> self.out
 
     class SetWriteBack(Composite):
         def configure(self):

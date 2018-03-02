@@ -51,7 +51,7 @@ class LookUp(Element):
         this->mem[x] = y;
         
 #ifdef DEBUG
-        printf("update storage\n");
+        printf("update storage %d %d\n", x, y);
 #endif
 
         output { out(key, keylen, vallen, val); }
@@ -102,7 +102,7 @@ class DisplayGet(Element):
         (int* key, int keylen, int vallen, int* val) = inp();
         int x = *key;
         int y = *val;
-        printf("get%d val%d\n", x, y);
+        printf("    GET%d VAL%d\n", x, y);
         ''')
 
 
@@ -114,7 +114,7 @@ class DisplaySet(Element):
         self.run_c(r'''
         (int* key, int keylen, int vallen, int* val) = inp();
         int x = *key;
-        printf("conf%d\n", x);
+        printf("    SET%d\n", x);
         ''')
 
 n_queues = 1
@@ -122,8 +122,16 @@ class QID(ElementOneInOut):
     def impl(self):
         self.run_c(r'''
         state->qid = state->hash %s %s;
+        printf("qid: key = %s\n", *state.key);
         output { out(); }
-        ''' % ('%', n_queues))
+        ''' % ('%', n_queues, '%d'))
+
+class DebugSet(ElementOneInOut):
+    def impl(self):
+        self.run_c(r'''
+        printf("debug: key = %d\n", *state.key);
+        output { out(); }
+        ''')
 
 
 CacheGetStart, CacheGetEnd, CacheSetStart, CacheSetEnd, \
@@ -164,7 +172,7 @@ class main(Flow):
 
                 self.core_id >> deq
                 deq.out[0] >> State2KV() >> CacheGetEnd() >> DisplayGet()
-                deq.out[1] >> State2KV() >> CacheSetEnd() >> DisplaySet()
+                deq.out[1] >> DebugSet() >> State2KV() >> CacheSetEnd() >> DisplaySet()
 
         class server(Pipeline):
             def impl(self):
@@ -193,5 +201,6 @@ c.testing = r'''
 set(1, 100);
 compute(11); compute(1); compute(11); compute(1); 
 set(11, 222); compute(11); compute(1);
+sleep(3);
 '''
 c.generate_code_and_run()
