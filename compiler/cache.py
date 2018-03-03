@@ -166,12 +166,15 @@ def cache_default(name, key_type, val_type, hash_value=False, var_size=False, re
 
     item_src = r'''
     int item_size = %s;
-    citem* it = malloc(item_size);
-    it->hv = hv;
-    it->keylen = keylen;
-    it->last_vallen = last_vallen;
-    uint8_t* p = it->content;
-    ''' % (item_size)
+    citem* it = NULL;
+    printf("keylen = %s, vallen = %s\n", keylen, last_vallen);
+    if(last_vallen > 0) {
+        it = malloc(item_size);
+        it->hv = hv;
+        it->keylen = keylen;
+        it->last_vallen = last_vallen;
+        uint8_t* p = it->content;
+    ''' % (item_size, '%d', '%d')
 
     if common.is_pointer(key_type):
         item_src += "memcpy(p, key, keylen);\n"
@@ -190,6 +193,7 @@ def cache_default(name, key_type, val_type, hash_value=False, var_size=False, re
         item_src += "memcpy(p, val{0}, last_vallen);\n".format(len(val_type) - 1)
     else:
         item_src += "memcpy(p, &val{0}, last_vallen);\n".format(len(val_type) - 1)
+    item_src += "}\n"
 
     item_src2 = item_src
     replace = 'true' if write_miss==graph_ir.Cache.write_alloc else 'false'
@@ -210,19 +214,21 @@ def cache_default(name, key_type, val_type, hash_value=False, var_size=False, re
 
     item_src2 += r'''
     state->cache_item = NULL;
-    citem* rit = cache_put_or_get(this->buckets, %d, it, true);
-    if(rit) {
-      if(rit->evicted == 2) {
-        cache_release(rit);
-        free(rit);
-      } else if(rit->evicted == 3) {
-        state->cache_item = rit;
-      } else {
-        it = rit;
-        state->cache_item = it;
-        %s
-      }
-    }
+    if(it) {
+        citem* rit = cache_put_or_get(this->buckets, %d, it, true);
+        if(rit) {
+            if(rit->evicted == 2) {
+                cache_release(rit);
+                free(rit);
+            } else if(rit->evicted == 3) {
+                state->cache_item = rit;
+            } else {
+                it = rit;
+                state->cache_item = it;
+                %s
+            }
+        }
+    } 
     ''' % (n_buckets, val_assign_src)
 
     # key-value input/out src

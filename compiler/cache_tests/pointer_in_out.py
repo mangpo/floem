@@ -108,8 +108,8 @@ class Display(Element):
 CacheGetStart, CacheGetEnd, CacheSetStart, CacheSetEnd, \
 CacheState, Key2State, KV2State, State2Key, State2KV = \
     cache_smart.smart_cache('MyCache', Pointer(Int), [Pointer(Int)],
-                            var_size=True, set_return_value=True, hash_value='hash',
-                            write_policy=Cache.write_through, write_miss=Cache.no_write_alloc)
+                            var_size=True, hash_value=True,
+                            write_policy=Cache.write_back, write_miss=Cache.write_alloc)
 
 
 class MyState(CacheState):

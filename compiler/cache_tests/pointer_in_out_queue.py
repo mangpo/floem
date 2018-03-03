@@ -23,13 +23,17 @@ class Mult2(Element):
         
         int x = *key;
         int y = this->mem[x];
+        int vallen = sizeof(int);
         
-        if(y == -1) {
+        if (x == 0) {
+            y = 0;
+            vallen = 0;
+        } else if(y == -1) {
             y = 2*x;
             this->mem[x] = y;
         }
         
-        output { out(key, keylen, sizeof(int), &y); }
+        output { out(key, keylen, vallen, &y); }
         ''')
 
 class LookUp(Element):
@@ -65,7 +69,9 @@ class OnlyVal(Element):
     def impl(self):
         self.run_c(r'''
         (int* key, int keylen, int vallen, int* val) = inp();
-        output { out(*val); }
+        int y = *val;
+        if(vallen == 0) y = -1;
+        output { out(&y); }
         ''')
 
 class Key2Pointer(Element):
@@ -101,7 +107,11 @@ class DisplayGet(Element):
         self.run_c(r'''
         (int* key, int keylen, int vallen, int* val) = inp();
         int x = *key;
-        int y = *val;
+        //int y = *val;
+        
+        int y = -1;
+        if(vallen > 0) y = *val;
+        
         printf("    GET%d VAL%d\n", x, y);
         ''')
 
@@ -198,10 +208,11 @@ void init_mem(int* mem, int n) {
 }
 '''
 c.testing = r'''
-set(1, 100);
-compute(11); compute(1); 
-compute(11); compute(1); 
-set(11, 222); compute(11); compute(1);
+//set(1, 100);
+//compute(11); compute(1); 
+//compute(11); compute(1); 
+//set(11, 222); compute(11); compute(1);
+compute(0);
 sleep(1);
 '''
 c.generate_code_and_run()
