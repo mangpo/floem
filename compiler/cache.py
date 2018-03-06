@@ -135,7 +135,7 @@ def cache_default(name, key_type, val_type,
                 if state:
                     input_src = "%s key = state->%s;" % (key_type, key_name)
                     output_src = ' '.join(["state->%s = %s;" % (s, v) for s, v in zip(val_names, return_vals)]) + \
-                                 " output switch { case it: hit(); miss(); }"
+                                 " output switch { case it: hit(); else: miss(); }"
                 else:
                     input_src = "(%s key) = inp();" % (key_type)
                     output_src = "output switch { case it: hit(key, %s); else: miss(key); }" % ','.join(return_vals)
@@ -168,7 +168,7 @@ def cache_default(name, key_type, val_type,
                 state->cache_item = it;
                 
                 %s
-                ''' % (input_src, key_type, compute_hash, n_buckets, key_arg, keylen_arg, val_src, output_src))
+                ''' % (input_src, compute_hash, n_buckets, key_arg, keylen_arg, val_src, output_src))
 
     # Item
     type_vals = []
@@ -300,7 +300,9 @@ def cache_default(name, key_type, val_type,
             ''' % (key_type, ','.join(type_vals))
 
     if state:
-        kv_output_src = ''
+        kv_output_src = r'''
+        output { out(); }
+        '''
     else:
         kv_output_src = r'''
         output { out(key, %s %s); }
@@ -615,6 +617,8 @@ def cache_default(name, key_type, val_type,
     #
     #     def impl(self):
     #         self.inp >> CacheSet() >> self.out
+
+    library.Drop(create=False, force=True)
 
     class SetWriteThrough(Composite):
         def configure(self):

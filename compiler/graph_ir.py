@@ -648,6 +648,7 @@ class Cache:
         self.hash_value = hash_value
         self.update_func = update_func
 
+        self.state = state
         self.key_name = key_name
         self.val_names = val_names
         self.keylen_name = keylen_name

@@ -325,14 +325,14 @@ class Element(Connectable):
     all_defined = set()
     defined = False
 
-    def __init__(self, name=None, states=[], configure=[], create=True):
+    def __init__(self, name=None, states=[], configure=[], create=True, force=False):
         self.special = None
         self.def_fields = None
         self.used_fields = None
         self.code = None
         self.code_cavium = None
 
-        if not self.__class__.defined:  # subclass has not declared before
+        if not self.__class__.defined or force:  # subclass has not declared before
             self.__class__.defined = True
             if self.__class__.__name__ in Element.class_defined:
                 self.__class__.__name__ += str(Element.class_id)

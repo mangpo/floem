@@ -28,11 +28,6 @@ def smart_cache_with_state(name, key, vals,
                            key_name=key_name, val_names=val_names, keylen_name=keylen_name, vallen_name=vallen_name,
                            write_policy=write_policy, write_miss=write_miss)
 
-    if not var_size:
-        use_kv_src = '; '.join([key] + vals)
-    else:
-        use_kv_src = '; '.join([keylen_name, vallen_name, key] + vals)
-
     class CacheBase(Element):
         def configure(self):
             self.special = cache
@@ -52,7 +47,7 @@ def smart_cache_with_state(name, key, vals,
 
     class CacheGetEnd(CacheBase):
         def impl(self):
-            self.run_c(use_kv_src + 'output { out(); }')
+            self.run_c('output { out(); }')
 
         def __init__(self, name=None, create=True):
             CacheBase.__init__(self, name=name, create=create)
@@ -68,7 +63,7 @@ def smart_cache_with_state(name, key, vals,
 
     class CacheSetEnd(CacheBase):
         def impl(self):
-            self.run_c(use_kv_src + 'output { out(); }')
+            self.run_c('output { out(); }')
 
         def __init__(self, name=None, create=True):
             CacheBase.__init__(self, name=name, create=create)
@@ -166,10 +161,9 @@ def smart_cache(name, key_type, val_type,
             CacheKeyValue.__init__(self, name=name, create=create)
             cache.set_start = self.instance
 
-    SetEndType = CacheKeyValue
-    class CacheSetEnd(SetEndType):
+    class CacheSetEnd(CacheKeyValue):
         def __init__(self, name=None, create=True):
-            SetEndType.__init__(self, name=name, create=create)
+            CacheKeyValue.__init__(self, name=name, create=create)
             cache.set_end = self.instance
 
     class Key2State(Element):

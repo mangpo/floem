@@ -314,8 +314,10 @@ def create_cache(cache_high, get, set):
     workspace.push_scope(cache_high.name)
     GetComposite, SetComposite = \
         cache.cache_default(cache_high.name, cache_high.key_type, cache_high.val_type,
+                            state=cache_high.state, key_name=cache_high.key_name, val_names=cache_high.val_names,
+                            keylen_name=cache_high.keylen_name, vallen_name=cache_high.vallen_name,
                             var_size=cache_high.var_size, hash_value=cache_high.hash_value,
-                            update_func=cache_high.update_func, release_type=[],
+                            update_func=cache_high.update_func,
                             write_policy=cache_high.write_policy, write_miss=cache_high.write_miss,
                             set_query=set)
 
@@ -325,7 +327,6 @@ def create_cache(cache_high, get, set):
         get_composite = GetComposite()
     if set:
         set_composite = SetComposite()
-    library.Drop(create=False)
 
     decl = workspace.pop_decl()
     scope, collection = workspace.pop_scope()
@@ -417,6 +418,7 @@ def cache_pass(g):
                 g.set_thread(drop_inst.name, prev.thread)
                 g.connect(prev_name, drop_inst.name, prev_port)
 
+        # Graph transformation
         if get_start:
             transform_get(g, get_start, get_end, get_composite, set_start, Drop, cache_high.write_policy)
         if set_start:
