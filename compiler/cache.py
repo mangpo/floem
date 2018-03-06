@@ -2,7 +2,9 @@ from dsl import *
 import common, graph_ir, library
 
 
-def cache_default(name, key_type, val_type, hash_value=False, var_size=False, release_type=[], update_func='f',
+def cache_default(name, key_type, val_type,
+                  state=False, key_name=None, val_names=None, keylen_name=None, vallen_name=None,
+                  hash_value=False, var_size=False, update_func='f',
                   write_policy=graph_ir.Cache.write_through, write_miss=graph_ir.Cache.no_write_alloc,
                   set_query=True):
     if write_policy == graph_ir.Cache.write_back:
@@ -25,12 +27,16 @@ def cache_default(name, key_type, val_type, hash_value=False, var_size=False, re
     hash_table.__name__ = prefix + hash_table.__name__
     my_hash_table = hash_table()
 
-    if not var_size:
-        key_params = [key_type]
-        kv_params =  [key_type] + val_type
+    if state:
+        key_params = []
+        kv_params = []
     else:
-        key_params = [key_type, Int]
-        kv_params = [key_type, Int, Int] + val_type
+        if not var_size:
+            key_params = [key_type]
+            kv_params =  [key_type] + val_type
+        else:
+            key_params = [key_type, Int]
+            kv_params = [key_type, Int, Int] + val_type
 
     # Key
     if common.is_pointer(key_type):
@@ -126,25 +132,43 @@ def cache_default(name, key_type, val_type, hash_value=False, var_size=False, re
 
         def impl(self):
             if not var_size:
+                if state:
+                    input_src = "%s key = state->%s;" % (key_type, key_name)
+                    output_src = ' '.join(["state->%s = %s;" % (s, v) for s, v in zip(val_names, return_vals)]) + \
+                                 " output switch { case it: hit(); miss(); }"
+                else:
+                    input_src = "(%s key) = inp();" % (key_type)
+                    output_src = "output switch { case it: hit(key, %s); else: miss(key); }" % ','.join(return_vals)
+
                 self.run_c(r'''
-                (%s key) = inp();
+                %s
                 %s
                 citem* it = cache_get(this->buckets, %d, %s, %s, hv);
                 %s
                 state->cache_item = it;
                 
-                output switch { case it: hit(key, %s); else: miss(key); }
-                ''' % (key_type, compute_hash, n_buckets, key_arg, keylen_arg, val_src, ','.join(return_vals)))
+                %s
+                ''' % (input_src, compute_hash, n_buckets, key_arg, keylen_arg, val_src, output_src))
             else:
+                if state:
+                    input_src = "%s key = state->%s; int keylen = state->%s;" % (key_type, key_name, keylen_name)
+                    output_src = "state->%s = (it)? it->last_vallen: 0;" % vallen_name + \
+                                 ' '.join(["state->%s = %s;" % (s, v) for s, v in zip(val_names, return_vals)]) + \
+                                 " output switch { case it: hit(); else: miss(); }"
+                else:
+                    input_src = "(%s key, int keylen) = inp();" % (key_type)
+                    output_src = "output switch { case it: hit(key, keylen, it->last_vallen, %s); else: miss(key, keylen); }" \
+                                 % ','.join(return_vals)
+
                 self.run_c(r'''
-                (%s key, int keylen) = inp();
+                %s
                 %s
                 citem* it = cache_get(this->buckets, %d, %s, %s, hv);
                 %s
                 state->cache_item = it;
                 
-                output switch { case it: hit(key, keylen, it->last_vallen, %s); else: miss(key, keylen); }
-                ''' % (key_type, compute_hash, n_buckets, key_arg, keylen_arg, val_src, ','.join(return_vals)))
+                %s
+                ''' % (input_src, key_type, compute_hash, n_buckets, key_arg, keylen_arg, val_src, output_src))
 
     # Item
     type_vals = []
@@ -212,6 +236,17 @@ def cache_default(name, key_type, val_type, hash_value=False, var_size=False, re
         if(rit && (rit->evicted & 2)) { cache_release(rit); free(rit); }
         '''
 
+    # Item source v2
+    if state:
+        val_state_src = ' '.join(["state->%s = %s;" % (s, v) for s, v in zip(val_names, return_vals)])
+        if common.is_pointer(key_type):
+            val_state_src += "state->%s = it->content; " % (key_name)
+        if var_size:
+            val_state_src += "state->%s = it->keylen;" % keylen_name
+            val_state_src += "state->%s = it->last_vallen;" % vallen_name
+    else:
+        val_state_src = ''
+
     item_src2 += r'''
     state->cache_item = NULL;
     if(it) {
@@ -226,26 +261,50 @@ def cache_default(name, key_type, val_type, hash_value=False, var_size=False, re
                 it = rit;
                 state->cache_item = it;
                 %s
+                %s
             }
         }
     } 
-    ''' % (n_buckets, val_assign_src)
+    ''' % (n_buckets, val_assign_src, val_state_src)
 
     # key-value input/out src
     if not var_size:
-        kv_input_src = r'''
-        (%s key, %s) = inp();
-        int keylen = %s;
-        int last_vallen = %s;
-        ''' % (key_type, ','.join(type_vals), keylen_arg, last_vallen_arg)
+        if state:
+            kv_input_src = r'''
+            %s key = state->%s;
+            %s
+            int keylen = %s;
+            int last_vallen = %s;
+            ''' % (key_type, key_name,
+                   ' '.join(["%s %s = state->%s;" % (t, v, s) for s, v, t in zip(val_names, return_vals, val_type)]),
+                   keylen_arg, last_vallen_arg)
+        else:
+            kv_input_src = r'''
+            (%s key, %s) = inp();
+            int keylen = %s;
+            int last_vallen = %s;
+            ''' % (key_type, ','.join(type_vals), keylen_arg, last_vallen_arg)
     else:
-        kv_input_src = r'''
-        (%s key, int keylen, int last_vallen, %s) = inp();
-        ''' % (key_type, ','.join(type_vals))
+        if state:
+            kv_input_src = r'''
+            %s key = state->%s;
+            %s
+            int keylen = state->%s;
+            int last_vallen = state->%s;
+            ''' % (key_type, key_name,
+                   ' '.join(["%s %s = state->%s;" % (t, v, s) for s, v, t in zip(val_names, return_vals, val_type)]),
+                   keylen_name, vallen_name)
+        else:
+            kv_input_src = r'''
+            (%s key, int keylen, int last_vallen, %s) = inp();
+            ''' % (key_type, ','.join(type_vals))
 
-    kv_output_src = r'''
-    output { out(key, %s %s); }
-    ''' % (extra_return, ','.join(return_vals))
+    if state:
+        kv_output_src = ''
+    else:
+        kv_output_src = r'''
+        output { out(key, %s %s); }
+        ''' % (extra_return, ','.join(return_vals))
 
     class CacheSet(Element):
         this = Persistent(hash_table)
@@ -289,68 +348,62 @@ def cache_default(name, key_type, val_type, hash_value=False, var_size=False, re
 
             self.run_c(kv_input_src + compute_hash + del_src + kv_output_src)
 
-    class CacheUpdate(Element):
-        this = Persistent(hash_table)
+    # class CacheUpdate(Element):
+    #     this = Persistent(hash_table)
+    #
+    #     def configure(self):
+    #         if not var_size:
+    #             self.inp = Input(key_type, *val_type)
+    #             self.hit = Output(key_type, *val_type)
+    #             self.miss = Output(key_type, *val_type)
+    #         else:
+    #             self.inp = Input(key_type, Int, Int, *val_type)
+    #             self.hit = Output(key_type, Int, Int, *val_type)
+    #             self.miss = Output(key_type, Int, Int, *val_type)
+    #         self.this = my_hash_table
+    #
+    #     def impl(self):
+    #         if hash_value:
+    #             compute_hash = "uint32_t hv = state->%s;" % hash_value
+    #         else:
+    #             compute_hash = "uint32_t hv = jenkins_hash(%s, %s);" % (key_arg, keylen_arg)
+    #
+    #         if not var_size:
+    #             input_src = r'''
+    #             (%s key, %s) = inp();
+    #             int keylen = %s;
+    #             int last_vallen = %s;
+    #             ''' % (key_type, ','.join(type_vals), keylen_arg, last_vallen_arg)
+    #         else:
+    #             input_src = r'''
+    #             (%s key, int keylen, int last_vallen, %s) = inp();
+    #             '''% (key_type, ','.join(type_vals))
+    #
+    #         get_src = "citem *it = cache_get(this->buckets, %d, %s, %s, hv);\n" % (n_buckets, key_arg, keylen_arg)
+    #
+    #         # if not var_size:
+    #         #     rel_src = "cache_release(it);\n"
+    #         # else:
+    #         rel_src = "state->cache_item = it;\n"
+    #
+    #
+    #         if not var_size:
+    #             output_src = r'''
+    #             output switch {
+    #                 case it: hit(key, %s);
+    #                 else: miss(key, %s);
+    #             }
+    #             ''' % (','.join(update_vals), ','.join(return_vals))
+    #         else:
+    #             output_src = r'''
+    #             output switch {
+    #                 case it: hit(key, keylen, last_vallen, %s);
+    #                 else: miss(key, keylen, last_vallen, %s);
+    #             }
+    #             ''' % (','.join(update_vals), ','.join(return_vals))
+    #
+    #         self.run_c(input_src + compute_hash + get_src + update_src + rel_src + output_src)
 
-        def configure(self):
-            if not var_size:
-                self.inp = Input(key_type, *val_type)
-                self.hit = Output(key_type, *val_type)
-                self.miss = Output(key_type, *val_type)
-            else:
-                self.inp = Input(key_type, Int, Int, *val_type)
-                self.hit = Output(key_type, Int, Int, *val_type)
-                self.miss = Output(key_type, Int, Int, *val_type)
-            self.this = my_hash_table
-
-        def impl(self):
-            if hash_value:
-                compute_hash = "uint32_t hv = state->%s;" % hash_value
-            else:
-                compute_hash = "uint32_t hv = jenkins_hash(%s, %s);" % (key_arg, keylen_arg)
-
-            if not var_size:
-                input_src = r'''
-                (%s key, %s) = inp();
-                int keylen = %s;
-                int last_vallen = %s;
-                ''' % (key_type, ','.join(type_vals), keylen_arg, last_vallen_arg)
-            else:
-                input_src = r'''
-                (%s key, int keylen, int last_vallen, %s) = inp();
-                '''% (key_type, ','.join(type_vals))
-
-            get_src = "citem *it = cache_get(this->buckets, %d, %s, %s, hv);\n" % (n_buckets, key_arg, keylen_arg)
-
-            # if not var_size:
-            #     rel_src = "cache_release(it);\n"
-            # else:
-            rel_src = "state->cache_item = it;\n"
-
-
-            if not var_size:
-                output_src = r'''
-                output switch { 
-                    case it: hit(key, %s); 
-                    else: miss(key, %s); 
-                }
-                ''' % (','.join(update_vals), ','.join(return_vals))
-            else:
-                output_src = r'''
-                output switch { 
-                    case it: hit(key, keylen, last_vallen, %s); 
-                    else: miss(key, keylen, last_vallen, %s); 
-                }
-                ''' % (','.join(update_vals), ','.join(return_vals))
-
-            self.run_c(input_src + compute_hash + get_src + update_src + rel_src + output_src)
-
-    # Release
-    release_args = []
-    release_vals = []
-    for i in range(len(release_type)):
-        release_args.append('{0} rel{1}'.format(release_type[i], i))
-        release_vals.append('rel{0}'.format(i))
 
     class FreeOrRelease(Element):
 
@@ -402,6 +455,12 @@ def cache_default(name, key_type, val_type, hash_value=False, var_size=False, re
 
         def impl(self):
             extra_return = 'it->keylen, it->last_vallen,' if var_size else ''
+            if state:
+                output_src = "output switch { case evict: out(); }"
+            else:
+                output_src = "output switch { case evict: out((int*) it->content, %s %s); } % " % \
+                             (extra_return, ','.join(return_vals))
+
             self.run_c(r'''
             inp();
             citem *it = state->cache_item;
@@ -411,9 +470,11 @@ def cache_default(name, key_type, val_type, hash_value=False, var_size=False, re
                 evict = true;
                 int keylen = it->keylen;
                 %s
+                %s
+                %s
             }
-            output switch { case evict: out((int*) it->content, %s %s); }
-            ''' % (val_decl, val_assign_src, extra_return, ','.join(return_vals)))
+            %s
+            ''' % (val_decl, val_assign_src, val_state_src, val_state_src, output_src))
 
     class Miss(Element):
         def configure(self):
@@ -421,13 +482,20 @@ def cache_default(name, key_type, val_type, hash_value=False, var_size=False, re
             self.out = Output(*kv_params)
 
         def impl(self):
-            extra_args = 'int keylen, int last_vallen,' if var_size else ''
-            extra_return = 'keylen, last_vallen,' if var_size else ''
-            self.run_c(r'''
-            (%s key, %s %s) = inp();
-            bool miss = (state->cache_item == NULL);
-            output switch { case miss: out(key, %s %s); }
-            ''' % (key_type, extra_args, ','.join(type_vals), extra_return, ','.join(return_vals)))
+            if state:
+                self.run_c(r'''
+                bool miss = (state->cache_item == NULL);
+                output switch { case miss: out(); }
+                ''')
+
+            else:
+                extra_args = 'int keylen, int last_vallen,' if var_size else ''
+                extra_return = 'keylen, last_vallen,' if var_size else ''
+                self.run_c(r'''
+                (%s key, %s %s) = inp();
+                bool miss = (state->cache_item == NULL);
+                output switch { case miss: out(key, %s %s); }
+                ''' % (key_type, extra_args, ','.join(type_vals), extra_return, ','.join(return_vals)))
 
     class ForkGet(Element):
         def configure(self):
@@ -437,12 +505,18 @@ def cache_default(name, key_type, val_type, hash_value=False, var_size=False, re
             self.outports_order = ['out', 'release']
 
         def impl(self):
-            extra_args = 'int keylen, int last_vallen,' if var_size else ''
-            extra_return = 'keylen, last_vallen,' if var_size else ''
-            self.run_c(r'''
-            (%s key, %s %s) = inp();
-            output { out(key, %s %s); release(); }
-            ''' % (key_type, extra_args, ','.join(type_vals), extra_return, ','.join(return_vals)))
+            if state:
+                self.run_c(r'''
+                output { out(); release(); }
+                ''')
+
+            else:
+                extra_args = 'int keylen, int last_vallen,' if var_size else ''
+                extra_return = 'keylen, last_vallen,' if var_size else ''
+                self.run_c(r'''
+                (%s key, %s %s) = inp();
+                output { out(key, %s %s); release(); }
+                ''' % (key_type, extra_args, ','.join(type_vals), extra_return, ','.join(return_vals)))
 
     class ForkSet(Element):
         def configure(self):
@@ -452,18 +526,23 @@ def cache_default(name, key_type, val_type, hash_value=False, var_size=False, re
             self.outports_order = ['out1', 'out2']
 
         def impl(self):
-            if not var_size:
-                return_src = 'key, ' + ','.join(return_vals)
+            if state:
                 self.run_c(r'''
-                (%s key, %s) = inp();
-                output { out1(%s); out2(%s); }
-                ''' % (key_type, ','.join(type_vals), return_src, return_src))
+                output { out1(); out2(); }
+                ''')
             else:
-                return_src = 'key, keylen, last_vallen, ' + ','.join(return_vals)
-                self.run_c(r'''
-                (%s key, int keylen, int last_vallen, %s) = inp();
-                output { out1(%s); out2(%s); }
-                ''' % (key_type, ','.join(type_vals), return_src, return_src))
+                if not var_size:
+                    return_src = 'key, ' + ','.join(return_vals)
+                    self.run_c(r'''
+                    (%s key, %s) = inp();
+                    output { out1(%s); out2(%s); }
+                    ''' % (key_type, ','.join(type_vals), return_src, return_src))
+                else:
+                    return_src = 'key, keylen, last_vallen, ' + ','.join(return_vals)
+                    self.run_c(r'''
+                    (%s key, int keylen, int last_vallen, %s) = inp();
+                    output { out1(%s); out2(%s); }
+                    ''' % (key_type, ','.join(type_vals), return_src, return_src))
 
     class ForkEvictFree(Element):
         def configure(self):

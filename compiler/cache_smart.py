@@ -2,6 +2,85 @@ from dsl import *
 import graph_ir
 
 
+def smart_cache_with_state(name, key, vals,
+                           var_size=False, hash_value=False,
+                           write_policy=graph_ir.Cache.write_through, write_miss=graph_ir.Cache.no_write_alloc):
+    if write_policy == graph_ir.Cache.write_back:
+        assert write_miss == graph_ir.Cache.write_alloc, \
+            "Cache: cannot use write-back policy with no write allocation on write misses."
+
+    if not var_size:
+        key_type, key_name = key
+        keylen_name = None
+    else:
+        key_type, key_name, keylen_name = key
+
+    val_type = [v[0] for v in vals]
+    val_names = [v[1] for v in vals]
+
+    if not var_size:
+        vallen_name = None
+    else:
+        vallen_name = vals[-1][2]
+
+    cache = graph_ir.Cache(name, key_type, val_type, var_size, hash_value,
+                           state=True,
+                           key_name=key_name, val_names=val_names, keylen_name=keylen_name, vallen_name=vallen_name,
+                           write_policy=write_policy, write_miss=write_miss)
+
+    if not var_size:
+        use_kv_src = '; '.join([key] + vals)
+    else:
+        use_kv_src = '; '.join([keylen_name, vallen_name, key] + vals)
+
+    class CacheBase(Element):
+        def configure(self):
+            self.special = cache
+            self.inp = Input()
+            self.out = Output()
+
+        def __init__(self, name=None, create=True):
+            Element.__init__(self, name=name, create=create)
+
+    class CacheGetStart(CacheBase):
+        def impl(self):
+            self.run_c('output { out(); }')
+
+        def __init__(self, name=None, create=True):
+            CacheBase.__init__(self, name=name, create=create)
+            cache.get_start = self.instance
+
+    class CacheGetEnd(CacheBase):
+        def impl(self):
+            self.run_c(use_kv_src + 'output { out(); }')
+
+        def __init__(self, name=None, create=True):
+            CacheBase.__init__(self, name=name, create=create)
+            cache.get_end = self.instance
+
+    class CacheSetStart(CacheBase):
+        def impl(self):
+            self.run_c('output { out(); }')
+
+        def __init__(self, name=None, create=True):
+            CacheBase.__init__(self, name=name, create=create)
+            cache.set_start = self.instance
+
+    class CacheSetEnd(CacheBase):
+        def impl(self):
+            self.run_c(use_kv_src + 'output { out(); }')
+
+        def __init__(self, name=None, create=True):
+            CacheBase.__init__(self, name=name, create=create)
+            cache.set_end = self.instance
+
+    class CacheState(State):
+        cache_item = Field('citem*')
+        qid = Field(Uint(8))
+        hash = Field(Uint(32))
+
+    return CacheGetStart, CacheGetEnd, CacheSetStart, CacheSetEnd, CacheState
+
 
 def smart_cache(name, key_type, val_type,
                 var_size=False, hash_value=False, update_func='f',
@@ -10,9 +89,9 @@ def smart_cache(name, key_type, val_type,
         assert write_miss == graph_ir.Cache.write_alloc, \
             "Cache: cannot use write-back policy with no write allocation on write misses."
 
-    prefix = name + "_"
-    cache = graph_ir.Cache(name, key_type, val_type, var_size, hash_value, update_func,
-                           write_policy, write_miss)
+    cache = graph_ir.Cache(name, key_type, val_type, var_size, hash_value,
+                           update_func=update_func,
+                           write_policy=write_policy, write_miss=write_miss)
 
     args = []
     vals = []
@@ -169,11 +248,6 @@ def smart_cache(name, key_type, val_type,
             val3 = Field(val_type[3], size=sizes[3])
 
     assert len(val_type) <= 4
-
-    # CacheGetStart.__name__ = prefix + CacheGetStart.__name__
-    # CacheGetEnd.__name__ = prefix + CacheGetEnd.__name__
-    # CacheSetStart.__name__ = prefix + CacheSetStart.__name__
-    # CacheSetEnd.__name__ = prefix + CacheSetEnd.__name__
 
     return CacheGetStart, CacheGetEnd, CacheSetStart, CacheSetEnd, CacheState, Key2State, KV2State, State2Key, State2KV
 
