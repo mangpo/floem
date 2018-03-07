@@ -19,6 +19,7 @@ typedef pthread_mutex_t lock_t;
 #endif
 
 //#define DEBUG
+#define HIT_RATE
 #define BUCKET_NITEMS 1
 
 typedef struct _cache_bucket cache_bucket;
@@ -68,6 +69,11 @@ static void cache_init(cache_bucket *buckets, int n)
 
 static citem *cache_get(cache_bucket *buckets, int nbuckets, const void *key, int klen, uint32_t hv)
 {
+#ifdef HIT_RATE
+    static __thread size_t hit = 0, total = 0;
+    total++;
+#endif
+  
     citem *it = NULL;
     size_t i;
 
@@ -96,6 +102,14 @@ done:
 #endif
     if(it == NULL)
         lock_unlock(&b->lock);
+
+#ifdef HIT_RATE
+    if(it) hit++;
+    if(total == 1000000) {
+      printf("hit rate = %f\n", 1.0*hit/total);
+      hit = 0; total = 0;
+    }
+#endif
     return it;
 }
 
@@ -326,7 +340,7 @@ static void cache_delete(cache_bucket *buckets, int nbuckets, void* key, int kle
         if (b->items[i] && b->hashes[i] == hv) {
             it = b->items[i];
             if (citem_key_matches(it, key, klen)) {
-                printf("delete %p\n", it);
+	      //printf("delete %p\n", it);
                 b->items[i] = it->next;
                 if(b->items[i]) b->hashes[i] = b->items[i]->hv;
                 free(it);
@@ -347,7 +361,7 @@ static void cache_delete(cache_bucket *buckets, int nbuckets, void* key, int kle
         }
 
         if (it != NULL) {
-            printf("delete %p\n", it);
+	  //printf("delete %p\n", it);
             prev->next = it->next;
             free(it);
             goto done;

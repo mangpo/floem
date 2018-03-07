@@ -32,7 +32,7 @@ m->ipv4._proto = 17;
 
         m->udp.len = htons(size - offsetof(iokvs_message, udp));
         m->udp.cksum = 0;
-        //printf("sizeof(iokvs) = %d, size = %ld\n", sizeof(iokvs_message), size);
+        printf("sizeof(iokvs) = %d, size = %ld\n", sizeof(iokvs_message), size);
 
 output { out(size, pkt, buff); }
         ''')
@@ -103,8 +103,16 @@ c = Compiler()
 c.include = r'''
 #include "protocol_binary.h"
 
-struct eth_addr src = { .addr = "\x68\x05\xca\x33\x13\x40" };
-struct eth_addr dest = { .addr = "\x68\x05\xca\x33\x11\x3c" };
+// .8 gua
+// .mac = {0x3c, 0xfd, 0xfe, 0xaa, 0xd1, 0xe1}
+// .ip = {0x0a, 0x64, 0x09, 0x08}
+
+// .9 hippo
+// .mac = {0x68, 0x05, 0xca, 0x33, 0x13, 0x41}
+// .ip = {0x0a, 0x64, 0x09, 0x09}
+
+struct eth_addr src = { .addr = "\x3c\xfd\xfe\xaa\xd1\xe1" };
+struct eth_addr dest = { .addr = "\x68\x05\xca\x33\x13\x41" };
 struct ip_addr src_ip = { .addr = "\x0a\x03\x00\x1e" };
 struct ip_addr dest_ip = { .addr = "\x0a\x03\x00\x21" };
 '''

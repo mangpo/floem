@@ -2,7 +2,7 @@ from dsl import *
 from compiler import Compiler
 import net
 
-n_cores = 1
+n_cores = 3
 
 class protocol_binary_request_header_request(State):
     magic = Field(Uint(8))
@@ -603,9 +603,9 @@ output { out(msglen, (void*) m, buff); }
         ######################## NIC Rx #######################
         class process_one_pkt(Pipeline):
             def impl(self):
-                from_net = net.FromNet('from_net')
+                from_net = net.FromNet('from_net',configure=[32])
                 from_net_free = net.FromNetFree('from_net_free')
-                to_net = net.ToNet('to_net', configure=['from_net'])
+                to_net = net.ToNet('to_net', configure=['from_net',32])
                 classifier = main.Classifer()
                 check_packet = main.CheckPacket()
                 hton1 = net.HTON(configure=['iokvs_message'])

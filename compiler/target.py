@@ -17,14 +17,14 @@ def is_dpdk_proc(process):
     return process == 'dpdk'
 
 dpdk = "dpdk"
-dpdk_dir = "/opt/dpdk"
+dpdk_dir = "/homes/sys/mangpo/dpdk"  #"/opt/dpdk"
 dpdk_include = dpdk_dir + "/include/dpdk"
 dpdk_lib = dpdk_dir + "/lib/"
 dpdk_pmds = "-lrte_pmd_ixgbe -lrte_pmd_i40e"
 dpdk_libs = "-Wl,--whole-archive " + dpdk_pmds + " -lrte_eal" + \
     " -lrte_mempool -lrte_mempool_ring -lrte_hash -lrte_ring -lrte_kvargs" + \
-    " -lrte_ethdev -lrte_mbuf -lrte_pmd_ring -Wl,--no-whole-archive -lm" + \
-    " -lpthread -ldl"
+    " -lrte_ethdev -lrte_mbuf -lrte_pmd_ring -lrte_pci -lrte_bus_pci -lrte_bus_vdev" + \
+    " -lnuma -Wl,--no-whole-archive -lm -lpthread -ldl"
 dpdk_driver_header = ['<dpdkif.h>']
 
 
