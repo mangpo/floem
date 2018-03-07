@@ -181,7 +181,7 @@ class TestDSL(unittest.TestCase):
                 run2('run2')
 
         c = Compiler(main)
-        g = c.generate_graph()
+        g = c.generate_graph(liveness_check=False)
         f1 = g.instances["main_run1_Dummy10"]
         self.assertEqual(f1.liveness, set(['a']))  # TODO: more precise, set()
         f2 = g.instances["main_run2_Dummy20"]

@@ -63,7 +63,7 @@ class TestPipelineState(unittest.TestCase):
         )
 
         g = program_to_graph_pass(p)
-        pipeline_state_pass(g)
+        pipeline_state_pass(g, liveness_check=False)
 
         self.check_live_all(g, [("e1", ["b"]), ("e2", ["a", "b"])])
         self.check_uses_all(g, [("e1", ["a", "b"]), ("e2", ["a", "b"])])
@@ -85,7 +85,7 @@ class TestPipelineState(unittest.TestCase):
         )
 
         g = program_to_graph_pass(p)
-        pipeline_state_pass(g)
+        pipeline_state_pass(g, liveness_check=False)
 
         self.check_live_all(g, [("e1", ["a"]), ("e2", ["a", "b"])])
         self.check_uses_all(g, [("e0", ["a", "b"]), ("e1", ["a", "b"]), ("e2", ["a", "b"])])
@@ -112,7 +112,7 @@ class TestPipelineState(unittest.TestCase):
         )
 
         g = program_to_graph_pass(p)
-        pipeline_state_pass(g)
+        pipeline_state_pass(g, liveness_check=False)
 
         self.check_live_all(g, [("fork1", ["a"]), ("fork2", ["a"]), ("join", ["a"]), ("use", ["a"]), ("def", [])])
         self.check_uses_all(g, [("fork1", ["a"]), ("fork2", ["a"]), ("join", ["a"]), ("use", ["a"]), ("def", ["a"])])
@@ -140,7 +140,7 @@ class TestPipelineState(unittest.TestCase):
         )
 
         g = program_to_graph_pass(p)
-        pipeline_state_pass(g)
+        pipeline_state_pass(g, liveness_check=False)
 
         self.check_live_all(g, [("choice", ["a"]), ("nop1", ["a"]), ("nop2", ["a"]), ("use", ["a"]), ("def", [])])
         self.check_uses_all(g, [("choice", ["a"]), ("nop1", ["a"]), ("nop2", ["a"]), ("use", ["a"]), ("def", ["a"])])
@@ -168,7 +168,7 @@ class TestPipelineState(unittest.TestCase):
         )
 
         g = program_to_graph_pass(p)
-        pipeline_state_pass(g)
+        pipeline_state_pass(g, liveness_check=False)
 
         self.check_live_all(g, [("fork", []), ("defA", []), ("defB", []), ("join", ["a", "b"]), ("use", ["a", "b"])])
         self.check_uses_all(g, [("fork", ["a", "b"]), ("defA", ["a", "b"]), ("defB", ["a", "b"]), ("join", ["a", "b"]), ("use", ["a", "b"])])
@@ -209,7 +209,7 @@ class TestPipelineState(unittest.TestCase):
         )
 
         g = program_to_graph_pass(p)
-        pipeline_state_pass(g)
+        pipeline_state_pass(g, liveness_check=False)
 
         self.check_live_all(g, [("a", ["b"]),
                                 ("b1", []), ("b2", ["b"]),
@@ -260,7 +260,7 @@ class TestPipelineState(unittest.TestCase):
         )
 
         g = program_to_graph_pass(p)
-        pipeline_state_pass(g)
+        pipeline_state_pass(g, liveness_check=False)
 
         self.check_live_all(g, [("a", ["b", "c"]),
                                 ("b1", ["c"]), ("b2", ["b", "c"]),
@@ -327,7 +327,7 @@ class TestPipelineState(unittest.TestCase):
         )
 
         g = program_to_graph_pass(p)
-        analyze_pipeline_states(g)
+        analyze_pipeline_states(g, liveness_check=False)
 
         self.check_live_all(g, [("save", []),
                                 ("classify", ["a"]),
@@ -415,7 +415,7 @@ class TestPipelineState(unittest.TestCase):
         )
 
         g = program_to_graph_pass(p)
-        analyze_pipeline_states(g)
+        analyze_pipeline_states(g, liveness_check=False)
 
         self.check_live_all(g, [("save", []),
                                 ("classify", ["a"]),
@@ -453,7 +453,7 @@ class TestPipelineState(unittest.TestCase):
             PipelineState("save", "mystate"))
 
         g = program_to_graph_pass(p)
-        analyze_pipeline_states(g)
+        analyze_pipeline_states(g, liveness_check=False)
 
         self.check_live_all(g, [("save", [])])
         self.check_uses_all(g, [("save", ['keylen', 'key'])])
@@ -513,7 +513,7 @@ class TestPipelineState(unittest.TestCase):
 
         g = program_to_graph_pass(p)
         g.states['mystate'].mapping = {'a': ('int', None, None, None)}
-        pipeline_state_pass(g)
+        pipeline_state_pass(g, liveness_check=False)
 
         deq_release = g.instances["smart_deq_release"]
         prevs = set([name for name, port in deq_release.input2ele["inp"]])
@@ -565,4 +565,4 @@ class TestPipelineState(unittest.TestCase):
 
         g = program_to_graph_pass(p)
         g.states['mystate'].mapping = {'a': ('int', None, None, None)}
-        pipeline_state_pass(g)
+        pipeline_state_pass(g, liveness_check=False)

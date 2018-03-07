@@ -541,12 +541,19 @@ def compute_join_killset(g):
                 instance.dominant2kills[dominant] = kills
 
 
-def analyze_pipeline_states(g):
+def analyze_pipeline_states(g, liveness_check=True):
     # Annotate minimal join information
     annotate_join_info(g, False)
     src2fields = collect_defs_uses(g)
     compute_join_killset(g)
     analyze_fields_liveness(g)
+
+    if liveness_check:
+        roots = g.find_roots()
+        for root in roots:
+            if not isinstance(g.instances[root].element.special, graph_ir.Queue):
+                assert len(g.instances[root].liveness) == 0
+
     return src2fields
 
 
@@ -623,7 +630,7 @@ def insert_starting_point(g, pktstate):
         raise Exception("Cannot find an entry point to create per-packet state '%s'." % pktstate.__class__.__name__)
 
 
-def compile_pipeline_states(g, pktstate):
+def compile_pipeline_states(g, pktstate, liveness_check=True):
     if len(g.pipeline_states) == 0 and pktstate is None:
         # Never use per-packet states. No modification needed.
         return
@@ -637,7 +644,7 @@ def compile_pipeline_states(g, pktstate):
         print "-------------------- before smart queue ----------------------"
         g.print_graphviz()
 
-    src2fields = analyze_pipeline_states(g)
+    src2fields = analyze_pipeline_states(g, liveness_check=liveness_check)
     compile_smart_queues(g, src2fields)
 
     if graphviz:
@@ -652,6 +659,6 @@ def compile_pipeline_states(g, pktstate):
         g.print_graphviz()
 
 
-def pipeline_state_pass(g, pktstate=None):
-    compile_pipeline_states(g, pktstate)
+def pipeline_state_pass(g, pktstate=None, liveness_check=True):
+    compile_pipeline_states(g, pktstate, liveness_check=liveness_check)
     clean_minimal_join_info(g)

@@ -197,7 +197,7 @@ def cache_default(name, key_type, val_type,
     int item_size = %s;
     citem* it = NULL;
     //printf("keylen = %s, vallen = %s\n", keylen, last_vallen);
-    if(last_vallen > 0) {
+    if(keylen > 0 && last_vallen > 0) {
         it = malloc(item_size);
         it->hv = hv;
         it->keylen = keylen;
@@ -227,7 +227,9 @@ def cache_default(name, key_type, val_type,
     item_src2 = item_src
     replace = 'true' if write_miss==graph_ir.Cache.write_alloc else 'false'
     item_src += r'''
-    citem *rit = cache_put(this->buckets, %d, it, %s);
+    state->cache_item = NULL;
+    if(it) {
+        citem *rit = cache_put(this->buckets, %d, it, %s);
     ''' % (n_buckets, replace)
 
     if write_policy == graph_ir.Cache.write_back:
@@ -240,6 +242,10 @@ def cache_default(name, key_type, val_type,
         state->cache_item = NULL;
         if(rit && (rit->evicted & 2)) { cache_release(rit); free(rit); }
         '''
+
+    item_src += r'''
+    }
+    '''
 
     # Item source v2
     if state:

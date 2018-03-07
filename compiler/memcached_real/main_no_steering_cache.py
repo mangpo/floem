@@ -1,6 +1,6 @@
-from dsl import *
+from floem import *
 from compiler import Compiler
-import net, cache_smart, graph_ir
+import net, cache_smart
 
 n_cores = 1
 
@@ -34,10 +34,11 @@ class iokvs_message(State):
     def init(self): self.declare = False
 
 
-CacheGetStart, CacheGetEnd, CacheSetStart, CacheSetEnd, \
-CacheState, Key2State, KV2State, State2Key, State2KV = cache_smart.smart_cache('cache', 'uint8_t*', 'uint8_t*',
-                var_size=True, hash_value=True,
-                write_policy=graph_ir.Cache.write_through, write_miss=graph_ir.Cache.no_write_alloc)
+CacheGetStart, CacheGetEnd, CacheSetStart, CacheSetEnd, CacheState = \
+    cache_smart.smart_cache_with_state('MyCache',
+                                       (Pointer(Int),'key','keylen'), [(Pointer(Int),'val','vallen')],
+                                       var_size=True, hash_value='hash',
+                                       write_policy=Cache.write_through, write_miss=Cache.no_write_alloc)
 
 
 class item(State):
@@ -54,10 +55,12 @@ class MyState(CacheState):
     pkt = Field(Pointer(iokvs_message))
     pkt_buff = Field('void*')
     it = Field(Pointer(item), shared='data_region')
-    key = Field('void*', size='state->pkt->mcr.request.keylen')
     hash = Field(Uint(32))
     core = Field(Uint(16))
+    keylen = Field(Uint(32))
+    key = Field('void*', size='state->keylen')
     vallen = Field(Uint(32))
+    val = Field('void*')
 
 class Schedule(State):
     core = Field(Int)
@@ -217,11 +220,31 @@ output { out(); }
 
         def impl(self):
             self.run_c(r'''
-item* it = hasht_get(state->key, state->pkt->mcr.request.keylen, state->hash);
+item* it = hasht_get(state->key, state->keylen, state->hash);
 //printf("hash get\n");
 state->it = it;
 
-output switch { out(); }
+if(state->it) {
+    state->val = item_value(state->it);
+    state->vallen = state->it->vallen;
+} else {
+    state->vallen = 0;
+}
+
+output { out(); }
+            ''')
+
+    class GetResult(Element):
+        def configure(self):
+            self.inp = Input()
+            self.hit = Output()
+            self.miss = Output()
+
+        def impl(self):
+            self.run_c(r'''
+bool yes = (state->vallen > 0);
+
+output switch { case yes: hit(); else: miss(); }
             ''')
 
     class HashPut(ElementOneInOut):
@@ -255,15 +278,14 @@ output { out(this->core); }''' % ('%', n_cores))
         def impl(self):
             self.run_c(r'''
 //printf("size get\n");
-    size_t msglen = sizeof(iokvs_message) + 4 + state->it->vallen;
-    state->vallen = state->it->vallen;
+    size_t msglen = sizeof(iokvs_message) + 4 + state->vallen;
     output { out(msglen); }
             ''')
 
         def impl_cavium(self):
             self.run_c(r'''
     uint32_t* vallen
-    dma_read(&state->it->vallen, sizeof(uint32_t), (void**) &vallen);
+    dma_read(&state->vallen, sizeof(uint32_t), (void**) &vallen);
     size_t msglen = sizeof(iokvs_message) + 4 + *vallen;
     state->vallen = *vallen;
     dma_free(vallen);
@@ -281,7 +303,6 @@ output { out(this->core); }''' % ('%', n_cores))
 
         iokvs_message *m = pkt;
         //memcpy(m, &iokvs_template, sizeof(iokvs_message));
-        item* it = state->it;
 
         m->mcr.request.magic = PROTOCOL_BINARY_RES;
         m->mcr.request.opcode = PROTOCOL_BINARY_CMD_GET;
@@ -293,7 +314,7 @@ m->mcr.request.extlen = 4;
 m->mcr.request.bodylen = 4;
 *((uint32_t *)m->payload) = 0;
 m->mcr.request.bodylen = 4 + state->vallen;
-rte_memcpy(m->payload + 4, item_value(it), state->vallen);
+rte_memcpy(m->payload + 4, state->val, state->vallen);
 
 output { out(msglen, m, pkt_buff); }
             ''')
@@ -304,7 +325,6 @@ output { out(msglen, m, pkt_buff); }
         iokvs_message *m = pkt;
         //memcpy(m, &iokvs_template, sizeof(iokvs_message));
         int msglen = sizeof(iokvs_message) + 4;
-        item* it = state->it;
 
         m->mcr.request.magic = PROTOCOL_BINARY_RES;
         m->mcr.request.opcode = PROTOCOL_BINARY_CMD_GET;
@@ -318,7 +338,7 @@ m->mcr.request.bodylen = 4;
 m->mcr.request.bodylen = 4 + state->vallen;
 
 void* value;
-dma_read(item_value(it), state->vallen, (void**) &value);
+dma_read(state->val, state->vallen, (void**) &value);
 rte_memcpy(m->payload + 4, value, state->vallen);
 dma_free(value);
 
@@ -522,6 +542,19 @@ output { out(msglen, (void*) m, buff); }
 
 
     ######################## item ########################
+    class KV2State(ElementOneInOut):
+        def impl(self):
+            self.run_c(r'''
+        uint8_t *p = state->key;
+        size_t totlen = state->pkt->mcr.request.bodylen - state->pkt->mcr.request.extlen;
+        uint16_t keylen = state->pkt->mcr.request.keylen;
+        
+        state->keylen = keylen;
+        state->vallen = totlen - keylen;
+        state->val = (void*) (p + keylen);
+        output { out(); }
+            ''')
+
     class GetItemSpec(Element):
         this = Persistent(ItemAllocators)
         def states(self):
@@ -530,7 +563,6 @@ output { out(msglen, (void*) m, buff); }
         def configure(self):
             self.inp = Input()
             self.out = Output()
-            self.nothing = Output()
 
         def impl(self):
             self.run_c(r'''
@@ -538,27 +570,46 @@ output { out(msglen, (void*) m, buff); }
     item *it = ialloc_alloc(&this->ia[state->core], sizeof(item) + totlen, false); // TODO
     if(it) {
         it->refcount = 1;
-        uint16_t keylen = state->pkt->mcr.request.keylen;
+        uint16_t keylen = state->keylen;
 
-        //    printf("get_item id: %d, keylen: %ld, totlen: %ld, item: %ld\n",
-        //state->pkt->mcr.request.opaque, state->pkt->mcr.request.keylen, totlen, it);
         it->hv = state->hash;
-        it->vallen = totlen - keylen;
-        it->keylen = keylen;
+        it->vallen = state->vallen;
+        it->keylen = state->keylen;
         memcpy(item_key(it), state->key, totlen);
         state->it = it;
+    } else {
+        state->keylen = 0;
     }
 
-    output switch { case it: out();  else: nothing(); }
+    output { out(); }
             ''')
 
+    class SetResult(Element):
+        def configure(self):
+            self.inp = Input()
+            self.success = Output()
+            self.fail = Output()
+
+        def impl(self):
+            self.run_c(r'''
+    bool yes = (state->keylen > 0);
+    output switch { case yes: success(); else: fail(); }
+            ''')
+
+    class Key2State(ElementOneInOut):
+        def impl(self):
+            self.run_c(r'''
+    state->it = NULL;
+    state->keylen = state->pkt->mcr.request.keylen;
+    output { out(); }
+    ''')
 
     class Unref(ElementOneInOut):
         def impl(self):
             self.run_c(r'''
-        if(state->it) item_unref(state->it);
-        output { out(); }
-            ''')
+    if(state->it) item_unref(state->it);
+    output { out(); }
+    ''')
 
     class Clean(Element):
         def configure(self, val):
@@ -632,18 +683,20 @@ output { out(msglen, (void*) m, buff); }
 
                 # get
                 hash_get = main.HashGet()
+                get_result = main.GetResult()
                 get_response = main.PrepareGetResp()
-                classifier.out_get >> CacheGetStart() >> hash_get >> CacheGetEnd() >> get_hit_miss
-                get_hit_miss.hit >> main.SizeGetResp() >> main.SizePktBuff() >> get_response >> prepare_header
+                classifier.out_get >> main.Key2State() >> CacheGetStart() >> hash_get >> CacheGetEnd() >> get_result
+                get_result.hit >> main.SizeGetResp() >> main.SizePktBuff() >> get_response >> prepare_header
                 get_response >> main.Unref() >> main.Drop()
 
                 # get (null)
-                get_hit_miss.miss >> main.SizeGetNullResp() >> main.SizePktBuff() >> main.PrepareGetNullResp() >> prepare_header
+                get_result.miss >> main.SizeGetNullResp() >> main.SizePktBuff() >> main.PrepareGetNullResp() >> prepare_header
 
                 # set
                 get_item = main.GetItemSpec()
+                set_result = main.SetResult()
                 set_response = main.PrepareSetResp(configure=['PROTOCOL_BINARY_RESPONSE_SUCCESS'])
-                classifier.out_set >> CacheSetStart() >> get_item >> main.HashPut() >> main.Unref() >> CacheSetEnd() >> set_result
+                classifier.out_set >> main.KV2State() >> CacheSetStart() >> get_item >> main.HashPut() >> main.Unref() >> CacheSetEnd() >> set_result
                 set_result.success >> main.SizeSetResp() >> main.SizePktBuff() >> set_response >> prepare_header
 
                 # set (unseccessful)

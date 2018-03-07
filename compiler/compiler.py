@@ -32,7 +32,8 @@ class Compiler:
                     return True
         return False
 
-    def generate_graph_from_scope(self, myscope, filename, pktstate=None, spec_impl=False, original=None):
+    def generate_graph_from_scope(self, myscope, filename, pktstate=None, spec_impl=False, original=None,
+                                  liveness_check=True):
         p = program.Program(*myscope)
         dp = desugaring.desugar(p, self.desugar_mode, force=spec_impl)
 
@@ -42,10 +43,10 @@ class Compiler:
         cache_smart_compile.cache_pass(g)
         empty_port.nonempty_to_empty_port_pass(g)
         thread_allocation.insert_resource_order(g)
-        pipeline_state.pipeline_state_pass(g, pktstate)
+        pipeline_state.pipeline_state_pass(g, pktstate, liveness_check=liveness_check)
         return g
 
-    def generate_graph(self, filename="tmp"):
+    def generate_graph(self, filename="tmp", liveness_check=True):
         # Retrieve all scopes first
         scope = workspace.get_last_scope()
         decl = workspace.get_last_decl()
@@ -60,12 +61,14 @@ class Compiler:
         has_spec_impl = self.has_spec_impl([p.scope for p in pipelines] + [org_scope])
 
         # Generate graph
-        original = self.generate_graph_from_scope(decl + scope, filename, spec_impl=has_spec_impl)
+        original = self.generate_graph_from_scope(decl + scope, filename,
+                                                  spec_impl=has_spec_impl, liveness_check=liveness_check)
         all = []
         for i in range(len(self.pipelines)):
             p = pipelines[i]
             g = self.generate_graph_from_scope(decl + p.decl + p.scope, filename,
-                                               pktstate=p.state, spec_impl=has_spec_impl, original=original)
+                                               pktstate=p.state, spec_impl=has_spec_impl, original=original,
+                                               liveness_check=liveness_check)
             all.append(g)
             decl += p.decl
 
