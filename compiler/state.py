@@ -200,7 +200,10 @@ class State(object):
                 if f not in layout:
                     layout.append(f)
         else:
-            layout = all_fields
+            layout = []
+            for x in all_fields:
+                if x not in layout:
+                    layout.append(x)
 
         for s in layout:
             o = object.__getattribute__(self, s)
