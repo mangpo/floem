@@ -376,7 +376,7 @@ class Graph:
 
     def find_subgraph_list(self, root, subgraph, until=None):
         if root == until:
-            return
+            return subgraph
 
         instance = self.instances[root]
         if instance.name not in subgraph:

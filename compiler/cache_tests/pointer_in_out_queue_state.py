@@ -155,7 +155,7 @@ class DebugSet(ElementOneInOut):
 
 
 write_policy = Cache.write_through
-write_miss = Cache.write_alloc
+write_miss = Cache.no_write_alloc
 
 CacheGetStart, CacheGetEnd, CacheSetStart, CacheSetEnd, CacheState = \
     cache_smart.smart_cache_with_state('MyCache', (Pointer(Int),'key','keylen'), [(Pointer(Int),'val','vallen')],
