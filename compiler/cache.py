@@ -478,6 +478,8 @@ def cache_default(name, key_type, val_type,
                 output_src = "output switch { case evict: out((int*) it->content, %s %s); } " % \
                              (extra_return, ','.join(return_vals))
 
+            hash_src = "state->hash = it->hv;" if hash_value else ''
+
             self.run_c(r'''
             citem *it = state->cache_item;
             bool evict = false;
@@ -487,9 +489,10 @@ def cache_default(name, key_type, val_type,
                 int keylen = it->keylen;
                 %s
                 %s
+                %s
             }
             %s
-            ''' % (val_decl, val_assign_src, val_state_src, output_src))
+            ''' % (val_decl, val_assign_src, val_state_src, hash_src, output_src))
 
     class EvictSave(Element):
         def configure(self):
