@@ -224,9 +224,9 @@ item* it = hasht_get(state->key, state->keylen, state->hash);
 //printf("hash get\n");
 state->it = it;
 
-if(state->it) {
-    state->val = item_value(state->it);
-    state->vallen = state->it->vallen;
+if(it) {
+    state->val = item_value(it);
+    state->vallen = it->vallen;
 } else {
     state->vallen = 0;
 }
@@ -566,7 +566,7 @@ output { out(msglen, (void*) m, buff); }
 
         def impl(self):
             self.run_c(r'''
-    size_t totlen = state->pkt->mcr.request.bodylen - state->pkt->mcr.request.extlen;
+    size_t totlen = state->keylen + state->vallen;
     item *it = ialloc_alloc(&this->ia[state->core], sizeof(item) + totlen, false); // TODO
     if(it) {
         it->refcount = 1;
@@ -575,7 +575,8 @@ output { out(msglen, (void*) m, buff); }
         it->hv = state->hash;
         it->vallen = state->vallen;
         it->keylen = state->keylen;
-        memcpy(item_key(it), state->key, totlen);
+        memcpy(item_key(it), state->key, state->keylen);
+        memcpy(item_value(it), state->val, state->vallen);
         state->it = it;
     } else {
         state->keylen = 0;
