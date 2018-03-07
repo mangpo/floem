@@ -84,6 +84,17 @@ class TestDSL(unittest.TestCase):
             status = os.system("cd programs_perpacket_state; python " + test + "; cd ..")
             self.assertEqual(status, 0, "Error at " + test)
 
+    def test_cache(self):
+        tests2 = ["one_in_one_out.py",
+                  "one_in_one_out_state.py",
+                  "pointer_in_out.py",
+                  "pointer_in_out_queue.py",
+                  "pointer_in_out_queue_state.py"]
+
+        for test in tests2:
+            status = os.system("cd cache_tests; python " + test + "; cd ..")
+            self.assertEqual(status, 0, "Error at " + test)
+
 
     def test_connection(self):
         a = Nop(name="a")

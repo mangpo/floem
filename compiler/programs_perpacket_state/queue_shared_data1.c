@@ -140,7 +140,7 @@ void queue_fill0_from_main_push_Save0(q_buffer _x1, MyState_compressed0* _x2) {
   if(e) {
     e->p = ((uintptr_t) _state->p - (uintptr_t) data_region);
     e->keylen = (_state->keylen);
-    memcpy(e->key, _state->key, _state->keylen);
+    memcpy(e->_content , _state->key, _state->keylen);
     e->task = 1;
   }  
   queue_enq_submit0_from_main_push_Save0(buff);

@@ -515,18 +515,9 @@ class TestPipelineState(unittest.TestCase):
         g.states['mystate'].mapping = {'a': ('int', None, None, None)}
         pipeline_state_pass(g)
 
-        #g.print_graphviz()
         deq_release = g.instances["smart_deq_release"]
         prevs = set([name for name, port in deq_release.input2ele["inp"]])
-        self.assertEqual(prevs, set(["smart_deq_classify_inst", 'smart_queue_save0_inst_merge2']))
-
-        merges = set()
-        myfork_merge2 = g.instances["smart_queue_save0_inst_merge2"]
-        name, port = myfork_merge2.input2ele["in0"][0]
-        merges.add(name)
-        name, port = myfork_merge2.input2ele["in1"][0]
-        merges.add(name)
-        self.assertEqual(merges, set(["choose_merge","p3"]))
+        self.assertEqual(prevs, set(["smart_deq_classify_inst", 'smart_queue_save0_inst']))
 
     def test_queue_release2(self):
         n_cases = 1
@@ -574,9 +565,4 @@ class TestPipelineState(unittest.TestCase):
 
         g = program_to_graph_pass(p)
         g.states['mystate'].mapping = {'a': ('int', None, None, None)}
-        try:
-            pipeline_state_pass(g)
-        except Exception as e:
-            self.assertNotEqual(e.message.find("Cannot insert dequeue release automatically"), -1)
-        else:
-            self.fail('Exception is not raised.')
+        pipeline_state_pass(g)

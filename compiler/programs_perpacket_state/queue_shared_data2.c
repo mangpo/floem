@@ -133,19 +133,19 @@ void queue_save0_inst(q_buffer buff,  int qid) {
   _state->refcount = 1;  _state->buffer = buff;
   _state->entry = (entry_queue0*) buff.entry;
   _state->p = (int*) ((uintptr_t) data_region + (_state->entry->p));
-  _state->key = (uint8_t*) _state->entry->key;
+  _state->key = (uint8_t*) (_state->entry->_content );
   
   main_pop_Display0(_state);
+  main_pop_queue_Dequeue0_release(_state->buffer);
   pipeline_unref((pipeline_state*) _state);
 }
 
 void main_pop_Display0(pipeline_queue0* _x4) {
   pipeline_queue0 *_state = _x4;
-        
+      
             printf("%d %d %d %d\n", _state->entry->keylen, _state->key[0], _state->key[_state->entry->keylen-1], *_state->p);
             fflush(stdout);
             
-  main_pop_queue_Dequeue0_release(_state->buffer);
 }
 
 void init(char *argv[]) {

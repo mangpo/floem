@@ -37,7 +37,7 @@ circular_queue* insts[2];
 
 
 typedef struct _entry_queue0 { 
-uint8_t flag; uint8_t task; uint16_t len; uint8_t checksum; uint8_t pad;  uint64_t p; int keylen; uint8_t key[];  
+uint8_t flag; uint8_t task; uint16_t len; uint8_t checksum; uint8_t pad;  uint64_t p; int keylen; uint8_t _content[];  
 } __attribute__ ((packed)) entry_queue0;
 
 

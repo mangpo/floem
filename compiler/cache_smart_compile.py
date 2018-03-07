@@ -344,7 +344,8 @@ def create_cache(cache_high, get, set):
 
 
 def cache_pass(g):
-    g.print_graphviz()
+    # g.print_graphviz()
+
     caches = []
     for instance in g.instances.values():
         c = instance.element.special
@@ -427,5 +428,5 @@ def cache_pass(g):
             else:
                 transform_set_write_through(g, set_start, set_end, set_composite)
 
-        print "------------------------- adding cache --------------------------"
-        g.print_graphviz()
+        # print "------------------------- adding cache --------------------------"
+        # g.print_graphviz()

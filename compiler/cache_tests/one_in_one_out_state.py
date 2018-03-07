@@ -50,9 +50,6 @@ class OnlyVal(Element):
         output { out(val); }
         ''')
 
-# CacheGetStart, CacheGetEnd, CacheSetStart, CacheSetEnd = \
-#     cache_smart.smart_cache('MyCache', Int, [Int], write_policy=Cache.write_back, write_miss=Cache.write_alloc, set_return_value=True)
-
 
 CacheGetStart, CacheGetEnd, CacheSetStart, CacheSetEnd, CacheState = \
     cache_smart.smart_cache_with_state('MyCache', (Int, 'key'), [(Int, 'val')],

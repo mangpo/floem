@@ -24,11 +24,12 @@ class OnlyVal(Element):
         output { out(val); }
         ''')
 
-CacheGetStart, CacheGetEnd, CacheSetStart, CacheSetEnd = \
-    cache_smart.smart_cache('MyCache', Int, [Int], write_policy=Cache.write_back, write_miss=Cache.write_alloc, set_return_value=True)
+CacheGetStart, CacheGetEnd, CacheSetStart, CacheSetEnd, \
+CacheState, Key2State, KV2State, State2Key, State2KV = \
+    cache_smart.smart_cache('MyCache', Int, [Int], write_policy=Cache.write_back, write_miss=Cache.write_alloc)
 
 
-class MyState(cache_smart.CacheState):
+class MyState(CacheState):
     pass
 
 

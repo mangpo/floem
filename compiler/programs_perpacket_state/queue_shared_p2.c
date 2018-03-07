@@ -135,15 +135,15 @@ void queue_save0_inst(q_buffer buff,  int qid) {
   _state->p = (int*) ((uintptr_t) data_region + (_state->entry->p));
   
   main_pop_Display0(_state);
+  main_pop_queue_Dequeue0_release(_state->buffer);
   pipeline_unref((pipeline_state*) _state);
 }
 
 void main_pop_Display0(pipeline_queue0* _x5) {
   pipeline_queue0 *_state = _x5;
-        
+      
             printf("%d\n", _state->p[_state->entry->index]); fflush(stdout);
             
-  main_pop_queue_Dequeue0_release(_state->buffer);
 }
 
 void pop(int arg0) { main_pop_queue_Dequeue0_get(arg0); }

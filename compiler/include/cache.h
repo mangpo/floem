@@ -18,7 +18,7 @@ typedef rte_spinlock_t lock_t;
 typedef pthread_mutex_t lock_t;
 #endif
 
-#define DEBUG
+//#define DEBUG
 #define BUCKET_NITEMS 1
 
 typedef struct _cache_bucket cache_bucket;
@@ -221,7 +221,7 @@ static citem *cache_put_or_get(cache_bucket *buckets, int nbuckets, citem *nit, 
 
     cache_bucket *b = buckets + (hv % nbuckets);
     lock_lock(&b->lock);
-    printf("lock\n");
+    //printf("lock\n");
 
     // Check if we need to replace an existing item
     for (i = 0; i < BUCKET_NITEMS; i++) {
@@ -319,7 +319,7 @@ static void cache_delete(cache_bucket *buckets, int nbuckets, void* key, int kle
 
     cache_bucket *b = buckets + (hv % nbuckets);
     lock_lock(&b->lock);
-    printf("lock\n");
+    //printf("lock\n");
 
     // Check if we need to replace an existing item
     for (i = 0; i < BUCKET_NITEMS; i++) {
@@ -361,9 +361,9 @@ done:
 
 static inline void cache_release(citem *it) {
     if(it) {
-        printf("unlock %p\n", it);
+        //printf("unlock %p\n", it);
         lock_unlock(&it->bucket->lock);
-        printf("unlock done %p\n", it);
+        //printf("unlock done %p\n", it);
     }
 }
 

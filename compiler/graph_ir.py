@@ -436,6 +436,7 @@ class ElementNode:
         # Liveness analysis
         self.fix = False
         self.liveness = None
+        self.liveness_dom = None
         self.dominants = None
         self.passing_nodes = None
         self.dominant2kills = {}

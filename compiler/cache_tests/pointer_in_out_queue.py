@@ -132,7 +132,7 @@ class QID(ElementOneInOut):
     def impl(self):
         self.run_c(r'''
         state->qid = state->hash %s %s;
-        printf("qid: key = %s\n", *state.key);
+        //printf("qid: key = %s\n", *state.key);
         output { out(); }
         ''' % ('%', n_queues, '%d'))
 
@@ -143,12 +143,14 @@ class DebugSet(ElementOneInOut):
         output { out(); }
         ''')
 
+write_policy = Cache.write_back
+write_miss = Cache.write_alloc
 
 CacheGetStart, CacheGetEnd, CacheSetStart, CacheSetEnd, \
 CacheState, Key2State, KV2State, State2Key, State2KV = \
     cache_smart.smart_cache('MyCache', Pointer(Int), [Pointer(Int)],
                             var_size=True, hash_value='hash',
-                            write_policy=Cache.write_back, write_miss=Cache.write_alloc)
+                            write_policy=write_policy, write_miss=write_miss)
 
 InEnq, InDeq, InClean = queue_smart.smart_queue("inqueue", 32, 16, n_queues, 2)
 OutEnq, OutDeq, OutClean = queue_smart.smart_queue("outqueue", 32, 16, n_queues, 2)
@@ -182,7 +184,7 @@ class main(Flow):
 
                 self.core_id >> deq
                 deq.out[0] >> State2KV() >> CacheGetEnd() >> DisplayGet()
-                deq.out[1] >> DebugSet() >> State2KV() >> CacheSetEnd() >> DisplaySet()
+                deq.out[1] >> State2KV() >> CacheSetEnd() >> DisplaySet()
 
         class server(Pipeline):
             def impl(self):
@@ -208,11 +210,13 @@ void init_mem(int* mem, int n) {
 }
 '''
 c.testing = r'''
-//set(1, 100);
-//compute(11); compute(1); 
-//compute(11); compute(1); 
-//set(11, 222); compute(11); compute(1);
+set(1, 100);
+compute(11); compute(1); 
+set(11, 222); compute(11); compute(1);
 compute(0);
 sleep(1);
 '''
-c.generate_code_and_run()
+if write_policy == Cache.write_through:
+    c.generate_code_and_run(["SET1", "GET11", "VAL22", "GET1", "VAL100", "SET11", "GET11", "VAL222", "GET1", "VAL100", "GET0", "VAL-1"])
+else:
+    c.generate_code_and_run()

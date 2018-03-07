@@ -27,16 +27,21 @@ def cache_default(name, key_type, val_type,
     hash_table.__name__ = prefix + hash_table.__name__
     my_hash_table = hash_table()
 
+    if not var_size:
+        kv_params_real = [key_type] + val_type
+    else:
+        kv_params_real = [key_type, Int, Int] + val_type
+
     if state:
         key_params = []
         kv_params = []
     else:
         if not var_size:
             key_params = [key_type]
-            kv_params =  [key_type] + val_type
+            kv_params =  kv_params_real
         else:
             key_params = [key_type, Int]
-            kv_params = [key_type, Int, Int] + val_type
+            kv_params = kv_params_real
 
     # Key
     if common.is_pointer(key_type):
@@ -66,7 +71,7 @@ def cache_default(name, key_type, val_type,
             val_assign_src += "val{1} = ({0}*) p;\n".format(val_base_type[i], i)
         else:
             val_assign_src += "val{1} = *(({0}*) p);\n".format(val_base_type[i], i)
-            val_assign_src += "p += sizeof({0});\n".format(val_base_type[i])
+        val_assign_src += "p += sizeof({0});\n".format(val_base_type[i])
         return_vals.append("val{0}".format(i))
 
 
@@ -191,7 +196,7 @@ def cache_default(name, key_type, val_type,
     item_src = r'''
     int item_size = %s;
     citem* it = NULL;
-    printf("keylen = %s, vallen = %s\n", keylen, last_vallen);
+    //printf("keylen = %s, vallen = %s\n", keylen, last_vallen);
     if(last_vallen > 0) {
         it = malloc(item_size);
         it->hv = hv;
@@ -240,7 +245,11 @@ def cache_default(name, key_type, val_type,
     if state:
         val_state_src = ' '.join(["state->%s = %s;" % (s, v) for s, v in zip(val_names, return_vals)])
         if common.is_pointer(key_type):
-            val_state_src += "state->%s = it->content; " % (key_name)
+            val_state_src += "state->%s = (%s) it->content; " % (key_name, key_type)
+        else:
+            val_state_src += "%s* key = (%s*) it->content; " % (key_type, key_type)
+            val_state_src += "state->%s = *key; " % key_name
+
         if var_size:
             val_state_src += "state->%s = it->keylen;" % keylen_name
             val_state_src += "state->%s = it->last_vallen;" % vallen_name
@@ -460,11 +469,10 @@ def cache_default(name, key_type, val_type,
             if state:
                 output_src = "output switch { case evict: out(); }"
             else:
-                output_src = "output switch { case evict: out((int*) it->content, %s %s); } % " % \
+                output_src = "output switch { case evict: out((int*) it->content, %s %s); } " % \
                              (extra_return, ','.join(return_vals))
 
             self.run_c(r'''
-            inp();
             citem *it = state->cache_item;
             bool evict = false;
             %s
@@ -472,11 +480,69 @@ def cache_default(name, key_type, val_type,
                 evict = true;
                 int keylen = it->keylen;
                 %s
-                %s
-                %s
             }
             %s
-            ''' % (val_decl, val_assign_src, val_state_src, val_state_src, output_src))
+            ''' % (val_decl, val_assign_src, output_src))
+
+    class EvictSave(Element):
+        def configure(self):
+            self.inp = Input()
+            self.out = Output()
+            self.revert = Output(*kv_params_real)
+            self.outports_order = ['out', 'revert']
+
+        def impl(self):
+            save_src = "%s _key = state->%s; " % (key_type, key_name)
+            returns = ['_key']
+
+            if var_size:
+                save_src += "int _keylen = state->%s; " % keylen_name
+                save_src += "int _vallen = state->%s; " % vallen_name
+                returns.append('_keylen')
+                returns.append('_vallen')
+
+            for i in range(len(val_type)):
+                save_src += "%s _val%d = state->%s; " % (val_type[i], i, val_names[i])
+                returns.append("_val%d" % i)
+
+            output_src = "output { out(); revert(%s); } " % ','.join(returns)
+
+            self.run_c(r'''
+            // save original key, val to temp
+            %s
+            
+            // prepare state->key state->val for eviction
+            citem *it = state->cache_item;
+            int keylen = it->keylen;
+            %s
+            %s
+            %s
+            
+            %s
+            ''' % (save_src, val_decl, val_assign_src, val_state_src, output_src))
+
+    class EvictRevert(Element):
+        def configure(self):
+            self.inp = Input(*kv_params_real)
+
+        def impl(self):
+            if not var_size:
+                src = r'''
+                (%s key, %s) = inp();
+                state->%s = key;
+                ''' % (key_type, ','.join(type_vals), key_name)
+            else:
+                src = r'''
+                (%s key, int keylen, int last_vallen, %s) = inp();
+                state->%s = key;
+                state->%s = keylen;
+                state->%s = last_vallen;
+                ''' % (key_type, ','.join(type_vals), key_name, keylen_name, vallen_name)
+
+            for i in range(len(val_type)):
+                src += "state->%s = val%d; " % (val_names[i], i)
+
+            self.run_c(src)
 
     class Miss(Element):
         def configure(self):
@@ -558,6 +624,22 @@ def cache_default(name, key_type, val_type,
             output { evict(); free(); }
             ''')
 
+    class EvictComposite(Composite):
+        def configure(self):
+            self.inp = Input()
+            self.out = Output(*kv_params)
+
+        def impl(self):
+            evict = Evict()
+            if state:
+                save = EvictSave()
+                revert = EvictRevert()
+
+                self.inp >> evict >> save >> self.out
+                save.revert >> revert
+            else:
+                self.inp >> evict >> self.out
+
     class GetComposite(Composite):
         def configure(self):
             self.inp = Input(*key_params)
@@ -585,7 +667,7 @@ def cache_default(name, key_type, val_type,
                 fork3 = ForkSet()
                 fork2 >> fork3
                 fork3.out2 >> self.out
-                fork3.out1 >> Evict() >> self.evict_begin
+                fork3.out1 >> EvictComposite() >> self.evict_begin
             else:
                 fork2 >> self.out
 
@@ -605,7 +687,7 @@ def cache_default(name, key_type, val_type,
             if write_miss == graph_ir.Cache.write_alloc:
                 evict_then_free = ForkEvictFree()
                 fork.out1 >> evict_then_free
-                evict_then_free.evict >> Evict() >> self.query_begin
+                evict_then_free.evict >> EvictComposite() >> self.query_begin
                 evict_then_free.free >> Free()
             else:
                 fork.out1 >> Miss() >> self.query_begin
