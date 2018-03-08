@@ -176,7 +176,7 @@ def transform_get(g, get_start, get_end, get_composite, set_start, Drop, write_p
         #     API_return = dup_nodes[-1]
         pipeline_state_join.duplicate_subgraph(g, dup_nodes, suffix='_cache', copy=2)
 
-        hit_start = dup_nodes[0] + '_cache0'  # hit
+        hit_start = dup_nodes[0] + '_cache1'  # hit
         subgraph = g.find_subgraph_list(hit_start, [])
         for name in subgraph:
             g.instances[name].thread = get_start.thread
@@ -196,6 +196,7 @@ def transform_get(g, get_start, get_end, get_composite, set_start, Drop, write_p
     #             out_inst = g.API_outputs[i]
     #             g.threads_order.append(get_composite.release_inst.name, out_inst)
     #             break
+
 
 def transform_set_write_back(g, set_start, set_end, set_composite):
     # A >> set.begin
@@ -234,32 +235,25 @@ def transform_set_write_back(g, set_start, set_end, set_composite):
     g.deleteElementInstance(set_start.name)
     g.deleteElementInstance(set_end.name)
 
+    # Duplicate if an instance has inputs from get and set on different threads.
+    for name in subgraph:
+        instance = g.instances[name]
+        thread_list = []
+        for port_list in instance.input2ele.values():
+            inst_list = [g.instances[prev_name] for (prev_name, prev_port) in port_list]
+            thread_list += [inst.thread for inst in inst_list]
+
+        n_threads = len(set(thread_list))
+
+        if n_threads > 1:
+            dup_nodes = g.find_subgraph_list(instance.name, [])
+            dup_nodes.reverse()
+            l = [t for t in set(thread_list)]
+            pipeline_state_join.duplicate_subgraph_wrt_threads(g, dup_nodes, l, suffix='_getset')
+            break
+
     # Does not work for API.
 
-
-# def transform_set_write_through(g, set_start, set_end, set_composite):
-#     # A >> set.begin
-#     if len(set_start.input2ele) > 0:
-#         ports = get_element_ports(set_composite.inp)
-#         assert len(ports) == 1
-#         inp = ports[0]
-#
-#         l = set_start.input2ele['inp']
-#         while len(l) > 0:
-#             prev_name, prev_port = l[0]  # index = 0 because l is mutated (first element is popped).
-#             g.disconnect(prev_name, set_start.name, prev_port, 'inp')
-#             g.connect(prev_name, inp.element.name, prev_port, inp.name)
-#
-#     # get.end >> SetQuery
-#     ports = get_element_ports(set_composite.out)
-#
-#     next_name, next_port = set_start.output2ele['out']
-#     g.disconnect(set_start.name, next_name, 'out', next_port)
-#     for out in ports:
-#         g.connect(out.element.name, next_name, out.name, next_port)
-#
-#     g.deleteElementInstance(set_start.name)
-#     # Keep set_end because it is just nop.
 
 def transform_set_write_through(g, set_start, set_end, set_composite):
     # A >> set.begin

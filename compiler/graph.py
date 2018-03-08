@@ -100,6 +100,21 @@ class Graph:
         return s
 
     def print_graphviz(self):
+        colors = ['purple', 'blue', 'green', 'yellow', 'orange', 'red']
+        thread2color = {}
+        id = 0
+        print "node [style=filled];"
+        for name in self.instances:
+            instance = self.instances[name]
+            t = instance.thread
+            if t in thread2color:
+                color = thread2color[t]
+            else:
+                color = id
+                id += 1
+                thread2color[t] = color
+            print "%s [color=%s];" % (name, colors[color])
+
         for name in self.instances:
             instance = self.instances[name]
             if instance.element.output_fire == "all":

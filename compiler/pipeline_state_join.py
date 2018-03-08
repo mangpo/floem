@@ -207,6 +207,7 @@ def get_node_before_release_nolive(name, g, prefix, vis):
 ##############################################################################3
 
 def duplicate_subgraph(g, node_list, suffix='_dup', copy=None):
+    first = True
     for inst_name in node_list:
         instance = g.instances[inst_name]
 
@@ -220,12 +221,52 @@ def duplicate_subgraph(g, node_list, suffix='_dup', copy=None):
 
         for inport in instance.input2ele.keys():
             l = instance.input2ele[inport]
-            assert len(l) == ref, "len(l) != ref"
-            for i in range(n):
-                if i < ref:
+            if first:
+                for i in range(len(l)):
                     prev_name, prev_port = l[0]  # index = 0 because l is mutated (first element is popped).
                     g.disconnect(prev_name, inst_name, prev_port, inport)
                     g.connect(prev_name, inst_name + suffix + str(i), prev_port, inport)
+            else:
+                for i in range(len(l)):
+                    prev_name, prev_port = l[0]  # index = 0 because l is mutated (first element is popped).
+                    g.disconnect(prev_name, inst_name, prev_port, inport)
+                    pos = prev_name.rfind(suffix)
+                    if pos >= 0:
+                        ext = prev_name[pos:]
+                        g.connect(prev_name, inst_name + ext, prev_port, inport)
+                    else:
+                        g.connect(prev_name, inst_name + suffix + str(0), prev_port, inport)
+
+        for outport in instance.output2ele.keys():
+            next_name, next_port = instance.output2ele[outport]
+            g.disconnect(inst_name, next_name, outport, next_port)
+            for i in range(n):
+                g.connect(inst_name + suffix + str(i), next_name, outport, next_port)
+
+        g.deleteElementInstance(inst_name)
+        first = False
+
+
+def duplicate_subgraph_wrt_threads(g, node_list, threads, suffix='_dup'):
+    for inst_name in node_list:
+        instance = g.instances[inst_name]
+
+        if len(instance.input2ele) == 0:
+            continue
+
+        n = len(threads)
+        for i in range(n):
+            g.copy_node_and_element(inst_name, suffix + str(i))
+            g.instances[inst_name + suffix + str(i)].thread = threads[i]
+
+        for inport in instance.input2ele.keys():
+            l = instance.input2ele[inport]
+            for i in range(len(l)):
+                prev_name, prev_port = l[0]  # index = 0 because l is mutated (first element is popped).
+                t = g.instances[prev_name].thread
+                id = threads.index(t)
+                g.disconnect(prev_name, inst_name, prev_port, inport)
+                g.connect(prev_name, inst_name + suffix + str(id), prev_port, inport)
 
         for outport in instance.output2ele.keys():
             next_name, next_port = instance.output2ele[outport]

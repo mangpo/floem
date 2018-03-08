@@ -40,18 +40,6 @@ CacheGetStart, CacheGetEnd, CacheSetStart, CacheSetEnd, CacheState = \
                                        var_size=True, hash_value='hash',
                                        write_policy=Cache.write_back, write_miss=Cache.write_alloc)
 
-# Queue
-RxEnq, RxDeq, RxScan = queue_smart.smart_queue("rx_queue", entry_size=192, size=128, insts=n_cores,
-                                               channels=2, enq_blocking=True, enq_atomic=False, enq_output=True)
-rx_enq = RxEnq()
-rx_deq = RxDeq()
-
-TxEnq, TxDeq, TxScan = queue_smart.smart_queue("tx_queue", entry_size=192, size=512, insts=n_cores,
-                                               channels=2, checksum=False, enq_blocking=True, deq_atomic=False,
-                                               enq_output=True)
-tx_enq = TxEnq()
-tx_deq = TxDeq()
-
 
 class item(State):
     next = Field('struct _item')
@@ -68,7 +56,6 @@ class MyState(CacheState):
     pkt_buff = Field('void*')
     it = Field(Pointer(item), shared='data_region')
     hash = Field(Uint(32))
-    core = Field(Uint(16))
     keylen = Field(Uint(32))
     key = Field('void*', size='state->keylen')
     vallen = Field(Uint(32))
@@ -95,15 +82,6 @@ class segments_holder(State):
 
 class main(Flow):
     state = PerPacket(MyState)
-
-    class SaveID(Element):
-        def configure(self):
-            self.inp = Input(Int)
-
-        def impl(self):
-            self.run_c(r'''
-    state->core = inp();
-            ''')
 
     class SaveState(Element):
         def configure(self):
@@ -206,13 +184,6 @@ output switch{
 state->key = state->pkt->payload + state->pkt->mcr.request.extlen;
 output { out(); }''')
 
-    class GetCore(ElementOneInOut):
-        def impl(self):
-            self.run_c(r'''
-int core = state->hash %s %d;;
-state->core = core;
-//printf("hash = %s, core = %s\n", state->hash, core);
-            output { out(); }''' % ('%', n_cores, '%d', '%d'))
 
     ######################## hash ########################
 
@@ -231,7 +202,7 @@ output { out(); }
 
         def impl(self):
             self.run_c(r'''
-    state->core = state->hash %s %d;
+    state->qid = state->hash %s %d;
     output { out(); }
     ''' % ('%', n_cores))
 
@@ -589,7 +560,7 @@ output { out(msglen, (void*) m, buff); }
         def impl(self):
             self.run_c(r'''
     size_t totlen = state->keylen + state->vallen;
-    item *it = ialloc_alloc(&this->ia[state->core], sizeof(item) + totlen, false); // TODO
+    item *it = ialloc_alloc(&this->ia[state->qid], sizeof(item) + totlen, false); // TODO
     if(it) {
         it->refcount = 1;
         uint16_t keylen = state->keylen;
@@ -674,11 +645,12 @@ output { out(msglen, (void*) m, buff); }
         def impl(self):
             self.run_c(r'''
     (int id) = inp();
+    
     static __thread int count = 0;
     count++;
     if(count == 32) {
       count = 0;
-      clean_log(&this->ia[state->core], true); // pkt = NULL
+      clean_log(&this->ia[id], true); // pkt = NULL
     }
     
     output { out(id); }
@@ -686,6 +658,18 @@ output { out(msglen, (void*) m, buff); }
 
     def impl(self):
         MemoryRegion('data_region', 2 * 1024 * 1024 * 512, init='ialloc_init(data_region);') #4 * 1024 * 512)
+
+        # Queue
+        RxEnq, RxDeq, RxScan = queue_smart.smart_queue("rx_queue", entry_size=192, size=128, insts=n_cores,
+                                                       channels=2, enq_blocking=True, enq_atomic=True, enq_output=False)
+        rx_enq = RxEnq()
+        rx_deq = RxDeq()
+
+        TxEnq, TxDeq, TxScan = queue_smart.smart_queue("tx_queue", entry_size=192, size=512, insts=n_cores,
+                                                       channels=2, checksum=False, enq_blocking=True, deq_atomic=False,
+                                                       enq_output=True)
+        tx_enq = TxEnq()
+        tx_deq = TxDeq()
 
         ######################## CPU #######################
         class process_one_pkt(Pipeline):
@@ -712,8 +696,8 @@ output { out(msglen, (void*) m, buff); }
                 from_net >> hton >> check_packet >> main.SaveState() >> main.GetKey() >> main.JenkinsHash() >> classifier
                 from_net.nothing >> drop
 
-                classifier.out_get >> main.Key2State() >> CacheGetStart() >> main.QID() >> tx_enq.inp[0]
-                classifier.out_set >> main.KV2State() >> CacheSetStart() >> main.QID() >> tx_enq.inp[1]
+                classifier.out_get >> main.Key2State() >> CacheGetStart() >> main.QID() >> rx_enq.inp[0]
+                classifier.out_set >> main.KV2State() >> CacheSetStart() >> main.QID() >> rx_enq.inp[1]
 
                 # exception
                 check_packet.slowpath >> arp >> to_net
@@ -747,6 +731,8 @@ output { out(msglen, (void*) m, buff); }
                 prepare_header >> hton >> to_net
 
         process_one_pkt('process_one_pkt', process='dpdk', cores=range(n_cores))
+        nic_rx('nic_rx', process='dpdk', cores=[1])
+        nic_tx('nic_tx', process='dpdk', cores=[0])
 
 master_process('dpdk')
 

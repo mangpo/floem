@@ -662,12 +662,10 @@ def cache_default(name, key_type, val_type,
         def impl(self):
             cache_get = CacheGet()
             cache_set_get = CacheSetGet()
-            fork = ForkGet()
 
             self.inp >> cache_get
-            cache_get.hit >> fork >> self.out
-            fork.release >> FreeOrRelease()
 
+            # Miss
             fork2 = ForkGet()
             cache_get.miss >> self.query_begin
             self.query_end >> cache_set_get >> fork2
@@ -680,6 +678,11 @@ def cache_default(name, key_type, val_type,
                 fork3.out2 >> Evict() >> self.evict_begin
             else:
                 fork2 >> self.out
+
+            # Get (come after miss because resource mapping on miss path is the default)
+            fork = ForkGet()
+            cache_get.hit >> fork >> self.out
+            fork.release >> FreeOrRelease()
 
     class SetWriteBack(Composite):
         def configure(self):

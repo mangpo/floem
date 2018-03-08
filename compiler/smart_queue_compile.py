@@ -352,6 +352,8 @@ def compile_smart_queue(g, q, src2fields):
                 ins += add
                 for x in ins:
                     if q.enq_output:
+                        if "done" not in enq.output2ele:
+                            raise Exception("Port 'done' of queue '%s' does not connect to anything." % q.name)
                         enq_done[x] = enq.output2ele["done"]
         ins_map.append(ins)
 
