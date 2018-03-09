@@ -2,7 +2,8 @@ from floem import *
 from compiler import Compiler
 import net, cache_smart, queue_smart, library
 
-n_cores = 1
+n_cores = 4
+nic_threads = 4
 
 class protocol_binary_request_header_request(State):
     magic = Field(Uint(8))
@@ -183,6 +184,18 @@ output switch{
             self.run_c(r'''
 state->key = state->pkt->payload + state->pkt->mcr.request.extlen;
 output { out(); }''')
+
+    class TxScheduler(Element):
+        def configure(self):
+            self.inp = Input(Int)
+            self.out = Output(Int)
+
+        def impl(self):
+            self.run_c(r'''
+            (int id) = inp();
+            int qid = id %s %d;
+            output { out(qid); }
+            ''' % ('%', n_cores))
 
 
     ######################## hash ########################
@@ -716,8 +729,7 @@ output { out(msglen, (void*) m, buff); }
                 hton = net.HTON(configure=['iokvs_message'])
                 to_net = net.ToNet('to_net', configure=['from_net'])
 
-                zero = library.Constant(configure=[Int,0])
-                zero >> tx_deq
+                self.core_id >> main.TxScheduler() >> tx_deq
                 
                 # get
                 tx_deq.out[0] >> CacheGetEnd() >> get_result
@@ -732,7 +744,6 @@ output { out(msglen, (void*) m, buff); }
                 # send
                 prepare_header >> hton >> to_net
 
-        nic_threads = 4
         process_one_pkt('process_one_pkt', process='dpdk', cores=range(n_cores))
         nic_rx('nic_rx', process='dpdk', cores=[nic_threads + x for x in range(nic_threads)])
         nic_tx('nic_tx', process='dpdk', cores=range(nic_threads))

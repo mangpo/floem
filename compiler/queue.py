@@ -192,14 +192,15 @@ def queue_default(name, entry_size, size, insts,
                 src = noblock_atom if enq_atomic else noblock_noatom
 
             self.run_c(r'''
-                        (int len, int c) = inp();
-                        %s *q = this->insts[c];
-                        ''' % EnqQueue.__name__
+            (int len, int c) = inp();
+            assert(c < %d);
+            %s *q = this->insts[c];
+            ''' % (insts, EnqQueue.__name__)
                        + src + r'''
-                        //if(entry == NULL) { printf("queue %d is full.\n", c); }
-                        //printf("ENQ' core=%ld, queue=%ld, entry=%ld\n", c, q->queue, entry);
-                        output { out(buff); }
-                        ''')
+                       //if(entry == NULL) { printf("queue %d is full.\n", c); }
+                       //printf("ENQ' core=%ld, queue=%ld, entry=%ld\n", c, q->queue, entry);
+                       output { out(buff); }
+                       ''')
 
     class EnqueueSubmit(Element):
         def configure(self):
@@ -257,13 +258,14 @@ def queue_default(name, entry_size, size, insts,
 '''
 
             self.run_c(r'''
-                    (int c) = inp();
-                    %s *q = this->insts[c];
-                    ''' % DeqQueue.__name__
+            (int c) = inp();
+            assert(c < %d);
+            %s *q = this->insts[c];
+            ''' % (insts, DeqQueue.__name__)
                        + src
                        + r'''
-                    output { out(%s); }
-                        ''' % ('buff, c' if qid_output else 'buff'))
+                       output { out(%s); }
+                       ''' % ('buff, c' if qid_output else 'buff'))
 
     class DequeueRelease(Element):
         def configure(self):
@@ -541,10 +543,11 @@ int dequeue_done%s(void* buff) {
 
             self.run_c(r'''
             (%s x, int c) = inp();
+            assert(c < %d);
             circular_queue* p = this->insts[c];
             %s* q = p->queue;
             assert(sizeof(q->data[0].%s) == 1);
-            ''' % (type_star, Storage.__name__, status_field)
+            ''' % (type_star, insts, Storage.__name__, status_field)
                        + src + out_src)
 
         def impl_cavium(self):
@@ -600,9 +603,10 @@ int dequeue_done%s(void* buff) {
 
             self.run_c(r'''
             (%s x, int c) = inp();
+            assert(c < %d);
             circular_queue* p = this->insts[c];
             %s* q = p->queue;
-            ''' % (type_star, Storage.__name__)
+            ''' % (type_star, insts, Storage.__name__)
                        + src + dma_free + out_src)
 
     class Dequeue(Element):
@@ -668,9 +672,10 @@ int dequeue_done%s(void* buff) {
 
             self.run_c(r'''
     (int c) = inp();
+    assert(c < %d);
     circular_queue* p = this->insts[c];
     %s* q = p->queue;
-    ''' % Storage.__name__
+    ''' % (insts, Storage.__name__)
                        + src
                        + r'''
     q_buffer tmp = {(void*) x, 0};
@@ -730,10 +735,11 @@ int dequeue_done%s(void* buff) {
             debug = r'''printf("deq %ld\n", c);'''
 
             self.run_c(r'''
-                        (int c) = inp();
-                        circular_queue* p = this->insts[c];
-                        %s* q = p->queue;
-                        ''' % Storage.__name__
+            (int c) = inp();
+            assert(c < %d);
+            circular_queue* p = this->insts[c];
+            %s* q = p->queue;
+            ''' % (insts, Storage.__name__)
                        #+ debug
                        + src
                        + r'''
