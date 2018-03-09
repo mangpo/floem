@@ -78,6 +78,7 @@ class Compiler:
         # original.print_graphviz()
         # import time
         # time.sleep(1)
+        
         join_handling.join_and_resource_annotation_pass(original, self.resource, self.remove_unused)
 
         return original

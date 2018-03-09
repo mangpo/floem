@@ -2,7 +2,7 @@ from dsl import *
 from compiler import Compiler
 import net
 
-n_cores = 3
+n_cores = 1
 
 class protocol_binary_request_header_request(State):
     magic = Field(Uint(8))

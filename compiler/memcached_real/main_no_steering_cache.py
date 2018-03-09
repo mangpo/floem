@@ -244,6 +244,14 @@ output { out(); }
             self.run_c(r'''
 bool yes = (state->vallen > 0);
 
+static int count = 0;
+if(!yes) {
+  count++;
+  if(count%10000==0) {
+            printf("GET FAIL %d\n", count);
+  }
+}
+
 output switch { case yes: hit(); else: miss(); }
             ''')
 
@@ -594,6 +602,15 @@ output { out(msglen, (void*) m, buff); }
         def impl(self):
             self.run_c(r'''
     bool yes = (state->keylen > 0);
+
+static int count = 0;
+if(!yes) {
+  count++;
+  if(count%10000==0) {
+            printf("SET FAIL %d\n", count);
+  }
+}
+
     output switch { case yes: success(); else: fail(); }
             ''')
 

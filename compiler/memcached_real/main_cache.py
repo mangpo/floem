@@ -660,13 +660,13 @@ output { out(msglen, (void*) m, buff); }
         MemoryRegion('data_region', 2 * 1024 * 1024 * 512, init='ialloc_init(data_region);') #4 * 1024 * 512)
 
         # Queue
-        RxEnq, RxDeq, RxScan = queue_smart.smart_queue("rx_queue", entry_size=192, size=128, insts=n_cores,
+        RxEnq, RxDeq, RxScan = queue_smart.smart_queue("rx_queue", entry_size=192, size=256, insts=n_cores,
                                                        channels=2, enq_blocking=True, enq_atomic=True, enq_output=False)
         rx_enq = RxEnq()
         rx_deq = RxDeq()
 
-        TxEnq, TxDeq, TxScan = queue_smart.smart_queue("tx_queue", entry_size=192, size=512, insts=n_cores,
-                                                       channels=2, checksum=False, enq_blocking=True, deq_atomic=False,
+        TxEnq, TxDeq, TxScan = queue_smart.smart_queue("tx_queue", entry_size=192, size=256, insts=n_cores,
+                                                       channels=2, checksum=False, enq_blocking=True, deq_atomic=True,
                                                        enq_output=True)
         tx_enq = TxEnq()
         tx_deq = TxDeq()
@@ -706,7 +706,6 @@ output { out(msglen, (void*) m, buff); }
 
         class nic_tx(Pipeline):
             def impl(self):
-                self.core_id >> tx_deq
                 prepare_header = main.PrepareHeader()
                 get_result = main.GetResult()
                 get_response = main.PrepareGetResp()
@@ -717,6 +716,9 @@ output { out(msglen, (void*) m, buff); }
                 hton = net.HTON(configure=['iokvs_message'])
                 to_net = net.ToNet('to_net', configure=['from_net'])
 
+                zero = library.Constant(configure=[Int,0])
+                zero >> tx_deq
+                
                 # get
                 tx_deq.out[0] >> CacheGetEnd() >> get_result
                 get_result.hit >> main.SizeGetResp() >> main.SizePktBuff() >> get_response >> prepare_header
@@ -730,9 +732,10 @@ output { out(msglen, (void*) m, buff); }
                 # send
                 prepare_header >> hton >> to_net
 
+        nic_threads = 4
         process_one_pkt('process_one_pkt', process='dpdk', cores=range(n_cores))
-        nic_rx('nic_rx', process='dpdk', cores=[1])
-        nic_tx('nic_tx', process='dpdk', cores=[0])
+        nic_rx('nic_rx', process='dpdk', cores=[nic_threads + x for x in range(nic_threads)])
+        nic_tx('nic_tx', process='dpdk', cores=range(nic_threads))
 
 master_process('dpdk')
 
