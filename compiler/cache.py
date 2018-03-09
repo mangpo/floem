@@ -235,12 +235,18 @@ def cache_default(name, key_type, val_type,
     if write_policy == graph_ir.Cache.write_back:
         item_src += r'''
         state->cache_item = NULL;
-        if(rit && (rit->evicted & 2)) state->cache_item = rit;  // to be evict & release & free.
+        if(rit) {
+            if(rit->evicted & 2) state->cache_item = rit;  // to be evict & release & free.
+            else cache_release(rit);
+        }
         '''
     else:
         item_src += r'''
         state->cache_item = NULL;
-        if(rit && (rit->evicted & 2)) { cache_release(rit); free(rit); }
+        if(rit) {
+            if(rit->evicted & 2) { cache_release(rit); free(rit); }
+            else cache_release(rit);
+        }
         '''
 
     item_src += r'''
