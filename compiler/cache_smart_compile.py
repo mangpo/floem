@@ -389,10 +389,14 @@ def cache_pass(g):
                             prev = g.instances[prev_name]
                             g.disconnect(prev_name, enq.name, prev_port, 'inp' + str(id))
 
-                            drop_inst = Drop(create=False).instance
-                            g.newElementInstance(drop_inst.element, drop_inst.name, drop_inst.args)
-                            g.set_thread(drop_inst.name, prev.thread)
-                            g.connect(prev_name, drop_inst.name, prev_port)
+                            if q.enq_output:
+                                done_name, done_part = enq.output2ele['done']
+                                g.connect(prev_name, done_name, prev_port, done_part)
+                            else:
+                                drop_inst = Drop(create=False).instance
+                                g.newElementInstance(drop_inst.element, drop_inst.name, drop_inst.args)
+                                g.set_thread(drop_inst.name, prev.thread)
+                                g.connect(prev_name, drop_inst.name, prev_port)
 
                 next_name, next_port = q.deq.output2ele['out' + str(id)]
                 g.disconnect(q.deq.name, next_name, 'out' + str(id), next_port)
