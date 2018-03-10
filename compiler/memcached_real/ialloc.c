@@ -5,6 +5,7 @@
 #include <fcntl.h>
 
 #include <rte_spinlock.h>
+#include <rte_memcpy.h>
 
 #include "iokvs.h"
 

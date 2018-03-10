@@ -1,7 +1,8 @@
 #ifndef PROTOCOL_BINARY_H
 #define PROTOCOL_BINARY_H
 
-    #define UDP_HEADER_SIZE 8
+#define RTE
+#define UDP_HEADER_SIZE 8
 
     typedef struct {
       uint16_t req_id;
@@ -126,6 +127,7 @@
         uint8_t bytes[24];
     } protocol_binary_request_header;
 
+#ifndef RTE
 #define ETH_ALEN     6
 
 /** Ethernet header */
@@ -227,5 +229,6 @@ struct arp_hdr
 #define ARPHRD_IEEE1394	24		/* IEEE 1394 IPv4 - RFC 2734.  */
 #define ARPHRD_EUI64		27		/* EUI-64.  */
 #define ARPHRD_INFINIBAND	32		/* InfiniBand.  */
+#endif
 
 #endif

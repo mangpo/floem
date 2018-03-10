@@ -126,7 +126,6 @@
         uint8_t bytes[24];
     } protocol_binary_request_header;
 
-
 #define ETH_ALEN     6
 
 /** Ethernet header */
@@ -228,5 +227,14 @@ struct arp_hdr
 #define ARPHRD_IEEE1394	24		/* IEEE 1394 IPv4 - RFC 2734.  */
 #define ARPHRD_EUI64		27		/* EUI-64.  */
 #define ARPHRD_INFINIBAND	32		/* InfiniBand.  */
+
+typedef struct {
+  struct eth_hdr ether;
+  struct ip_hdr ipv4;
+  struct udp_hdr udp;
+  memcached_udp_header mcudp;
+  protocol_binary_request_header mcr;
+  uint8_t payload[];
+} __attribute__ ((packed)) iokvs_message;
 
 #endif
