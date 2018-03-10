@@ -310,7 +310,6 @@ output { out(this->core); }''' % ('%', n_cores))
         (size_t msglen, void* pkt, void* pkt_buff) = inp();
 
         iokvs_message *m = pkt;
-        //memcpy(m, &iokvs_template, sizeof(iokvs_message));
 
         m->mcr.request.magic = PROTOCOL_BINARY_RES;
         m->mcr.request.opcode = PROTOCOL_BINARY_CMD_GET;
@@ -331,7 +330,6 @@ output { out(msglen, m, pkt_buff); }
             self.run_c(r'''
         (size_t msglen, void* pkt, void* pkt_buff) = inp();
         iokvs_message *m = pkt;
-        //memcpy(m, &iokvs_template, sizeof(iokvs_message));
         int msglen = sizeof(iokvs_message) + 4;
 
         m->mcr.request.magic = PROTOCOL_BINARY_RES;
@@ -374,7 +372,6 @@ output { out(msglen, m, pkt_buff); }
             self.run_c(r'''
             (size_t msglen, void* pkt, void* pkt_buff) = inp();
             iokvs_message *m = pkt;
-            //memcpy(m, &iokvs_template, sizeof(iokvs_message));
 
             m->mcr.request.magic = PROTOCOL_BINARY_RES;
             m->mcr.request.opcode = PROTOCOL_BINARY_CMD_GET;
@@ -426,7 +423,6 @@ output { out(msglen, m, pkt_buff); }
             self.run_c(r'''
 (size_t msglen, void* pkt, void* pkt_buff) = inp();
 iokvs_message *m = pkt;
-//memcpy(m, &iokvs_template, sizeof(iokvs_message));
 
 m->mcr.request.magic = PROTOCOL_BINARY_RES;
 m->mcr.request.opcode = PROTOCOL_BINARY_CMD_SET;

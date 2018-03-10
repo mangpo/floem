@@ -281,6 +281,7 @@ static inline void myt_item_release(void *it)
     item_unref(it);
 }
 
+#ifdef DPDK
 #include <rte_ether.h>
 #include <rte_ip.h>
 #include <rte_udp.h>
@@ -299,12 +300,16 @@ typedef struct {
     protocol_binary_request_header mcr;
     uint8_t payload[];
 } __attribute__ ((packed)) iokvs_message;
-
-static iokvs_message iokvs_template = {
-  .ether = { .ether_type = 0x0008 },
- .ipv4 = { .version_ihl = 0x45, .time_to_live = 0x40, .next_proto_id = 0x11},
- .mcudp = { .n_data = 0x0100 }
-};
+#else
+typedef struct {
+    struct eth_hdr ether;
+    struct ip_hdr ipv4;
+    struct udp_hdr udp;
+    memcached_udp_header mcudp;
+    protocol_binary_request_header mcr;
+    uint8_t payload[];
+} __attribute__ ((packed)) iokvs_message;
+#endif
 
 uint32_t jenkins_hash(const void *key, size_t length);
 void populate_hasht();
