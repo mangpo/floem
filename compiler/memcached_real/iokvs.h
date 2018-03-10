@@ -300,6 +300,7 @@ typedef struct {
     protocol_binary_request_header mcr;
     uint8_t payload[];
 } __attribute__ ((packed)) iokvs_message;
+
 #else
 typedef struct {
     struct eth_hdr ether;
