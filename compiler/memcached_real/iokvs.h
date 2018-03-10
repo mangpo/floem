@@ -23,10 +23,17 @@ struct settings {
     size_t segmaxnum;
     /** Size of seqment clean queue */
     size_t segcqsize;
+#ifdef RTE
     /** Local IP */
     uint32_t localip;
     /** Local IP */
     uint64_t localmac;
+#else
+    /** Local IP */
+    struct ip_addr localip;
+    /** Local IP */
+    struct eth_addr localmac;
+#endif
     /** UDP port to listen on */
     uint16_t udpport;
     /** Verbosity for log messages. */
@@ -281,7 +288,7 @@ static inline void myt_item_release(void *it)
     item_unref(it);
 }
 
-#ifdef DPDK
+#ifdef RTE
 #include <rte_ether.h>
 #include <rte_ip.h>
 #include <rte_udp.h>

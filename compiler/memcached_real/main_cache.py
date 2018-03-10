@@ -489,11 +489,6 @@ output { out(msglen, m, pkt_buff); }
     int resp = 0;
 
     /* Currently we're only handling ARP here */
-    if (msg->ether.ether_type == htons(ETHER_TYPE_ARP) &&
-            arp->arp_hrd == htons(ARP_HRD_ETHER) && arp->arp_pln == 4 &&
-            arp->arp_op == htons(ARP_OP_REQUEST) && arp->arp_hln == 6 &&
-            arp->arp_data.arp_tip == settings.localip)
-            
     if (msg->ether.type == htons(ETHERTYPE_ARP) &&
         arp->arp_hrd == htons(ARPHRD_ETHER) && arp->arp_pln == 4 &&
         arp->arp_op == htons(ARPOP_REQUEST) && arp->arp_hln == 6 &&

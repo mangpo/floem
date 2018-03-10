@@ -43,14 +43,15 @@ void settings_init(int argc, char *argv[])
     exit(1);
   }
 
+#ifdef RTE
   if (inet_pton(AF_INET, argv[1], &settings.localip) != 1) {
     fprintf(stderr, "Parsing ip failed\n");
     exit(1);
   }
+#else
+    struct ip_addr ip = { .addr = {0x0, 0x0, 0x0, 0x0} };
+    settings.localip = ip;
+#endif
 
-  /* if (parse_mac(argv[2], &settings.localmac) != 0) { */
-  /*   fprintf(stderr, "Parsing mac failed\n"); */
-  /*   exit(1); */
-  /* } */
 }
 
