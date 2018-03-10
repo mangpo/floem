@@ -2,8 +2,8 @@ from floem import *
 from compiler import Compiler
 import net, cache_smart, queue_smart, library
 
-n_cores = 4
-nic_threads = 4
+n_cores = 1
+nic_threads = 1
 
 class protocol_binary_request_header_request(State):
     magic = Field(Uint(8))
@@ -745,8 +745,8 @@ output { out(msglen, (void*) m, buff); }
                 prepare_header >> hton >> to_net
 
         process_one_pkt('process_one_pkt', process='dpdk', cores=range(n_cores))
-        nic_rx('nic_rx', process='dpdk', cores=[nic_threads + x for x in range(nic_threads)])
-        nic_tx('nic_tx', process='dpdk', cores=range(nic_threads))
+        nic_rx('nic_rx', process=target.CAVIUM, cores=[nic_threads + x for x in range(nic_threads)])
+        nic_tx('nic_tx', process=target.CAVIUM, cores=range(nic_threads))
 
 master_process('dpdk')
 
