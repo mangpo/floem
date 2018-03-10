@@ -281,11 +281,11 @@ static inline void myt_item_release(void *it)
     item_unref(it);
 }
 
-#include <rte_ether.h>
-#include <rte_ip.h>
-#include <rte_udp.h>
-#include <rte_arp.h>
-#include <rte_ethdev.h>
+//#include <rte_ethdev.h>
+//#include <rte_ether.h>
+//#include <rte_ip.h>
+//#include <rte_udp.h>
+//#include <rte_arp.h>
 
 typedef struct {
     struct ether_hdr ether;
