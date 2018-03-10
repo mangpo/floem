@@ -4,6 +4,8 @@ import net, cache_smart, queue_smart, library
 
 n_cores = 1
 nic_threads = 1
+mode = 'dpdk'
+#mode = target.CAVIUM
 
 class protocol_binary_request_header_request(State):
     magic = Field(Uint(8))
@@ -25,8 +27,8 @@ class protocol_binary_request_header(State):
     def init(self): self.declare = False
 
 class iokvs_message(State):
-    ether = Field('struct ether_hdr')
-    ipv4 = Field('struct ipv4_hdr')
+    ether = Field('struct eth_hdr')
+    ipv4 = Field('struct ip_hdr')
     dup = Field('struct udp_hdr')
     mcudp = Field('memcached_udp_header')
     mcr = Field(protocol_binary_request_header)
@@ -124,10 +126,10 @@ iokvs_message* m = (iokvs_message*) pkt;
 
 int type; // 0 = normal, 1 = slow, 2 = drop
 
-if (m->ether.ether_type == htons(ETHER_TYPE_IPv4) &&
-    m->ipv4.next_proto_id == 17 &&
-    m->ipv4.dst_addr == settings.localip &&
-    m->udp.dst_port == htons(11211) &&
+if (m->ether.type == htons(ETHERTYPE_IPv4) &&
+    m->ipv4._proto == 17 &&
+    memcmp(m->ipv4.dest.addr, settings.localip.addr, sizeof(struct ip_addr)) == 0 &&
+    m->udp.dest_port == htons(11211) &&
     msglen >= sizeof(iokvs_message))
 {
     uint32_t blen = m->mcr.request.bodylen;
@@ -460,20 +462,19 @@ output { out(msglen, m, pkt_buff); }
             self.run_c(r'''
         (size_t msglen, iokvs_message* m, void* buff) = inp();
 
-        struct ether_addr mymac = m->ether.d_addr;
-        m->ether.d_addr = m->ether.s_addr;
-        m->ether.s_addr = mymac; //settings.localmac;
-        m->ipv4.dst_addr = m->ipv4.src_addr;
-        m->ipv4.src_addr = settings.localip;
-        m->ipv4.total_length = htons(msglen - offsetof(iokvs_message, ipv4));
-        m->ipv4.time_to_live = 64;
-        m->ipv4.hdr_checksum = 0;
-        //m->ipv4.hdr_checksum = rte_ipv4_cksum(&m->ipv4);
+        struct eth_addr mymac = m->ether.dest;
+        m->ether.dest = m->ether.src;
+        m->ether.src = mymac;
+        m->ipv4.dest = m->ipv4.src;
+        m->ipv4.src = settings.localip;
+        m->ipv4._len = htons(msglen - offsetof(iokvs_message, ipv4));
+        m->ipv4._ttl = 64;
+        m->ipv4._chksum = 0;
 
-        m->udp.dst_port = m->udp.src_port;
+        m->udp.dest_port = m->udp.src_port;
         m->udp.src_port = htons(11211);
-        m->udp.dgram_len = htons(msglen - offsetof(iokvs_message, udp));
-        m->udp.dgram_cksum = 0;
+        m->udp.len = htons(msglen - offsetof(iokvs_message, udp));
+        m->udp.cksum = 0;
 
         output { out(msglen, (void*) m, buff); }
             ''')
@@ -496,28 +497,29 @@ output { out(msglen, m, pkt_buff); }
             arp->arp_hrd == htons(ARP_HRD_ETHER) && arp->arp_pln == 4 &&
             arp->arp_op == htons(ARP_OP_REQUEST) && arp->arp_hln == 6 &&
             arp->arp_data.arp_tip == settings.localip)
+            
+    if (msg->ether.type == htons(ETHERTYPE_ARP) &&
+        arp->arp_hrd == htons(ARPHRD_ETHER) && arp->arp_pln == 4 &&
+        arp->arp_op == htons(ARPOP_REQUEST) && arp->arp_hln == 6 &&
+        memcmp(arp->arp_tip.addr, settings.localip.addr, sizeof(struct ip_addr)) == 0
+        )
     {
         printf("Responding to ARP\n");
         resp = 1;
-        struct ether_addr mymac = msg->ether.d_addr;
-        msg->ether.d_addr = msg->ether.s_addr;
-        msg->ether.s_addr = mymac;
-        arp->arp_op = htons(ARP_OP_REPLY);
-        arp->arp_data.arp_tha = arp->arp_data.arp_sha;
-        arp->arp_data.arp_sha = mymac;
-        arp->arp_data.arp_tip = arp->arp_data.arp_sip;
-        arp->arp_data.arp_sip = settings.localip;
+        struct eth_addr mymac = msg->ether.dest;
+        msg->ether.dest = msg->ether.src;
+        msg->ether.src = mymac; // TODO
+        
+        arp->arp_op = htons(ARPOP_REPLY);
+        arp->arp_tha = arp->arp_sha;
+        arp->arp_sha = mymac;
+        arp->arp_tip = arp->arp_sip;
+        arp->arp_sip = settings.localip;
 
-        //rte_mbuf_refcnt_update(mbuf, 1);  // TODO
-
-/*
-        mbuf->ol_flags = PKT_TX_L4_NO_CKSUM;
-        mbuf->tx_offload = 0;
-*/
     }
 
     output switch { 
-      case resp: out(sizeof(struct ether_hdr) + sizeof(struct arp_hdr), pkt, buff); 
+      case resp: out(sizeof(struct eth_hdr) + sizeof(struct arp_hdr), pkt, buff); 
             else: drop(pkt, buff);
     }
             ''')
@@ -744,11 +746,14 @@ output { out(msglen, (void*) m, buff); }
                 # send
                 prepare_header >> hton >> to_net
 
-        process_one_pkt('process_one_pkt', process='dpdk', cores=range(n_cores))
-        nic_rx('nic_rx', process=target.CAVIUM, cores=[nic_threads + x for x in range(nic_threads)])
-        nic_tx('nic_tx', process=target.CAVIUM, cores=range(nic_threads))
-
-master_process('dpdk')
+        if mode == 'dpdk':
+            process_one_pkt('process_one_pkt', process=target.dpdk, cores=range(n_cores))
+            nic_rx('nic_rx', process=target.dpdk, cores=[nic_threads + x for x in range(nic_threads)])
+            nic_tx('nic_tx', process=target.dpdk, cores=range(nic_threads))
+        else:
+            process_one_pkt('process_one_pkt', process='app', cores=range(n_cores))
+            nic_rx('nic_rx', device=target.CAVIUM, cores=[nic_threads + x for x in range(nic_threads)])
+            nic_tx('nic_tx', device=target.CAVIUM, cores=range(nic_threads))
 
 
 ######################## Run test #######################
@@ -758,6 +763,10 @@ c.include = r'''
 #include "iokvs.h"
 #include "protocol_binary.h"
 '''
+if mode == target.CAVIUM:
+    c.init = r'''
+    settings_init();
+    '''
 c.generate_code_as_header()
 c.depend = ['jenkins_hash', 'hashtable', 'ialloc', 'settings', 'dpdk']
 c.compile_and_run('test_no_steer')

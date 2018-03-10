@@ -126,4 +126,106 @@
         uint8_t bytes[24];
     } protocol_binary_request_header;
 
+#define ETH_ALEN     6
+
+/** Ethernet header */
+struct eth_addr {
+  uint8_t addr[ETH_ALEN];
+} __attribute__ ((packed));
+
+struct eth_hdr {
+#if ETH_PAD_SIZE
+  uint8_t padding[ETH_PAD_SIZE];
+#endif
+  struct eth_addr dest;
+  struct eth_addr src;
+  uint16_t type;
+} __attribute__ ((packed));
+
+struct ip_addr {
+  //uint32_t addr;
+  uint8_t addr[4];
+} __attribute__ ((packed));
+
+struct ip_hdr {
+  /* version / header length */
+  uint8_t _v_hl;
+  /* type of service */
+  uint8_t _tos;
+  /* total length */
+  uint16_t _len;
+  /* identification */
+  uint16_t _id;
+  /* fragment offset field */
+  uint16_t _offset;
+  /* time to live */
+  uint8_t _ttl;
+  /* protocol*/
+  uint8_t _proto;
+  /* checksum */
+  uint16_t _chksum;
+  /* source and destination IP addresses */
+  struct ip_addr src;
+  struct ip_addr dest;
+} __attribute__ ((packed));
+
+struct udp_hdr{
+    uint16_t src_port;
+    uint16_t dest_port;
+    uint16_t len;
+    uint16_t cksum;
+} __attribute__((packed));
+
+/* Eternet protocal type. */
+#define ETHERTYPE_PUP    0x0200/* PUP protocol */
+#define ETHERTYPE_IPv4   0x0800/* IP protocol */
+#define ETHERTYPE_ARP    0x0806/* Addr. resolution protocol */
+
+/* ARP protocol opcodes. */
+#define	ARPOP_REQUEST	1		/* ARP request.  */
+#define	ARPOP_REPLY	2		/* ARP reply.  */
+#define	ARPOP_RREQUEST	3		/* RARP request.  */
+#define	ARPOP_RREPLY	4		/* RARP reply.  */
+#define	ARPOP_InREQUEST	8		/* InARP request.  */
+#define	ARPOP_InREPLY	9		/* InARP reply.  */
+#define	ARPOP_NAK	10		/* (ATM)ARP NAK.  */
+
+/* See RFC 826 for protocol description.  ARP packets are variable
+   in size; the arphdr structure defines the fixed-length portion.
+   Protocol type values are the same as those for 10 Mb/s Ethernet.
+   It is followed by the variable-sized fields ar_sha, arp_spa,
+   arp_tha and arp_tpa in that order, according to the lengths
+   specified.  Field names used correspond to RFC 826.  */
+
+struct arp_hdr
+  {
+    unsigned short int arp_hrd;		/* Format of hardware address.  */
+    unsigned short int arp_pro;		/* Format of protocol address.  */
+    unsigned char arp_hln;		/* Length of hardware address.  */
+    unsigned char arp_pln;		/* Length of protocol address.  */
+    unsigned short int arp_op;		/* ARP opcode (command).  */
+    struct eth_addr arp_sha;    /* Sender hardware address.  */
+    struct ip_addr arp_sip;     /* Sender IP address.  */
+    struct eth_addr arp_tha;    /* Target hardware address.  */
+    struct ip_addr arp_tip;     /* Target IP address.  */
+  };
+
+
+/* ARP protocol HARDWARE identifiers. */
+#define ARPHRD_NETROM	0		/* From KA9Q: NET/ROM pseudo. */
+#define ARPHRD_ETHER 	1		/* Ethernet 10/100Mbps.  */
+#define	ARPHRD_EETHER	2		/* Experimental Ethernet.  */
+#define	ARPHRD_AX25	3		/* AX.25 Level 2.  */
+#define	ARPHRD_PRONET	4		/* PROnet token ring.  */
+#define	ARPHRD_CHAOS	5		/* Chaosnet.  */
+#define	ARPHRD_IEEE802	6		/* IEEE 802.2 Ethernet/TR/TB.  */
+#define	ARPHRD_ARCNET	7		/* ARCnet.  */
+#define	ARPHRD_APPLETLK	8		/* APPLEtalk.  */
+#define	ARPHRD_DLCI	15		/* Frame Relay DLCI.  */
+#define	ARPHRD_ATM	19		/* ATM.  */
+#define	ARPHRD_METRICOM	23		/* Metricom STRIP (new IANA id).  */
+#define ARPHRD_IEEE1394	24		/* IEEE 1394 IPv4 - RFC 2734.  */
+#define ARPHRD_EUI64		27		/* EUI-64.  */
+#define ARPHRD_INFINIBAND	32		/* InfiniBand.  */
+
 #endif
