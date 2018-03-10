@@ -9,7 +9,7 @@ cpu_include_c = cpu_include_h + \
 CAVIUM = 'CAVIUM'
 cavium_include_h = ['"cvmcs-nic.h"', '"floem-queue.h"']
 cavium_include_c = cavium_include_h +\
-                   ['<cvmx-atomic.h>', '"floem-util.h"', '"floem-dma.h"', '"floem-queue-manage.h"']
+                   ['<cvmx-atomic.h>', '"floem-util.h"', '"floem-dma.h"', '"floem-queue-manage.h"', '"floem-cache.h"']
 
 
 # device = CPU, process = DPDK

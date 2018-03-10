@@ -14,6 +14,10 @@ typedef cvmx_spinlock_t lock_t;
 #define qlock_lock(x) cvmx_spinlock_lock(x)
 #define qlock_unlock(x) cvmx_spinlock_unlock(x)
 
+#define lock_init(x) cvmx_spinlock_init(x)
+#define lock_lock(x) cvmx_spinlock_lock(x)
+#define lock_unlock(x) cvmx_spinlock_unlock(x)
+
 typedef cvmx_spinlock_t spinlock_t;
 #define spinlock_init(x) cvmx_spinlock_init(x)
 #define spinlock_lock(x) cvmx_spinlock_lock(x)
