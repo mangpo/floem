@@ -680,8 +680,8 @@ def cache_default(name, key_type, val_type,
             if write_policy == graph_ir.Cache.write_back and set_query:
                 fork3 = ForkSet()
                 fork2 >> fork3
-                fork3.out1 >> self.out
-                fork3.out2 >> Evict() >> self.evict_begin
+                fork3.out2 >> self.out
+                fork3.out1 >> EvictComposite() >> self.evict_begin
             else:
                 fork2 >> self.out
 
@@ -701,12 +701,12 @@ def cache_default(name, key_type, val_type,
             fork = ForkSet()
 
             self.inp >> cache_set >> fork
-            fork.out1 >> self.out
+            fork.out2 >> self.out
 
             if write_miss == graph_ir.Cache.write_alloc:
                 evict_then_free = ForkEvictFree()
-                fork.out2 >> evict_then_free
-                evict_then_free.evict >> Evict() >> self.query_begin
+                fork.out1 >> evict_then_free
+                evict_then_free.evict >> EvictComposite() >> self.query_begin
                 evict_then_free.free >> Free()
             else:
                 fork.out2 >> Miss() >> self.query_begin

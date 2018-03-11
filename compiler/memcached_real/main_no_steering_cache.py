@@ -54,7 +54,8 @@ class item(State):
 class MyState(CacheState):
     pkt = Field(Pointer(iokvs_message))
     pkt_buff = Field('void*')
-    it = Field(Pointer(item), shared='data_region')
+    it = Field(Pointer(item))
+    it_set = Field(Pointer(item))
     hash = Field(Uint(32))
     core = Field(Uint(16))
     keylen = Field(Uint(32))
@@ -259,7 +260,7 @@ output switch { case yes: hit(); else: miss(); }
         def impl(self):
             self.run_c(r'''
 //printf("hash put\n");
-if(state->it) hasht_put(state->it, NULL);
+if(state->it_set) hasht_put(state->it_set, NULL);
 output { out(); }
             ''')
 
@@ -585,7 +586,7 @@ output { out(msglen, (void*) m, buff); }
         it->keylen = state->keylen;
         memcpy(item_key(it), state->key, state->keylen);
         memcpy(item_value(it), state->val, state->vallen);
-        state->it = it;
+        state->it_set = it;
     } else {
         state->keylen = 0;
     }
@@ -626,6 +627,13 @@ if(!yes) {
         def impl(self):
             self.run_c(r'''
     if(state->it) item_unref(state->it);
+    output { out(); }
+    ''')
+
+    class UnrefSet(ElementOneInOut):
+        def impl(self):
+            self.run_c(r'''
+    if(state->it_set) item_unref(state->it_set);
     output { out(); }
     ''')
 
@@ -673,8 +681,6 @@ if(!yes) {
             ''')
 
     def impl(self):
-        MemoryRegion('data_region', 2 * 1024 * 1024 * 512, init='ialloc_init(data_region);') #4 * 1024 * 512)
-
 
         ######################## NIC Rx #######################
         class process_one_pkt(Pipeline):
@@ -714,7 +720,7 @@ if(!yes) {
                 get_item = main.GetItemSpec()
                 set_result = main.SetResult()
                 set_response = main.PrepareSetResp(configure=['PROTOCOL_BINARY_RESPONSE_SUCCESS'])
-                classifier.out_set >> main.KV2State() >> CacheSetStart() >> get_item >> main.HashPut() >> main.Unref() >> CacheSetEnd() >> set_result
+                classifier.out_set >> main.KV2State() >> CacheSetStart() >> get_item >> main.HashPut() >> main.UnrefSet() >> CacheSetEnd() >> set_result
                 set_result.success >> main.SizeSetResp() >> main.SizePktBuff() >> set_response >> prepare_header
 
                 # set (unseccessful)
