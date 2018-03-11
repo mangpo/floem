@@ -41,7 +41,7 @@ CacheGetStart, CacheGetEnd, CacheSetStart, CacheSetEnd, CacheState = \
     cache_smart.smart_cache_with_state('MyCache',
                                        (Pointer(Int),'key','keylen'), [(Pointer(Int),'val','vallen')],
                                        var_size=True, hash_value='hash',
-                                       write_policy=Cache.write_through, write_miss=Cache.no_write_alloc)
+                                       write_policy=Cache.write_back, write_miss=Cache.write_alloc)
 
 
 class item(State):
@@ -62,7 +62,7 @@ class MyState(CacheState):
     keylen = Field(Uint(32))
     key = Field('void*', size='state->keylen')
     vallen = Field(Uint(32))
-    val = Field('void*')
+    val = Field('void*', size='state->vallen')
 
 class Schedule(State):
     core = Field(Int)

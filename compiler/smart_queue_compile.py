@@ -101,8 +101,8 @@ def find_pipeline_state(g, instance):
             return state
 
 
-def create_queue(name, entry_size, size, insts, enq_blocking, deq_blocking, enq_atomic, deq_atomic, clean, qid_output,
-                 checksum):
+def create_queue(q, name, entry_size, size, insts, enq_blocking, deq_blocking, enq_atomic, deq_atomic, clean,
+                 qid_output, checksum):
     workspace.push_decl()
     workspace.push_scope(name)
     EnqAlloc, EnqSubmit, DeqGet, DeqRelease, clean = \
@@ -110,7 +110,9 @@ def create_queue(name, entry_size, size, insts, enq_blocking, deq_blocking, enq_
                             enq_blocking=enq_blocking, deq_blocking=deq_blocking,
                             enq_atomic=enq_atomic, deq_atomic=deq_atomic,
                             clean=clean, qid_output=qid_output, checksum=checksum)
-    EnqAlloc(create=False)
+
+    EnqAlloc(create=False, configure=[0])
+    EnqAlloc(create=False, configure=[q.enq_gap])
     EnqSubmit(create=False)
     DeqGet(create=False)
     DeqRelease(create=False)
@@ -268,7 +270,7 @@ def compile_smart_queue(g, q, src2fields):
         prefix = ""
 
     g_add, enq_alloc, enq_submit, deq_get, deq_release, clean = \
-        create_queue(q.name, entry_size=q.entry_size, size=q.size, insts=q.insts, enq_blocking=q.enq_blocking,
+        create_queue(q, q.name, entry_size=q.entry_size, size=q.size, insts=q.insts, enq_blocking=q.enq_blocking,
                      deq_blocking=q.deq_blocking, enq_atomic=q.enq_atomic, deq_atomic=q.deq_atomic, clean=q.clean,
                      qid_output=True, checksum=q.checksum)
     g.merge(g_add)
@@ -343,6 +345,7 @@ def compile_smart_queue(g, q, src2fields):
     out_map = []
     scan_map = []
     enq_done = {}
+    enq_gap = {}
 
     for i in range(q.channels):
         ins = []
@@ -355,6 +358,7 @@ def compile_smart_queue(g, q, src2fields):
                         if "done" not in enq.output2ele:
                             raise Exception("Port 'done' of queue '%s' does not connect to anything." % q.name)
                         enq_done[x] = enq.output2ele["done"]
+                    enq_gap[x[0]] = q.enq_gap_map[enq.name]
         ins_map.append(ins)
 
         out = q.deq.output2ele["out" + str(i)]
@@ -386,7 +390,6 @@ def compile_smart_queue(g, q, src2fields):
                 g.connect(prev_inst, scan_inst.name, prev_port, port)
 
     save_inst_names = []
-    scan_save_inst_names = []
     lives = []
 
     release_vis = set()
@@ -444,9 +447,11 @@ def compile_smart_queue(g, q, src2fields):
         # Enqueue
         for in_inst, in_port in ins:
             in_thread = g.instances[in_inst].thread
+            gap = enq_gap[in_inst]
 
             # Enqueue instances
-            enq_alloc_inst = enq_alloc(prefix + q.name + "_enq_alloc" + str(i) + "_from_" + in_inst, create=False).instance
+            enq_alloc_inst = enq_alloc(prefix + q.name + "_enq_alloc" + str(i) + "_from_" + in_inst,
+                                       create=False, configure=[gap]).instance
             enq_submit_inst = enq_submit(prefix + q.name + "_enq_submit" + str(i) + "_from_" + in_inst, create=False).instance
             size_qid = ElementInstance(size_qid_ele.name, prefix + size_qid_ele.name + "_from_" + in_inst)
             fill_inst = ElementInstance(fill_ele.name, prefix + fill_ele.name + "_from_" + in_inst)
@@ -575,6 +580,26 @@ def order_smart_queues(name, vis, order, g):
     if isinstance(q, graph_ir.Queue) and (instance in q.enq) and (q not in order):
         order.append(q)
 
+def compute_enqueue_gap(g, q):
+    gap_map = {}
+    if len(q.enq) == 1:
+        gap_map[q.enq[0].name] = 0
+    else:
+        reachable = g.find_subgraph_with_queue(q.deq.name, set())
+        need_gap = False
+        for enq in q.enq:
+            gap_map[enq.name] = 0
+            if enq.name in reachable:
+                need_gap = True
+                break
+
+        if need_gap:
+            for enq in q.enq:
+                if enq.name not in reachable:
+                    gap_map[enq.name] = q.enq_gap
+
+    q.enq_gap_map = gap_map
+
 
 def compile_smart_queues(g, src2fields):
     original_pipeline_states = copy.copy(g.pipeline_states)
@@ -584,6 +609,9 @@ def compile_smart_queues(g, src2fields):
         q = instance.element.special
         if isinstance(q, graph_ir.Queue) and instance in q.enq:
             order_smart_queues(instance.name, vis, order, g)
+
+    for q in order:
+        compute_enqueue_gap(g, q)
 
     for q in order:
         compile_smart_queue(g, q, src2fields)

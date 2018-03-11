@@ -585,6 +585,9 @@ class Queue:
         self.entry_size = entry_size
         self.checksum = checksum
 
+        self.enq_gap = 8
+        self.enq_gap_map = None
+
     def rename_ports(self, g):
 
         id = 0
