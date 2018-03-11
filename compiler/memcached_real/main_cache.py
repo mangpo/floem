@@ -3,7 +3,7 @@ from compiler import Compiler
 import net, cache_smart, queue_smart, library
 
 n_cores = 1
-nic_threads = 1
+nic_threads = 4
 mode = 'dpdk'
 #mode = target.CAVIUM
 
@@ -41,7 +41,7 @@ CacheGetStart, CacheGetEnd, CacheSetStart, CacheSetEnd, CacheState = \
     cache_smart.smart_cache_with_state('MyCache',
                                        (Pointer(Int),'key','keylen'), [(Pointer(Int),'val','vallen')],
                                        var_size=True, hash_value='hash',
-                                       write_policy=Cache.write_back, write_miss=Cache.write_alloc)
+                                       write_policy=Cache.write_through, write_miss=Cache.no_write_alloc)
 
 
 class item(State):
@@ -631,7 +631,7 @@ output { out(msglen, (void*) m, buff); }
         MemoryRegion('data_region', 2 * 1024 * 1024 * 512, init='ialloc_init(data_region);') #4 * 1024 * 512)
 
         # Queue
-        RxEnq, RxDeq, RxScan = queue_smart.smart_queue("rx_queue", entry_size=128, size=256, insts=n_cores,
+        RxEnq, RxDeq, RxScan = queue_smart.smart_queue("rx_queue", entry_size=192, size=256, insts=n_cores,
                                                        channels=2, enq_blocking=True, enq_atomic=True, enq_output=False)
         rx_enq = RxEnq()
         rx_deq = RxDeq()
