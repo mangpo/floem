@@ -20,7 +20,7 @@ typedef pthread_mutex_t lock_t;
 
 //#define DEBUG
 #define HIT_RATE
-#define BUCKET_NITEMS 5
+#define BUCKET_NITEMS 1
 
 typedef struct _cache_bucket cache_bucket;
 

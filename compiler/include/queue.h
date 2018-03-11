@@ -161,6 +161,8 @@ static void enqueue_clean(circular_queue* q, void(*clean_func)(q_buffer)) {
 static q_buffer enqueue_alloc(circular_queue* q, size_t len, void(*clean)(q_buffer)) {
   __sync_synchronize();
   assert(q->offset < q->len);
+  if(len > q->entry_size)
+    printf("enqueue_alloc: len %ld > entry_size %d\n", len, q->entry_size);
   assert(len <= q->entry_size);
   q_entry* eqe = q->queue + q->offset;
   len = (len + ALIGN - 1) & (~(ALIGN - 1));

@@ -41,7 +41,7 @@ CacheGetStart, CacheGetEnd, CacheSetStart, CacheSetEnd, CacheState = \
     cache_smart.smart_cache_with_state('MyCache',
                                        (Pointer(Int),'key','keylen'), [(Pointer(Int),'val','vallen')],
                                        var_size=True, hash_value='hash',
-                                       write_policy=Cache.write_through, write_miss=Cache.no_write_alloc)
+                                       write_policy=Cache.write_back, write_miss=Cache.write_alloc)
 
 
 class item(State):
@@ -62,7 +62,7 @@ class MyState(CacheState):
     keylen = Field(Uint(32))
     key = Field('void*', size='state->keylen')
     vallen = Field(Uint(32))
-    val = Field('void*')
+    val = Field('void*', size='state->vallen')
 
 class Schedule(State):
     core = Field(Int)
@@ -290,16 +290,6 @@ output { out(this->core); }''' % ('%', n_cores))
     output { out(msglen); }
             ''')
 
-        def impl_cavium(self):
-            self.run_c(r'''
-    uint32_t* vallen
-    dma_read(&state->vallen, sizeof(uint32_t), (void**) &vallen);
-    size_t msglen = sizeof(iokvs_message) + 4 + *vallen;
-    state->vallen = *vallen;
-    dma_free(vallen);
-    output { out(msglen); }
-                        ''')
-
     class PrepareGetResp(Element):
         def configure(self):
             self.inp = Input(SizeT, 'void*', 'void*')
@@ -321,32 +311,7 @@ m->mcr.request.extlen = 4;
 m->mcr.request.bodylen = 4;
 *((uint32_t *)m->payload) = 0;
 m->mcr.request.bodylen = 4 + state->vallen;
-rte_memcpy(m->payload + 4, state->val, state->vallen);
-
-output { out(msglen, m, pkt_buff); }
-            ''')
-
-        def impl_cavium(self):
-            self.run_c(r'''
-        (size_t msglen, void* pkt, void* pkt_buff) = inp();
-        iokvs_message *m = pkt;
-        int msglen = sizeof(iokvs_message) + 4;
-
-        m->mcr.request.magic = PROTOCOL_BINARY_RES;
-        m->mcr.request.opcode = PROTOCOL_BINARY_CMD_GET;
-        m->mcr.request.datatype = PROTOCOL_BINARY_RAW_BYTES;
-        m->mcr.request.status = PROTOCOL_BINARY_RESPONSE_SUCCESS;
-
-m->mcr.request.keylen = 0;
-m->mcr.request.extlen = 4;
-m->mcr.request.bodylen = 4;
-*((uint32_t *)m->payload) = 0;
-m->mcr.request.bodylen = 4 + state->vallen;
-
-void* value;
-dma_read(state->val, state->vallen, (void**) &value);
-rte_memcpy(m->payload + 4, value, state->vallen);
-dma_free(value);
+memcpy(m->payload + 4, state->val, state->vallen);
 
 output { out(msglen, m, pkt_buff); }
             ''')
@@ -666,7 +631,7 @@ output { out(msglen, (void*) m, buff); }
         MemoryRegion('data_region', 2 * 1024 * 1024 * 512, init='ialloc_init(data_region);') #4 * 1024 * 512)
 
         # Queue
-        RxEnq, RxDeq, RxScan = queue_smart.smart_queue("rx_queue", entry_size=192, size=256, insts=n_cores,
+        RxEnq, RxDeq, RxScan = queue_smart.smart_queue("rx_queue", entry_size=128, size=256, insts=n_cores,
                                                        channels=2, enq_blocking=True, enq_atomic=True, enq_output=False)
         rx_enq = RxEnq()
         rx_deq = RxDeq()
@@ -750,7 +715,6 @@ output { out(msglen, (void*) m, buff); }
 ######################## Run test #######################
 c = Compiler(main)
 c.include = r'''
-#include "nicif.h"
 #include "iokvs.h"
 #include "protocol_binary.h"
 '''
