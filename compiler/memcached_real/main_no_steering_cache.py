@@ -38,7 +38,7 @@ CacheGetStart, CacheGetEnd, CacheSetStart, CacheSetEnd, CacheState = \
     cache_smart.smart_cache_with_state('MyCache',
                                        (Pointer(Int),'key','keylen'), [(Pointer(Int),'val','vallen')],
                                        var_size=True, hash_value='hash',
-                                       write_policy=Cache.write_through, write_miss=Cache.no_write_alloc)
+                                       write_policy=Cache.write_back, write_miss=Cache.write_alloc)
 
 
 class item(State):
@@ -681,6 +681,7 @@ if(!yes) {
             ''')
 
     def impl(self):
+        MemoryRegion('data_region', 2 * 1024 * 1024 * 512, init='ialloc_init(data_region);') #4 * 1024 * 512)
 
         ######################## NIC Rx #######################
         class process_one_pkt(Pipeline):
