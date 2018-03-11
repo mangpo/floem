@@ -152,14 +152,22 @@ def queue_default(name, entry_size, size, insts,
         this = Persistent(enq_all.__class__)
         def states(self): self.this = enq_all
 
-        def configure(self):
+        def configure(self, gap=0):
             self.inp = Input(Int, Int)  # len, core
             self.out = Output(q_buffer)
+            self.gap = gap
 
         def impl(self):
-            noblock_noatom = "q_buffer buff = enqueue_alloc((circular_queue*) q, len, %s);\n" % \
-                             (clean_name)
-            block_noatom = r'''
+            lock = "qlock_lock(&q->lock);" if enq_atomic else ''
+            unlock = "qlock_unlock(&q->lock);" if enq_atomic else ''
+
+            noblock = r'''
+            %s
+            q_buffer buff = enqueue_alloc((circular_queue*) q, len, %d, %s);
+            %s
+            ''' % (lock, self.gap, clean_name, unlock)
+
+            block = r'''
 #ifdef QUEUE_STAT
     static size_t full = 0;
     static struct timeval base, now;
@@ -177,19 +185,19 @@ def queue_default(name, entry_size, size, insts,
     q_buffer buff = { NULL, 0, 0 };
 #endif
     while(buff.entry == NULL) {
-        buff = enqueue_alloc((circular_queue*) q, len, %s);
+        %s
+        buff = enqueue_alloc((circular_queue*) q, len, %d, %s);
+        %s
 #ifdef QUEUE_STAT
         if(buff.entry == NULL) full++;
 #endif
    }
-   ''' % (clean_name)
-            noblock_atom = "qlock_lock(&q->lock);\n" + noblock_noatom + "qlock_unlock(&q->lock);\n"
-            block_atom = "qlock_lock(&q->lock);\n" + block_noatom + "qlock_unlock(&q->lock);\n"
+   ''' % (lock, self.gap, clean_name, unlock)
 
             if enq_blocking:
-                src = block_atom if enq_atomic else block_noatom
+                src = block
             else:
-                src = noblock_atom if enq_atomic else noblock_noatom
+                src = noblock
 
             self.run_c(r'''
             (int len, int c) = inp();

@@ -158,7 +158,7 @@ static void enqueue_clean(circular_queue* q, void(*clean_func)(q_buffer)) {
     __sync_synchronize();
 }
 
-static q_buffer enqueue_alloc(circular_queue* q, size_t len, void(*clean)(q_buffer)) {
+static q_buffer enqueue_alloc(circular_queue* q, size_t len, int gap, void(*clean)(q_buffer)) {  // TODO: gap
   __sync_synchronize();
   assert(q->offset < q->len);
   if(len > q->entry_size)
@@ -167,12 +167,19 @@ static q_buffer enqueue_alloc(circular_queue* q, size_t len, void(*clean)(q_buff
   q_entry* eqe = q->queue + q->offset;
   len = (len + ALIGN - 1) & (~(ALIGN - 1));
 
+  q_entry* check = eqe;
+  if(gap > 0) {
+    int offset = q->offset + gap*q->entry_size;
+    while(offset > q->len) offset -= q->len;
+    check = q->queue + offset;
+  }
+
   if(eqe->flag == FLAG_CLEAN) enqueue_clean(q, clean);
 
 #ifdef OPTIMISTIC
-  if(eqe->flag != FLAG_INUSE) {
+  if(eqe->flag != FLAG_INUSE && check->flag != FLAG_INUSE) {
 #else
-  if(eqe->flag == 0) {
+  if(eqe->flag == 0 && check->flag == 0) {
 #endif
     eqe->len = len;
     eqe->flag = FLAG_INUSE;
