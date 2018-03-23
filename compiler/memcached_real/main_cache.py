@@ -4,8 +4,8 @@ import net, cache_smart, queue_smart, library
 
 n_cores = 1
 nic_threads = 4
-mode = 'dpdk'
-#mode = target.CAVIUM
+#mode = 'dpdk'
+mode = target.CAVIUM
 
 class protocol_binary_request_header_request(State):
     magic = Field(Uint(8))

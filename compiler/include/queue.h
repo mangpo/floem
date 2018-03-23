@@ -179,7 +179,7 @@ static q_buffer enqueue_alloc(circular_queue* q, size_t len, int gap, void(*clea
 #ifdef OPTIMISTIC
   if(eqe->flag != FLAG_INUSE && check->flag != FLAG_INUSE) {
 #else
-  if(eqe->flag == 0 && check->flag == 0) {
+  if(eqe->flag == 0 && (check->flag == 0 || check->flag == FLAG_CLEAN)) {
 #endif
     eqe->len = len;
     eqe->flag = FLAG_INUSE;

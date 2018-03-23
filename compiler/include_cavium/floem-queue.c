@@ -48,19 +48,34 @@ void enqueue_clean(q_entry* eqe, uintptr_t addr, void(*clean_func)(q_buffer)) {
   eqe->flag = 0;
 }
 
-q_buffer enqueue_alloc(circular_queue* q, size_t len, void(*clean)(q_buffer)) {
-    q_entry* eqe;
-    uint64_t addr;
+q_buffer enqueue_alloc(circular_queue* q, size_t len, int gap, void(*clean)(q_buffer)) {
+    q_entry* eqe, check;
+    uint64_t addr, addr_check;
+    int offset;
 
     assert(q->offset < q->len);
     assert(len <= q->entry_size);
     addr = (uint64_t) q->queue + q->offset;
+
+    if(gap > 0) {
+        offset = q->offset + gap*q->entry_size;
+        while(offset > q->len) offset -= q->len;
+        addr_check = (uint64_t) q->queue + offset;
+    }
+
 #ifdef DMA_CACHE
     eqe = smart_dma_read(q->id, addr, q->entry_size);
-    if(eqe) {
+    if(gap > 0) check = smart_dma_read(q->id, addr_check, q->entry_size);
+    else check = eqe;
+
+    if(eqe && check) {
 #else
     dma_read(addr, q->entry_size, (void**) &eqe);
-    if(eqe->flag == 0 || eqe->flag == FLAG_CLEAN) {
+    if(gap > 0) dma_read(addr_check, q->entry_size, (void**) &check);
+    else check = eqe;
+
+    if((eqe->flag == 0 || eqe->flag == FLAG_CLEAN) &&
+       (check->flag == 0 || check->flag == FLAG_CLEAN)) {
 #endif
       // enqueue_clean is never called if we eleminate actual enqueue read.
       if(eqe->flag == FLAG_CLEAN) enqueue_clean(eqe, addr, clean);

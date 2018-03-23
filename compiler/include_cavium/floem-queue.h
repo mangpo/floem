@@ -42,7 +42,7 @@ typedef struct {
   int qid;
 } q_buffer;
 
-q_buffer enqueue_alloc(circular_queue* q, size_t len, void(*clean)(q_buffer));
+q_buffer enqueue_alloc(circular_queue* q, size_t len, int gap, void(*clean)(q_buffer));
 void enqueue_submit(q_buffer buf, bool check);
 q_buffer dequeue_get(circular_queue* q);
 void dequeue_release(q_buffer buf, uint8_t flag_clean);
