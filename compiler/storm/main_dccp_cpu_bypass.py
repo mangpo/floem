@@ -629,15 +629,18 @@ import target
 MAX_ELEMS = (4 * 1024)
 
 rx_enq_creator, rx_deq_creator, rx_release_creator = \
-    queue.queue_custom("rx_queue", "struct tuple", MAX_ELEMS, n_cores, "status", enq_blocking=False,
-                       deq_blocking=True, enq_atomic=True, enq_output=True)
+    queue.queue_custom("rx_queue", "struct tuple", MAX_ELEMS, n_cores, "status",
+                       enq_blocking=False,
+                       deq_blocking=False, enq_atomic=True, enq_output=True)
 
 tx_enq_creator, tx_deq_creator, tx_release_creator = \
-    queue.queue_custom("tx_queue", "struct tuple", MAX_ELEMS, n_cores, "status", enq_blocking=True,
+    queue.queue_custom("tx_queue", "struct tuple", MAX_ELEMS, n_cores, "status",
+                       enq_blocking=True,
                        deq_atomic=True)
 
 BypassEnq, BypassDeq, BypassRelease = \
-    queue.queue_custom("bypass_queue", "struct tuple", MAX_ELEMS, n_cores, "status", enq_blocking=True,
+    queue.queue_custom("bypass_queue", "struct tuple", MAX_ELEMS, n_cores, "status",
+                       enq_blocking=False,
                        deq_blocking=False, enq_atomic=True)  # TODO: enq_blocking?
 
 
@@ -663,7 +666,7 @@ class NicRxFlow(Flow):
 
             def impl(self):
                 network_alloc = net.NetAlloc()
-                to_net = net.ToNet(configure=["alloc", 8])
+                to_net = net.ToNet(configure=["alloc", 32])
                 classifier = Classifier()
                 rx_enq = rx_enq_creator()
                 tx_buf = GetTxBuf(configure=['sizeof(struct pkt_dccp_ack_headers)'])
@@ -753,7 +756,7 @@ class NicTxFlow(Flow):
     def impl(self):
         tx_release = tx_release_creator()
         network_alloc = net.NetAlloc()
-        to_net = net.ToNet(configure=["alloc", 8])
+        to_net = net.ToNet(configure=["alloc", 32])
 
         tx_buf = GetTxBuf(configure=['sizeof(struct pkt_dccp_headers) + sizeof(struct tuple)'])
         size_pkt = SizePkt(configure=['sizeof(struct pkt_dccp_headers) + sizeof(struct tuple)'])

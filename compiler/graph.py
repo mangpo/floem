@@ -100,7 +100,7 @@ class Graph:
         return s
 
     def print_graphviz(self):
-        colors = ['purple', 'blue', 'green', 'yellow', 'orange', 'red']
+        colors = ['purple', 'blue', 'green', 'yellow', 'orange', 'red', 'violet', 'navy', 'gold', 'pink', 'grey']
         thread2color = {}
         id = 0
         print "node [style=filled];"

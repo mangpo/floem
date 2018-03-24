@@ -99,7 +99,7 @@ int global_grouping(const struct tuple *t, struct executor *self)
   return self->outtasks[0];
 }
 
-#define SYSLAB_DPDK2
+#define SYSLAB_DPDK
 
 struct worker workers[MAX_WORKERS] = {
 #if defined(LOCAL)

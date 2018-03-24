@@ -9,18 +9,20 @@ void executor_thread(void *arg) {
   int tid = (long)arg;
   struct executor *self = &executor[tid];
   
-  //printf("executor[%d] = %p, exe_id = %d\n", tid, self, self->exe_id);
+  printf("executor[%d] = %p, exe_id = %d\n", tid, self, self->exe_id);
 
   // Run dispatch loop
   for(;;) {
     if(!self->spout) {
-        q_buffer buff;
-        buff = inqueue_get(tid);
-        from_bypass = false;
+      //printf("executor[%d]: inqueue get\n", tid);
+        q_buffer buff = inqueue_get(tid);
+        bool from_bypass = false;
 
         if(!buff.entry) {
-            buff = bypass_get(tid);
-            from_bypass = true;
+	  //printf("Bypass get %d\n", tid);
+	  buff = bypass_get(tid);
+	  //printf("Bypass return %d\n", tid);
+	  from_bypass = true;
         }
         if(!buff.entry) continue;
 

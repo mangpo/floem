@@ -20,7 +20,7 @@
 //#define DEBUG_MP
 //#define DEBUG_DCCP
 //#define THREAD_AFFINITY
-#define DEBUG_PERF
+//#define DEBUG_PERF
 //#define QUEUE_STAT
 
 #define MAX_VECTOR	5	// Max. tuple vector
