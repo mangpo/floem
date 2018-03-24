@@ -99,7 +99,7 @@ int global_grouping(const struct tuple *t, struct executor *self)
   return self->outtasks[0];
 }
 
-#define SAMPA_DPDK
+#define SYSLAB_DPDK2
 
 struct worker workers[MAX_WORKERS] = {
 #if defined(LOCAL)
@@ -166,6 +166,53 @@ struct worker workers[MAX_WORKERS] = {
       { .execute = rank_execute, .taskid = 30, .outtasks = { 0 }, .grouper = global_grouping },
     }
   },
+  
+#elif defined(SYSLAB_DPDK)
+  {
+    .hostname = "dikdik", .ip.addr = "\x0a\x64\x14\x05", .port = 1234, .mac.addr = "\x3c\xfd\xfe\xad\x84\x8d",
+    .executors = {
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 1, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 2, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
+
+      { .execute = count_execute, .init = count_init, .taskid = 10, .outtasks = { 20, 21, 22, 23 }, .grouper = fields_grouping },
+      { .execute = count_execute, .init = count_init, .taskid = 11, .outtasks = { 20, 21, 22, 23 }, .grouper = fields_grouping },
+
+      { .execute = rank_execute, .taskid = 20, .outtasks = { 30 }, .grouper = global_grouping },
+      { .execute = rank_execute, .taskid = 21, .outtasks = { 30 }, .grouper = global_grouping },
+    }
+  },
+  {
+    .hostname = "fossa", .ip.addr = "\x0a\x64\x14\x07", .port = 1234, .mac.addr = "\x3c\xfd\xfe\xad\xfe\x05",
+    .executors = {
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 3, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 4, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
+
+      { .execute = count_execute, .init = count_init, .taskid = 12, .outtasks = { 20, 21, 22, 23 }, .grouper = fields_grouping },
+      { .execute = count_execute, .init = count_init, .taskid = 13, .outtasks = { 20, 21, 22, 23 }, .grouper = fields_grouping },
+
+      { .execute = rank_execute, .taskid = 22, .outtasks = { 30 }, .grouper = global_grouping },
+      { .execute = rank_execute, .taskid = 23, .outtasks = { 30 }, .grouper = global_grouping },
+      { .execute = rank_execute, .taskid = 30, .outtasks = { 0 }, .grouper = global_grouping },
+    }
+  },
+#elif defined(SYSLAB_DPDK2)
+  {
+    .hostname = "dikdik", .ip.addr = "\x0a\x64\x14\x05", .port = 1234, .mac.addr = "\x3c\xfd\xfe\xad\x84\x8d",
+    .executors = {
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 1, .outtasks = { 10, 11 }, .grouper = fields_grouping },
+      { .execute = count_execute, .init = count_init, .taskid = 10, .outtasks = { 20, 21 }, .grouper = fields_grouping },
+      { .execute = rank_execute, .taskid = 20, .outtasks = { 30 }, .grouper = global_grouping },
+    }
+  },
+  {
+    .hostname = "fossa", .ip.addr = "\x0a\x64\x14\x07", .port = 1234, .mac.addr = "\x3c\xfd\xfe\xad\xfe\x05",
+    .executors = {
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 2, .outtasks = { 10, 11 }, .grouper = fields_grouping },
+      { .execute = count_execute, .init = count_init, .taskid = 11, .outtasks = { 20, 21 }, .grouper = fields_grouping },
+      { .execute = rank_execute, .taskid = 21, .outtasks = { 30 }, .grouper = global_grouping },
+      { .execute = rank_execute, .taskid = 30, .outtasks = { 0 }, .grouper = global_grouping },
+    }
+  },
 #elif defined(SAMPA_LOCAL)
   {
     .hostname = "127.0.0.1", .port = 7001,	// sampa1
@@ -214,6 +261,7 @@ struct worker workers[MAX_WORKERS] = {
       { .execute = count_execute, .init = count_init, .taskid = 13, .outtasks = { 20, 21, 22, 23 }, .grouper = fields_grouping },
     }
   },
+  
 #elif defined(SAMPA_DPDK)
   {
     .hostname = "10.3.0.30", .ip.addr = "\x0a\x03\x00\x1e", .port = 1234, .mac.addr = "\x68\x05\xca\x33\x13\x40",	// sampa1

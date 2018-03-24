@@ -100,13 +100,12 @@ void count_execute(const struct tuple *t, struct executor *self)
 #ifdef DEBUG_PERF
   static __thread time_t debug_lasttime = 0;
   static __thread size_t numexecutes = 0;
-  static __thread uint64_t execute_time = 0;
-
- /* before_time = 0, hash_time = 0, lookup_time = 0, insert_time = 0; */
+  static __thread uint64_t execute_time = 0, before_time = 0, hash_time = 0, lookup_time = 0, insert_time = 0, total = 0;
 
   uint64_t starttime = rdtsc(); // TODO: cavium
 
   numexecutes++;
+  total++;
 #endif
 
   assert(t != NULL);
@@ -119,15 +118,15 @@ void count_execute(const struct tuple *t, struct executor *self)
 
   /* printf("Counter %d got '%s'.\n", t->task, t->v[0].str); */
 
-  /* uint64_t before_hash = rdtsc(); */
+  uint64_t before_hash = rdtsc();
 
   uint64_t key = hash(t->v[0].str, strlen(t->v[0].str), 0);
 
-  /* uint64_t before_lookup = rdtsc(); */
+  uint64_t before_lookup = rdtsc();
 
   struct bucket *b = collections_hash_find(st->counts, key);
 
-  /* uint64_t before_insert = rdtsc(); */
+  uint64_t before_insert = rdtsc();
 
   if(b == NULL) {
     //printf(">>>>>>>>>>>>>> NEW BUCKET: %s key = %ld\n", t->v[0].str, key);
@@ -143,15 +142,21 @@ void count_execute(const struct tuple *t, struct executor *self)
 
 #ifdef DEBUG_PERF
   uint64_t now = rdtsc();
-  /* before_time += before_hash - starttime; */
-  /* hash_time += before_lookup - before_hash; */
-  /* lookup_time += before_insert - before_lookup; */
-  /* insert_time += now - before_insert; */
+  before_time += before_hash - starttime;
+  hash_time += before_lookup - before_hash;
+  lookup_time += before_insert - before_lookup;
+  insert_time += now - before_insert;
   execute_time += now - starttime;
   
   if(numexecutes == 1000000) {
-    printf("count time: %.2f\n", 1.0*execute_time/numexecutes);
+    printf("count time: %.2f | %.2f + %.2f + %.2f+ %.2f | %ld\n", 1.0*execute_time/numexecutes,
+	   1.0*before_time/numexecutes,
+	   1.0*hash_time/numexecutes,
+	   1.0*lookup_time/numexecutes,
+	   1.0*insert_time/numexecutes,
+	   total);
     execute_time = numexecutes = 0;
+    before_time = hash_time = lookup_time = insert_time = 0;
   }
 #endif
 

@@ -6,7 +6,7 @@ test = "spout"
 inject_func = "random_" + test
 workerid = {"spout": 0, "count": 1, "rank": 2}
 
-n_cores = 7
+n_cores = 4 #7
 n_workers = 'MAX_WORKERS'
 n_nic_rx = 2
 n_nic_tx = 3
@@ -539,6 +539,7 @@ class BatchScheduler(Element):
         //if(old <=3 && core > 3) core = 2;             
         //if(old >=4 && core < 4) core = 4;             
         if(old >=2 && core < 2) core = 2;             
+        //if(old >=1 && core < 1) core = 1;             
         batch_size = 0;                                        
         start = rdtsc();                                             
     }                                                             
@@ -649,7 +650,7 @@ class NicRxFlow(Flow):
 
             def impl(self):
                 network_alloc = net.NetAlloc()
-                to_net = net.ToNet(configure=["alloc", 8])
+                to_net = net.ToNet(configure=["alloc", 32])
                 classifier = Classifier()
                 rx_enq = rx_enq_creator()
                 tx_buf = GetTxBuf(configure=['sizeof(struct pkt_dccp_ack_headers)'])
@@ -718,7 +719,7 @@ class NicTxFlow(Flow):
     def impl(self):
         tx_release = tx_release_creator()
         network_alloc = net.NetAlloc()
-        to_net = net.ToNet(configure=["alloc", 8])
+        to_net = net.ToNet(configure=["alloc", 32])
 
         tx_buf = GetTxBuf(configure=['sizeof(struct pkt_dccp_headers) + sizeof(struct tuple)'])
         size_pkt = SizePkt(configure=['sizeof(struct pkt_dccp_headers) + sizeof(struct tuple)'])

@@ -1,4 +1,3 @@
-#include "dpdk.h"
 #include "iokvs.h"
 #include <unistd.h>
 

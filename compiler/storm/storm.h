@@ -20,7 +20,8 @@
 //#define DEBUG_MP
 //#define DEBUG_DCCP
 //#define THREAD_AFFINITY
-//#define DEBUG_PERF
+#define DEBUG_PERF
+//#define QUEUE_STAT
 
 #define MAX_VECTOR	5	// Max. tuple vector
 #define MAX_STR		64
@@ -59,7 +60,7 @@ struct executor {
   bool		spout;
   size_t	outqueue_empty, outqueue_full, inqueue_empty, inqueue_full;
 #ifndef FLEXNIC_EMULATION
-  size_t	execute_time, numexecutes, emitted, recved, avglatency;
+  size_t	get_time, execute_time, numexecutes, emitted, recved, avglatency;
   size_t	lastexecute_time, lastnumexecutes;
 #else
   size_t	tuples, lasttuples, full;

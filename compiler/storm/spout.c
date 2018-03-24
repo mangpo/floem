@@ -47,7 +47,7 @@ void spout_execute(const struct tuple *t, struct executor *self)
   struct timeval start;
   r = gettimeofday(&start, NULL);
 
-  static __thread size_t count = 0, sum = 0;
+  static __thread size_t count = 0, sum = 0, total = 0;
   size_t starttime = rdtsc();
 #endif
 
@@ -85,9 +85,10 @@ void spout_execute(const struct tuple *t, struct executor *self)
 #ifdef DEBUG_PERF
   size_t endtime = rdtsc();
   count++;
+  total++;
   sum += endtime - starttime;
   if(count == 1000000) {
-    printf("spout time: %.2f\n", 1.0*sum/count);
+    printf("spout time: %.2f | %ld\n", 1.0*sum/count, total);
     count = sum = 0;
   }
 #endif

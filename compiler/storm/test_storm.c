@@ -14,6 +14,7 @@ void executor_thread(void *arg) {
   // Run dispatch loop
   for(;;) {
     if(!self->spout) {
+      uint64_t gettime = rdtsc();
       q_buffer buff = inqueue_get(tid);
       struct tuple *t = (struct tuple *) buff.entry;
       assert(t != NULL);
@@ -22,6 +23,7 @@ void executor_thread(void *arg) {
       inqueue_advance(buff);  // old version: inqueue_advance(tid);
       uint64_t now = rdtsc();
       self->execute_time += now - starttime;
+      self->get_time += starttime - gettime;
       self->numexecutes++;
       //}
     } else {
@@ -89,6 +91,7 @@ int main(int argc, char *argv[]) {
         printf("main: executor[%d] = %p\n", i, &executor[i]);
 	executor[i].numexecutes = executor[i].lastnumexecutes = 0;
 	executor[i].execute_time = executor[i].lastexecute_time = 0;
+	executor[i].get_time = 0;
 	executor[i].exe_id = i;
         if(executor[i].init != NULL) {
 	  executor[i].init(&executor[i]);
@@ -104,7 +107,7 @@ int main(int argc, char *argv[]) {
 
     size_t sum = 0, lasttuples = 0, tuples;
     run_threads();
-    int wait = 10;
+    int wait = 1;
     while(1) {
         sleep(wait);
         sum = 0;
@@ -116,14 +119,14 @@ int main(int argc, char *argv[]) {
         /* } */
 #ifdef DEBUG_PERF
 	for(int i = 0; i < MAX_EXECUTORS && executor[i].execute != NULL; i++) {
-	  struct executor *self = &executor[i];
-	  if(self->numexecutes-self->lastnumexecutes) {
-	    printf("%d: numexecutes %zu, time %zu\n", self->taskid, 
-		   self->numexecutes-self->lastnumexecutes, 
-		   (self->execute_time-self->lastexecute_time) / (self->numexecutes - self->lastnumexecutes));
-	    self->lastnumexecutes = self->numexecutes;
-	    self->lastexecute_time = self->execute_time;
-	  }
+	  struct executor *e = &executor[i];
+	  printf("%d: emitted %zu, get time %zu, execute time %zu, numexecutes %zu, avg. latency %zu\n",
+		 e->taskid,
+		 e->emitted,
+		 e->get_time / (e->numexecutes > 0 ? e->numexecutes : 1),
+		 e->execute_time / (e->numexecutes > 0 ? e->numexecutes : 1),
+		 e->numexecutes,
+		 e->avglatency / (e->numexecutes > 0 ? e->numexecutes : 1));
 	}
 #endif
         tuples = info->tuples - lasttuples;

@@ -720,8 +720,13 @@ c.include = r'''
 '''
 if mode == target.CAVIUM:
     c.init = r'''
+#ifdef CAVIUM
     settings_init();
+#endif
     '''
-c.generate_code_as_header()
-c.depend = ['jenkins_hash', 'hashtable', 'ialloc', 'settings', 'dpdk']
+    c.generate_code_as_header()
+    c.depend = ['jenkins_hash', 'hashtable', 'ialloc', 'settings', 'app']
+else:
+    c.generate_code_as_header()
+    c.depend = ['jenkins_hash', 'hashtable', 'ialloc', 'settings', 'dpdk']
 c.compile_and_run('test_no_steer')
