@@ -3,7 +3,6 @@ from dsl import *
 from compiler import Compiler
 
 test = "spout"
-inject_func = "random_" + test
 workerid = {"spout": 0, "count": 1, "rank": 2}
 
 n_cores = 4 #7

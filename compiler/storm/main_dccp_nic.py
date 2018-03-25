@@ -2,15 +2,18 @@ import queue, net
 from dsl import *
 from compiler import Compiler
 
-nic = 'CAVIUM' #'dpdk'
+nic = 'dpdk'
 test = "spout"
-inject_func = "random_" + test
 workerid = {"spout": 0, "count": 1, "rank": 2}
 
-n_cores = 7
+n_cores = 4
 n_workers = 'MAX_WORKERS'
-n_nic_rx = 3
-n_nic_tx = 5
+if nic == 'dpdk':
+    n_nic_rx = 2
+    n_nic_tx = 3
+else:
+    n_nic_rx = 3
+    n_nic_tx = 5
 
 class DccpInfo(State):
     header = Field("struct pkt_dccp_headers")
@@ -34,19 +37,6 @@ class DccpInfo(State):
 
 dccp_info = DccpInfo()
 
-class CountTuple(Element):
-    dccp = Persistent(DccpInfo)
-    def states(self): self.dccp = dccp_info
-
-    def configure(self):
-        self.inp = Input("struct tuple*")
-        self.out = Output("struct tuple*")
-
-    def impl(self):
-        self.run_c(r'''
-        struct tuple *t = inp();
-        if(t) __sync_fetch_and_add64(&dccp->tuples, 1);
-        output { out(t); }''')
 
 class CountPacket(Element):
     dccp = Persistent(DccpInfo)
@@ -153,7 +143,7 @@ class LocalOrRemote(Element):
     if(local) printf("send to myself!\n");
 #endif
 
-    output switch { case local: out_local(t); else: out_send(t, worker); }
+    output switch { case local: out_local(t); else: out_send(t); }
         ''')
 
 
@@ -182,21 +172,6 @@ class PrintTuple(Element):
 
 
 ############################### DCCP #################################
-
-class DccpGetStat(Element):
-    dccp = Persistent(DccpInfo)
-
-    def states(self):
-        self.dccp = dccp_info
-
-    def configure(self):
-        self.inp = Input()
-        self.out = Output(Pointer(DccpInfo))
-
-    def impl(self):
-        self.run_c(r'''
-        output { out(dccp); }''')
-
 
 class DccpPrintStat(Element):
     info = Persistent(DccpInfo)
@@ -637,20 +612,6 @@ class BatchScheduler(Element):
     output { out(core); }
         ''' % ('%d', n_cores, n_nic_tx, '%', '%', '%d', '%d', '%d'))
 
-# class BatchInc(Element):
-#     this = Persistent(BatchInfo)
-#
-#     def states(self): self.this = batch_info
-#
-#     def configure(self):
-#         self.inp = Input("struct tuple*")
-#
-#     def impl(self):
-#         self.run_c(r'''
-#         (struct tuple* t) = inp();
-#         if(t) this->batch_size++;
-#         ''')
-
 class BatchInc(Element):
     def configure(self):
         self.inp = Input()
@@ -878,36 +839,45 @@ if nic == 'dpdk':
     class dccp_print_stat(CallablePipeline):
         def impl(self):
             DccpPrintStat()
-    dccp_print_stat('dccp_print_stat', process='dpdk') 
+    dccp_print_stat('dccp_print_stat', process='dpdk')
+    inqueue_get('inqueue_get', process='dpdk')
+    inqueue_advance('inqueue_advance', process='dpdk')
+    outqueue_put('outqueue_put', process='dpdk')
+    master_process('dpdk')
 else:
     class dccp_print_stat(Pipeline):
         def impl(self):
             DccpPrintStat()
     dccp_print_stat('dccp_print_stat', device=target.CAVIUM, cores=[8])
-
-inqueue_get('inqueue_get', process='app')
-inqueue_advance('inqueue_advance', process='app')
-outqueue_put('outqueue_put', process='app')
-master_process('app')
+    inqueue_get('inqueue_get', process='app')
+    inqueue_advance('inqueue_advance', process='app')
+    outqueue_put('outqueue_put', process='app')
+    master_process('app')
 
 
 c = Compiler(NicRxFlow, NicTxFlow)
-c.include = r'''
-#include "worker.h"
-#include "storm.h"
-#include "dccp.h"
-'''
-c.init = r'''
-int workerid = atoi(argv[1]);
-struct worker* workers = get_workers();
-init_task2executor(workers[workerid].executors);
-'''
-c.generate_code_as_header()
 
 if nic == 'dpdk':
-    c.depend = {"test_storm_nic": ['hash', 'worker', 'dummy', 'dpdk'],
-                "test_storm_app": ['list', 'hash', 'hash_table', 'spout', 'count', 'rank', 'worker', 'app']}
-    c.compile_and_run([("test_storm_app", workerid[test]), ("test_storm_nic", workerid[test])])
+    c.include = r'''
+    #include <rte_memcpy.h>
+    #include "worker.h"
+    #include "storm.h"
+    #include "dccp.h"
+    '''
+    c.generate_code_as_header("dpdk")
+    c.depend = {"test_storm": ['list', 'hash', 'hash_table', 'spout', 'count', 'rank', 'worker', 'dpdk']}
+    c.compile_and_run([("test_storm2", workerid[test])])
 else:
+    c.include = r'''
+    #include "worker.h"
+    #include "storm.h"
+    #include "dccp.h"
+    '''
+    c.init = r'''
+    int workerid = atoi(argv[1]);
+    struct worker* workers = get_workers();
+    init_task2executor(workers[workerid].executors);
+    '''
+    c.generate_code_as_header()
     c.depend = {"test_storm_app": ['list', 'hash', 'hash_table', 'spout', 'count', 'rank', 'worker', 'app']}
     c.compile_and_run([("test_storm_app", workerid[test])])
