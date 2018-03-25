@@ -103,8 +103,6 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    DccpInfo* info = get_dccp_stat();
-
     size_t lasttuples = 0, tuples;
     run_threads();
     int wait = 1;

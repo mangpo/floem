@@ -354,7 +354,7 @@ class DccpRecvAck(Element):
 #endif
 	  // Congestion event! Shrink congestion window
 	  uint32_t oldcwnd, success = 0;
-          size_t count = 0;
+          //size_t count = 0;
 	  do {
             oldcwnd = connections[srcworker].cwnd;
 	    if(oldcwnd >= 2) {
@@ -363,8 +363,8 @@ class DccpRecvAck(Element):
 	    } else {
 	      break;
 	    }
-            count++;
-            if(count%1000==0) printf("congestion loop (%d): cwnd = %d, count = %ld\n", cvmx_get_core_num(),connections[srcworker].cwnd,count);
+            //count++;
+            //if(count%1000==0) printf("congestion loop (%d): cwnd = %d, count = %ld\n", cvmx_get_core_num(),connections[srcworker].cwnd,count);
 
 	  } while(!success);
 #ifdef DEBUG_DCCP
@@ -575,7 +575,11 @@ class BatchScheduler(Element):
         
     if(core == -1) {
         //core = (core_id * n_cores)/%d;
+#ifndef CAVIUM
+        core = core_id;
+#else
         core = core_id/2;
+#endif
         while(this->executors[core].execute == NULL){
             core = (core + 1) %s n_cores;
         }  
@@ -685,9 +689,17 @@ rx_enq_creator, rx_deq_creator, rx_release_creator = \
     queue.queue_custom("rx_queue", "struct tuple", MAX_ELEMS, n_cores, "status", enq_blocking=False,
                        deq_blocking=True, enq_atomic=True, enq_output=True)
 
+if nic == 'dpdk':
+    checksum = False
+    deq_atomic = False
+else:
+    checksum = "checksum"
+    deq_atomic = True
+    
 tx_enq_creator, tx_deq_creator, tx_release_creator = \
-    queue.queue_custom("tx_queue", "struct tuple", MAX_ELEMS, n_cores, "status", checksum="checksum",
-                       enq_blocking=True, deq_atomic=True)
+    queue.queue_custom("tx_queue", "struct tuple", MAX_ELEMS, n_cores, "status",
+                       checksum=checksum,
+                       enq_blocking=True, deq_atomic=deq_atomic)
 
 
 class RxState(State):
@@ -700,7 +712,7 @@ class NicRxFlow(Flow):
     state = PerPacket(RxState)
 
     def impl(self):
-        from_net = net.FromNet()
+        from_net = net.FromNet(configure=[64])
         from_net_free = net.FromNetFree()
         class nic_rx(Pipeline):
 
@@ -865,7 +877,7 @@ if nic == 'dpdk':
     #include "dccp.h"
     '''
     c.generate_code_as_header("dpdk")
-    c.depend = {"test_storm": ['list', 'hash', 'hash_table', 'spout', 'count', 'rank', 'worker', 'dpdk']}
+    c.depend = {"test_storm2": ['list', 'hash', 'hash_table', 'spout', 'count', 'rank', 'worker', 'dpdk']}
     c.compile_and_run([("test_storm2", workerid[test])])
 else:
     c.include = r'''
