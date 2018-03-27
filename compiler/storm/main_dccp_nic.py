@@ -524,36 +524,6 @@ class GetRxBuf(Element):
 
 
 ############################### Queue #################################
-# class BatchInfo(State):
-#     core = Field(Int)
-#     batch_size = Field(Int)
-#     start = Field(Uint(64))
-#
-#     def init(self):
-#         self.core = 0
-#         self.batch_size = 0
-#         self.start = 0
-#
-# batch_info = BatchInfo()
-#
-# class BatchScheduler(Element):
-#     this = Persistent(BatchInfo)
-#     def states(self):
-#         self.this = batch_info
-#
-#     def configure(self):
-#         self.out = Output(Size)
-#
-#     def impl(self):
-#         self.run_c(r'''
-#     if(this->batch_size >= BATCH_SIZE || rdtsc() - this->start >= BATCH_DELAY) {
-#         this->core = (this->core + 1) %s %d;
-#         this->batch_size = 0;
-#         this->start = rdtsc();
-#         printf("======================= Dequeue core = %d\n", this->core);
-#     }
-#     output { out(this->core); }
-#         ''' % ('%', n_cores))
 
 class BatchScheduler(Element):
     this = Persistent(TaskMaster)
@@ -624,28 +594,6 @@ class BatchInc(Element):
         self.run_c("")
 
 ################## Queue addr ####################
-class DropAddr(Element):
-    def configure(self):
-        self.inp = Input("struct tuple*", "uintptr_t")
-        self.out = Output("struct tuple*")
-
-    def impl(self):
-        self.run_c(r'''
-    (struct tuple* t, uintptr_t addr) = inp();
-    output { out(t); }
-        ''')
-
-class AddNullAddr(Element):
-    def configure(self):
-        self.inp = Input("struct tuple*")
-        self.out = Output("struct tuple*", "uintptr_t")
-
-    def impl(self):
-        self.run_c(r'''
-    (struct tuple* t) = inp();
-    output { out(t, 0); }
-        ''')
-
 class SaveBuff(Element):
     def configure(self):
         self.inp = Input(queue.q_buffer)
@@ -715,13 +663,6 @@ class NicRxFlow(Flow):
         from_net = net.FromNet(configure=[64])
         from_net_free = net.FromNetFree()
         class nic_rx(Pipeline):
-
-            def impl_basic(self):
-                # Notice that it's okay to connect non-empty port to an empty port.
-                rx_enq = rx_enq_creator()
-                from_net >> Save() >> Pkt2Tuple() >> GetCore() >> rx_enq >> GetRxBuf() >> from_net_free
-                from_net.nothing >> Drop()
-
             def impl(self):
                 network_alloc = net.NetAlloc()
                 to_net = net.ToNet(configure=["alloc"])
