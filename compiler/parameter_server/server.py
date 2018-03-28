@@ -1,4 +1,4 @@
-from floem import *
+from common import *
 import net, library
 
 nic = 'dpdk'
@@ -35,20 +35,6 @@ class MyState(State):
     parameters = Field('int*')
     n = Field(Int)
     group_id = Field(Int)
-
-class param_message(State):
-    group_id = Field(Int)
-    member_id = Field(Int)
-    start_id = Field(Uint(64))
-    n = Field(Int)
-    parameters = Field(Array(Int))
-    layout = [group_id, member_id, start_id, n, parameters]
-
-class param_message_out(State):
-    group_id = Field(Int)
-    n = Field(Int)
-    parameters = Field(Array(Int))
-    layout = [group_id, n, parameters]
 
 define_state(param_message)
 define_state(param_message_out)
@@ -204,6 +190,7 @@ udp_message* m = pkt;
 // fill in pkt
 param_message_out* param_msg = (param_message_out*) m->payload;
 param_msg->group_id = state->group_id;
+param_msg->member_id = %d;
 param_msg->n = state->n;
 memcpy(param_msg->parameters, state->parameters, sizeof(int) * state->n);
 
@@ -215,7 +202,7 @@ m->ipv4.src = old->ipv4.dest;
 m->ipv4.dest = ips[%d];
 
 output { out(size, pkt, buff); }
-''' % (self.worker_id, self.worker_id))
+''' % (self.worker_id, self.worker_id, self.worker_id))
 
 
 class Filter(Element):
@@ -288,7 +275,7 @@ class main(Flow):
 
                 for i in range(n_workers):
                     net_alloc = net.NetAlloc()
-                    update >> net_alloc >> Copy(configure=[i]) >> to_net
+                    update >> net_alloc >> Copy(configure=[0]) >> to_net  # send to dikdik
                     net_alloc.oom >> drop
 
 
