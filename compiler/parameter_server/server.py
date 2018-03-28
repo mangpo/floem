@@ -1,5 +1,7 @@
 from floem import *
-import net
+import net, library
+
+nic = 'dpdk'
 
 n_params = 1024
 n_groups = 128
@@ -146,7 +148,7 @@ class UpdateParam(Element):
 
     def configure(self):
         self.inp = Input("param_aggregate*")
-        self.out = Output(Int)
+        self.out = Output(SizeT)
         self.buffer = param_buffer_inst
         self.store = param_store_inst
 
@@ -160,8 +162,13 @@ state->group_id = agg->group_id;
 state->n = agg->n;
 state->parameters = &store->parameters[start_id];
 
-memcpy(&store->parameters[start_id], agg->parameters, agg->n * sizeof(int));
+// Update params
+int i;
+for(i=0; i<agg->n; i++) {
+    store->parameters[start_id] += agg->parameters[i] >> 8;   // learning_rate = 1/2^8
+}
 
+// Reset aggregrate buffer
 memset(agg->parameters, 0, agg->n * sizeof(int));
 agg->bitmap = 0;
 agg->group_id = -1;
@@ -230,7 +237,7 @@ output switch {
 class SavePkt(Element):
     def configure(self):
         self.inp = Input(SizeT, "void *", "void *")
-        self.out = Output()
+        self.out = Output("void*")
 
     def impl(self):
         self.run_c(r'''
@@ -259,16 +266,41 @@ class main(Flow):
                 from_net = net.FromNet()
                 to_net = net.ToNet(configure=["alloc"])
                 net_free = net.FromNetFree()
+
+                filter = Filter()
                 aggregate = Aggregate()
                 update = UpdateParam()
                 get_pkt = GetPkt()
+                drop = library.Drop()
 
-                from_net >> Filter() >> SavePkt() >> aggregate
+                from_net >> filter >> SavePkt() >> aggregate
                 aggregate.up >> update >> get_pkt
                 aggregate.other >> get_pkt
+
+                for i in range(n_workers):
+                    net_alloc = net.NetAlloc()
+                    update >> net_alloc >> Copy(configure=[i]) >> to_net
+                    net_alloc.oom >> drop
+
+
+                from_net.nothing >> drop
+                filter.other >> net_free
                 get_pkt >> net_free
 
-                for i in n_workers:
-                    update >> net.NetAlloc() >> Copy(configure=[i]) >> to_net
-
         nic_rx('nic_rx', process='dpdk', cores=range(1))
+
+
+c = Compiler(main)
+c.include = r'''
+#include "protocol_binary.h"
+''' + define + addr
+c.testing = 'while (1) pause();'
+if nic == 'dpdk':
+    c.generate_code_and_run()
+else:
+    pass
+    # c.generate_code_as_header()
+    # c.generate_code_and_compile()
+    # c.compile_and_run('dpdk')
+
+
