@@ -16,7 +16,7 @@ define = r'''
 ''' % (n_params, n_groups, buffer_size)
 
 addr = r'''
-struct ether dests[4] = { 
+struct eth_addr dests[4] = { 
     {.addr = "\x3c\xfd\xfe\xad\x84\x8d"}, // dikdik
     {.addr = "\x3c\xfd\xfe\xad\x84\x8d"}, 
     {.addr = "\x3c\xfd\xfe\xad\xfe\x05"}, // fossa
@@ -38,15 +38,20 @@ class MyState(State):
 
 class param_message(State):
     group_id = Field(Int)
-    member_id = Field(Uint(8))
+    member_id = Field(Int)
     start_id = Field(Uint(64))
     n = Field(Int)
     parameters = Field(Array(Int))
+    layout = [group_id, member_id, start_id, n, parameters]
 
 class param_message_out(State):
     group_id = Field(Int)
     n = Field(Int)
     parameters = Field(Array(Int))
+    layout = [group_id, n, parameters]
+
+define_state(param_message)
+define_state(param_message_out)
 
 class param_aggregate(State):
     group_id = Field(Int)
@@ -54,9 +59,10 @@ class param_aggregate(State):
     n = Field(Int)
     bitmap = Field(Int)
     parameters = Field(Array(Int, buffer_size))
+    layout = [group_id, start_id, n, bitmap, parameters]
 
 class param_buffer(State):
-    groups = Field(param_aggregate, n_groups)
+    groups = Field(Array(param_aggregate, n_groups))
 
 class param_store(State):
     parameters = Field(Array(Int, n_params))
@@ -82,12 +88,13 @@ class Aggregate(Element):
         self.run_c(r'''
 (void* pkt) = inp();
 udp_message* udp_msg = pkt;
-param_message* param_msg = udp_msg->payload;
+param_message* param_msg = (param_message*) udp_msg->payload;
 
 int group_id = param_msg->group_id;
-int old_group_id = agg->group_id;
 int key = group_id % BUFFER_SIZE;
 param_aggregate* agg = &buffer->groups[key];
+int old_group_id = agg->group_id;
+
 bool pass = true, update = false;
 int bit, bitmap, new_bitmap;
 int i;
@@ -173,7 +180,7 @@ memset(agg->parameters, 0, agg->n * sizeof(int));
 agg->bitmap = 0;
 agg->group_id = -1;
 
-int size = sizeof(udp_message) + sizeof(param_message_out) + agg->n * sizeof(int));
+int size = sizeof(udp_message) + sizeof(param_message_out) + agg->n * sizeof(int);
 
 output {
     out(size);
@@ -195,7 +202,7 @@ udp_message* old = state->pkt;
 udp_message* m = pkt;
 
 // fill in pkt
-param_message_out* param_msg = pkt->payload;
+param_message_out* param_msg = (param_message_out*) m->payload;
 param_msg->group_id = state->group_id;
 param_msg->n = state->n;
 memcpy(param_msg->parameters, state->parameters, sizeof(int) * state->n);
@@ -224,11 +231,11 @@ class Filter(Element):
 
 #define IP_PROTOCOL_POS 23
 
-uint8_t pkt_ptr = pkt;
+uint8_t* pkt_ptr = pkt;
 bool discard = (pkt_ptr[IP_PROTOCOL_POS] != 0x11); // UDP only
 
 output switch {
-    case disgard: other(pkt, buff);
+    case discard: other(pkt, buff);
     else: out(size, pkt, buff);
 }
         ''')
@@ -254,7 +261,9 @@ class GetPkt(Element):
 
     def impl(self):
         self.run_c(r'''
-    output { out(state->pkt, state->pkt_buff); }
+    void* pkt = state->pkt;
+    void* buff = state->pkt_buff;
+    output { out(pkt, buff); }
         ''')
 
 class main(Flow):

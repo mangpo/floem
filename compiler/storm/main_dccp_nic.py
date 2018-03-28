@@ -631,7 +631,7 @@ class Drop(Element):
 #################### Connection ####################
 import target
 
-MAX_ELEMS = 256 #(4 * 1024)
+MAX_ELEMS = 4 * 1024 #256 (4 * 1024)
 
 rx_enq_creator, rx_deq_creator, rx_release_creator = \
     queue.queue_custom("rx_queue", "struct tuple", MAX_ELEMS, n_cores, "status", enq_blocking=False,

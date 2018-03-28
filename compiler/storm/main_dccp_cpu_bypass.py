@@ -6,7 +6,7 @@ test = "spout"
 inject_func = "random_" + test
 workerid = {"spout": 0, "count": 1, "rank": 2}
 
-n_cores = 7
+n_cores = 4
 n_workers = 'MAX_WORKERS'
 n_nic_rx = 2
 n_nic_tx = 3
