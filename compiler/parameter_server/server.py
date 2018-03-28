@@ -13,6 +13,20 @@ define = r'''
 #define BITMAP_FULL 0xf
 ''' % (n_params, n_groups, buffer_size)
 
+addr = r'''
+struct ether dests[4] = { 
+    {.addr = "\x3c\xfd\xfe\xad\x84\x8d"}, // dikdik
+    {.addr = "\x3c\xfd\xfe\xad\x84\x8d"}, 
+    {.addr = "\x3c\xfd\xfe\xad\xfe\x05"}, // fossa
+    {.addr = "\x3c\xfd\xfe\xad\xfe\x05"} };
+    
+struct ip_addr ips[4] = { 
+    {.addr = "\x0a\x64\x14\x05"}, // dikdik
+    {.addr = "\x0a\x64\x14\x05"}, 
+    {.addr = "\x0a\x64\x14\x07"}, // fossa
+    {.addr = "\x0a\x64\x14\x07"} };
+'''
+
 class MyState(State):
     pkt_buff = Field('void*')
     pkt = Field('void*')
@@ -37,14 +51,10 @@ class param_aggregate(State):
     start_id = Field(Uint(64))
     n = Field(Int)
     bitmap = Field(Int)
-    lock = Field('spinlock_t')
     parameters = Field(Array(Int, buffer_size))
 
 class param_buffer(State):
     groups = Field(param_aggregate, n_groups)
-
-    def init(self):
-        pass # TODO: lock_init
 
 class param_store(State):
     parameters = Field(Array(Int, n_params))
@@ -136,7 +146,7 @@ class UpdateParam(Element):
 
     def configure(self):
         self.inp = Input("param_aggregate*")
-        self.out = Output()
+        self.out = Output(Int)
         self.buffer = param_buffer_inst
         self.store = param_store_inst
 
@@ -165,21 +175,33 @@ output {
 
 
 class Copy(Element):
-    def configure(self):
+    def configure(self, worker_id):
         self.inp = Input(SizeT, "void*", "void*")
         self.out = Output(SizeT, "void*", "void*")
+        self.worker_id = worker_id
 
     def impl(self):
         self.run_c(r'''
 (size_t size, void* pkt, void* buff) = inp();
 memcpy(pkt, state->pkt, sizeof(udp_message));
+udp_message* old = state->pkt;
+udp_message* m = pkt;
 
-// TODO: fill in pkt
+// fill in pkt
+param_message_out* param_msg = pkt->payload;
+param_msg->group_id = state->group_id;
+param_msg->n = state->n;
+memcpy(param_msg->parameters, state->parameters, sizeof(int) * state->n);
 
-// TODO: fill in MAC address
+// fill in MAC address
+m->ether.src = old->ether.dest;
+m->ether.dest = dests[%d];
+
+m->ipv4.src = old->ipv4.dest;
+m->ipv4.dest = ips[%d];
 
 output { out(size, pkt, buff); }
-''')
+''' % (self.worker_id, self.worker_id))
 
 
 class Filter(Element):
@@ -205,7 +227,7 @@ output switch {
         ''')
 
 
-class SaveState(Element):
+class SavePkt(Element):
     def configure(self):
         self.inp = Input(SizeT, "void *", "void *")
         self.out = Output()
@@ -218,10 +240,35 @@ class SaveState(Element):
     output { out(pkt); }
                 ''')
 
-class nic_rx(Pipeline):
-    def impl(self):
-        from_net = net.FromNet()
-        to_net = net.ToNet()
-        net_free = net.FromNetFree()
+class GetPkt(Element):
+    def configure(self):
+        self.inp = Input()
+        self.out = Output('void*', 'void*')
 
-        from_net >> Filter() >> SaveState()
+    def impl(self):
+        self.run_c(r'''
+    output { out(state->pkt, state->pkt_buff); }
+        ''')
+
+class main(Flow):
+    state = PerPacket(MyState)
+
+    def impl(self):
+        class nic_rx(Pipeline):
+            def impl(self):
+                from_net = net.FromNet()
+                to_net = net.ToNet(configure=["alloc"])
+                net_free = net.FromNetFree()
+                aggregate = Aggregate()
+                update = UpdateParam()
+                get_pkt = GetPkt()
+
+                from_net >> Filter() >> SavePkt() >> aggregate
+                aggregate.up >> update >> get_pkt
+                aggregate.other >> get_pkt
+                get_pkt >> net_free
+
+                for i in n_workers:
+                    update >> net.NetAlloc() >> Copy(configure=[i]) >> to_net
+
+        nic_rx('nic_rx', process='dpdk', cores=range(1))
