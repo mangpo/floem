@@ -1,11 +1,11 @@
-from common import *
+from message import *
 import net, library
 
 nic = 'dpdk'
 
 n_params = 1024
 n_groups = 128
-n_workers = 4
+n_workers = 1
 buffer_size = 32
 
 define = r'''
@@ -37,7 +37,6 @@ class MyState(State):
     group_id = Field(Int)
 
 define_state(param_message)
-define_state(param_message_out)
 
 class param_aggregate(State):
     group_id = Field(Int)
@@ -166,7 +165,7 @@ memset(agg->parameters, 0, agg->n * sizeof(int));
 agg->bitmap = 0;
 agg->group_id = -1;
 
-int size = sizeof(udp_message) + sizeof(param_message_out) + agg->n * sizeof(int);
+int size = sizeof(udp_message) + sizeof(param_message) + agg->n * sizeof(int);
 
 output {
     out(size);
@@ -188,7 +187,7 @@ udp_message* old = state->pkt;
 udp_message* m = pkt;
 
 // fill in pkt
-param_message_out* param_msg = (param_message_out*) m->payload;
+param_message* param_msg = (param_message*) m->payload;
 param_msg->group_id = state->group_id;
 param_msg->member_id = %d;
 param_msg->n = state->n;

@@ -1,4 +1,4 @@
-from common import *
+from message import *
 import net, library
 
 n_params = 1024
@@ -14,16 +14,16 @@ define = r'''
 ''' % (n_params, n_groups, buffer_size)
 
 define_state(param_message)
-define_state(param_message_out)
 
 class Stat(State):
     starttime = Field(Uint(64))
     time = Field(Uint(64))
     count = Field(Int)
+    total = Field(Int)
     groups = Field(Array(Bool, n_groups))
 
 class StatAll(State):
-    workers = Field(Array(State, n_workers))
+    workers = Field(Array(Stat, n_workers))
 
 stat_all = StatAll()
 
@@ -61,49 +61,6 @@ m->ipv4._proto = 17; // udp
 output { out(size, pkt, buff); }
         ''')
 
-class Wait(Element):
-    stat = Persistent(StatAll)
-
-    def configure(self):
-        self.inp = Input()
-        self.out = Output()
-        self.stat = stat_all
-
-    def impl(self):
-        self.run_c(r'''
-bool yes = false;
-
-StatOne* worker = &stat->workers[state->core_id];
-if(worker->group_id > 0) 
-    yes = true;
-else {
-    int i;
-    yes = true;
-    for(i=0; i<N_GROUPS; i++) {
-        if(!worker->groups[i]) {
-            yes = false;
-            break;
-        }
-    }
-    
-    if(yes) {
-        uint64_t t;
-        t = rdtsc() - worker->starttime;
-        worker->time += t;
-        worker->count += 1;
-        
-        if(worker->count == 10) {
-            print("Latency: core = %d, time = %ld\n", state->core_id, worker->time/worker->count);
-            worker->time = 0;
-            worker->count = 0;
-        }
-    }
-}
-
-output switch {
-    case yes: out();
-}
-        ''')
 
 class PayloadGen(Element):
     stat = Persistent(StatAll)
@@ -136,15 +93,48 @@ if(worker->group_id >= N_GROUPS) {
     worker->group_id = 0;
     
     // start timer, reset collector
-    memset(worker->groups, 0, sizeof(bool) * N_GROUPS);
     worker->starttime = rdtsc();
 }
 
 output { out(size, pkt, buff); }
         ''')
 
+
+class Wait(Element):
+    stat = Persistent(StatAll)
+
+    def configure(self):
+        self.inp = Input(Int)
+        self.out = Output(SizeT)
+        self.stat = stat_all
+
+    def impl(self):
+        self.run_c(r'''
+(int core_id) = inp();
+        
+bool yes = false;
+
+state->core_id = core_id;
+StatOne* worker = &stat->workers[core_id];
+if(worker->group_id > 0) 
+    yes = true;
+else {
+    if(worker->total == N_GROUPS) {
+        yes = true;
+        memset(worker->groups, 0, sizeof(bool) * N_GROUPS);
+        worker->total = 0;
+    }
+}
+int size = sizeof(udp_message) + sizeof(param_message) + BUFFER_SIZE * sizeof(int);
+
+output switch {
+    case yes: out(size);
+}
+        ''')
+
+
 class Reply(Element):
-    this = Persistent(Stat)
+    stat = Persistent(StatAll)
 
     def configure(self):
         self.inp = Input(SizeT, "void*", "void*")
@@ -158,19 +148,28 @@ class Reply(Element):
 (size_t size, void* pkt, void* buff) = inp();
 udp_message* m = (udp_message*) pkt;
 
-
 if(m->ipv4._proto == 17) {
-        //printf("pkt %ld\n", size);
-uint64_t mycount = __sync_fetch_and_add64(&this->count, 1);
-        if(mycount == 100000) {
-    struct timeval now;
-    gettimeofday(&now, NULL);
-    size_t thistime = now.tv_sec * 1000000 + now.tv_usec;
-    printf("%zu pkts/s  %f Gbits/s\n", (mycount * 1000000)/(thistime - this->lasttime),
-                                        (mycount * size * 8.0)/((thistime - this->lasttime) * 1000));
-    this->lasttime = thistime;
-    this->count = 0;
-}
+    udp_message* m = (udp_message*) pkt;
+    param_message* param_msg = (param_message*) m->payload;
+    StatOne* worker = &stat->workers[param_msg->member_id];
+    
+    if(worker->group[param_msg->group_id] == 0) {
+        worker->group[param_msg->group_id] = 1;
+        int total = __sync_fetch_and_add32(&worker->total, 1);
+        
+        if(total == N_GROUPS-1) {
+            uint64_t t;
+            t = rdtsc() - worker->starttime;
+            worker->time += t;
+            worker->count += 1;
+
+            if(worker->count == 10) {
+                print("Latency: core = %d, time = %ld\n", state->core_id, worker->time/worker->count);
+                worker->time = 0;
+                worker->count = 0;
+            }
+        }
+    }
 }
 
 output { out(pkt, buff); }
@@ -182,9 +181,7 @@ class gen(Pipeline):
         net_alloc = net.NetAlloc()
         to_net = net.ToNet(configure=["net_alloc"])
 
-        # TODO: start from Wait
-
-        library.Constant(configure=[SizeT,80]) >> net_alloc
+        self.core_id >> Wait() >> net_alloc
         net_alloc.oom >> library.Drop()
         net_alloc.out >> Request() >> PayloadGen() >> to_net
 
@@ -194,12 +191,10 @@ class recv(Pipeline):
         free = net.FromNetFree()
 
         from_net.nothing >> library.Drop()
-
         from_net >> Reply() >> free
 
-        # TODO
 
-n = 5
+n = 1  # number of workers
 gen('gen', process='dpdk', cores=range(n))
 recv('recv', process='dpdk', cores=range(n))
 c = Compiler()
