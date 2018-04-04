@@ -15,7 +15,7 @@ define = r'''
 
 define_state(param_message)
 
-class Stat(State):
+class StatOne(State):
     starttime = Field(Uint(64))
     time = Field(Uint(64))
     count = Field(Int)
@@ -23,7 +23,7 @@ class Stat(State):
     groups = Field(Array(Bool, n_groups))
 
 class StatAll(State):
-    workers = Field(Array(Stat, n_workers))
+    workers = Field(Array(StatOne, n_workers))
 
 stat_all = StatAll()
 
@@ -141,7 +141,7 @@ class Reply(Element):
         self.out = Output("void*", "void*")
 
     def states(self):
-        self.this = Stat()
+        self.this = stat_all
 
     def impl(self):
         self.run_c(r'''
@@ -164,7 +164,7 @@ if(m->ipv4._proto == 17) {
             worker->count += 1;
 
             if(worker->count == 10) {
-                print("Latency: core = %d, time = %ld\n", state->core_id, worker->time/worker->count);
+                print("Latency: core = %d, time = %ld\n", param_msg->member_id, worker->time/worker->count);
                 worker->time = 0;
                 worker->count = 0;
             }
@@ -175,29 +175,35 @@ if(m->ipv4._proto == 17) {
 output { out(pkt, buff); }
         ''')
 
+class MyState(State):
+    core_id = Field(Int)
 
-class gen(Pipeline):
+class main(Flow):
+    state = PerPacket(MyState)
+
     def impl(self):
-        net_alloc = net.NetAlloc()
-        to_net = net.ToNet(configure=["net_alloc"])
+        class gen(Pipeline):
+            def impl(self):
+                net_alloc = net.NetAlloc()
+                to_net = net.ToNet(configure=["net_alloc"])
 
-        self.core_id >> Wait() >> net_alloc
-        net_alloc.oom >> library.Drop()
-        net_alloc.out >> Request() >> PayloadGen() >> to_net
+                self.core_id >> Wait() >> net_alloc
+                net_alloc.oom >> library.Drop()
+                net_alloc.out >> Request() >> PayloadGen() >> to_net
 
-class recv(Pipeline):
-    def impl(self):
-        from_net = net.FromNet()
-        free = net.FromNetFree()
+        class recv(Pipeline):
+            def impl(self):
+                from_net = net.FromNet()
+                free = net.FromNetFree()
 
-        from_net.nothing >> library.Drop()
-        from_net >> Reply() >> free
+                from_net.nothing >> library.Drop()
+                from_net >> Reply() >> free
 
+        n = 1  # number of workers
+        gen('gen', process='dpdk', cores=range(n))
+        recv('recv', process='dpdk', cores=range(n))
 
-n = 1  # number of workers
-gen('gen', process='dpdk', cores=range(n))
-recv('recv', process='dpdk', cores=range(n))
-c = Compiler()
+c = Compiler(main)
 c.include = r'''
 #include <string.h>
 #include "protocol_binary.h"
@@ -208,6 +214,6 @@ struct eth_addr dest = { .addr = "\x3c\xfd\xfe\xad\xfe\x05" }; // fossa
 
 struct ip_addr src_ip = { .addr = "\x0a\x64\x14\x05" };   // dikdik
 struct ip_addr dest_ip = { .addr = "\x0a\x64\x14\x07" }; // fossa
-'''
+''' + define
 c.testing = 'while (1) pause();'
 c.generate_code_and_compile()
