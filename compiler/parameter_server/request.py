@@ -20,6 +20,7 @@ class StatOne(State):
     time = Field(Uint(64))
     count = Field(Int)
     total = Field(Int)
+    group_id = Field(Int)
     groups = Field(Array(Bool, n_groups))
 
 class StatAll(State):
@@ -63,12 +64,12 @@ output { out(size, pkt, buff); }
 
 
 class PayloadGen(Element):
-    stat = Persistent(StatAll)
+    this = Persistent(StatAll)
 
     def configure(self):
         self.inp = Input(SizeT, "void*", "void*")
         self.out = Output(SizeT, "void*", "void*")
-        self.stat = stat_all
+        self.this = stat_all
 
 
     def impl(self):
@@ -78,7 +79,7 @@ class PayloadGen(Element):
 udp_message* m = (udp_message*) pkt;
 param_message* param_msg = (param_message*) m->payload;
 
-StatOne* worker = &stat->workers[state->core_id];
+StatOne* worker = &this->workers[state->core_id];
 
 param_msg->group_id = worker->group_id;
 param_msg->member_id = state->core_id;
@@ -101,12 +102,12 @@ output { out(size, pkt, buff); }
 
 
 class Wait(Element):
-    stat = Persistent(StatAll)
+    this = Persistent(StatAll)
 
     def configure(self):
         self.inp = Input(Int)
         self.out = Output(SizeT)
-        self.stat = stat_all
+        self.this = stat_all
 
     def impl(self):
         self.run_c(r'''
@@ -115,7 +116,7 @@ class Wait(Element):
 bool yes = false;
 
 state->core_id = core_id;
-StatOne* worker = &stat->workers[core_id];
+StatOne* worker = &this->workers[core_id];
 if(worker->group_id > 0) 
     yes = true;
 else {
@@ -134,7 +135,7 @@ output switch {
 
 
 class Reply(Element):
-    stat = Persistent(StatAll)
+    this = Persistent(StatAll)
 
     def configure(self):
         self.inp = Input(SizeT, "void*", "void*")
@@ -151,7 +152,7 @@ udp_message* m = (udp_message*) pkt;
 if(m->ipv4._proto == 17) {
     udp_message* m = (udp_message*) pkt;
     param_message* param_msg = (param_message*) m->payload;
-    StatOne* worker = &stat->workers[param_msg->member_id];
+    StatOne* worker = &this->workers[param_msg->member_id];
     
     if(worker->group[param_msg->group_id] == 0) {
         worker->group[param_msg->group_id] = 1;
