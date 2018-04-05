@@ -236,9 +236,8 @@ class main(Flow):
                 from_net.nothing >> drop
                 filter.other >> drop
 
-        n = 1  # number of workers
-        gen('gen', process='dpdk', cores=range(n))
-        recv('recv', process='dpdk', cores=range(n))
+        gen('gen', process='dpdk', cores=range(n_workers))
+        recv('recv', process='dpdk', cores=range(n_workers))
 
 c = Compiler(main)
 c.include = r'''

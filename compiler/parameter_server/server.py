@@ -95,21 +95,20 @@ if(pass) {
 #ifdef DEBUG
         printf("bit = %x, bitmap = %x\n", bit, bitmap);
 #endif
-        if(bit & bitmap) {
-            pass = false;
-            break;
-        }
-        new_bitmap = agg->bitmap | bit;
-    } while(!__sync_bool_compare_and_swap32((uint32_t*) &agg->bitmap, bitmap, new_bitmap));
+        if(bit & bitmap)
+            new_bitmap = bit;
+        else
+            new_bitmap = bitmap | bit;
+    } while(new_bitmap != bitmap && 
+    !__sync_bool_compare_and_swap32((uint32_t*) &agg->bitmap, bitmap, new_bitmap));
     
-    if(pass) {
-        for(i=0; i<agg->n; i++) {
-            __sync_fetch_and_add32(&agg->parameters[i], param_msg->parameters[i]);
-        }
-        
-        if(new_bitmap == BITMAP_FULL)
-            update = true;
+    
+    for(i=0; i<agg->n; i++) {
+        __sync_fetch_and_add32(&agg->parameters[i], param_msg->parameters[i]);
     }
+        
+    if(new_bitmap == BITMAP_FULL)
+        update = true;
 }
 
 if(!pass) assert(0);
@@ -187,16 +186,16 @@ memcpy(param_msg->parameters, state->parameters, sizeof(int) * state->n);
 
 // fill in MAC address
 m->ether.src = old->ether.dest;
-m->ether.dest = mydests[%d];
+m->ether.dest = mydests[0];
 
 m->ipv4.src = old->ipv4.dest;
-m->ipv4.dest = myips[%d];
+m->ipv4.dest = myips[0];
 #ifdef DEBUG
 printf("send pkt\n");
 #endif
 
 output { out(size, pkt, buff); }
-''' % (self.worker_id, self.worker_id, self.worker_id))
+''' % self.worker_id)
 
 
 class Filter(Element):
@@ -274,7 +273,7 @@ class main(Flow):
 
                 for i in range(n_workers):
                     net_alloc = net.NetAlloc()
-                    update >> net_alloc >> Copy(configure=[0]) >> to_net  # send to dikdik
+                    update >> net_alloc >> Copy(configure=[i]) >> to_net  # send to dikdik
                     net_alloc.oom >> drop
 
 
@@ -283,7 +282,7 @@ class main(Flow):
                 get_pkt >> net_free
 
         if nic == 'dpdk':
-            nic_rx('nic_rx', process='dpdk', cores=range(4))
+            nic_rx('nic_rx', process='dpdk', cores=range(1))
         else:
             nic_rx('nic_rx', device=target.CAVIUM, cores=range(12))
             

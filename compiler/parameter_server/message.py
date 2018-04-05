@@ -10,12 +10,12 @@ class param_message(State):
 
 n_params = 5000
 n_groups = 32
-n_workers = 1
+n_workers = 2
 buffer_size = 128
 
 define = r'''
 #define N_PARAMS %d
 #define N_GROUPS %d
 #define BUFFER_SIZE %d
-#define BITMAP_FULL 0x1
+#define BITMAP_FULL 0x3
 ''' % (n_params, n_groups, buffer_size)
