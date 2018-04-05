@@ -179,6 +179,36 @@ if(m->ipv4._proto == 17) {
 output { out(pkt, buff); }
         ''')
 
+class Filter(Element):
+
+    def configure(self):
+        self.inp = Input(SizeT, "void*", "void*")
+        self.out = Output(SizeT, "void*", "void*")
+        self.other = Output("void*", "void*")
+
+    def impl(self):
+        self.run_c(r'''
+(size_t size, void* pkt, void* buff) = inp();
+
+#define IP_PROTOCOL_POS 23
+
+uint8_t* pkt_ptr = pkt;
+bool pass = false;
+udp_message* m = (udp_message*) pkt;
+
+if(size == sizeof(udp_message) + sizeof(param_message) + BUFFER_SIZE * sizeof(int) &&
+        m->ipv4._proto == 17 && 
+        m->ether.type == htons(ETHERTYPE_IPv4)
+        ) {
+        pass = true;
+}
+
+output switch {
+    case pass: out(size, pkt, buff);
+    else: other(pkt, buff);
+}
+        ''')
+
 class MyState(State):
     core_id = Field(Int)
 
@@ -199,9 +229,12 @@ class main(Flow):
             def impl(self):
                 from_net = net.FromNet()
                 free = net.FromNetFree()
+                filter = Filter()
+                drop = library.Drop()
 
-                from_net.nothing >> library.Drop()
-                from_net >> Reply() >> free
+                from_net >> filter >> Reply() >> free
+                from_net.nothing >> drop
+                filter.other >> drop
 
         n = 1  # number of workers
         gen('gen', process='dpdk', cores=range(n))
