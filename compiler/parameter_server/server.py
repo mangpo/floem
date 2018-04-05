@@ -7,8 +7,6 @@ addr = r'''
 struct eth_addr dests[1] = { 
     {.addr = "\x3c\xfd\xfe\xaa\xd1\xe1"}, // guanaco
 };
-
-struct ip_addr src_ip = { .addr = "\x0a\x64\x14\x09" }; // hippopotamus
     
 struct ip_addr ips[1] = { 
     {.addr = "\x0a\x64\x14\x08"}, // guanaco
@@ -72,8 +70,8 @@ int i;
 
 if(old_group_id == 0) {
     if(__sync_bool_compare_and_swap32(&agg->group_id, old_group_id, group_id)) {
-        agg->start_id = param_msg->start_id;
-        agg->n = param_msg->n;
+        agg->start_id = nic_htonl(param_msg->start_id);
+        agg->n = nic_htonl(param_msg->n);
     }
     else {
         __SYNC;
@@ -85,15 +83,13 @@ else if(old_group_id != group_id) {
     pass = false;
 }
 
-if(agg->n != param_msg->n) {
-    pass = false;
-}
 #ifdef DEBUG
-        printf("recv: worker = %d, group_id = %d, old_group_id = %d, pass = %d\n", param_msg->member_id, param_msg->group_id, old_group_id, pass);
+        printf("recv: worker = %d, group_id = %d, old_group_id = %d, pass = %d\n", 
+        nic_htonl(param_msg->member_id), nic_htonl(param_msg->group_id), nic_htonl(old_group_id), pass);
 #endif
 
 if(pass) {
-    bit = 1 << param_msg->member_id;
+    bit = 1 << nic_htonl(param_msg->member_id);
     do {
         bitmap = agg->bitmap;
 #ifdef DEBUG
@@ -107,7 +103,7 @@ if(pass) {
     } while(!__sync_bool_compare_and_swap32(&agg->bitmap, bitmap, new_bitmap));
     
     if(pass) {
-        for(i=0; i<param_msg->n; i++) {
+        for(i=0; i<agg->n; i++) {
             __sync_fetch_and_add32(&agg->parameters[i], param_msg->parameters[i]);
         }
         
@@ -185,8 +181,8 @@ udp_message* m = pkt;
 // fill in pkt
 param_message* param_msg = (param_message*) m->payload;
 param_msg->group_id = state->group_id;
-param_msg->member_id = %d;
-param_msg->n = state->n;
+param_msg->member_id = nic_htonl(%d);
+param_msg->n = nic_htonl(state->n);
 memcpy(param_msg->parameters, state->parameters, sizeof(int) * state->n);
 
 // fill in MAC address
@@ -300,9 +296,7 @@ c.testing = 'while (1) pause();'
 if nic == 'dpdk':
     c.generate_code_and_run()
 else:
-    pass
-    # c.generate_code_as_header()
-    # c.generate_code_and_compile()
-    # c.compile_and_run('dpdk')
+    c.generate_code_as_header()
+    c.generate_code_and_compile()
 
 
