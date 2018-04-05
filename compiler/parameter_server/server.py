@@ -3,30 +3,16 @@ import net, library
 
 nic = 'dpdk'
 
-n_params = 1024
-n_groups = 128
-n_workers = 1
-buffer_size = 32
-
-define = r'''
-#define N_PARAMS %d
-#define N_GROUPS %d
-#define BUFFER_SIZE %d
-#define BITMAP_FULL 0xf
-''' % (n_params, n_groups, buffer_size)
-
 addr = r'''
-struct eth_addr dests[4] = { 
-    {.addr = "\x3c\xfd\xfe\xad\x84\x8d"}, // dikdik
-    {.addr = "\x3c\xfd\xfe\xad\x84\x8d"}, 
-    {.addr = "\x3c\xfd\xfe\xad\xfe\x05"}, // fossa
-    {.addr = "\x3c\xfd\xfe\xad\xfe\x05"} };
+struct eth_addr dests[1] = { 
+    {.addr = "\x3c\xfd\xfe\xaa\xd1\xe1"}, // guanaco
+};
+
+struct ip_addr src_ip = { .addr = "\x0a\x64\x14\x09" }; // hippopotamus
     
-struct ip_addr ips[4] = { 
-    {.addr = "\x0a\x64\x14\x05"}, // dikdik
-    {.addr = "\x0a\x64\x14\x05"}, 
-    {.addr = "\x0a\x64\x14\x07"}, // fossa
-    {.addr = "\x0a\x64\x14\x07"} };
+struct ip_addr ips[1] = { 
+    {.addr = "\x0a\x64\x14\x08"}, // guanaco
+};
 '''
 
 class MyState(State):
@@ -47,7 +33,7 @@ class param_aggregate(State):
     layout = [group_id, start_id, n, bitmap, parameters]
 
 class param_buffer(State):
-    groups = Field(Array(param_aggregate, n_groups))
+    groups = Field(Array(param_aggregate, n_groups+1))
 
 class param_store(State):
     parameters = Field(Array(Int, n_params))
@@ -76,7 +62,7 @@ udp_message* udp_msg = pkt;
 param_message* param_msg = (param_message*) udp_msg->payload;
 
 int group_id = param_msg->group_id;
-int key = group_id % BUFFER_SIZE;
+int key = group_id % N_GROUPS;
 param_aggregate* agg = &buffer->groups[key];
 int old_group_id = agg->group_id;
 
@@ -84,8 +70,10 @@ bool pass = true, update = false;
 int bit, bitmap, new_bitmap;
 int i;
 
-if(old_group_id == -1) {
+if(old_group_id == 0) {
+    printf("old_group_id == 0\n");
     if(__sync_bool_compare_and_swap32(&agg->group_id, old_group_id, group_id)) {
+        printf("compare and swap\n");
         agg->start_id = param_msg->start_id;
         agg->n = param_msg->n;
     }
@@ -102,12 +90,14 @@ else if(old_group_id != group_id) {
 if(agg->n != param_msg->n) {
     pass = false;
 }
+        printf("recv: worker = %d, group_id = %d, old_group_id = %d, pass = %d\n", param_msg->member_id, param_msg->group_id, old_group_id, pass);
 
 if(pass) {
+    bit = 1 << param_msg->member_id;
     do {
         bitmap = agg->bitmap;
-        bit = 1 << param_msg->member_id;
-        if(bit & bitmap == 0) {
+        printf("bit = %x, bitmap = %x\n", bit, bitmap);
+        if(bit & bitmap) {
             pass = false;
             break;
         }
@@ -150,6 +140,8 @@ class UpdateParam(Element):
 (param_aggregate* agg) = inp();
 int start_id = agg->start_id;
 
+        printf("update: group_id = %d\n", agg->group_id);
+
 state->group_id = agg->group_id;
 state->n = agg->n;
 state->parameters = &store->parameters[start_id];
@@ -163,7 +155,7 @@ for(i=0; i<agg->n; i++) {
 // Reset aggregrate buffer
 memset(agg->parameters, 0, agg->n * sizeof(int));
 agg->bitmap = 0;
-agg->group_id = -1;
+agg->group_id = 0;
 
 int size = sizeof(udp_message) + sizeof(param_message) + agg->n * sizeof(int);
 
@@ -199,6 +191,7 @@ m->ether.dest = dests[%d];
 
 m->ipv4.src = old->ipv4.dest;
 m->ipv4.dest = ips[%d];
+printf("send pkt\n");
 
 output { out(size, pkt, buff); }
 ''' % (self.worker_id, self.worker_id, self.worker_id))
@@ -218,11 +211,19 @@ class Filter(Element):
 #define IP_PROTOCOL_POS 23
 
 uint8_t* pkt_ptr = pkt;
-bool discard = (pkt_ptr[IP_PROTOCOL_POS] != 0x11); // UDP only
+bool pass = false;
+udp_message* m = (udp_message*) pkt;
+
+if(size == sizeof(udp_message) + sizeof(param_message) + BUFFER_SIZE * sizeof(int) &&
+        m->ipv4._proto == 17 && 
+        m->ether.type == htons(ETHERTYPE_IPv4)
+        ) {
+        pass = true;
+}
 
 output switch {
-    case discard: other(pkt, buff);
-    else: out(size, pkt, buff);
+    case pass: out(size, pkt, buff);
+    else: other(pkt, buff);
 }
         ''')
 
