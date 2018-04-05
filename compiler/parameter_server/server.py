@@ -1,14 +1,14 @@
 from message import *
 import net, library
 
-nic = 'dpdk'
+nic = target.CAVIUM
 
 addr = r'''
-struct eth_addr dests[1] = { 
+static struct eth_addr mydests[1] = { 
     {.addr = "\x3c\xfd\xfe\xaa\xd1\xe1"}, // guanaco
 };
     
-struct ip_addr ips[1] = { 
+static struct ip_addr myips[1] = { 
     {.addr = "\x0a\x64\x14\x08"}, // guanaco
 };
 '''
@@ -59,7 +59,7 @@ class Aggregate(Element):
 udp_message* udp_msg = pkt;
 param_message* param_msg = (param_message*) udp_msg->payload;
 
-int group_id = param_msg->group_id;
+int group_id = nic_htonl(param_msg->group_id);
 int key = group_id % N_GROUPS;
 param_aggregate* agg = &buffer->groups[key];
 int old_group_id = agg->group_id;
@@ -69,7 +69,7 @@ int bit, bitmap, new_bitmap;
 int i;
 
 if(old_group_id == 0) {
-    if(__sync_bool_compare_and_swap32(&agg->group_id, old_group_id, group_id)) {
+    if(__sync_bool_compare_and_swap32((uint32_t*) &agg->group_id, old_group_id, group_id)) {
         agg->start_id = nic_htonl(param_msg->start_id);
         agg->n = nic_htonl(param_msg->n);
     }
@@ -100,7 +100,7 @@ if(pass) {
             break;
         }
         new_bitmap = agg->bitmap | bit;
-    } while(!__sync_bool_compare_and_swap32(&agg->bitmap, bitmap, new_bitmap));
+    } while(!__sync_bool_compare_and_swap32((uint32_t*) &agg->bitmap, bitmap, new_bitmap));
     
     if(pass) {
         for(i=0; i<agg->n; i++) {
@@ -180,17 +180,17 @@ udp_message* m = pkt;
 
 // fill in pkt
 param_message* param_msg = (param_message*) m->payload;
-param_msg->group_id = state->group_id;
+param_msg->group_id = nic_htonl(state->group_id);
 param_msg->member_id = nic_htonl(%d);
 param_msg->n = nic_htonl(state->n);
 memcpy(param_msg->parameters, state->parameters, sizeof(int) * state->n);
 
 // fill in MAC address
 m->ether.src = old->ether.dest;
-m->ether.dest = dests[%d];
+m->ether.dest = mydests[%d];
 
 m->ipv4.src = old->ipv4.dest;
-m->ipv4.dest = ips[%d];
+m->ipv4.dest = myips[%d];
 #ifdef DEBUG
 printf("send pkt\n");
 #endif
@@ -210,9 +210,6 @@ class Filter(Element):
         self.run_c(r'''
 (size_t size, void* pkt, void* buff) = inp();
 
-#define IP_PROTOCOL_POS 23
-
-uint8_t* pkt_ptr = pkt;
 bool pass = false;
 udp_message* m = (udp_message*) pkt;
 
@@ -285,7 +282,11 @@ class main(Flow):
                 filter.other >> net_free
                 get_pkt >> net_free
 
-        nic_rx('nic_rx', process='dpdk', cores=range(1))
+        if nic == 'dpdk':
+            nic_rx('nic_rx', process='dpdk', cores=range(4))
+        else:
+            nic_rx('nic_rx', device=target.CAVIUM, cores=range(12))
+            
 
 
 c = Compiler(main)
