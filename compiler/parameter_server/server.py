@@ -71,9 +71,7 @@ int bit, bitmap, new_bitmap;
 int i;
 
 if(old_group_id == 0) {
-    printf("old_group_id == 0\n");
     if(__sync_bool_compare_and_swap32(&agg->group_id, old_group_id, group_id)) {
-        printf("compare and swap\n");
         agg->start_id = param_msg->start_id;
         agg->n = param_msg->n;
     }
@@ -90,13 +88,17 @@ else if(old_group_id != group_id) {
 if(agg->n != param_msg->n) {
     pass = false;
 }
+#ifdef DEBUG
         printf("recv: worker = %d, group_id = %d, old_group_id = %d, pass = %d\n", param_msg->member_id, param_msg->group_id, old_group_id, pass);
+#endif
 
 if(pass) {
     bit = 1 << param_msg->member_id;
     do {
         bitmap = agg->bitmap;
+#ifdef DEBUG
         printf("bit = %x, bitmap = %x\n", bit, bitmap);
+#endif
         if(bit & bitmap) {
             pass = false;
             break;
@@ -140,7 +142,9 @@ class UpdateParam(Element):
 (param_aggregate* agg) = inp();
 int start_id = agg->start_id;
 
+#ifdef DEBUG
         printf("update: group_id = %d\n", agg->group_id);
+#endif
 
 state->group_id = agg->group_id;
 state->n = agg->n;
@@ -191,7 +195,9 @@ m->ether.dest = dests[%d];
 
 m->ipv4.src = old->ipv4.dest;
 m->ipv4.dest = ips[%d];
+#ifdef DEBUG
 printf("send pkt\n");
+#endif
 
 output { out(size, pkt, buff); }
 ''' % (self.worker_id, self.worker_id, self.worker_id))
