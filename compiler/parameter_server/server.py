@@ -1,15 +1,19 @@
 from message import *
 import net, library
 
-nic = target.CAVIUM
+nic = 'dpdk'
 
 addr = r'''
+#define DEBUG
+
 static struct eth_addr mydests[1] = { 
-    {.addr = "\x3c\xfd\xfe\xaa\xd1\xe1"}, // guanaco
+    { .addr = "\x68\x05\xca\x33\x13\x41" }, // hippopotamus
+    //{.addr = "\x3c\xfd\xfe\xaa\xd1\xe1"}, // guanaco
 };
     
 static struct ip_addr myips[1] = { 
-    {.addr = "\x0a\x64\x14\x08"}, // guanaco
+    { .addr = "\x0a\x64\x14\x09" }, // hippopotamus
+    //{.addr = "\x0a\x64\x14\x08"}, // guanaco
 };
 '''
 
@@ -178,9 +182,10 @@ udp_message* old = state->pkt;
 udp_message* m = pkt;
 
 // fill in pkt
+int id = %d;
 param_message* param_msg = (param_message*) m->payload;
 param_msg->group_id = nic_htonl(state->group_id);
-param_msg->member_id = nic_htonl(%d);
+param_msg->member_id = nic_htonl(id);
 param_msg->n = nic_htonl(state->n);
 memcpy(param_msg->parameters, state->parameters, sizeof(int) * state->n);
 
@@ -191,11 +196,11 @@ m->ether.dest = mydests[0];
 m->ipv4.src = old->ipv4.dest;
 m->ipv4.dest = myips[0];
 #ifdef DEBUG
-printf("send pkt\n");
+        printf("send pkt %s\n", param_msg->member_id);
 #endif
 
 output { out(size, pkt, buff); }
-''' % self.worker_id)
+        ''' % (self.worker_id, '%d'))
 
 
 class Filter(Element):
@@ -273,7 +278,7 @@ class main(Flow):
 
                 for i in range(n_workers):
                     net_alloc = net.NetAlloc()
-                    update >> net_alloc >> Copy(configure=[i]) >> to_net  # send to dikdik
+                    update >> net_alloc >> Copy(configure=[1-i]) >> to_net  # send to dikdik
                     net_alloc.oom >> drop
 
 

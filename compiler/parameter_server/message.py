@@ -9,7 +9,7 @@ class param_message(State):
     layout = [group_id, member_id, start_id, n, parameters]
 
 n_params = 5000
-n_groups = 32
+n_groups = 1
 n_workers = 2
 buffer_size = 128
 

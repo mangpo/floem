@@ -79,6 +79,7 @@ for(i=0; i<BUFFER_SIZE; i++)
 
 #ifdef DEBUG
         printf("send: worker = %d, group_id = %d\n", state->core_id, worker->group_id);
+        fflush(stdout);
 #endif
 
 worker->group_id++;
@@ -105,7 +106,7 @@ class Wait(Element):
         self.run_c(r'''
 (int core_id) = inp();
 
-#define TIMEOUT 10000000
+#define TIMEOUT 10000000000
         
 bool yes = false;
 
@@ -114,12 +115,18 @@ StatOne* worker = &this->workers[core_id];
 if(worker->group_id > 0) 
     yes = true;
 else {
+    __SYNC;
     if(worker->total == 0 ||
        rdtsc() - worker->starttime > TIMEOUT) {
+        if(worker->total != 0) printf(">>> TIMEOUT total = %d (%d)\n", worker->total, core_id);
+        else printf(">>> COMPLETE (%d)\n", core_id);
+        fflush(stdout);
+
         yes = true;
         memset(worker->groups, 0, sizeof(bool) * (N_GROUPS+1));
         worker->total = N_GROUPS;
         worker->group_id = 1;
+        __SYNC;
     }
 }
 int size = sizeof(udp_message) + sizeof(param_message) + BUFFER_SIZE * sizeof(int);
@@ -158,11 +165,13 @@ if(m->ipv4._proto == 17) {
         worker->groups[param_msg->group_id] = 1;
         int total = __sync_fetch_and_sub32(&worker->total, 1);
 #ifdef DEBUG
-        printf("total = %d\n", total);
+        printf("total = %d (%d)\n", total, param_msg->member_id);
+        fflush(stdout); 
 #endif
         
         if(total == 1) {
             uint64_t t;
+            __SYNC;
             t = rdtsc() - worker->starttime;
             worker->time += t;
             worker->count += 1;
@@ -201,6 +210,8 @@ if(size == sizeof(udp_message) + sizeof(param_message) + BUFFER_SIZE * sizeof(in
         m->ether.type == htons(ETHERTYPE_IPv4)
         ) {
         pass = true;
+} else {
+        printf("filter\n");
 }
 
 output switch {
@@ -237,7 +248,7 @@ class main(Flow):
                 filter.other >> drop
 
         gen('gen', process='dpdk', cores=range(n_workers))
-        recv('recv', process='dpdk', cores=range(n_workers))
+        recv('recv', process='dpdk', cores=range(1))
 
 c = Compiler(main)
 c.include = r'''
@@ -246,16 +257,24 @@ c.include = r'''
 #include <rte_ip.h>
 
 //struct eth_addr src = { .addr = "\x3c\xfd\xfe\xad\x84\x8d" }; // dikdik
-struct eth_addr src = { .addr = "\x3c\xfd\xfe\xaa\xd1\xe1" }; // guanaco
+//struct eth_addr src = { .addr = "\x3c\xfd\xfe\xaa\xd1\xe1" }; // guanaco
 //struct eth_addr dest = { .addr = "\x3c\xfd\xfe\xad\xfe\x05" }; // fossa
 //struct eth_addr dest = { .addr = "\x68\x05\xca\x33\x13\x41" }; // hippopotamus
-struct eth_addr dest = { .addr = "\x02\x78\x1f\x5a\x5b\x01" }; // jaguar
+//struct eth_addr dest = { .addr = "\x02\x78\x1f\x5a\x5b\x01" }; // jaguar
+
+struct eth_addr src = { .addr = "\x68\x05\xca\x33\x13\x41" }; // hippopotamus
+struct eth_addr dest = { .addr = "\x3c\xfd\xfe\xaa\xd1\xe1" }; // guanaco 
+
 
 //struct ip_addr src_ip = { .addr = "\x0a\x64\x14\x05" };   // dikdik
-struct ip_addr src_ip = { .addr = "\x0a\x64\x14\x08" };   // guanaco
+//struct ip_addr src_ip = { .addr = "\x0a\x64\x14\x08" };   // guanaco
 //struct ip_addr dest_ip = { .addr = "\x0a\x64\x14\x07" }; // fossa
 //struct ip_addr dest_ip = { .addr = "\x0a\x64\x14\x09" }; // hippopotamus
-struct ip_addr dest_ip = { .addr = "\x0a\x64\x14\x0b" }; // hippopotamus
+//struct ip_addr dest_ip = { .addr = "\x0a\x64\x14\x0b" }; // jaguar
+
+struct ip_addr src_ip = { .addr = "\x0a\x64\x14\x09" }; // hippopotamus
+struct ip_addr dest_ip = { .addr = "\x0a\x64\x14\x08" };   // guanaco 
+
 
 static inline uint64_t rdtsc(void)
 {
@@ -263,6 +282,8 @@ static inline uint64_t rdtsc(void)
   __asm volatile ("rdtsc" : "=a" (eax), "=d" (edx));
   return ((uint64_t)edx << 32) | eax;
 }
+
+#define DEBUG
 
 ''' + define
 c.testing = 'while (1) pause();'
