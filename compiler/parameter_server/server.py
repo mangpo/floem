@@ -4,7 +4,7 @@ import net, library
 nic = 'dpdk'
 
 addr = r'''
-#define DEBUG
+//#define DEBUG
 
 static struct eth_addr mydests[1] = { 
     { .addr = "\x68\x05\xca\x33\x13\x41" }, // hippopotamus
@@ -273,7 +273,7 @@ class main(Flow):
                 drop = library.Drop()
 
                 from_net >> filter >> SavePkt() >> aggregate
-                aggregate.up >> update >> get_pkt
+                aggregate.up >> update
                 aggregate.other >> get_pkt
 
                 for i in range(n_workers):
@@ -284,6 +284,7 @@ class main(Flow):
 
                 from_net.nothing >> drop
                 filter.other >> net_free
+                update >> get_pkt
                 get_pkt >> net_free
 
         if nic == 'dpdk':

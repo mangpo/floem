@@ -233,7 +233,6 @@ typedef struct {
     struct eth_hdr ether;
     struct ip_hdr ipv4;
     struct udp_hdr udp;
-    char cmd[5];
     uint8_t payload[];
 } __attribute__ ((packed)) udp_message;
 

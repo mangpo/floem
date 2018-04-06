@@ -177,7 +177,6 @@ static void dpdk_from_net(size_t *sz, void **pdata, void **pbuf, int BATCH_SIZE_
 
     /* get more packets from NIC */
     num = rte_eth_rx_burst(dpdk_port_id, rxq, mbs, BATCH_SIZE_IN);
-    if(num) printf("DPDK: recv = %d\n", num);
     mb = mbs[0];
     if (num > 1) {
       cache_count = num;
@@ -192,14 +191,7 @@ out:
 
     *pdata = data;
     *pbuf = mb;
-
-    static __thread size_t total = 0;
-
-    if(data) {
-      total++;
-      printf("from_net[%d]: total = %ld\n\n", rxq, total);
-    }
-
+    
 #if 0    
     static __thread size_t count = 0;
     static __thread struct timeval last, now;
@@ -260,9 +252,6 @@ static void dpdk_to_net(size_t size, void *data, void *buf, int BATCH_SIZE_OUT)
     mbufs[n] = mb;
     n++;
 
-    int* id = ((uint8_t*) data) + 47 + 4;
-    printf("to net: n = %d/%d, mb = %p, data = %p, id = %d\n", n, batch_size, mb, data, *id);
-
     /* get queue ID/initialize queue */
     uint16_t txq = tx_queue_id;
     if (txq == 0) {
@@ -291,31 +280,25 @@ static void dpdk_to_net(size_t size, void *data, void *buf, int BATCH_SIZE_OUT)
     uint16_t i = 0, inc;
     if(n >= batch_size) {
       while (i < n) {
-	if(n == 2)
-	  printf("burst: %p %p\n", mbufs[0], mbufs[1]);
         inc = rte_eth_tx_burst(dpdk_port_id, txq, mbufs + i, n - i);
         i += inc;
-	printf("burst: %d\n", inc);
       }
       n = 0;
     }
 
-    static __thread size_t count = 0, total = 0;
+    static __thread size_t count = 0;
     static __thread struct timeval last, now;
 
     gettimeofday(&now, NULL);
     count++;
     if(now.tv_sec > last.tv_sec + 1) {
-      batch_size = (count > 1000)? BATCH_SIZE_OUT: 2;
+      batch_size = (count > 1000)? BATCH_SIZE_OUT: 1;
 #if 0
       printf("to_net[%d]: %ld pkts/s, batch_size = %d\n", txq, count, batch_size);
 #endif
       count = 0;
       last = now;
     }
-
-    total++;
-    printf("to_net[%d]: total = %ld\n\n", txq, total);
 
 }
 

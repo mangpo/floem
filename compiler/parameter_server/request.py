@@ -119,7 +119,7 @@ else {
     if(worker->total == 0 ||
        rdtsc() - worker->starttime > TIMEOUT) {
         if(worker->total != 0) printf(">>> TIMEOUT total = %d (%d)\n", worker->total, core_id);
-        else printf(">>> COMPLETE (%d)\n", core_id);
+        //else printf(">>> COMPLETE (%d)\n", core_id);
         fflush(stdout);
 
         yes = true;
@@ -211,7 +211,7 @@ if(size == sizeof(udp_message) + sizeof(param_message) + BUFFER_SIZE * sizeof(in
         ) {
         pass = true;
 } else {
-        printf("filter\n");
+        //printf("filter\n");
 }
 
 output switch {
@@ -283,7 +283,7 @@ static inline uint64_t rdtsc(void)
   return ((uint64_t)edx << 32) | eax;
 }
 
-#define DEBUG
+//#define DEBUG
 
 ''' + define
 c.testing = 'while (1) pause();'
