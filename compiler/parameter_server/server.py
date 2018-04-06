@@ -183,10 +183,13 @@ udp_message* m = pkt;
 
 // fill in pkt
 int id = %d;
+param_message* old_param_msg = (param_message*) old->payload;
 param_message* param_msg = (param_message*) m->payload;
+
 param_msg->group_id = nic_htonl(state->group_id);
 param_msg->member_id = nic_htonl(id);
 param_msg->n = nic_htonl(state->n);
+param_msg->starttime = old_param_msg->starttime;
 memcpy(param_msg->parameters, state->parameters, sizeof(int) * state->n);
 
 // fill in MAC address

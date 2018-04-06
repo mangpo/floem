@@ -90,6 +90,8 @@ if(worker->group_id > N_GROUPS) {
     worker->starttime = rdtsc();
 }
 
+param_msg->starttime = rdtsc();
+
 output { out(size, pkt, buff); }
         ''')
 
@@ -156,6 +158,16 @@ if(m->ipv4._proto == 17) {
     udp_message* m = (udp_message*) pkt;
     param_message* param_msg = (param_message*) m->payload;
     StatOne* worker = &this->workers[param_msg->member_id];
+    
+    worker->time += rdtsc() - param_msg->starttime;
+    worker->count++;
+    
+    if(worker->count == 10000) {
+        printf("Latency: core = %d, time = %f\n", param_msg->member_id, 1.0*worker->time/worker->count);
+        worker->time = 0;
+        worker->count = 0;
+    }
+    
 
 #ifdef DEBUG
         printf("update: worker = %d, group_id = %d\n", param_msg->member_id, param_msg->group_id);
@@ -169,6 +181,7 @@ if(m->ipv4._proto == 17) {
         fflush(stdout); 
 #endif
         
+        /*
         if(total == 1) {
             uint64_t t;
             __SYNC;
@@ -182,6 +195,7 @@ if(m->ipv4._proto == 17) {
                 worker->count = 0;
             }
         }
+        */
     }
 }
 
