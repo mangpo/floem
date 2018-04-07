@@ -1,7 +1,7 @@
 from message import *
 import net, library
 
-nic = 'dpdk'
+nic = 'dpdk' #target.CAVIUM
 
 addr = r'''
 //#define DEBUG
@@ -281,7 +281,7 @@ class main(Flow):
 
                 for i in range(n_workers):
                     net_alloc = net.NetAlloc()
-                    update >> net_alloc >> Copy(configure=[1-i]) >> to_net  # send to dikdik
+                    update >> net_alloc >> Copy(configure=[i]) >> to_net  # send to dikdik
                     net_alloc.oom >> drop
 
 

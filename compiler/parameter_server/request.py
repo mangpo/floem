@@ -110,6 +110,7 @@ class Wait(Element):
 
 #define TIMEOUT 10000000000
         
+        //usleep(1);
 bool yes = false;
 
 state->core_id = core_id;
@@ -159,8 +160,14 @@ if(m->ipv4._proto == 17) {
     param_message* param_msg = (param_message*) m->payload;
     StatOne* worker = &this->workers[param_msg->member_id];
     
-    worker->time += rdtsc() - param_msg->starttime;
+    uint64_t t = rdtsc();
+    worker->time += t - param_msg->starttime;
     worker->count++;
+        
+    if(t - param_msg->starttime > 10000000) {
+        printf("slow: %ld = %ld - %ld\n", t - param_msg->starttime, t, param_msg->starttime);
+    }
+        
     
     if(worker->count == 10000) {
         printf("Latency: core = %d, time = %f\n", param_msg->member_id, 1.0*worker->time/worker->count);
