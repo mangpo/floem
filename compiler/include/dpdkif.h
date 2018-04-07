@@ -139,7 +139,7 @@ static void dpdk_thread_create(void *(*entry_point)(void *), void *arg)
 static void dpdk_from_net(size_t *sz, void **pdata, void **pbuf, int BATCH_SIZE_IN)
 {
     static volatile uint16_t rx_queue_alloc = 0;
-    static __thread uint16_t rx_queue_id;
+    static __thread uint32_t rx_queue_id = 0;
     struct rte_mbuf *mb = NULL;
     static __thread unsigned cache_count;
     static __thread unsigned cache_index;
@@ -162,7 +162,7 @@ static void dpdk_from_net(size_t *sz, void **pdata, void **pbuf, int BATCH_SIZE_
     }
 
     /* get queue ID/initialize queue */
-    uint16_t rxq = rx_queue_id;
+    uint32_t rxq = rx_queue_id;
     if (rxq == 0) {
         rxq = __sync_fetch_and_add(&rx_queue_alloc, 1);
 
@@ -192,18 +192,19 @@ out:
     *pdata = data;
     *pbuf = mb;
     
-#if 0    
+#if 0
     static __thread size_t count = 0;
     static __thread struct timeval last, now;
 
     if(data) {
       gettimeofday(&now, NULL);
       count++;
-      if(now.tv_sec > last.tv_sec + 1) {
+      //if(now.tv_sec > last.tv_sec) {
+      //printf("rx_queue_id = %d\n", rx_queue_id);
 	printf("from_net[%d]: %ld pkts/s\n", rxq, count);
-	count = 0;
-	last = now;
-      }
+	//count = 0;
+	//last = now;
+	//}
       /*
       printf("from_net: size = %ld\n", *sz);
       int i;
@@ -291,7 +292,7 @@ static void dpdk_to_net(size_t size, void *data, void *buf, int BATCH_SIZE_OUT)
 
     gettimeofday(&now, NULL);
     count++;
-    if(now.tv_sec > last.tv_sec + 1) {
+    if(now.tv_sec > last.tv_sec) {
       batch_size = (count > 1000)? BATCH_SIZE_OUT: 1;
 #if 0
       printf("to_net[%d]: %ld pkts/s, batch_size = %d\n", txq, count, batch_size);

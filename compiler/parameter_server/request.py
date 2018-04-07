@@ -108,7 +108,7 @@ class Wait(Element):
         self.run_c(r'''
 (int core_id) = inp();
 
-#define TIMEOUT 1000000
+#define TIMEOUT 5000000
         
         //usleep(1);
 bool yes = false;
@@ -172,10 +172,11 @@ if(m->ipv4._proto == 17) {
     worker->time += rtt;
     worker->count++;
         
+/*
     if(rtt > 1000) {
-        printf("slow: %ld", rtt);
+        printf("slow: %ld\n", rtt);
     }
-        
+  */      
     
     if(worker->count == 10000) {
         printf("Latency: core = %d, time = %f\n", param_msg->member_id, 1.0*worker->time/worker->count);
@@ -244,7 +245,7 @@ class main(Flow):
         class gen(Pipeline):
             def impl(self):
                 net_alloc = net.NetAlloc()
-                to_net = net.ToNet(configure=["net_alloc"])
+                to_net = net.ToNet(configure=["net_alloc",1])
 
                 self.core_id >> Wait() >> net_alloc
                 net_alloc.oom >> library.Drop()
@@ -252,7 +253,7 @@ class main(Flow):
 
         class recv(Pipeline):
             def impl(self):
-                from_net = net.FromNet()
+                from_net = net.FromNet(configure=[32])
                 free = net.FromNetFree()
                 filter = Filter()
                 drop = library.Drop()

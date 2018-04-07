@@ -110,6 +110,8 @@ if(pass) {
     for(i=0; i<agg->n; i++) {
         __sync_fetch_and_add32(&agg->parameters[i], param_msg->parameters[i]);
     }
+
+    //assert(new_bitmap == BITMAP_FULL);
         
     if(new_bitmap == BITMAP_FULL)
         update = true;
@@ -177,7 +179,7 @@ class Copy(Element):
     def impl(self):
         self.run_c(r'''
 (size_t size, void* pkt, void* buff) = inp();
-memcpy(pkt, state->pkt, sizeof(param_message));
+memcpy(pkt, state->pkt, sizeof(udp_message) + sizeof(param_message));
 udp_message* old = state->pkt;
 udp_message* m = pkt;
 
@@ -196,11 +198,11 @@ m->ether.dest = mydests[0];
 m->ipv4.src = old->ipv4.dest;
 m->ipv4.dest = myips[0];
 #ifdef DEBUG
-        printf("send pkt %s\n", param_msg->member_id);
+        printf("send pkt: worker = %s, group_id = %s\n", param_msg->member_id, param_msg->group_id);
 #endif
 
 output { out(size, pkt, buff); }
-        ''' % (self.worker_id, '%d'))
+        ''' % (self.worker_id, '%d', '%d'))
 
 
 class Filter(Element):
@@ -262,8 +264,8 @@ class main(Flow):
     def impl(self):
         class nic_rx(Pipeline):
             def impl(self):
-                from_net = net.FromNet()
-                to_net = net.ToNet(configure=["alloc"])
+                from_net = net.FromNet(configure=[32])
+                to_net = net.ToNet(configure=["alloc",1])
                 net_free = net.FromNetFree()
 
                 filter = Filter()
