@@ -177,7 +177,7 @@ class Copy(Element):
     def impl(self):
         self.run_c(r'''
 (size_t size, void* pkt, void* buff) = inp();
-memcpy(pkt, state->pkt, sizeof(udp_message));
+memcpy(pkt, state->pkt, sizeof(param_message));
 udp_message* old = state->pkt;
 udp_message* m = pkt;
 
@@ -186,10 +186,7 @@ int id = %d;
 param_message* old_param_msg = (param_message*) old->payload;
 param_message* param_msg = (param_message*) m->payload;
 
-param_msg->group_id = nic_htonl(state->group_id);
 param_msg->member_id = nic_htonl(id);
-param_msg->n = nic_htonl(state->n);
-param_msg->starttime = old_param_msg->starttime;
 memcpy(param_msg->parameters, state->parameters, sizeof(int) * state->n);
 
 // fill in MAC address

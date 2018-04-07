@@ -4,7 +4,7 @@ import net, library
 define_state(param_message)
 
 class StatOne(State):
-    starttime = Field(Uint(64))
+    starttime = Field('struct timeval')
     time = Field(Uint(64))
     count = Field(Int)
     total = Field(Int)
@@ -87,10 +87,10 @@ if(worker->group_id > N_GROUPS) {
     worker->group_id = 0;
     
     // start timer, reset collector
-    worker->starttime = rdtsc();
+    gettimeofday(&worker->starttime, NULL);
 }
 
-param_msg->starttime = rdtsc();
+gettimeofday(&param_msg->starttime, NULL);
 
 output { out(size, pkt, buff); }
         ''')
@@ -108,7 +108,7 @@ class Wait(Element):
         self.run_c(r'''
 (int core_id) = inp();
 
-#define TIMEOUT 10000000000
+#define TIMEOUT 1000000
         
         //usleep(1);
 bool yes = false;
@@ -119,8 +119,12 @@ if(worker->group_id > 0)
     yes = true;
 else {
     __SYNC;
-    if(worker->total == 0 ||
-       rdtsc() - worker->starttime > TIMEOUT) {
+    struct timeval now;
+    gettimeofday(&now, NULL);
+    uint64_t t;
+    t = (now.tv_sec - worker->starttime.tv_sec) * 1000000 + (now.tv_usec - worker->starttime.tv_usec);
+    
+    if(worker->total == 0 || t > TIMEOUT) {
         if(worker->total != 0) printf(">>> TIMEOUT total = %d (%d)\n", worker->total, core_id);
         //else printf(">>> COMPLETE (%d)\n", core_id);
         fflush(stdout);
@@ -160,12 +164,16 @@ if(m->ipv4._proto == 17) {
     param_message* param_msg = (param_message*) m->payload;
     StatOne* worker = &this->workers[param_msg->member_id];
     
-    uint64_t t = rdtsc();
-    worker->time += t - param_msg->starttime;
+    struct timeval now;
+    uint64_t rtt;
+    gettimeofday(&now, NULL);
+    rtt = (now.tv_sec - param_msg->starttime.tv_sec) * 1000000 + (now.tv_usec - param_msg->starttime.tv_usec);
+                    
+    worker->time += rtt;
     worker->count++;
         
-    if(t - param_msg->starttime > 10000000) {
-        printf("slow: %ld = %ld - %ld\n", t - param_msg->starttime, t, param_msg->starttime);
+    if(rtt > 1000) {
+        printf("slow: %ld", rtt);
     }
         
     
@@ -188,21 +196,6 @@ if(m->ipv4._proto == 17) {
         fflush(stdout); 
 #endif
         
-        /*
-        if(total == 1) {
-            uint64_t t;
-            __SYNC;
-            t = rdtsc() - worker->starttime;
-            worker->time += t;
-            worker->count += 1;
-
-            if(worker->count == 10000) {
-                printf("Latency: core = %d, time = %f\n", param_msg->member_id, 1.0*worker->time/worker->count);
-                worker->time = 0;
-                worker->count = 0;
-            }
-        }
-        */
     }
 }
 

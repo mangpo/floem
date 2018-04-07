@@ -4,7 +4,7 @@ class param_message(State):
     group_id = Field(Int)
     member_id = Field(Int)  # worker
     start_id = Field(Uint(64))
-    starttime = Field(Uint(64))
+    starttime = Field('struct timeval')
     n = Field(Int)
     parameters = Field(Array(Int))
     layout = [group_id, member_id, start_id, starttime, n, parameters]
