@@ -1,19 +1,19 @@
 from message import *
 import net, library
 
-nic = 'dpdk' #target.CAVIUM
+nic = target.CAVIUM
 
 addr = r'''
 //#define DEBUG
 
 static struct eth_addr mydests[1] = { 
-    { .addr = "\x68\x05\xca\x33\x13\x41" }, // hippopotamus
-    //{.addr = "\x3c\xfd\xfe\xaa\xd1\xe1"}, // guanaco
+    //{ .addr = "\x68\x05\xca\x33\x13\x41" }, // hippopotamus
+    {.addr = "\x3c\xfd\xfe\xaa\xd1\xe1"}, // guanaco
 };
     
 static struct ip_addr myips[1] = { 
-    { .addr = "\x0a\x64\x14\x09" }, // hippopotamus
-    //{.addr = "\x0a\x64\x14\x08"}, // guanaco
+    //{ .addr = "\x0a\x64\x14\x09" }, // hippopotamus
+    {.addr = "\x0a\x64\x14\x08"}, // guanaco
 };
 '''
 
@@ -185,7 +185,6 @@ udp_message* m = pkt;
 
 // fill in pkt
 int id = %d;
-param_message* old_param_msg = (param_message*) old->payload;
 param_message* param_msg = (param_message*) m->payload;
 
 param_msg->member_id = nic_htonl(id);

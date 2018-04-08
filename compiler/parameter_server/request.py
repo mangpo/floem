@@ -94,7 +94,7 @@ if(worker->group_id > N_GROUPS) {
         gettimeofday(&now, NULL);
         uint64_t t;
         t = (now.tv_sec - worker->freq_time.tv_sec) * 1000000 + (now.tv_usec - worker->freq_time.tv_usec);
-        printf("[%d] rounds/s %f\n", state->core_id, 1000000.0 * count/t);
+        printf("[%d] rounds/s %f\n", state->core_id, 1000000.0 * worker->freq_count/t);
         
         worker->freq_time = now;
         worker->freq_count = 0;
@@ -286,24 +286,17 @@ c.include = r'''
 #include <rte_ip.h>
 
 //struct eth_addr src = { .addr = "\x3c\xfd\xfe\xad\x84\x8d" }; // dikdik
-//struct eth_addr src = { .addr = "\x3c\xfd\xfe\xaa\xd1\xe1" }; // guanaco
+struct eth_addr src = { .addr = "\x3c\xfd\xfe\xaa\xd1\xe1" }; // guanaco
 //struct eth_addr dest = { .addr = "\x3c\xfd\xfe\xad\xfe\x05" }; // fossa
 //struct eth_addr dest = { .addr = "\x68\x05\xca\x33\x13\x41" }; // hippopotamus
-//struct eth_addr dest = { .addr = "\x02\x78\x1f\x5a\x5b\x01" }; // jaguar
-
-struct eth_addr src = { .addr = "\x68\x05\xca\x33\x13\x41" }; // hippopotamus
-struct eth_addr dest = { .addr = "\x3c\xfd\xfe\xaa\xd1\xe1" }; // guanaco 
+struct eth_addr dest = { .addr = "\x02\x78\x1f\x5a\x5b\x01" }; // jaguar
 
 
 //struct ip_addr src_ip = { .addr = "\x0a\x64\x14\x05" };   // dikdik
-//struct ip_addr src_ip = { .addr = "\x0a\x64\x14\x08" };   // guanaco
+struct ip_addr src_ip = { .addr = "\x0a\x64\x14\x08" };   // guanaco
 //struct ip_addr dest_ip = { .addr = "\x0a\x64\x14\x07" }; // fossa
 //struct ip_addr dest_ip = { .addr = "\x0a\x64\x14\x09" }; // hippopotamus
-//struct ip_addr dest_ip = { .addr = "\x0a\x64\x14\x0b" }; // jaguar
-
-struct ip_addr src_ip = { .addr = "\x0a\x64\x14\x09" }; // hippopotamus
-struct ip_addr dest_ip = { .addr = "\x0a\x64\x14\x08" };   // guanaco 
-
+struct ip_addr dest_ip = { .addr = "\x0a\x64\x14\x0b" }; // jaguar
 
 static inline uint64_t rdtsc(void)
 {
