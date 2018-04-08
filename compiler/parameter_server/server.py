@@ -6,14 +6,16 @@ nic = 'dpdk' #target.CAVIUM
 addr = r'''
 //#define DEBUG
 
-static struct eth_addr mydests[1] = { 
+static struct eth_addr mydests[2] = { 
     //{ .addr = "\x68\x05\xca\x33\x13\x41" }, // hippopotamus
     {.addr = "\x3c\xfd\xfe\xaa\xd1\xe1"}, // guanaco
+    {.addr = "\x3c\xfd\xfe\xad\x84\x8d"}, // dikdik
 };
     
-static struct ip_addr myips[1] = { 
+static struct ip_addr myips[2] = { 
     //{ .addr = "\x0a\x64\x14\x09" }, // hippopotamus
     {.addr = "\x0a\x64\x14\x08"}, // guanaco
+    {.addr = "\x0a\x64\x14\x05"}, // dikdik
 };
 '''
 
@@ -185,6 +187,7 @@ udp_message* m = pkt;
 
 // fill in pkt
 int id = %d;
+int div = %d;
 param_message* param_msg = (param_message*) m->payload;
 
 param_msg->member_id = nic_htonl(id);
@@ -192,16 +195,16 @@ memcpy(param_msg->parameters, state->parameters, sizeof(int) * state->n);
 
 // fill in MAC address
 m->ether.src = old->ether.dest;
-m->ether.dest = mydests[0];
+m->ether.dest = mydests[id/div];
 
 m->ipv4.src = old->ipv4.dest;
-m->ipv4.dest = myips[0];
+m->ipv4.dest = myips[id/div];
 #ifdef DEBUG
         printf("send pkt: worker = %s, group_id = %s\n", param_msg->member_id, param_msg->group_id);
 #endif
 
 output { out(size, pkt, buff); }
-        ''' % (self.worker_id, '%d', '%d'))
+        ''' % (self.worker_id, n_workers/2, '%d', '%d'))
 
 
 class Filter(Element):

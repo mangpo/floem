@@ -1,5 +1,8 @@
 from message import *
 import net, library
+import sys
+
+machine_id = int(sys.argv[1])
 
 define_state(param_message)
 
@@ -28,32 +31,30 @@ class Request(Element):
 (size_t size, void* pkt, void* buff) = inp();
 udp_message* m = (udp_message*) pkt;
 
-m->ether.src = src;
+int machine_id = %d;
+m->ether.src = src[machine_id];
 m->ether.dest = dest;
 
-m->ipv4.src = src_ip;
+m->ipv4.src = src_ip[machine_id];
 m->ipv4.dest = dest_ip;
 
 static __thread uint16_t sport = 0;
 m->udp.src_port = state->core_id+1; //(++sport == 0 ? ++sport : sport);
 m->udp.dest_port = htons(1234);
+m->udp.len = htons(size - offsetof(udp_message, udp));
+m->udp.cksum = 0;
 
 m->ether.type = htons(ETHERTYPE_IPv4);
 m->ipv4._proto = 17; // udp
 m->ipv4._v_hl = 4 << 4 | 5; 
 m->ipv4._id = 0; 
 m->ipv4._offset = 0; 
-        m->ipv4._len = htons(size - offsetof(udp_message, ipv4));
-        m->ipv4._ttl = 64;
-        m->ipv4._chksum = 0;
-        //m->ipv4._chksum = rte_ipv4_cksum(&m->ipv4);  // TODO
-
-        m->udp.len = htons(size - offsetof(udp_message, udp));
-        m->udp.cksum = 0;
-        //printf("size: %ld %ld %ld\n", size, m->ipv4._len, m->udp.len);
+m->ipv4._len = htons(size - offsetof(udp_message, ipv4));
+m->ipv4._ttl = 64;
+m->ipv4._chksum = 0;
 
 output { out(size, pkt, buff); }
-        ''')
+        ''' % machine_id)
 
 
 class PayloadGen(Element):
@@ -75,7 +76,7 @@ param_message* param_msg = (param_message*) m->payload;
 StatOne* worker = &this->workers[state->core_id];
 
 param_msg->group_id = worker->group_id;
-param_msg->member_id = state->core_id;
+param_msg->member_id = state->core_id + OFFSET;
 param_msg->start_id = worker->group_id * BUFFER_SIZE;
 param_msg->n = BUFFER_SIZE;
 int i;
@@ -179,7 +180,7 @@ udp_message* m = (udp_message*) pkt;
 if(m->ipv4._proto == 17) {
     udp_message* m = (udp_message*) pkt;
     param_message* param_msg = (param_message*) m->payload;
-    StatOne* worker = &this->workers[param_msg->member_id];
+    StatOne* worker = &this->workers[param_msg->member_id - OFFSET];
     
     struct timeval now;
     uint64_t rtt;
@@ -279,8 +280,10 @@ class main(Flow):
                 from_net.nothing >> drop
                 filter.other >> drop
 
-        gen('gen', process='dpdk', cores=range(n_workers))
-        recv('recv', process='dpdk', cores=range(n_workers))
+
+        gen('gen', process='dpdk', cores=range(n_workers/2))
+        recv('recv', process='dpdk', cores=range(1))
+
 
 c = Compiler(main)
 c.include = r'''
@@ -288,16 +291,26 @@ c.include = r'''
 #include "protocol_binary.h"
 #include <rte_ip.h>
 
+struct eth_addr src[2] = { 
+    {.addr = "\x3c\xfd\xfe\xaa\xd1\xe1"}, // guanaco -- 0
+    {.addr = "\x3c\xfd\xfe\xad\x84\x8d"}, // dikdik -- 1
+};
+
+struct ip_addr src_ip[2] = { 
+    {.addr = "\x0a\x64\x14\x08"}, // guanaco
+    {.addr = "\x0a\x64\x14\x05"}, // dikdik
+};
+
 //struct eth_addr src = { .addr = "\x3c\xfd\xfe\xad\x84\x8d" }; // dikdik
 //struct eth_addr dest = { .addr = "\x3c\xfd\xfe\xad\xfe\x05" }; // fossa
-struct eth_addr src = { .addr = "\x3c\xfd\xfe\xaa\xd1\xe1" }; // guanaco
+//struct eth_addr src = { .addr = "\x3c\xfd\xfe\xaa\xd1\xe1" }; // guanaco
 struct eth_addr dest = { .addr = "\x68\x05\xca\x33\x13\x41" }; // hippopotamus
 //struct eth_addr dest = { .addr = "\x02\x78\x1f\x5a\x5b\x01" }; // jaguar
 
 
 //struct ip_addr src_ip = { .addr = "\x0a\x64\x14\x05" };   // dikdik
 //struct ip_addr dest_ip = { .addr = "\x0a\x64\x14\x07" }; // fossa
-struct ip_addr src_ip = { .addr = "\x0a\x64\x14\x08" };   // guanaco
+//struct ip_addr src_ip = { .addr = "\x0a\x64\x14\x08" };   // guanaco
 struct ip_addr dest_ip = { .addr = "\x0a\x64\x14\x09" }; // hippopotamus
 //struct ip_addr dest_ip = { .addr = "\x0a\x64\x14\x0b" }; // jaguar
 
@@ -309,7 +322,8 @@ static inline uint64_t rdtsc(void)
 }
 
 //#define DEBUG
+#define OFFSET %d
 
-''' + define
+''' % (machine_id * n_workers/2) + define
 c.testing = 'while (1) pause();'
 c.generate_code_and_compile()
