@@ -5,8 +5,10 @@ define_state(param_message)
 
 class StatOne(State):
     starttime = Field('struct timeval')
-    time = Field(Uint(64))
-    count = Field(Int)
+    rtt_time = Field(Uint(64))
+    rtt_count = Field(Int)
+    freq_time = Field('struct timeval')
+    freq_count = Field(Int)
     total = Field(Int)
     group_id = Field(Int)
     groups = Field(Array(Bool, n_groups+1)) # group_id starts from 1
@@ -85,6 +87,18 @@ for(i=0; i<BUFFER_SIZE; i++)
 worker->group_id++;
 if(worker->group_id > N_GROUPS) {
     worker->group_id = 0;
+    
+    worker->freq_count++;
+    if(worker->freq_count == 1000) {
+        struct timeval now;
+        gettimeofday(&now, NULL);
+        uint64_t t;
+        t = (now.tv_sec - worker->freq_time.tv_sec) * 1000000 + (now.tv_usec - worker->freq_time.tv_usec);
+        printf("[%d] rounds/s %f\n", state->core_id, 1000000.0 * count/t);
+        
+        worker->freq_time = now;
+        worker->freq_count = 0;
+    }
     
     // start timer, reset collector
     gettimeofday(&worker->starttime, NULL);
@@ -169,8 +183,8 @@ if(m->ipv4._proto == 17) {
     gettimeofday(&now, NULL);
     rtt = (now.tv_sec - param_msg->starttime.tv_sec) * 1000000 + (now.tv_usec - param_msg->starttime.tv_usec);
                     
-    worker->time += rtt;
-    worker->count++;
+    worker->rtt_time += rtt;
+    worker->rtt_count++;
         
 /*
     if(rtt > 1000) {
@@ -178,10 +192,10 @@ if(m->ipv4._proto == 17) {
     }
   */      
     
-    if(worker->count == 10000) {
-        printf("Latency: core = %d, time = %f\n", param_msg->member_id, 1.0*worker->time/worker->count);
-        worker->time = 0;
-        worker->count = 0;
+    if(worker->rtt_count == 10000) {
+        printf("Latency: core = %d, time = %f\n", param_msg->member_id, 1.0*worker->rtt_time/worker->rtt_count);
+        worker->rtt_time = 0;
+        worker->rtt_count = 0;
     }
     
 
