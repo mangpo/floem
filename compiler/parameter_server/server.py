@@ -1,7 +1,7 @@
 from message import *
 import net, library
 
-nic = target.CAVIUM
+nic = 'dpdk' #target.CAVIUM
 
 addr = r'''
 //#define DEBUG
