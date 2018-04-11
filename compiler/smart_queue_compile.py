@@ -217,7 +217,16 @@ def get_save_state_src(g, deq_thread, enq_thread, live, special, extras,
     save_src += "  state.buffer = buff;\n"
     save_src += "  state.entry = (%s*) buff.entry;\n" % state_entry.name
     copysize = ""
+
+    order1 = []
+    order2 = []
     for var in live:
+        if var not in special:
+            order1.append(var)
+        else:
+            order2.append(var)
+
+    for var in order1 + order2:
         field = get_entry_field(var, src2fields)
         if var in special:
             t, name, special_t, info = special[var]

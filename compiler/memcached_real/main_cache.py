@@ -3,7 +3,7 @@ from compiler import Compiler
 import net, cache_smart, queue_smart, library
 
 n_cores = 1
-nic_threads = 4
+nic_threads = 1
 #mode = 'dpdk'
 mode = target.CAVIUM
 
@@ -55,7 +55,7 @@ class item(State):
     def init(self): self.declare = False
 
 class MyState(CacheState):
-    pkt = Field(Pointer(iokvs_message))
+    pkt = Field(Pointer(iokvs_message), size='sizeof(struct eth_hdr) + sizeof(struct ip_hdr)')
     pkt_buff = Field('void*')
     it = Field(Pointer(item))
     hash = Field(Uint(32))
@@ -300,6 +300,7 @@ output { out(this->core); }''' % ('%', n_cores))
         (size_t msglen, void* pkt, void* pkt_buff) = inp();
 
         iokvs_message *m = pkt;
+        memcpy(m, state->pkt, sizeof(struct eth_hdr) + sizeof(struct ip_hdr));
 
         m->mcr.request.magic = PROTOCOL_BINARY_RES;
         m->mcr.request.opcode = PROTOCOL_BINARY_CMD_GET;
@@ -337,6 +338,7 @@ output { out(msglen, m, pkt_buff); }
             self.run_c(r'''
             (size_t msglen, void* pkt, void* pkt_buff) = inp();
             iokvs_message *m = pkt;
+            memcpy(m, state->pkt, sizeof(struct eth_hdr) + sizeof(struct ip_hdr));
 
             m->mcr.request.magic = PROTOCOL_BINARY_RES;
             m->mcr.request.opcode = PROTOCOL_BINARY_CMD_GET;
@@ -388,6 +390,7 @@ output { out(msglen, m, pkt_buff); }
             self.run_c(r'''
 (size_t msglen, void* pkt, void* pkt_buff) = inp();
 iokvs_message *m = pkt;
+memcpy(m, state->pkt, sizeof(struct eth_hdr) + sizeof(struct ip_hdr));
 
 m->mcr.request.magic = PROTOCOL_BINARY_RES;
 m->mcr.request.opcode = PROTOCOL_BINARY_CMD_SET;
