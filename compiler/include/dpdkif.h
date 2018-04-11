@@ -26,6 +26,9 @@ typedef rte_spinlock_t spinlock_t;
 #define __sync_bool_compare_and_swap32(ptr, old, new) __sync_bool_compare_and_swap(ptr, old, new)
 #define __sync_bool_compare_and_swap64(ptr, old, new) __sync_bool_compare_and_swap(ptr, old, new)
 
+#define shared_mm_malloc(size) malloc(size)
+#define shared_mm_free(p) free(p)
+
 /* these are non-static on purpose! */
 uint8_t dpdk_port_id;
 uint8_t dpdk_thread_num;

@@ -93,7 +93,7 @@ if(worker->group_id > N_GROUPS) {
     worker->group_id = 0;
     
     worker->freq_count++;
-    if(worker->freq_count == 1000) {
+    if(worker->freq_count == 100) {
         struct timeval now;
         gettimeofday(&now, NULL);
         uint64_t t;
@@ -126,7 +126,7 @@ class Wait(Element):
         self.run_c(r'''
 (int core_id) = inp();
 
-#define TIMEOUT 5000000
+#define TIMEOUT 10000000
         
         //usleep(1);
 bool yes = false;
@@ -196,7 +196,7 @@ if(m->ipv4._proto == 17) {
     }
   */      
     
-    if(worker->rtt_count == 10000) {
+        if(worker->rtt_count == 100000) {
         printf("Latency: core = %d, time = %f\n", param_msg->member_id, 1.0*worker->rtt_time/worker->rtt_count);
         worker->rtt_time = 0;
         worker->rtt_count = 0;

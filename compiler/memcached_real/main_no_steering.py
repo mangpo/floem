@@ -29,6 +29,7 @@ class iokvs_message(State):
     dup = Field('struct udp_hdr')
     mcudp = Field('memcached_udp_header')
     mcr = Field(protocol_binary_request_header)
+    time = Field(Uint(64))
     payload = Field(Array(Uint(8)))
 
     def init(self): self.declare = False

@@ -144,14 +144,11 @@ c.include = r'''
 #include "protocol_binary.h"
 #include <rte_ip.h>
 
-struct eth_addr src = { .addr = "\x68\x05\xca\x33\x13\x40" };
-//struct eth_addr dest = { .addr = "\x68\x05\xca\x33\x11\x3c" }; // n33
-struct eth_addr dest = { .addr = "\x00\x0f\xb7\x30\x3f\x58" }; // n35
+struct eth_addr src = { .addr = "\x3c\xfd\xfe\xad\x84\x8d" }; // dikdik
+struct eth_addr dest = { .addr = "\x02\x78\x1f\x5a\x5b\x01" }; // jaguar
 
-struct ip_addr src_ip = { .addr = "\x0a\x03\x00\x1e" };   // n30
-//struct ip_addr dest_ip = { .addr = "\x0a\x03\x00\x21" }; // n33
-struct ip_addr dest_ip = { .addr = "\x0a\x03\x00\x23" }; // n35
-//struct ip_addr dest_ip = { .addr = "\x0a\x03\x00\x24" }; // n36
+struct ip_addr src_ip = { .addr = "\x0a\x64\x14\x05" }; // dikdik
+struct ip_addr dest_ip = { .addr = "\x0a\x64\x14\x0b" }; // jaguar
 
 #define TEXT_BASE 10000000 /* 10M (8 bits) */
 typedef enum _TYPE {

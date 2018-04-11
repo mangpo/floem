@@ -34,7 +34,10 @@ void* get_pointer(uint64_t offset) {
 }
 
 void ialloc_init(void* p) {
-  seg_base = p;
+  if(p)
+    seg_base = p;
+  else
+    seg_base = (void*) malloc(settings.segsize * settings.segmaxnum);
   printf("seg_base = %p\n", seg_base);
   if ((seg_headers = calloc(settings.segmaxnum, sizeof(*seg_headers))) ==
             NULL)

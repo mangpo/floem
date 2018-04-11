@@ -57,7 +57,7 @@ class item(State):
 class MyState(CacheState):
     pkt = Field(Pointer(iokvs_message))
     pkt_buff = Field('void*')
-    it = Field(Pointer(item), shared='data_region')
+    it = Field(Pointer(item))
     hash = Field(Uint(32))
     keylen = Field(Uint(32))
     key = Field('void*', size='state->keylen')
@@ -229,7 +229,7 @@ output { out(); }
         def impl(self):
             self.run_c(r'''
 item* it = hasht_get(state->key, state->keylen, state->hash);
-//printf("hash get\n");
+printf("hash get\n");
 state->it = it;
 
 if(it) {
@@ -258,7 +258,7 @@ output switch { case yes: hit(); else: miss(); }
     class HashPut(ElementOneInOut):
         def impl(self):
             self.run_c(r'''
-//printf("hash put\n");
+printf("hash put\n");
 if(state->it) hasht_put(state->it, NULL);
 output { out(); }
             ''')
@@ -628,7 +628,6 @@ output { out(msglen, (void*) m, buff); }
             ''')
 
     def impl(self):
-        MemoryRegion('data_region', 2 * 1024 * 1024 * 512, init='ialloc_init(data_region);') #4 * 1024 * 512)
 
         # Queue
         RxEnq, RxDeq, RxScan = queue_smart.smart_queue("rx_queue", entry_size=192, size=256, insts=n_cores,
@@ -637,7 +636,7 @@ output { out(msglen, (void*) m, buff); }
         rx_deq = RxDeq()
 
         TxEnq, TxDeq, TxScan = queue_smart.smart_queue("tx_queue", entry_size=192, size=256, insts=n_cores,
-                                                       channels=2, checksum=False, enq_blocking=True, deq_atomic=True,
+                                                       channels=2, checksum=True, enq_blocking=True, deq_atomic=True,
                                                        enq_output=True)
         tx_enq = TxEnq()
         tx_deq = TxDeq()
@@ -729,4 +728,4 @@ if mode == target.CAVIUM:
 else:
     c.generate_code_as_header()
     c.depend = ['jenkins_hash', 'hashtable', 'ialloc', 'settings', 'dpdk']
-c.compile_and_run('test_no_steer')
+c.compile_and_run('test_cache')

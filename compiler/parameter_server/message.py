@@ -9,10 +9,10 @@ class param_message(State):
     parameters = Field(Array(Int))
     layout = [group_id, member_id, start_id, starttime, n, parameters]
 
-n_params = 5000
-n_groups = 32
+n_params = 3500000
+n_groups = 128
 n_workers = 8
-buffer_size = 128
+buffer_size = 350
 
 define = r'''
 #define N_PARAMS %d

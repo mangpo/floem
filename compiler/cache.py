@@ -198,7 +198,7 @@ def cache_default(name, key_type, val_type,
     citem* it = NULL;
     //printf("keylen = %s, vallen = %s\n", keylen, last_vallen);
     if(keylen > 0 && last_vallen > 0) {
-        it = malloc(item_size);
+        it = shared_mm_malloc(item_size);
         it->hv = hv;
         it->keylen = keylen;
         it->last_vallen = last_vallen;
@@ -244,7 +244,7 @@ def cache_default(name, key_type, val_type,
         item_src += r'''
         state->cache_item = NULL;
         if(rit) {
-            if(rit->evicted & 2) { cache_release(rit); free(rit); }
+            if(rit->evicted & 2) { cache_release(rit); shared_mm_free(rit); }
             else cache_release(rit);
         }
         '''
@@ -275,7 +275,7 @@ def cache_default(name, key_type, val_type,
         if(rit) {
             if(rit->evicted == 2) {
                 cache_release(rit);
-                free(rit);
+                shared_mm_free(rit);
             } else if(rit->evicted == 3) {
                 state->cache_item = rit;
             } else {
@@ -440,7 +440,7 @@ def cache_default(name, key_type, val_type,
                 //printf("it->evicted = %d\n", it->evicted);
                 if(it->evicted & 2) { 
                     cache_release(it); 
-                    free(it); 
+                    shared_mm_free(it); 
                     //printf("free %p\n", it); 
                 }
                 else { 
@@ -463,7 +463,7 @@ def cache_default(name, key_type, val_type,
             citem* it = state->cache_item;
             if(it && it->evicted & 2) { 
                 cache_release(it); 
-                free(it);
+                shared_mm_free(it);
 #ifdef DEBUG
                 printf("release %p\n", it); 
 #endif
@@ -637,7 +637,7 @@ def cache_default(name, key_type, val_type,
 
         def impl(self):
             self.run_c(r'''
-            output { evict(); free(); }
+            output { evict(); shared_mm_free(); }
             ''')
 
     class EvictComposite(Composite):

@@ -36,7 +36,7 @@ class test(Pipeline):
         net.FromNetFree('from_net_free')
         from_net.nothing >> Drop('drop')
 
-test('test', process='dpdk')
+test('test', process='dpdk', cores=range(4))
 
 c = Compiler()
 c.testing = 'while (1) pause();'

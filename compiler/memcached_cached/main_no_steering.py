@@ -30,6 +30,7 @@ class iokvs_message(State):
     dup = Field('struct udp_hdr')
     mcudp = Field('memcached_udp_header')
     mcr = Field(protocol_binary_request_header)
+    time = Field(Uint(64))
     payload = Field(Array(Uint(8)))
 
     def init(self): self.declare = False
@@ -475,6 +476,8 @@ output { out(msglen, m, pkt_buff); }
         m->udp.len = htons(msglen - offsetof(iokvs_message, udp));
         m->udp.cksum = 0;
 
+        m->time = pkt->time;
+
         output { out(msglen, (void*) m, buff); }
             ''')
 
@@ -692,12 +695,12 @@ state.qid = cvmx_get_core_num();
     def impl(self):
 
         # Queue
-        RxEnq, RxDeq, RxScan = queue_smart.smart_queue("rx_queue", entry_size=192, size=128, insts=n_cores,
+        RxEnq, RxDeq, RxScan = queue_smart.smart_queue("rx_queue", entry_size=200, size=512, insts=n_cores,
                                                        channels=1, enq_blocking=True, enq_atomic=False, enq_output=True)
         rx_enq = RxEnq()
         rx_deq = RxDeq()
 
-        TxEnq, TxDeq, TxScan = queue_smart.smart_queue("tx_queue", entry_size=192, size=512, insts=n_cores,
+        TxEnq, TxDeq, TxScan = queue_smart.smart_queue("tx_queue", entry_size=200, size=512, insts=n_cores,
                                                        channels=1, checksum=True, enq_blocking=True, deq_atomic=False,
                                                        enq_output=True)
         tx_enq = TxEnq()

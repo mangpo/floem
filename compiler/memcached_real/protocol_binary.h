@@ -1,7 +1,7 @@
 #ifndef PROTOCOL_BINARY_H
 #define PROTOCOL_BINARY_H
 
-#define RTE
+//#define RTE
 #define UDP_HEADER_SIZE 8
 
     typedef struct {
