@@ -401,17 +401,16 @@ m->mcr.request.bodylen = 0;
 output { out(msglen, m, pkt_buff); }
             ''' % self.status)
 
-    class SizePktBuff(Element):
+    class PktBuff(Element):
         def configure(self):
-            self.inp = Input(SizeT)
-            self.out = Output(SizeT, 'void*', 'void*')
+            self.inp = Input()
+            self.out = Output('void*', 'void*')
 
         def impl(self):
             self.run_c(r'''
-            size_t msglen = inp();
             void* pkt = state->pkt;
             void* pkt_buff = state->pkt_buff;
-            output { out(msglen, pkt, pkt_buff); }
+            output { out(pkt, pkt_buff); }
             ''')
 
     class PrepareHeader(Element):
@@ -631,7 +630,7 @@ output { out(msglen, (void*) m, buff); }
 
         # Queue
         RxEnq, RxDeq, RxScan = queue_smart.smart_queue("rx_queue", entry_size=192, size=256, insts=n_cores,
-                                                       channels=2, enq_blocking=True, enq_atomic=True, enq_output=False)
+                                                       channels=2, enq_blocking=True, enq_atomic=True, enq_output=True)
         rx_enq = RxEnq()
         rx_deq = RxDeq()
 
@@ -668,6 +667,7 @@ output { out(msglen, (void*) m, buff); }
 
                 classifier.out_get >> main.Key2State() >> CacheGetStart() >> main.QID() >> rx_enq.inp[0]
                 classifier.out_set >> main.KV2State() >> CacheSetStart() >> main.QID() >> rx_enq.inp[1]
+                rx_enq >> main.PktBuff() >> from_net_free
 
                 # exception
                 check_packet.slowpath >> arp >> to_net
@@ -686,20 +686,26 @@ output { out(msglen, (void*) m, buff); }
                 hton = net.HTON(configure=['iokvs_message'])
                 to_net = net.ToNet('to_net', configure=['from_net'])
 
+                net_allocs = [net.NetAlloc() for i in range(4)]
+                drop = library.Drop()
+
                 self.core_id >> main.TxScheduler() >> tx_deq
                 
                 # get
                 tx_deq.out[0] >> CacheGetEnd() >> get_result
-                get_result.hit >> main.SizeGetResp() >> main.SizePktBuff() >> get_response >> prepare_header
-                get_result.miss >> main.SizeGetNullResp() >> main.SizePktBuff() >> get_response_null >> prepare_header
+                get_result.hit >> main.SizeGetResp() >> net_allocs[0] >> get_response >> prepare_header
+                get_result.miss >> main.SizeGetNullResp() >> net_allocs[1] >> get_response_null >> prepare_header
 
                 # set
                 tx_deq.out[1] >> CacheSetEnd() >> set_result
-                set_result.success >> main.SizeSetResp() >> main.SizePktBuff() >> set_response >> prepare_header
-                set_result.fail >> main.SizeSetResp() >> main.SizePktBuff() >> set_reponse_fail >> prepare_header
+                set_result.success >> main.SizeSetResp() >> net_allocs[2] >> set_response >> prepare_header
+                set_result.fail >> main.SizeSetResp() >> net_allocs[3] >> set_reponse_fail >> prepare_header
 
                 # send
                 prepare_header >> hton >> to_net
+
+                for i in range(4):
+                    net_allocs[i].oom >> drop
 
         if mode == 'dpdk':
             process_one_pkt('process_one_pkt', process=target.dpdk, cores=range(n_cores))
