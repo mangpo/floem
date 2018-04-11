@@ -581,7 +581,7 @@ def cache_default(name, key_type, val_type,
                 output switch { case miss: out(key, %s %s); }
                 ''' % (key_type, extra_args, ','.join(type_vals), extra_return, ','.join(return_vals)))
 
-    class ForkGet(Element):
+    class ForkRel(Element):
         def configure(self):
             self.inp = Input(*kv_params)
             self.out = Output(*kv_params)
@@ -602,7 +602,7 @@ def cache_default(name, key_type, val_type,
                 output { out(key, %s %s); release(); }
                 ''' % (key_type, extra_args, ','.join(type_vals), extra_return, ','.join(return_vals)))
 
-    class ForkSet(Element):
+    class Fork(Element):
         def configure(self):
             self.inp = Input(*kv_params)
             self.out1 = Output(*kv_params)
@@ -637,7 +637,7 @@ def cache_default(name, key_type, val_type,
 
         def impl(self):
             self.run_c(r'''
-            output { evict(); shared_mm_free(); }
+            output { evict(); free(); }
             ''')
 
     class EvictComposite(Composite):
@@ -662,23 +662,26 @@ def cache_default(name, key_type, val_type,
             self.out = Output(*kv_params)
             self.query_begin = Output(*key_params)
             self.query_end = Input(*kv_params)
+            self.enq_out = Output()
             if write_policy == graph_ir.Cache.write_back and set_query:
                 self.evict_begin = Output(*kv_params)
 
         def impl(self):
             cache_get = CacheGet()
             cache_set_get = CacheSetGet()
+            fork_rel = ForkRel()
 
-            self.inp >> cache_get
+            self.inp >> fork_rel >> cache_get
+            fork_rel.release >> self.enq_out
 
             # Miss
-            fork2 = ForkGet()
+            fork2 = ForkRel()
             cache_get.miss >> self.query_begin
             self.query_end >> cache_set_get >> fork2
             fork2.release >> FreeOrRelease()
 
             if write_policy == graph_ir.Cache.write_back and set_query:
-                fork3 = ForkSet()
+                fork3 = Fork()
                 fork2 >> fork3
                 fork3.out2 >> self.out
                 fork3.out1 >> EvictComposite() >> self.evict_begin
@@ -686,7 +689,7 @@ def cache_default(name, key_type, val_type,
                 fork2 >> self.out
 
             # Get (come after miss because resource mapping on miss path is the default)
-            fork = ForkGet()
+            fork = ForkRel()
             cache_get.hit >> fork >> self.out
             fork.release >> FreeOrRelease()
 
@@ -695,12 +698,15 @@ def cache_default(name, key_type, val_type,
             self.inp = Input(*kv_params)
             self.out = Output(*kv_params)
             self.query_begin = Output(*kv_params)
+            self.enq_out = Output()
 
         def impl(self):
             cache_set = CacheSet()
-            fork = ForkSet()
+            fork = Fork()
+            fork_rel = ForkRel()
 
-            self.inp >> cache_set >> fork
+            self.inp >> fork_rel >> cache_set >> fork
+            fork_rel.release >> self.enq_out
             fork.out2 >> self.out
 
             if write_miss == graph_ir.Cache.write_alloc:
@@ -727,10 +733,13 @@ def cache_default(name, key_type, val_type,
             self.out = Output(*kv_params)
             self.query_begin = Output(*kv_params)
             self.query_end = Input(*kv_params)
+            self.enq_out = Output()
 
         def impl(self):
-            fork = ForkSet()
-            self.inp >> CacheDelete() >> self.query_begin
+            fork = Fork()
+            fork_rel = ForkRel()
+            self.inp >> fork_rel >> CacheDelete() >> self.query_begin
+            fork_rel.release >> self.enq_out
             self.query_end >> fork
             fork.out1 >> self.out
             fork.out2 >> CacheSet() >> library.Drop()

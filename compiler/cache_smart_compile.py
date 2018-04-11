@@ -89,7 +89,13 @@ def get_element_ports(port):
     return port.spec.element_ports
 
 
-def transform_get(g, get_start, get_end, get_composite, set_start, Drop, write_policy):
+def transform_get(g, get_start, get_end, get_composite, set_start, Drop, write_policy, enq_out):
+    # get.enq_out >> enq_out
+    ports = get_element_ports(get_composite.enq_out)
+    assert len(ports) == 1
+    compo_enq_out = ports[0]
+    g.connect(compo_enq_out.element.name, enq_out[0], compo_enq_out.name, enq_out[1])
+
     # A >> get.begin
     if len(get_start.input2ele) > 0:
         ports = get_element_ports(get_composite.inp)
@@ -198,7 +204,13 @@ def transform_get(g, get_start, get_end, get_composite, set_start, Drop, write_p
     #             break
 
 
-def transform_set_write_back(g, set_start, set_end, set_composite):
+def transform_set_write_back(g, set_start, set_end, set_composite, enq_out):
+    # set.enq_out >> enq_out
+    ports = get_element_ports(set_composite.enq_out)
+    assert len(ports) == 1
+    compo_enq_out = ports[0]
+    g.connect(compo_enq_out.element.name, enq_out[0], compo_enq_out.name, enq_out[1])
+
     # A >> set.begin
     if len(set_start.input2ele) > 0:
         ports = get_element_ports(set_composite.inp)
@@ -236,7 +248,10 @@ def transform_set_write_back(g, set_start, set_end, set_composite):
     g.deleteElementInstance(set_end.name)
 
     # Duplicate if an instance has inputs from get and set on different threads.
+    already_dups = []
     for name in subgraph:
+        if name in already_dups:
+            continue
         instance = g.instances[name]
         thread_list = []
         for port_list in instance.input2ele.values():
@@ -248,14 +263,20 @@ def transform_set_write_back(g, set_start, set_end, set_composite):
         if n_threads > 1:
             dup_nodes = g.find_subgraph_list(instance.name, [])
             dup_nodes.reverse()
+            already_dups += dup_nodes
             l = [t for t in set(thread_list)]
             pipeline_state_join.duplicate_subgraph_wrt_threads(g, dup_nodes, l, suffix='_getset')
-            break
 
     # Does not work for API.
 
 
-def transform_set_write_through(g, set_start, set_end, set_composite):
+def transform_set_write_through(g, set_start, set_end, set_composite, enq_out):
+    # set.enq_out >> enq_out
+    ports = get_element_ports(set_composite.enq_out)
+    assert len(ports) == 1
+    compo_enq_out = ports[0]
+    g.connect(compo_enq_out.element.name, enq_out[0], compo_enq_out.name, enq_out[1])
+
     # A >> set.begin
     if len(set_start.input2ele) > 0:
         ports = get_element_ports(set_composite.inp)
@@ -351,20 +372,26 @@ def cache_pass(g):
         if cache_high.get_start:
             get_start = g.instances[cache_high.get_start.name]
             get_end = g.instances[cache_high.get_end.name]
-            get_reach = dfs_same_thread(g, get_start, get_end, {})
+            get_queues = []
+            get_reach = dfs_same_thread(g, get_start, get_end, {}, queues=get_queues)
             assert g.process_of_thread(get_start.thread) == g.process_of_thread(get_end.thread)
         else:
             get_start = None
             get_end = None
+            get_reach = None
+            get_queues = None
 
         if cache_high.set_start:
             set_start = g.instances[cache_high.set_start.name]
             set_end = g.instances[cache_high.set_end.name]
-            set_reach = dfs_same_thread(g, set_start, set_end, {})
+            set_queues = []
+            set_reach = dfs_same_thread(g, set_start, set_end, {}, queues=set_queues)
             assert g.process_of_thread(set_start.thread) == g.process_of_thread(set_end.thread)
         else:
             set_start = None
             set_end = None
+            set_reach = None
+            set_queues = None
 
         if get_reach and set_reach:
             n = min(len(get_reach), len(set_reach))
@@ -374,6 +401,40 @@ def cache_pass(g):
 
         g_add, get_composite, set_composite, Drop = create_cache(cache_high, get_start, set_start)
         g.merge(g_add)
+
+        # Enq output
+        enq_out = None
+
+        if get_queues or set_queues:
+            in_queue = None
+            if get_queues and set_queues:
+                if len(get_queues) > 0 and len(set_queues) > 0:
+                    assert get_queues[0] == set_queues[0]
+                    in_queue = get_queues[0]
+                else:
+                    assert len(get_queues) == 0 and len(set_queues == 0)
+            elif get_queues:
+                if len(get_queues) > 0:
+                    in_queue = get_queues[0]
+            elif set_queues:
+                if len(set_queues) > 0:
+                    in_queue = set_queues[0]
+
+            if in_queue:
+                if 'done' in in_queue.enq[0].output2ele:
+                    inst_name, port_name = in_queue.enq[0].output2ele['done']
+                    enq_out = (inst_name, port_name)
+                    for enq in in_queue.enq:
+                        g.disconnect(enq.name, inst_name, 'done', port_name)
+
+                    in_queue.enq_output = False
+
+        if enq_out is None:
+            drop_inst = Drop(create=False).instance
+            g.newElementInstance(drop_inst.element, drop_inst.name, drop_inst.args)
+            g.set_thread(drop_inst.name, prev.thread)
+            enq_out = (drop_inst.name, 'inp')
+
 
         # Remove connection at set_end for write-back policy
         if set_start and len(set_reach) > 1 and cache_high.write_policy == graph_ir.Cache.write_back:
@@ -419,12 +480,12 @@ def cache_pass(g):
 
         # Graph transformation
         if get_start:
-            transform_get(g, get_start, get_end, get_composite, set_start, Drop, cache_high.write_policy)
+            transform_get(g, get_start, get_end, get_composite, set_start, Drop, cache_high.write_policy, enq_out)
         if set_start:
             if cache_high.write_policy==graph_ir.Cache.write_back:
-                transform_set_write_back(g, set_start, set_end, set_composite)
+                transform_set_write_back(g, set_start, set_end, set_composite, enq_out)
             else:
-                transform_set_write_through(g, set_start, set_end, set_composite)
+                transform_set_write_through(g, set_start, set_end, set_composite, enq_out)
 
         # print "------------------------- adding cache --------------------------"
         # g.print_graphviz()
