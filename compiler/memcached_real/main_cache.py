@@ -3,7 +3,8 @@ from compiler import Compiler
 import net, cache_smart, queue_smart, library
 
 n_cores = 1
-nic_threads = 1
+nic_rx_threads = 1
+nic_threads = 10
 #mode = 'dpdk'
 mode = target.CAVIUM
 
@@ -229,7 +230,7 @@ output { out(); }
         def impl(self):
             self.run_c(r'''
 item* it = hasht_get(state->key, state->keylen, state->hash);
-printf("hash get\n");
+//printf("hash get\n");
 state->it = it;
 
 if(it) {
@@ -258,7 +259,7 @@ output switch { case yes: hit(); else: miss(); }
     class HashPut(ElementOneInOut):
         def impl(self):
             self.run_c(r'''
-printf("hash put\n");
+//printf("hash put\n");
 if(state->it) hasht_put(state->it, NULL);
 output { out(); }
             ''')
@@ -632,12 +633,12 @@ output { out(msglen, (void*) m, buff); }
     def impl(self):
 
         # Queue
-        RxEnq, RxDeq, RxScan = queue_smart.smart_queue("rx_queue", entry_size=192, size=256, insts=n_cores,
+        RxEnq, RxDeq, RxScan = queue_smart.smart_queue("rx_queue", entry_size=192, size=512, insts=n_cores,
                                                        channels=2, enq_blocking=True, enq_atomic=True, enq_output=True)
         rx_enq = RxEnq()
         rx_deq = RxDeq()
 
-        TxEnq, TxDeq, TxScan = queue_smart.smart_queue("tx_queue", entry_size=192, size=256, insts=n_cores,
+        TxEnq, TxDeq, TxScan = queue_smart.smart_queue("tx_queue", entry_size=192, size=512, insts=n_cores,
                                                        channels=2, checksum=True, enq_blocking=True, deq_atomic=True,
                                                        enq_output=True)
         tx_enq = TxEnq()
@@ -687,7 +688,7 @@ output { out(msglen, (void*) m, buff); }
                 set_response = main.PrepareSetResp(configure=['PROTOCOL_BINARY_RESPONSE_SUCCESS'])
                 set_reponse_fail = main.PrepareSetResp(configure=['PROTOCOL_BINARY_RESPONSE_ENOMEM'])
                 hton = net.HTON(configure=['iokvs_message'])
-                to_net = net.ToNet('to_net', configure=['from_net'])
+                to_net = net.ToNet('to_net', configure=['net_alloc'])
 
                 net_allocs = [net.NetAlloc() for i in range(4)]
                 drop = library.Drop()
@@ -712,12 +713,12 @@ output { out(msglen, (void*) m, buff); }
 
         if mode == 'dpdk':
             process_one_pkt('process_one_pkt', process=target.dpdk, cores=range(n_cores))
-            nic_rx('nic_rx', process=target.dpdk, cores=[nic_threads + x for x in range(nic_threads)])
-            nic_tx('nic_tx', process=target.dpdk, cores=range(nic_threads))
+            nic_rx('nic_rx', process=target.dpdk, cores=[nic_rx_threads + x for x in range(nic_threads)])
+            nic_tx('nic_tx', process=target.dpdk, cores=range(1))
         else:
             process_one_pkt('process_one_pkt', process='app', cores=range(n_cores))
-            nic_rx('nic_rx', device=target.CAVIUM, cores=[nic_threads + x for x in range(nic_threads)])
-            nic_tx('nic_tx', device=target.CAVIUM, cores=range(nic_threads))
+            nic_rx('nic_rx', device=target.CAVIUM, cores=[nic_rx_threads + x for x in range(nic_threads)])
+            nic_tx('nic_tx', device=target.CAVIUM, cores=range(nic_rx_threads))
 
 
 ######################## Run test #######################
