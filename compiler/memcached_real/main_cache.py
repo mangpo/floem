@@ -634,13 +634,15 @@ output { out(msglen, (void*) m, buff); }
 
         # Queue
         RxEnq, RxDeq, RxScan = queue_smart.smart_queue("rx_queue", entry_size=192, size=512, insts=n_cores,
-                                                       channels=2, enq_blocking=True, enq_atomic=True, enq_output=True)
+                                                       channels=2,
+                                                       enq_blocking=[False, True], enq_atomic=True, enq_output=True)
         rx_enq = RxEnq()
         rx_deq = RxDeq()
 
         TxEnq, TxDeq, TxScan = queue_smart.smart_queue("tx_queue", entry_size=192, size=512, insts=n_cores,
-                                                       channels=2, checksum=True, enq_blocking=True, deq_atomic=True,
-                                                       enq_output=True)
+                                                       channels=2, checksum=True,
+                                                       enq_blocking=True, enq_output=True,
+                                                       deq_atomic=True)
         tx_enq = TxEnq()
         tx_deq = TxDeq()
 

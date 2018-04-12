@@ -133,6 +133,7 @@ def cache_default(name, key_type, val_type,
             self.inp = Input(*key_params)
             self.hit = Output(*kv_params)
             self.miss = Output(*key_params)
+            self.fail = Output()
             self.this = my_hash_table
 
         def impl(self):
@@ -140,7 +141,7 @@ def cache_default(name, key_type, val_type,
                 if state:
                     input_src = "%s key = state->%s;" % (key_type, key_name)
                     output_src = ' '.join(["state->%s = %s;" % (s, v) for s, v in zip(val_names, return_vals)]) + \
-                                 " output switch { case it: hit(); else: miss(); }"
+                                 " output switch { case it: hit(); cass success: miss(); else: fail(); }"
                 else:
                     input_src = "(%s key) = inp();" % (key_type)
                     output_src = "output switch { case it: hit(key, %s); else: miss(key); }" % ','.join(return_vals)
@@ -148,7 +149,8 @@ def cache_default(name, key_type, val_type,
                 self.run_c(r'''
                 %s
                 %s
-                citem* it = cache_get(this->buckets, %d, %s, %s, hv);
+                bool success;
+                citem* it = cache_get(this->buckets, %d, %s, %s, hv, &success);
                 %s
                 state->cache_item = it;
                 
@@ -159,7 +161,7 @@ def cache_default(name, key_type, val_type,
                     input_src = "%s key = state->%s; int keylen = state->%s;" % (key_type, key_name, keylen_name)
                     output_src = "state->%s = (it)? it->last_vallen: 0;" % vallen_name + \
                                  ' '.join(["state->%s = %s;" % (s, v) for s, v in zip(val_names, return_vals)]) + \
-                                 " output switch { case it: hit(); else: miss(); }"
+                                 " output switch { case it: hit(); case success: miss(); else: fail(); }"
                 else:
                     input_src = "(%s key, int keylen) = inp();" % (key_type)
                     output_src = "output switch { case it: hit(key, keylen, it->last_vallen, %s); else: miss(key, keylen); }" \
@@ -168,7 +170,8 @@ def cache_default(name, key_type, val_type,
                 self.run_c(r'''
                 %s
                 %s
-                citem* it = cache_get(this->buckets, %d, %s, %s, hv);
+                bool success;
+                citem* it = cache_get(this->buckets, %d, %s, %s, hv, &success);
                 %s
                 state->cache_item = it;
                 
@@ -228,8 +231,9 @@ def cache_default(name, key_type, val_type,
     replace = 'true' if write_miss==graph_ir.Cache.write_alloc else 'false'
     item_src += r'''
     state->cache_item = NULL;
+    bool success = false;
     if(it) {
-        citem *rit = cache_put(this->buckets, %d, it, %s);
+        citem *rit = cache_put(this->buckets, %d, it, %s, &success);
     ''' % (n_buckets, replace)
 
     if write_policy == graph_ir.Cache.write_back:
@@ -270,8 +274,9 @@ def cache_default(name, key_type, val_type,
 
     item_src2 += r'''
     state->cache_item = NULL;
+    bool success = false;
     if(it) {
-        citem* rit = cache_put_or_get(this->buckets, %d, it, true);
+        citem* rit = cache_put_or_get(this->buckets, %d, it, true, &success);
         if(rit) {
             if(rit->evicted == 2) {
                 cache_release(rit);
@@ -322,11 +327,11 @@ def cache_default(name, key_type, val_type,
 
     if state:
         kv_output_src = r'''
-        output { out(); }
+        output switch { case success: out(); else: fail(); }
         '''
     else:
         kv_output_src = r'''
-        output { out(key, %s %s); }
+        output switch { case success: out(key, %s %s); else: fail(); }
         ''' % (extra_return, ','.join(return_vals))
 
     class CacheSet(Element):
@@ -335,6 +340,7 @@ def cache_default(name, key_type, val_type,
         def configure(self):
             self.inp = Input(*kv_params)
             self.out = Output(*kv_params)
+            self.fail = Output()
             self.this = my_hash_table
 
         def impl(self):
@@ -349,7 +355,15 @@ def cache_default(name, key_type, val_type,
             self.this = my_hash_table
 
         def impl(self):
-            self.run_c(kv_input_src + compute_hash + item_src2 + kv_output_src)
+            if state:
+                my_kv_output_src = r'''
+                output { out(); }
+                '''
+            else:
+                my_kv_output_src = r'''
+                output { out(key, %s %s); }
+                ''' % (extra_return, ','.join(return_vals))
+            self.run_c(kv_input_src + compute_hash + item_src2 + my_kv_output_src)
 
     class CacheDelete(Element):
         this = Persistent(hash_table)
@@ -357,16 +371,19 @@ def cache_default(name, key_type, val_type,
         def configure(self):
             self.inp = Input(*kv_params)
             self.out = Output(*kv_params)
+            self.fail = Output()
             self.this = my_hash_table
 
         def impl(self):
             if common.is_pointer(key_type):
                 del_src = r'''
-                cache_delete(this->buckets, %d, key, keylen, hv);
+                bool success;
+                cache_delete(this->buckets, %d, key, keylen, hv, &success);
                 ''' % n_buckets
             else:
                 del_src = r'''
-                cache_delete(this->buckets, %d, &key, keylen, hv);
+                bool success;
+                cache_delete(this->buckets, %d, &key, keylen, hv, &success);
                 ''' % n_buckets
 
             self.run_c(kv_input_src + compute_hash + del_src + kv_output_src)
@@ -656,6 +673,7 @@ def cache_default(name, key_type, val_type,
             else:
                 self.inp >> evict >> self.out
 
+    library.Drop(create=False, force=True)
     class GetComposite(Composite):
         def configure(self):
             self.inp = Input(*key_params)
@@ -673,6 +691,9 @@ def cache_default(name, key_type, val_type,
 
             self.inp >> fork_rel >> cache_get
             fork_rel.release >> self.enq_out
+
+            # Lock fail
+            cache_get.fail >> library.Drop()
 
             # Miss
             fork2 = ForkRel()
@@ -705,6 +726,9 @@ def cache_default(name, key_type, val_type,
             fork = Fork()
             fork_rel = ForkRel()
 
+            # Lock fail
+            cache_set.fail >> library.Drop()
+
             self.inp >> fork_rel >> cache_set >> fork
             fork_rel.release >> self.enq_out
             fork.out2 >> self.out
@@ -717,15 +741,6 @@ def cache_default(name, key_type, val_type,
             else:
                 fork.out2 >> Miss() >> self.query_begin
 
-    # class SetWriteThrough(Composite):
-    #     def configure(self):
-    #         self.inp = Input(*kv_params)
-    #         self.out = Output(*kv_params)
-    #
-    #     def impl(self):
-    #         self.inp >> CacheSet() >> self.out
-
-    library.Drop(create=False, force=True)
 
     class SetWriteThrough(Composite):
         def configure(self):
@@ -738,10 +753,17 @@ def cache_default(name, key_type, val_type,
         def impl(self):
             fork = Fork()
             fork_rel = ForkRel()
-            self.inp >> fork_rel >> CacheDelete() >> self.query_begin
+            cache_del = CacheDelete()
+            cache_set = CacheSet()
+
+            self.inp >> fork_rel >> cache_del >> self.query_begin
             fork_rel.release >> self.enq_out
             self.query_end >> fork
             fork.out1 >> self.out
-            fork.out2 >> CacheSet() >> library.Drop()
+            fork.out2 >> cache_set >> library.Drop()
+
+            # Lock fail
+            cache_del.fail >> library.Drop()
+            cache_set.fail >> library.Drop()
 
     return GetComposite, SetWriteBack if write_policy==graph_ir.Cache.write_back else SetWriteThrough

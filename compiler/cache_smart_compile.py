@@ -128,6 +128,10 @@ def transform_get(g, get_start, get_end, get_composite, set_start, Drop, write_p
         g.disconnect(prev_name, get_end.name, prev_port, 'inp')
         g.connect(prev_name, query_end.element.name, prev_port, query_end.name)
 
+    # subgraph = g.find_subgraph_list(query_end.element.name, [])
+    # for name in subgraph:
+    #     g.instances[name].thread = get_end.thread
+
     # get.end >> B
     ports = get_element_ports(get_composite.out)
 
@@ -136,6 +140,7 @@ def transform_get(g, get_start, get_end, get_composite, set_start, Drop, write_p
     for out in ports:
         g.connect(out.element.name, next_name, out.name, next_port)
     B = next_name
+
 
     # get.evict >> SetQuery
     if write_policy == graph_ir.Cache.write_back and set_start:
@@ -181,6 +186,7 @@ def transform_get(g, get_start, get_end, get_composite, set_start, Drop, write_p
         # if dup_nodes[-1] in g.API_outputs:
         #     API_return = dup_nodes[-1]
         pipeline_state_join.duplicate_subgraph(g, dup_nodes, suffix='_cache', copy=2)
+        #pipeline_state_join.duplicate_subgraph_wrt_threads(g, dup_nodes, [get_start.thread, get_end.thread], suffix='_cache')
 
         hit_start = dup_nodes[0] + '_cache1'  # hit
         subgraph = g.find_subgraph_list(hit_start, [])
@@ -487,5 +493,6 @@ def cache_pass(g):
             else:
                 transform_set_write_through(g, set_start, set_end, set_composite, enq_out)
 
-        # print "------------------------- adding cache --------------------------"
-        # g.print_graphviz()
+        print "------------------------- adding cache --------------------------"
+        g.print_graphviz()
+        print "---------------------------------------------------"

@@ -111,8 +111,9 @@ def create_queue(q, name, entry_size, size, insts, enq_blocking, deq_blocking, e
                             enq_atomic=enq_atomic, deq_atomic=deq_atomic,
                             clean=clean, qid_output=qid_output, checksum=checksum)
 
-    EnqAlloc(create=False, configure=[0])
-    EnqAlloc(create=False, configure=[q.enq_gap])
+    for i in range(q.channels):
+        EnqAlloc(create=False, configure=[0, i])
+        EnqAlloc(create=False, configure=[q.enq_gap, i])
     EnqSubmit(create=False)
     DeqGet(create=False)
     DeqRelease(create=False)
@@ -362,7 +363,7 @@ def compile_smart_queue(g, q, src2fields):
             if "inp" + str(i) in enq.input2ele:
                 add = enq.input2ele["inp" + str(i)]
                 ins += add
-                for x in ins:
+                for x in add:
                     if q.enq_output:
                         if "done" not in enq.output2ele:
                             raise Exception("Port 'done' of queue '%s' does not connect to anything." % q.name)
@@ -460,7 +461,7 @@ def compile_smart_queue(g, q, src2fields):
 
             # Enqueue instances
             enq_alloc_inst = enq_alloc(prefix + q.name + "_enq_alloc" + str(i) + "_from_" + in_inst,
-                                       create=False, configure=[gap]).instance
+                                       create=False, configure=[gap, i]).instance
             enq_submit_inst = enq_submit(prefix + q.name + "_enq_submit" + str(i) + "_from_" + in_inst, create=False).instance
             size_qid = ElementInstance(size_qid_ele.name, prefix + size_qid_ele.name + "_from_" + in_inst)
             fill_inst = ElementInstance(fill_ele.name, prefix + fill_ele.name + "_from_" + in_inst)

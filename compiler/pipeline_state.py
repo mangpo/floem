@@ -552,7 +552,7 @@ def analyze_pipeline_states(g, liveness_check=True):
         roots = g.find_roots()
         for root in roots:
             if not isinstance(g.instances[root].element.special, graph_ir.Queue):
-                assert len(g.instances[root].liveness) == 0
+                assert len(g.instances[root].liveness) == 0, "Live: %s" % g.instances[root].liveness
 
     return src2fields
 

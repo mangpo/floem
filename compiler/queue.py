@@ -152,10 +152,11 @@ def queue_default(name, entry_size, size, insts,
         this = Persistent(enq_all.__class__)
         def states(self): self.this = enq_all
 
-        def configure(self, gap=0):
+        def configure(self, gap=0, channel=0):
             self.inp = Input(Int, Int)  # len, core
             self.out = Output(q_buffer)
             self.gap = gap
+            self.channel = channel
 
         def impl(self):
             lock = "qlock_lock(&q->lock);" if enq_atomic else ''
@@ -194,7 +195,11 @@ def queue_default(name, entry_size, size, insts,
    }
    ''' % (lock, self.gap, clean_name, unlock)
 
-            if enq_blocking:
+            my_blocking = enq_blocking
+            if isinstance(enq_blocking, list):
+                my_blocking = enq_blocking[self.channel]
+
+            if my_blocking:
                 src = block
             else:
                 src = noblock
