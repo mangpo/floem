@@ -3,7 +3,7 @@ from compiler import Compiler
 import net, cache_smart, queue_smart, library
 
 n_cores = 1
-nic_rx_threads = 1
+nic_tx_threads = 1
 nic_threads = 10
 #mode = 'dpdk'
 mode = target.CAVIUM
@@ -715,12 +715,12 @@ output { out(msglen, (void*) m, buff); }
 
         if mode == 'dpdk':
             process_one_pkt('process_one_pkt', process=target.dpdk, cores=range(n_cores))
-            nic_rx('nic_rx', process=target.dpdk, cores=[nic_rx_threads + x for x in range(nic_threads)])
+            nic_rx('nic_rx', process=target.dpdk, cores=[nic_tx_threads + x for x in range(nic_threads)])
             nic_tx('nic_tx', process=target.dpdk, cores=range(1))
         else:
             process_one_pkt('process_one_pkt', process='app', cores=range(n_cores))
-            nic_rx('nic_rx', device=target.CAVIUM, cores=[nic_rx_threads + x for x in range(nic_threads)])
-            nic_tx('nic_tx', device=target.CAVIUM, cores=range(nic_rx_threads))
+            nic_rx('nic_rx', device=target.CAVIUM, cores=[nic_tx_threads + x for x in range(nic_threads)])
+            nic_tx('nic_tx', device=target.CAVIUM, cores=range(nic_tx_threads))
 
 
 ######################## Run test #######################
