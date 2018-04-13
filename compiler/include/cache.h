@@ -67,7 +67,7 @@ static void cache_init(cache_bucket *buckets, int n)
     }
 }
 
-static citem *cache_get(cache_bucket *buckets, int nbuckets, const void *key, int klen, uint32_t hv)
+static citem *cache_get(cache_bucket *buckets, int nbuckets, const void *key, int klen, uint32_t hv, bool* success)
 {
 #ifdef HIT_RATE
     static __thread size_t hit = 0, total = 0;
@@ -79,6 +79,7 @@ static citem *cache_get(cache_bucket *buckets, int nbuckets, const void *key, in
 
     cache_bucket *b = buckets + (hv % nbuckets);
     lock_lock(&b->lock);
+    *success = true;
 
     for (i = 0; i < BUCKET_NITEMS; i++) {
         if (b->items[i] != NULL && b->hashes[i] == hv) {
@@ -114,7 +115,7 @@ done:
 }
 
 
-static citem *cache_put(cache_bucket *buckets, int nbuckets, citem *nit, bool replace)
+static citem *cache_put(cache_bucket *buckets, int nbuckets, citem *nit, bool replace, bool* success)
 {
     citem *it, *prev;
     size_t i, di;
@@ -131,6 +132,7 @@ static citem *cache_put(cache_bucket *buckets, int nbuckets, citem *nit, bool re
 
     cache_bucket *b = buckets + (hv % nbuckets);
     lock_lock(&b->lock);
+    *success = true;
     //printf("lock\n");
 
     // Check if we need to replace an existing item
@@ -214,7 +216,7 @@ static citem *cache_put(cache_bucket *buckets, int nbuckets, citem *nit, bool re
     return NULL;
 }
 
-static citem *cache_put_or_get(cache_bucket *buckets, int nbuckets, citem *nit, bool replace)
+static citem *cache_put_or_get(cache_bucket *buckets, int nbuckets, citem *nit, bool replace, bool* success)
 {
     citem *it, *prev;
     size_t i, di;
@@ -231,6 +233,7 @@ static citem *cache_put_or_get(cache_bucket *buckets, int nbuckets, citem *nit, 
 
     cache_bucket *b = buckets + (hv % nbuckets);
     lock_lock(&b->lock);
+    *success = true;
     //printf("lock\n");
 
     // Check if we need to replace an existing item
@@ -318,7 +321,7 @@ done:
     return NULL;
 }
 
-static void cache_delete(cache_bucket *buckets, int nbuckets, void* key, int klen, uint32_t hv)
+static void cache_delete(cache_bucket *buckets, int nbuckets, void* key, int klen, uint32_t hv, bool* success)
 {
     citem *it, *prev;
     size_t i, di;
@@ -329,6 +332,7 @@ static void cache_delete(cache_bucket *buckets, int nbuckets, void* key, int kle
 
     cache_bucket *b = buckets + (hv % nbuckets);
     lock_lock(&b->lock);
+    *success = true;
     //printf("lock\n");
 
     // Check if we need to replace an existing item
