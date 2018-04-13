@@ -3,8 +3,11 @@ from compiler import Compiler
 import net, cache_smart, queue_smart, library
 
 n_cores = 1
+nic_rx_threads = 10
 nic_tx_threads = 1
-nic_threads = 10
+
+rx_queues = 1
+tx_queues = 2
 #mode = 'dpdk'
 mode = target.CAVIUM
 
@@ -41,7 +44,7 @@ class iokvs_message(State):
 CacheGetStart, CacheGetEnd, CacheSetStart, CacheSetEnd, CacheState = \
     cache_smart.smart_cache_with_state('MyCache',
                                        (Pointer(Int),'key','keylen'), [(Pointer(Int),'val','vallen')],
-                                       var_size=True, hash_value='hash', n_hashes=2**14,
+                                       var_size=True, hash_value='hash', n_hashes=2**15,
                                        write_policy=Cache.write_back, write_miss=Cache.write_alloc)
 
 
@@ -188,6 +191,19 @@ output switch{
 state->key = state->pkt->payload + state->pkt->mcr.request.extlen;
 output { out(); }''')
 
+    class RxScheduler(Element):
+        def configure(self):
+            self.inp = Input(Int)
+            self.out = Output(Int)
+
+        def impl(self):
+            self.run_c(r'''
+            (int id) = inp();
+            static __thread int qid = (id * %d) / %d;
+            qid = (qid + 1) %s %d;
+            output { out(qid); }
+            ''' % (rx_queues, n_cores, '%', rx_queues))
+
     class TxScheduler(Element):
         def configure(self):
             self.inp = Input(Int)
@@ -196,9 +212,10 @@ output { out(); }''')
         def impl(self):
             self.run_c(r'''
             (int id) = inp();
-            int qid = id %s %d;
+            static __thread int qid = (id * %d) / %d;
+            qid = (qid + 1) %s %d;
             output { out(qid); }
-            ''' % ('%', n_cores))
+            ''' % (tx_queues, nic_tx_threads, '%', tx_queues))
 
 
     ######################## hash ########################
@@ -211,16 +228,19 @@ state->hash = jenkins_hash(state->key, state->pkt->mcr.request.keylen);
 output { out(); }
             ''')
 
-    class QID(Element):
-        def configure(self):
-            self.inp = Input()
-            self.out = Output()
-
+    class QID(ElementOneInOut):
         def impl(self):
             self.run_c(r'''
     state->qid = state->hash %s %d;
     output { out(); }
-    ''' % ('%', n_cores))
+    ''' % ('%', rx_queues))
+
+    class QIDCPU(ElementOneInOut):
+        def impl(self):
+            self.run_c(r'''
+    state->qid = state->hash %s %d;
+    output { out(); }
+    ''' % ('%', tx_queues))
 
     class HashGet(Element):
         def configure(self):
@@ -266,18 +286,6 @@ output { out(); }
 
 
     ######################## responses ########################
-
-    class Scheduler(Element):
-        this = Persistent(Schedule)
-
-        def configure(self):
-            self.out = Output(Int)
-            self.this = Schedule()
-
-        def impl(self):
-            self.run_c(r'''
-this->core = (this->core + 1) %s %s;
-output { out(this->core); }''' % ('%', n_cores))
 
     class SizeGetResp(Element):
         def configure(self):
@@ -633,13 +641,13 @@ output { out(msglen, (void*) m, buff); }
     def impl(self):
 
         # Queue
-        RxEnq, RxDeq, RxScan = queue_smart.smart_queue("rx_queue", entry_size=192, size=512, insts=n_cores,
+        RxEnq, RxDeq, RxScan = queue_smart.smart_queue("rx_queue", entry_size=192, size=512, insts=rx_queues,
                                                        channels=2,
                                                        enq_blocking=[False, True], enq_atomic=True, enq_output=True)
         rx_enq = RxEnq()
         rx_deq = RxDeq()
 
-        TxEnq, TxDeq, TxScan = queue_smart.smart_queue("tx_queue", entry_size=192, size=512, insts=n_cores,
+        TxEnq, TxDeq, TxScan = queue_smart.smart_queue("tx_queue", entry_size=192, size=512, insts=tx_queues,
                                                        channels=2, checksum=True,
                                                        enq_blocking=True, enq_output=True,
                                                        deq_atomic=True)
@@ -649,9 +657,9 @@ output { out(msglen, (void*) m, buff); }
         ######################## CPU #######################
         class process_one_pkt(Pipeline):
             def impl(self):
-                self.core_id >> main.CleanLog() >> rx_deq
-                rx_deq.out[0] >> main.HashGet() >> tx_enq.inp[0]
-                rx_deq.out[1] >> main.GetItemSpec() >> main.HashPut() >> tx_enq.inp[1]
+                self.core_id >> main.CleanLog() >> main.RxScheduler() >> rx_deq
+                rx_deq.out[0] >> main.HashGet() >> main.QIDCPU() >> tx_enq.inp[0]
+                rx_deq.out[1] >> main.GetItemSpec() >> main.HashPut() >> main.QIDCPU() >> tx_enq.inp[1]
                 tx_enq.done >> main.Unref() >> library.Drop()
 
 
@@ -715,11 +723,11 @@ output { out(msglen, (void*) m, buff); }
 
         if mode == 'dpdk':
             process_one_pkt('process_one_pkt', process=target.dpdk, cores=range(n_cores))
-            nic_rx('nic_rx', process=target.dpdk, cores=[nic_tx_threads + x for x in range(nic_threads)])
+            nic_rx('nic_rx', process=target.dpdk, cores=[nic_tx_threads + x for x in range(nic_rx_threads)])
             nic_tx('nic_tx', process=target.dpdk, cores=range(1))
         else:
             process_one_pkt('process_one_pkt', process='app', cores=range(n_cores))
-            nic_rx('nic_rx', device=target.CAVIUM, cores=[nic_tx_threads + x for x in range(nic_threads)])
+            nic_rx('nic_rx', device=target.CAVIUM, cores=[nic_tx_threads + x for x in range(nic_rx_threads)])
             nic_tx('nic_tx', device=target.CAVIUM, cores=range(nic_tx_threads))
 
 
