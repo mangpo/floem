@@ -642,7 +642,7 @@ class Cache:
     no_write_alloc = 'no_write_alloc'
     write_alloc = 'write_alloc'
 
-    def __init__(self, name, key_type, val_type, var_size, hash_value, update_func=None,
+    def __init__(self, name, key_type, val_type, var_size, hash_value, update_func=None, n_hashes=2**15,
                  state=False, key_name=None, val_names=None, keylen_name= None, vallen_name=None,
                  write_policy=write_through, write_miss=no_write_alloc):
         self.name = name
@@ -651,6 +651,7 @@ class Cache:
         self.var_size = var_size
         self.hash_value = hash_value
         self.update_func = update_func
+        self.n_hashes = n_hashes
 
         self.state = state
         self.key_name = key_name

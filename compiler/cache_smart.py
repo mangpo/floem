@@ -3,7 +3,7 @@ import graph_ir
 
 
 def smart_cache_with_state(name, key, vals,
-                           var_size=False, hash_value=False,
+                           var_size=False, hash_value=False, n_hashes=2**15,
                            write_policy=graph_ir.Cache.write_through, write_miss=graph_ir.Cache.no_write_alloc):
     if write_policy == graph_ir.Cache.write_back:
         assert write_miss == graph_ir.Cache.write_alloc, \
@@ -24,7 +24,7 @@ def smart_cache_with_state(name, key, vals,
         vallen_name = vals[-1][2]
 
     cache = graph_ir.Cache(name, key_type, val_type, var_size, hash_value,
-                           state=True,
+                           state=True, n_hashes=n_hashes,
                            key_name=key_name, val_names=val_names, keylen_name=keylen_name, vallen_name=vallen_name,
                            write_policy=write_policy, write_miss=write_miss)
 

@@ -340,7 +340,7 @@ def create_cache(cache_high, get, set):
                             var_size=cache_high.var_size, hash_value=cache_high.hash_value,
                             update_func=cache_high.update_func,
                             write_policy=cache_high.write_policy, write_miss=cache_high.write_miss,
-                            set_query=set)
+                            set_query=set, n_hashes=cache_high.n_hashes)
 
     get_composite = None
     set_composite = None

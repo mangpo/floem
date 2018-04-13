@@ -6,7 +6,7 @@ def cache_default(name, key_type, val_type,
                   state=False, key_name=None, val_names=None, keylen_name=None, vallen_name=None,
                   hash_value=False, var_size=False, update_func='f',
                   write_policy=graph_ir.Cache.write_through, write_miss=graph_ir.Cache.no_write_alloc,
-                  set_query=True):
+                  set_query=True, n_hashes=2**15):
     if write_policy == graph_ir.Cache.write_back:
         assert write_miss == graph_ir.Cache.write_alloc, \
             "Cache: cannot use write-back policy with no write allocation on write misses."
@@ -17,12 +17,11 @@ def cache_default(name, key_type, val_type,
         for v in val_type:
             assert not common.is_pointer(v), "Cache with non-variable-size must not return any pointer value."
 
-    n_buckets = 2**15
     class hash_table(State):
-        buckets = Field(Array('cache_bucket', n_buckets))
+        buckets = Field(Array('cache_bucket', n_hashes))
 
         def init(self):
-            self.buckets = lambda (x): 'cache_init(%s, %d)' % (x, n_buckets)
+            self.buckets = lambda (x): 'cache_init(%s, %d)' % (x, n_hashes)
 
     hash_table.__name__ = prefix + hash_table.__name__
     my_hash_table = hash_table()
@@ -155,7 +154,7 @@ def cache_default(name, key_type, val_type,
                 state->cache_item = it;
                 
                 %s
-                ''' % (input_src, compute_hash, n_buckets, key_arg, keylen_arg, val_src, output_src))
+                ''' % (input_src, compute_hash, n_hashes, key_arg, keylen_arg, val_src, output_src))
             else:
                 if state:
                     input_src = "%s key = state->%s; int keylen = state->%s;" % (key_type, key_name, keylen_name)
@@ -176,7 +175,7 @@ def cache_default(name, key_type, val_type,
                 state->cache_item = it;
                 
                 %s
-                ''' % (input_src, compute_hash, n_buckets, key_arg, keylen_arg, val_src, output_src))
+                ''' % (input_src, compute_hash, n_hashes, key_arg, keylen_arg, val_src, output_src))
 
     # Item
     type_vals = []
@@ -234,7 +233,7 @@ def cache_default(name, key_type, val_type,
     bool success = false;
     if(it) {
         citem *rit = cache_put(this->buckets, %d, it, %s, &success);
-    ''' % (n_buckets, replace)
+    ''' % (n_hashes, replace)
 
     if write_policy == graph_ir.Cache.write_back:
         item_src += r'''
@@ -291,7 +290,7 @@ def cache_default(name, key_type, val_type,
             }
         }
     } 
-    ''' % (n_buckets, val_assign_src, val_state_src)
+    ''' % (n_hashes, val_assign_src, val_state_src)
 
     # key-value input/out src
     if not var_size:
@@ -379,12 +378,12 @@ def cache_default(name, key_type, val_type,
                 del_src = r'''
                 bool success;
                 cache_delete(this->buckets, %d, key, keylen, hv, &success);
-                ''' % n_buckets
+                ''' % n_hashes
             else:
                 del_src = r'''
                 bool success;
                 cache_delete(this->buckets, %d, &key, keylen, hv, &success);
-                ''' % n_buckets
+                ''' % n_hashes
 
             self.run_c(kv_input_src + compute_hash + del_src + kv_output_src)
 

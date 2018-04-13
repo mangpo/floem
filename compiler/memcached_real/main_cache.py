@@ -41,7 +41,7 @@ class iokvs_message(State):
 CacheGetStart, CacheGetEnd, CacheSetStart, CacheSetEnd, CacheState = \
     cache_smart.smart_cache_with_state('MyCache',
                                        (Pointer(Int),'key','keylen'), [(Pointer(Int),'val','vallen')],
-                                       var_size=True, hash_value='hash',
+                                       var_size=True, hash_value='hash', n_hashes=2**14,
                                        write_policy=Cache.write_back, write_miss=Cache.write_alloc)
 
 
