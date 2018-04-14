@@ -235,7 +235,7 @@ def duplicate_subgraph(g, node_list, suffix='_dup', copy=None):
                         ext = prev_name[pos:]
                         g.connect(prev_name, inst_name + ext, prev_port, inport)
                     else:
-                        g.connect(prev_name, inst_name + suffix + str(0), prev_port, inport)
+                        g.connect(prev_name, inst_name + suffix + str(i), prev_port, inport)
 
         for outport in instance.output2ele.keys():
             next_name, next_port = instance.output2ele[outport]
