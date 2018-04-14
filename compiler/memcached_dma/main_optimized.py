@@ -2,7 +2,7 @@ from dsl import *
 import queue_smart, net, library
 from compiler import Compiler
 
-n_cores = 7
+n_cores = 1
 nic_rx_threads = 5
 nic_tx_threads = 2
 
@@ -755,7 +755,7 @@ output switch { case segment: out(); else: null(); }
     uint64_t addr = 0;
 
     if(h) {
-        addr = segment_item_alloc(h->segaddr, h->seglen, &h->offset, sizeof(item) + totlen);  // TODO: concurrent
+        addr = (uint64_t) segment_item_alloc(h->segaddr, h->seglen, &h->offset, sizeof(item) + totlen);  // TODO: concurrent
 
         if(addr == 0) {
             printf("Segment is full. offset = %ld\n", h->offset);  // including this line will make CPU keep making new segment. Without this line, # of segment will stop under 100.
@@ -773,7 +773,7 @@ output switch { case segment: out(); else: null(); }
             }
 
             if(h) {
-                addr = segment_item_alloc(h->segaddr, h->seglen, &h->offset, sizeof(item) + totlen);
+                addr = (uint64_t) segment_item_alloc(h->segaddr, h->seglen, &h->offset, sizeof(item) + totlen);
             }
         }
     }
@@ -931,7 +931,7 @@ output switch { case segment: out(); else: null(); }
         rx_enq = RxEnq()
         rx_deq = RxDeq()
 
-        TxEnq, TxDeq, TxScan = queue_smart.smart_queue("tx_queue", entry_size=160, size=512, insts=n_cores,
+        TxEnq, TxDeq, TxScan = queue_smart.smart_queue("tx_queue", entry_size=192, size=512, insts=n_cores,
                                                        channels=1, checksum=True, enq_blocking=True, deq_atomic=True,
                                                        enq_output=True)
         tx_enq = TxEnq()

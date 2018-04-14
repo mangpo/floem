@@ -10,7 +10,7 @@
 #include <assert.h>
 #include "protocol_binary.h"
 
-#define NUM_THREADS     7
+#define NUM_THREADS     1
 //#define DEBUG
 
 /******************************************************************************/
@@ -271,6 +271,7 @@ typedef struct {
     struct udp_hdr udp;
     memcached_udp_header mcudp;
     protocol_binary_request_header mcr;
+    uint64_t time;
     uint8_t payload[];
 } __attribute__ ((packed)) iokvs_message;
 
