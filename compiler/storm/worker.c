@@ -99,7 +99,7 @@ int global_grouping(const struct tuple *t, struct executor *self)
   return self->outtasks[0];
 }
 
-#define SYSLAB_DPDK2
+#define SYSLAB_CAVIUM
 
 struct worker workers[MAX_WORKERS] = {
 #if defined(LOCAL)
@@ -213,7 +213,33 @@ struct worker workers[MAX_WORKERS] = {
       { .execute = rank_execute, .taskid = 30, .outtasks = { 0 }, .grouper = global_grouping },
     }
   },
+
 #elif defined(SYSLAB_CAVIUM)
+  {
+    .hostname = "jaguar", .ip.addr = "\x0a\x64\x14\x0b", .port = 1234, .mac.addr = "\x02\x78\x1f\x5a\x5b\x01",
+    .executors = {
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 1, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 2, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
+      { .execute = count_execute, .init = count_init, .taskid = 10, .outtasks = { 20, 21, 22, 23 }, .grouper = fields_grouping },
+      { .execute = count_execute, .init = count_init, .taskid = 11, .outtasks = { 20, 21, 22, 23 }, .grouper = fields_grouping },
+      { .execute = rank_execute, .taskid = 20, .outtasks = { 30 }, .grouper = global_grouping },
+      { .execute = rank_execute, .taskid = 21, .outtasks = { 30 }, .grouper = global_grouping },
+    }
+  },
+  {
+    .hostname = "quagga", .ip.addr = "\x0a\x64\x14\x12", .port = 1234, .mac.addr = "\x00\x0f\xb7\x30\x3f\x59",
+    .executors = {
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 3, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 4, .outtasks = { 10, 11, 12, 13 }, .grouper = fields_grouping },
+      { .execute = count_execute, .init = count_init, .taskid = 12, .outtasks = { 20, 21, 22, 23 }, .grouper = fields_grouping },
+      { .execute = count_execute, .init = count_init, .taskid = 13, .outtasks = { 20, 21, 22, 23 }, .grouper = fields_grouping },
+      { .execute = rank_execute, .taskid = 22, .outtasks = { 30 }, .grouper = global_grouping },
+      { .execute = rank_execute, .taskid = 23, .outtasks = { 30 }, .grouper = global_grouping },
+      { .execute = rank_execute, .taskid = 30, .outtasks = { 0 }, .grouper = global_grouping },
+    }
+  },
+
+#elif defined(SYSLAB_CAVIUM2)
   {
     .hostname = "jaguar", .ip.addr = "\x0a\x64\x14\x0b", .port = 1234, .mac.addr = "\x02\x78\x1f\x5a\x5b\x01",
     .executors = {
