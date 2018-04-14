@@ -3,11 +3,11 @@ from compiler import Compiler
 import net, cache_smart, queue_smart, library
 
 n_cores = 1
-nic_rx_threads = 10
-nic_tx_threads = 1
+nic_rx_threads = 8
+nic_tx_threads = 3
 
 rx_queues = 1
-tx_queues = 2
+tx_queues = 1
 #mode = 'dpdk'
 mode = target.CAVIUM
 
@@ -45,7 +45,7 @@ CacheGetStart, CacheGetEnd, CacheSetStart, CacheSetEnd, CacheState = \
     cache_smart.smart_cache_with_state('MyCache',
                                        (Pointer(Int),'key','keylen'), [(Pointer(Int),'val','vallen')],
                                        var_size=True, hash_value='hash', n_hashes=2**15,
-                                       write_policy=Cache.write_back, write_miss=Cache.write_alloc)
+                                       write_policy=Cache.write_through, write_miss=Cache.no_write_alloc)
 
 
 class item(State):
@@ -199,7 +199,8 @@ output { out(); }''')
         def impl(self):
             self.run_c(r'''
             (int id) = inp();
-            static __thread int qid = (id * %d) / %d;
+            static __thread int qid = -1;
+            if(qid == -1) qid = (id * %d) / %d;
             qid = (qid + 1) %s %d;
             output { out(qid); }
             ''' % (rx_queues, n_cores, '%', rx_queues))
@@ -212,7 +213,8 @@ output { out(); }''')
         def impl(self):
             self.run_c(r'''
             (int id) = inp();
-            static __thread int qid = (id * %d) / %d;
+            static __thread int qid = -1;
+            if(qid == -1) qid = (id * %d) / %d;
             qid = (qid + 1) %s %d;
             output { out(qid); }
             ''' % (tx_queues, nic_tx_threads, '%', tx_queues))
