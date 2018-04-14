@@ -7,7 +7,7 @@ test = "spout"
 inject_func = "random_" + test
 workerid = {"spout": 0, "count": 1, "rank": 2}
 
-n_cores = 7
+n_cores = 4
 n_workers = 'MAX_WORKERS'
 n_nic_rx = 3
 n_nic_tx = 5
@@ -634,7 +634,7 @@ class BatchScheduler(Element):
         
     if(core == -1) {
         //core = (core_id * n_cores)/%d;
-        core = core_id/2;
+        core = core_id/4;
         while(this->executors[core].execute == NULL){
             core = (core + 1) %s n_cores;
         }  
@@ -646,14 +646,15 @@ class BatchScheduler(Element):
     }
 
 #ifndef CAVIUM
-    if(core >= 2 && (batch_size >= BATCH_SIZE || rdtsc() - start >= BATCH_DELAY * PROC_FREQ_MHZ)) {
+    if(core >= 1 && (batch_size >= BATCH_SIZE || rdtsc() - start >= BATCH_DELAY * PROC_FREQ_MHZ)) {
 #else
-    if(core >= 2 && (batch_size >= BATCH_SIZE || core_time_now_us() - start >= BATCH_DELAY)) {
+    if(core >= 1 && (batch_size >= BATCH_SIZE || core_time_now_us() - start >= BATCH_DELAY)) {
 #endif
         do {
             core = (core + 1) %s n_cores;
         } while(this->executors[core].execute == NULL);
-        if(core < 2) core = 2;
+        //if(core < 2) core = 2;
+        if(core < 1) core = 1;
         batch_size = 0;
         //printf("======================= Dequeue core = %s, thread = %s\n", core, core_id);
 #ifndef CAVIUM

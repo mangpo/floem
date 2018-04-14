@@ -197,7 +197,7 @@ struct worker workers[MAX_WORKERS] = {
   },
 #elif defined(SYSLAB_DPDK2)
   {
-    .hostname = "dikdik", .ip.addr = "\x0a\x64\x14\x05", .port = 1234, .mac.addr = "\x3c\xfd\xfe\xad\x84\x8d",
+    .hostname = "guanaco", .ip.addr = "\x0a\x64\x14\x08", .port = 1234, .mac.addr = "\x3c\xfd\xfe\xaa\xd1\xe1",
     .executors = {
       { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 1, .outtasks = { 10, 11 }, .grouper = fields_grouping },
       { .execute = count_execute, .init = count_init, .taskid = 10, .outtasks = { 20, 21 }, .grouper = fields_grouping },
@@ -205,7 +205,25 @@ struct worker workers[MAX_WORKERS] = {
     }
   },
   {
-    .hostname = "fossa", .ip.addr = "\x0a\x64\x14\x07", .port = 1234, .mac.addr = "\x3c\xfd\xfe\xad\xfe\x05",
+    .hostname = "hippopotamus", .ip.addr = "\x0a\x64\x14\x09", .port = 1234, .mac.addr = "\x68\x05\xca\x33\x13\x41",
+    .executors = {
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 2, .outtasks = { 10, 11 }, .grouper = fields_grouping },
+      { .execute = count_execute, .init = count_init, .taskid = 11, .outtasks = { 20, 21 }, .grouper = fields_grouping },
+      { .execute = rank_execute, .taskid = 21, .outtasks = { 30 }, .grouper = global_grouping },
+      { .execute = rank_execute, .taskid = 30, .outtasks = { 0 }, .grouper = global_grouping },
+    }
+  },
+#elif defined(SYSLAB_CAVIUM)
+  {
+    .hostname = "jaguar", .ip.addr = "\x0a\x64\x14\x0b", .port = 1234, .mac.addr = "\x02\x78\x1f\x5a\x5b\x01",
+    .executors = {
+      { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 1, .outtasks = { 10, 11 }, .grouper = fields_grouping },
+      { .execute = count_execute, .init = count_init, .taskid = 10, .outtasks = { 20, 21 }, .grouper = fields_grouping },
+      { .execute = rank_execute, .taskid = 20, .outtasks = { 30 }, .grouper = global_grouping },
+    }
+  },
+  {
+    .hostname = "quagga", .ip.addr = "\x0a\x64\x14\x12", .port = 1234, .mac.addr = "\x00\x0f\xb7\x30\x3f\x59",
     .executors = {
       { .execute = spout_execute, .init = spout_init, .spout = true, .taskid = 2, .outtasks = { 10, 11 }, .grouper = fields_grouping },
       { .execute = count_execute, .init = count_init, .taskid = 11, .outtasks = { 20, 21 }, .grouper = fields_grouping },
