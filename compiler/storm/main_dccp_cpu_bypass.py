@@ -8,7 +8,7 @@ workerid = {"spout": 0, "count": 1, "rank": 2}
 
 n_cores = 4
 n_workers = 'MAX_WORKERS'
-n_nic_rx = 2
+n_nic_rx = 1
 n_nic_tx = 3
 
 class Classifier(Element):
@@ -262,9 +262,7 @@ class DccpSendAck(Element):  # TODO
         ack->eth.src = p->eth.dest;
         ack->ip.dest = p->ip.src;
         ack->ip.src = p->ip.dest;
-        ack->ip._len = htons(sizeof(struct pkt_dccp_ack_headers) - offsetof(struct pkt_dccp_ack_headers, ip));
-
-        //ack->dccp.hdr.src = p->dccp.dst;
+        ack->dccp.hdr.src = p->dccp.dst;
         ack->dccp.hdr.res_type_x = DCCP_TYPE_ACK << 1;
         uint32_t seq = (p->dccp.seq_high << 16) | ntohs(p->dccp.seq_low);
         ack->dccp.ack = htonl(seq);
@@ -435,18 +433,13 @@ class Tuple2Pkt(Element):
         memcpy(new_t, t, sizeof(struct tuple));
         new_t->task = t->task;
 
-        static __thread uint16_t sport = 0;
-        struct worker *workers = get_workers();
-        header->dccp.dst = (++sport == 0)? ++sport : sport;
-        //header->dccp.dst = htons(state.worker);
+        struct worker* workers = get_workers();
+        header->dccp.dst = htons(state.worker);
         header->dccp.src = htons(state.myworker);
-        
         header->eth.dest = workers[state.worker].mac;
         header->ip.dest = workers[state.worker].ip;
         header->eth.src = workers[state.myworker].mac;
         header->ip.src = workers[state.myworker].ip;
-        
-        header->ip._len = htons(size - offsetof(struct pkt_dccp_headers, ip));
         
         if(new_t->task == 30) printf("PREPARE PKT: task = %d, fromtask = %d, worker = %d\n", new_t->task, new_t->fromtask, state.worker);
         output { out(p); }

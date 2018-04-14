@@ -7,7 +7,7 @@ test = "spout"
 inject_func = "random_" + test
 workerid = {"spout": 0, "count": 1, "rank": 2}
 
-n_cores = 4
+n_cores = 7
 n_workers = 'MAX_WORKERS'
 n_nic_rx = 3
 n_nic_tx = 5
@@ -360,9 +360,8 @@ class DccpSendAck(Element):  # TODO
         ack->eth.src = p->eth.dest;
         ack->ip.dest = p->ip.src;
         ack->ip.src = p->ip.dest;
-        ack->ip._len = htons(sizeof(struct pkt_dccp_ack_headers) - offsetof(struct pkt_dccp_ack_headers, ip));
 
-        //ack->dccp.hdr.src = p->dccp.dst;
+        ack->dccp.hdr.src = p->dccp.dst;
         ack->dccp.hdr.res_type_x = DCCP_TYPE_ACK << 1;
         uint32_t seq = (p->dccp.seq_high << 16) | ntohs(p->dccp.seq_low);
         ack->dccp.ack = htonl(seq);
@@ -513,18 +512,11 @@ class Tuple2Pkt(Element):
         memcpy(header, &dccp->header, sizeof(struct pkt_dccp_headers));
         memcpy(&header[1], t, sizeof(struct tuple));
 
-        static __thread uint16_t sport = 0;
         struct worker *workers = get_workers();
-        header->dccp.dst = (++sport == 0)? ++sport : sport;
-        //header->dccp.dst = htons(state.worker);
+        header->dccp.dst = htons(state.worker);
         header->dccp.src = htons(state.myworker);
-        
         header->eth.dest = workers[state.worker].mac;
         header->eth.src = workers[state.myworker].mac;
-        header->ip.src = workers[state.worker].ip;
-        header->ip.dest = workers[state.myworker].ip;
-        
-        header->ip._len = htons(size - offsetof(struct pkt_dccp_headers, ip));
         
         //printf("PREPARE PKT: task = %d, worker = %d\n", nic_hotnl(t->task), state.worker);
 
@@ -642,7 +634,7 @@ class BatchScheduler(Element):
         
     if(core == -1) {
         //core = (core_id * n_cores)/%d;
-        core = core_id/4;
+        core = core_id/2;
         while(this->executors[core].execute == NULL){
             core = (core + 1) %s n_cores;
         }  
@@ -654,15 +646,14 @@ class BatchScheduler(Element):
     }
 
 #ifndef CAVIUM
-    if(core >= 1 && (batch_size >= BATCH_SIZE || rdtsc() - start >= BATCH_DELAY * PROC_FREQ_MHZ)) {
+    if(core >= 2 && (batch_size >= BATCH_SIZE || rdtsc() - start >= BATCH_DELAY * PROC_FREQ_MHZ)) {
 #else
-    if(core >= 1 && (batch_size >= BATCH_SIZE || core_time_now_us() - start >= BATCH_DELAY)) {
+    if(core >= 2 && (batch_size >= BATCH_SIZE || core_time_now_us() - start >= BATCH_DELAY)) {
 #endif
         do {
             core = (core + 1) %s n_cores;
         } while(this->executors[core].execute == NULL);
-        //if(core < 2) core = 2;
-        if(core < 1) core = 1;
+        if(core < 2) core = 2;
         batch_size = 0;
         //printf("======================= Dequeue core = %s, thread = %s\n", core, core_id);
 #ifndef CAVIUM

@@ -58,12 +58,12 @@ void init_header_template(struct pkt_dccp_headers *p) {
   p->ip._ttl = 0xff;
   p->ip._proto = IP_PROTO_DCCP;
   p->ip._chksum = 0;
-  //p->ip._len = htons(sizeof(struct tuple) + sizeof(struct dccp_hdr) + IP_HLEN);
+  //p->ip.src.addr = 0; // arranet_myip
+  p->ip._len = htons(sizeof(struct tuple) + sizeof(struct dccp_hdr) + IP_HLEN);
 
   p->dccp.data_offset = 3;
   p->dccp.res_type_x = DCCP_TYPE_DATA << 1;
   p->dccp.ccval_cscov = 1;
-  p->dccp.checksum = 0;
 }
 
 void init_congestion_control(struct connection* connections) {
