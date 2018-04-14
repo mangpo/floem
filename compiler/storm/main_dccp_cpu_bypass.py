@@ -262,7 +262,9 @@ class DccpSendAck(Element):  # TODO
         ack->eth.src = p->eth.dest;
         ack->ip.dest = p->ip.src;
         ack->ip.src = p->ip.dest;
-        ack->dccp.hdr.src = p->dccp.dst;
+        ack->ip._len = htons(sizeof(struct pkt_dccp_ack_headers) - offsetof(pkt_dccp_ack_headers, ip));
+
+        //ack->dccp.hdr.src = p->dccp.dst;
         ack->dccp.hdr.res_type_x = DCCP_TYPE_ACK << 1;
         uint32_t seq = (p->dccp.seq_high << 16) | ntohs(p->dccp.seq_low);
         ack->dccp.ack = htonl(seq);
@@ -433,13 +435,18 @@ class Tuple2Pkt(Element):
         memcpy(new_t, t, sizeof(struct tuple));
         new_t->task = t->task;
 
-        struct worker* workers = get_workers();
-        header->dccp.dst = htons(state.worker);
+        static __thread uint16_t sport = 0;
+        struct worker *workers = get_workers();
+        header->dccp.dst = (++sport == 0)? ++sport : sport;
+        //header->dccp.dst = htons(state.worker);
         header->dccp.src = htons(state.myworker);
+        
         header->eth.dest = workers[state.worker].mac;
         header->ip.dest = workers[state.worker].ip;
         header->eth.src = workers[state.myworker].mac;
         header->ip.src = workers[state.myworker].ip;
+        
+        m->ip._len = htons(size - offsetof(pkt_dccp_headers, ip));
         
         if(new_t->task == 30) printf("PREPARE PKT: task = %d, fromtask = %d, worker = %d\n", new_t->task, new_t->fromtask, state.worker);
         output { out(p); }
