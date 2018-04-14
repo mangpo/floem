@@ -542,9 +542,9 @@ def compile_smart_queue(g, q, src2fields):
             g.connect(scan_classify_inst.name, scan_save_inst.name, "out" + str(i))
             g.connect(scan_save_inst.name, clean_inst, "out", clean_port)
 
-    # Insert release dequeue
-    # duplicate_overlapped(g, save_inst_names)
+    duplicate_overlapped(g, save_inst_names)
 
+    # Insert release dequeue
     # for i in range(q.channels):
     #     node = get_node_before_release(save_inst_names[i], g, lives[i], prefix, release_vis)
     #     if node not in release_vis:
