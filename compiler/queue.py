@@ -287,14 +287,14 @@ def queue_default(name, entry_size, size, insts,
         def impl(self):
             if clean:
                 self.run_c(r'''
-                            (q_buffer buf) = inp();
-                            dequeue_release(buf, FLAG_CLEAN);
-                            ''')
+                (q_buffer buf) = inp();
+                dequeue_release(buf, FLAG_CLEAN);
+                ''')
             else:
                 self.run_c(r'''
-                            (q_buffer buf) = inp();
-                            dequeue_release(buf, 0);
-                            ''')
+                (q_buffer buf) = inp();
+                dequeue_release(buf, 0);
+                ''')
 
     EnqueueReserve.__name__ = prefix + EnqueueReserve.__name__
     EnqueueSubmit.__name__ = prefix + EnqueueSubmit.__name__
@@ -696,7 +696,11 @@ int dequeue_done%s(void* buff) {
     ''' % (insts, Storage.__name__)
                        + src
                        + r'''
+#ifndef CAVIUM
     q_buffer tmp = {(void*) x, 0};
+#else
+    q_buffer tmp = {(void*) x, 0, p->id};
+#endif
     output { out(tmp); }''')
 
         def impl_cavium(self):

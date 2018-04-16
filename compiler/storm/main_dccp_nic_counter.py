@@ -217,7 +217,6 @@ class CounterTuple(Element):
     def impl(self):
         self.run_c(r'''
     (q_buffer buff) = inp();
-    state.q_buf = buff;
     output { out((struct tuple*) buff.entry, buff); }
         ''')
 
