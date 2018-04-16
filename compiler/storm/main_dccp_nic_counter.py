@@ -123,6 +123,19 @@ class GetCore(Element):
     output { out(t, id); }
         ''')
 
+class GetCountCore(Element):
+    this = Persistent(TaskMaster)
+
+    def configure(self):
+        self.inp = Input("struct tuple*")
+        self.out = Output("struct tuple*", Int)
+
+    def impl(self):
+        self.run_c(r'''
+    struct tuple* t = inp();
+    output { out(t, 0); }
+        ''')
+
 
 class LocalOrRemote(Element):
     this = Persistent(TaskMaster)
@@ -196,21 +209,32 @@ class CountOrNot(Element):
         }
         ''')
 
+class CounterTuple(Element):
+    def configure(self):
+        self.inp = Input(queue.q_buffer)
+        self.out = Output("struct tuple*", queue.q_buffer)
+
+    def impl(self):
+        self.run_c(r'''
+    (q_buffer buff) = inp();
+    state.q_buf = buff;
+    output { out((struct tuple*) buff.entry, buff); }
+        ''')
 
 class Counter(Element):
     this = Persistent(NICCounter)
 
     def configure(self):
-        self.inp = Input("struct tuple*")
-        self.out = Output()
+        self.inp = Input("struct tuple*", queue.q_buffer)
+        self.out = Output(queue.q_buffer)
         self.this = nic_counter
 
     def impl(self):
         self.run_c(r'''
-        struct tuple* t = inp();
+        (struct tuple* t, q_buffer buff) = inp();
         count_execute(t, &this->executor);
         
-        output { out(); }
+        output { out(buff); }
         ''')
 
 
@@ -660,7 +684,7 @@ class GetBuff(Element):
         self.run_c(r'''
     q_buffer buff = state.q_buf;
     int is_tx = state.tx_queue;
-    output { 
+    output switch { 
         case is_tx: tx(buff); 
         else: count(buff);
     }
@@ -680,11 +704,12 @@ class Drop(Element):
 #################### Connection ####################
 import target
 
-MAX_ELEMS = 4 * 1024 #256 (4 * 1024)
+MAX_ELEMS = 256 #256 (4 * 1024)
 
 rx_enq_creator, rx_deq_creator, rx_release_creator = \
-    queue.queue_custom("rx_queue", "struct tuple", MAX_ELEMS, n_cores-1, "status", enq_blocking=False,
-                       deq_blocking=True, enq_atomic=True, enq_output=True)
+    queue.queue_custom("rx_queue", "struct tuple", MAX_ELEMS, n_cores-1, "status",
+                       enq_blocking=False, enq_atomic=True, enq_output=True,
+                       deq_blocking=True)
 
 if nic == 'dpdk':
     checksum = False
@@ -698,9 +723,14 @@ tx_enq_creator, tx_deq_creator, tx_release_creator = \
                        checksum=checksum,
                        enq_blocking=True, deq_atomic=deq_atomic)
 
+count_in_enq_creator, count_in_deq_creator, count_in_release_creator = \
+    queue.queue_custom("count_inqueue", "struct tuple", MAX_ELEMS, 1, "status",
+                       enq_blocking=False, enq_atomic=True, enq_output=True,
+                       deq_blocking=True)
+
 count_enq_creator, count_deq_creator, count_release_creator = \
-    queue.queue_custom("count_queue", "struct tuple", MAX_ELEMS, 1, "status",
-                       enq_blocking=False, deq_atomic=deq_atomic)
+    queue.queue_custom("count_outqueue", "struct tuple", MAX_ELEMS, 1, "status",
+                       enq_blocking=True, deq_atomic=deq_atomic)
 
 
 class RxState(State):
@@ -736,7 +766,7 @@ class NicRxFlow(Flow):
                 pkt2tuple = Pkt2Tuple()
                 count_or_not = CountOrNot()
                 classifier.pkt >> pkt2tuple >> count_or_not >> GetCore() >> rx_enq >> rx_buf
-                count_or_not.count >> Counter() >> rx_buf
+                count_or_not.count >> GetCountCore() >> count_in_enq_creator() >> rx_buf
 
                 # CASE 2: ack
                 classifier.ack >> DccpRecvAck() >> rx_buf
@@ -772,6 +802,10 @@ class outqueue_put(CallablePipeline):
 
     def impl(self): self.inp >> tx_enq_creator()
 
+import library
+class count_process(Pipeline):
+    def impl(self):
+        library.Constant(configure=[Int, 0]) >> count_in_deq_creator() >> CounterTuple() >> Counter() >> count_in_release_creator()
 
 class count_out(CallablePipeline):
     def configure(self):
@@ -849,7 +883,7 @@ class NicTxFlow(Flow):
                 # local
                 local_or_remote.out_local >> count_or_not >> GetCore() >> rx_enq >> get_buff #CountTuple() >> get_buff
                 # counter
-                count_or_not.count >> Counter() >> get_buff
+                count_or_not.count >> GetCountCore() >> count_in_enq_creator() >> get_buff
 
                 get_buff.tx >> tx_release
                 get_buff.count >> count_release
@@ -876,6 +910,8 @@ else:
     inqueue_get('inqueue_get', process='app')
     inqueue_advance('inqueue_advance', process='app')
     outqueue_put('outqueue_put', process='app')
+
+    count_process('count_process', device=target.CAVIUM, cores=[11])
     count_out('count_out', process=target.CAVIUM)
     master_process('app')
 
