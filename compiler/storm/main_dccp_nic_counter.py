@@ -231,7 +231,7 @@ class Counter(Element):
     def impl(self):
         self.run_c(r'''
         (struct tuple* t, q_buffer buff) = inp();
-        count_execute(t, &this->executor);
+        if(t) count_execute(t, &this->executor);
         
         output { out(buff); }
         ''')
@@ -724,8 +724,7 @@ tx_enq_creator, tx_deq_creator, tx_release_creator = \
 
 count_in_enq_creator, count_in_deq_creator, count_in_release_creator = \
     queue.queue_custom("count_inqueue", "struct tuple", MAX_ELEMS, 1, "status", local=True,
-                       enq_blocking=False, enq_atomic=True, enq_output=True,
-                       deq_blocking=True)
+                       enq_blocking=False, enq_atomic=True, enq_output=True)
 
 count_enq_creator, count_deq_creator, count_release_creator = \
     queue.queue_custom("count_outqueue", "struct tuple", MAX_ELEMS, 1, "status", local=True,
