@@ -683,7 +683,7 @@ import target
 MAX_ELEMS = 4 * 1024 #256 (4 * 1024)
 
 rx_enq_creator, rx_deq_creator, rx_release_creator = \
-    queue.queue_custom("rx_queue", "struct tuple", MAX_ELEMS, n_cores, "status", enq_blocking=False,
+    queue.queue_custom("rx_queue", "struct tuple", MAX_ELEMS, n_cores-1, "status", enq_blocking=False,
                        deq_blocking=True, enq_atomic=True, enq_output=True)
 
 if nic == 'dpdk':
@@ -694,7 +694,7 @@ else:
     deq_atomic = True
     
 tx_enq_creator, tx_deq_creator, tx_release_creator = \
-    queue.queue_custom("tx_queue", "struct tuple", MAX_ELEMS, n_cores, "status",
+    queue.queue_custom("tx_queue", "struct tuple", MAX_ELEMS, n_cores-1, "status",
                        checksum=checksum,
                        enq_blocking=True, deq_atomic=deq_atomic)
 

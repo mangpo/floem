@@ -82,6 +82,9 @@ int main(int argc, char *argv[]) {
 
     pthread_t threads[MAX_EXECUTORS];
     for(int i = 0; i < MAX_EXECUTORS && executor[i].execute != NULL; i++) {
+#ifdef OFFLOAD_COUNT
+        if(!executor[i].cpu) continue;
+#endif
         printf("main: executor[%d] = %p\n", i, &executor[i]);
 	    executor[i].exe_id = i;
         if(executor[i].init != NULL) {
@@ -99,6 +102,9 @@ int main(int argc, char *argv[]) {
       sleep(wait);
 #if 1 //def QUEUE_STAT
 	for(int i = 0; i < MAX_EXECUTORS && executor[i].execute != NULL; i++) {
+#ifdef OFFLOAD_COUNT
+      if(!executor[i].cpu) continue;
+#endif
 	  struct executor *self = &executor[i];
 	  if(self->numexecutes-self->lastnumexecutes) {
 	    printf("%d: numexecutes %zu, time %zu\n", self->taskid, 

@@ -58,6 +58,7 @@ struct executor {
   void		*state;
   GrouperFunc	grouper;
   bool		spout;
+  bool      cpu;
   size_t	outqueue_empty, outqueue_full, inqueue_empty, inqueue_full;
 #ifndef FLEXNIC_EMULATION
   size_t	get_time, execute_time, numexecutes, emitted, recved, avglatency;
