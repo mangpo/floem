@@ -304,7 +304,7 @@ def queue_default(name, entry_size, size, insts,
     return EnqueueReserve, EnqueueSubmit, DequeueGet, DequeueRelease, clean_inst
 
 
-def queue_custom(name, entry_type, size, insts, status_field, checksum=False,
+def queue_custom(name, entry_type, size, insts, status_field, checksum=False, local=False,
                  enq_blocking=False, enq_atomic=False, enq_output=False,
                  deq_blocking=False, deq_atomic=False):
     """
@@ -428,7 +428,7 @@ int dequeue_done%s(void* buff) {
     wait_then_copy = r'''
     // still occupied. wait until empty
 
-    while(q->data[old].%s != 0 || !__sync_bool_compare_and_swap(&q->data[old].%s, 0, FLAG_INUSE)) {
+    while(q->data[old].%s != 0 || !__sync_bool_compare_and_swap32(&q->data[old].%s, 0, FLAG_INUSE)) {
         __SYNC;
     }
     %s
@@ -463,9 +463,9 @@ int dequeue_done%s(void* buff) {
 
     wait_then_get = r'''
     %s x = &q->data[old];
-    while(x->%s != FLAG_OWN || !__sync_bool_compare_and_swap(&x->%s, FLAG_OWN, FLAG_OWN | FLAG_INUSE)) {
+    while(x->%s != FLAG_OWN || !__sync_bool_compare_and_swap32(&x->%s, FLAG_OWN, FLAG_OWN | FLAG_INUSE)) {
 #ifdef QUEUE_STAT
-        __sync_fetch_and_add(&empty[c], 1);
+        __sync_fetch_and_add64(&empty[c], 1);
 #endif
         __SYNC;
     }
@@ -480,7 +480,7 @@ int dequeue_done%s(void* buff) {
         while(!dequeue_ready%s(entry)) dma_read_with_buf(addr, size, entry, 1);
 #endif
         %s* x = entry;
-        ''' % (sanitized_name, status_field, entry_type)
+        ''' % (status_field, sanitized_name, entry_type)
 
     inc_offset = "p->offset = (p->offset + 1) %s %d;\n" % ('%', size)
 
@@ -493,6 +493,9 @@ int dequeue_done%s(void* buff) {
             self.inp = Input(type_star, Int)
             if enq_output:
                 self.done = Output(type_star)
+
+            if local:
+                self.special = 'queue-local'
 
         def impl(self):
 
@@ -520,7 +523,7 @@ int dequeue_done%s(void* buff) {
                 p->offset = (p->offset + 1) %s %d;
             }
 #ifdef QUEUE_STAT
-            else __sync_fetch_and_add(&drop[c], 1);
+            else __sync_fetch_and_add64(&drop[c], 1);
 #endif
                 ''' % (status_field, copy, '%', size)
 
@@ -529,8 +532,8 @@ int dequeue_done%s(void* buff) {
     bool success = false;
     size_t old = p->offset;
 
-    if(__sync_bool_compare_and_swap(&q->data[old].%s, 0, FLAG_INUSE)) {
-      if(__sync_bool_compare_and_swap(&p->offset, old, (old + 1) %s %d)) {
+    if(__sync_bool_compare_and_swap32(&q->data[old].%s, 0, FLAG_INUSE)) {
+      if(__sync_bool_compare_and_swap64(&p->offset, old, (old + 1) %s %d)) {
         %s
         success = true; 
       } else {
@@ -539,7 +542,7 @@ int dequeue_done%s(void* buff) {
     }
 
 #ifdef QUEUE_STAT
-    if(!success) __sync_fetch_and_add(&drop[c], 1);
+    if(!success) __sync_fetch_and_add64(&drop[c], 1);
 #endif
     ''' % (status_field, '%', size, copy, status_field)
 
@@ -630,6 +633,8 @@ int dequeue_done%s(void* buff) {
         def configure(self):
             self.inp = Input(Int)
             self.out = Output(q_buffer)
+            if local:
+                self.special = 'queue-local'
 
         def impl(self):
             noblock_noatom = r'''
@@ -645,8 +650,8 @@ int dequeue_done%s(void* buff) {
     %s x = NULL;
     __SYNC;
     size_t old = p->offset; 
-    if(__sync_bool_compare_and_swap(&q->data[old].%s, FLAG_OWN, FLAG_OWN | FLAG_INUSE)) {
-      if(__sync_bool_compare_and_swap(&p->offset, old, (old + 1) %s %d)) {
+    if(__sync_bool_compare_and_swap32(&q->data[old].%s, FLAG_OWN, FLAG_OWN | FLAG_INUSE)) {
+      if(__sync_bool_compare_and_swap64(&p->offset, old, (old + 1) %s %d)) {
         x = &q->data[old];
       } else {
         q->data[old].%s = FLAG_OWN;
@@ -679,7 +684,7 @@ int dequeue_done%s(void* buff) {
 #endif
 ''' + src + r'''  
 #ifdef QUEUE_STAT
-    if(x == NULL)  __sync_fetch_and_add(&empty[c], 1);
+    if(x == NULL)  __sync_fetch_and_add64(&empty[c], 1);
 #endif
 '''
 
@@ -723,7 +728,7 @@ int dequeue_done%s(void* buff) {
     if(dequeue_ready%s(entry)) {
 #endif
         size_t new = (old + 1) %s %d;
-        if(__sync_bool_compare_and_swap(&p->offset, old, new)) {
+        if(__sync_bool_compare_and_swap64(&p->offset, old, new)) {
             x = entry;
             success = true;
             assert(entry->%s != 0);
@@ -762,6 +767,8 @@ int dequeue_done%s(void* buff) {
     class Release(Element):
         def configure(self):
             self.inp = Input(q_buffer)
+            if local:
+                self.special = 'queue-local'
 
         def impl(self):
             set_owner = "x->%s = 0; __SYNC;" % status_field

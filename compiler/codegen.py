@@ -154,7 +154,10 @@ def element_to_function(instance, state_rename, graph, ext):
     :return: a string of function source code
     """
     element = instance.element
-    src = element.get_code(instance.device[0])
+    if element.special == 'queue-local':
+        src = element.get_code(target.CPU)
+    else:
+        src = element.get_code(instance.device[0])
     out_src = element.get_output_code(instance.join_partial_order, instance.device[0])
     funcname = instance.name
     inports = element.inports
