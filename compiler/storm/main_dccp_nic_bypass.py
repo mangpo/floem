@@ -1,13 +1,14 @@
 import queue, net
 from dsl import *
 from compiler import Compiler
+import library
 
 nic = 'CAVIUM' #'dpdk'
 test = "spout"
 inject_func = "random_" + test
 workerid = {"spout": 0, "count": 1, "rank": 2}
 
-n_cores = 7
+n_cores = 4
 n_workers = 'MAX_WORKERS'
 n_nic_rx = 4
 n_nic_tx = 5
@@ -174,7 +175,10 @@ class LocalOrRemote(Element):
     //else printf("remote!\n");
 #endif
 
-    output switch { case local: out_local(t); else: out_send(t, qid); }
+    output switch { 
+        case local: out_local(t); 
+        else: out_send(t, 0); 
+    }
         ''')
 
 
@@ -646,14 +650,14 @@ class BatchScheduler(Element):
     }
 
 #ifndef CAVIUM
-    if(core >= 2 && (batch_size >= BATCH_SIZE || rdtsc() - start >= BATCH_DELAY * PROC_FREQ_MHZ)) {
+    if((batch_size >= BATCH_SIZE || rdtsc() - start >= BATCH_DELAY * PROC_FREQ_MHZ)) {
 #else
-    if(core >= 2 && (batch_size >= BATCH_SIZE || core_time_now_us() - start >= BATCH_DELAY)) {
+    if((batch_size >= BATCH_SIZE || core_time_now_us() - start >= BATCH_DELAY)) {
 #endif
         do {
             core = (core + 1) %s n_cores;
         } while(this->executors[core].execute == NULL);
-        if(core < 2) core = 2;
+        //if(core < 1) core = 1;
         batch_size = 0;
         //printf("======================= Dequeue core = %s, thread = %s\n", core, core_id);
 #ifndef CAVIUM
@@ -759,8 +763,8 @@ rx_enq_creator, rx_deq_creator, rx_release_creator = \
                        deq_blocking=False, enq_atomic=True, enq_output=True)
 
 tx_enq_creator, tx_deq_creator, tx_release_creator = \
-    queue.queue_custom("tx_queue", "struct tuple", MAX_ELEMS, n_cores, "status", checksum="checksum",
-                       enq_blocking=True, deq_atomic=True)
+    queue.queue_custom("tx_queue", "struct tuple", MAX_ELEMS*4, 1, "status", checksum="checksum",
+                       enq_blocking=True, enq_atomic=True, deq_atomic=True)
 
 BypassEnq, BypassDeq, BypassRelease = \
     queue.queue_custom("bypass_queue", "struct tuple", MAX_ELEMS, n_cores, "status", enq_blocking=True,
@@ -917,7 +921,8 @@ class NicTxFlow(Flow):
                 save_buff = SaveBuff()
                 get_buff = GetBuff()
 
-                self.core_id >> queue_schedule >> tx_deq >> save_buff >> PrintTuple() >> SaveWorkerID() \
+                #self.core_id >> queue_schedule 
+                library.Constant(configure=[Int,0]) >> tx_deq >> save_buff >> PrintTuple() >> SaveWorkerID() \
                 >> PreparePkt() >> get_buff >> tx_release
 
         if nic == 'dpdk':
