@@ -3,14 +3,14 @@ from compiler import Compiler
 import target, queue, net, library
 import queue_smart
 
-n_cores = 9
+n_nic_cores = 12
+n_queues = 1
 
 class MyState(State):
     pkt = Field('void*')
     pkt_buff = Field('void*')
-    key = Field('void*', size=22)
+    key = Field('void*', size=64)
     qid = Field(Int)
-    pool = Field(Int)
 
 
 class main(Flow):
@@ -18,8 +18,8 @@ class main(Flow):
 
     def impl(self):
         # Queue
-        RxEnq, RxDeq, RxScan = queue_smart.smart_queue("rx_queue", entry_size=32, size=32 * 1024, insts=n_cores,
-                                                       channels=1, enq_blocking=True, enq_atomic=False, enq_output=True)
+        RxEnq, RxDeq, RxScan = queue_smart.smart_queue("rx_queue", entry_size=96, size=32 * 1024, insts=n_queues,
+                                                       channels=1, enq_blocking=True, enq_atomic=True, enq_output=True)
         rx_enq = RxEnq()
         rx_deq = RxDeq()
 
@@ -35,12 +35,11 @@ class main(Flow):
         state.pkt_buff = buff;
         iokvs_message* m = (iokvs_message*) pkt;
 
-        state.key = m->payload + m->mcr.request.extlen;;
-        state.pool = 0;
-        state.qid = cvmx_get_core_num();
+        state.key = m;
+        state.qid = cvmx_get_core_num() %s %d;
 
         output { out(); }
-                ''')
+                ''' % ('%', n_queues))
 
         class GetPktBuff(Element):
             def configure(self):
@@ -67,14 +66,14 @@ class main(Flow):
         ############################ CPU #############################
         class Scheduler(Element):
             def configure(self):
+                self.inp = Input(Int)
                 self.out = Output(Int)
 
             def impl(self):
                 self.run_c(r'''
-    static int core = 0;
-    core = (core+1) %s %d;
-                output { out(core); }
-                ''' % ('%', n_cores))
+    (int core_id) = inp();
+    output { out(core_id); }
+    ''')
 
         class Display(Element):
             def configure(self):
@@ -83,7 +82,6 @@ class main(Flow):
             def impl(self):
                 self.run_c(r'''
     void *key = state.key;
-    int pool = state.pool;
 
     static size_t count = 0;
     static uint64_t lasttime = 0;
@@ -93,7 +91,7 @@ class main(Flow):
         gettimeofday(&now, NULL);
 
         uint64_t thistime = now.tv_sec*1000000 + now.tv_usec;
-        printf("%zu pkts/s\n", (count * 1000000)/(thistime - lasttime));
+        printf("%zu pkts/s\n %zu Gbits/s", (count * 1000000)/(thistime - lasttime), (count * 64 * 8.0)/(thistime - lasttime)/1000);
         lasttime = thistime;
         count = 0;
     }
@@ -101,11 +99,11 @@ class main(Flow):
 
         class run(Pipeline):
             def impl(self):
-                Scheduler() >> rx_deq
+                self.core_id >> rx_deq
                 rx_deq.out[0] >> Display()
 
-        nic_rx('nic_rx', device=target.CAVIUM, cores=range(n_cores))
-        run('run', process='app', cores=range(1))
+        nic_rx('nic_rx', device=target.CAVIUM, cores=range(n_nic_cores))
+        run('run', process='app', cores=range(n_queues))
 
 
 c = Compiler(main)
