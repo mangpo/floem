@@ -49,9 +49,12 @@ void enqueue_clean(q_entry* eqe, uintptr_t addr, void(*clean_func)(q_buffer)) {
 }
 
 q_buffer enqueue_alloc(circular_queue* q, size_t len, int gap, void(*clean)(q_buffer)) {
-    q_entry* eqe, check;
+    q_entry *eqe, *check;
     uint64_t addr, addr_check;
-    int offset;
+    uint32_t offset;
+
+    if(len > q->entry_size)
+      printf("Enqueue_alloc: len = %ld, entry_size = %d\n", len, q->entry_size);
 
     assert(q->offset < q->len);
     assert(len <= q->entry_size);
@@ -95,13 +98,11 @@ q_buffer enqueue_alloc(circular_queue* q, size_t len, int gap, void(*clean)(q_bu
       q_buffer buff = { eqe, addr, q->id };
       return buff;
     }
-    else {
 #ifndef DMA_CACHE
-      dma_free(eqe);
+    dma_free(eqe);
 #endif
-      q_buffer buff = { NULL, 0, 0 };
-      return buff;
-    }
+    q_buffer buff = { NULL, 0, 0 };
+    return buff;
 }
 
 void enqueue_submit(q_buffer buf, bool check)
