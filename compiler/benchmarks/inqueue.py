@@ -3,8 +3,8 @@ from compiler import Compiler
 import target, queue, net, library
 import queue_smart
 
-n_nic_cores = 12
-n_queues = 1
+n_nic_cores = 10
+n_queues = 7
 
 class MyState(State):
     pkt = Field('void*')
@@ -18,7 +18,7 @@ class main(Flow):
 
     def impl(self):
         # Queue
-        RxEnq, RxDeq, RxScan = queue_smart.smart_queue("rx_queue", entry_size=96, size=32 * 1024, insts=n_queues,
+        RxEnq, RxDeq, RxScan = queue_smart.smart_queue("rx_queue", entry_size=96, size=1024, insts=n_queues,
                                                        channels=1, enq_blocking=True, enq_atomic=True, enq_output=True)
         rx_enq = RxEnq()
         rx_deq = RxDeq()
@@ -36,7 +36,9 @@ class main(Flow):
         iokvs_message* m = (iokvs_message*) pkt;
 
         state.key = m;
-        state.qid = cvmx_get_core_num() %s %d;
+        static int qid = 0;
+        state.qid= qid;
+        qid = (qid+1) %s %d;
 
         output { out(); }
                 ''' % ('%', n_queues))
@@ -83,15 +85,15 @@ class main(Flow):
                 self.run_c(r'''
     void *key = state.key;
 
-    static size_t count = 0;
-    static uint64_t lasttime = 0;
+    static __thread size_t count = 0;
+    static __thread uint64_t lasttime = 0;
     count++;
-    if(count == 100000) {
+                if(count == 1000000) {
         struct timeval now;
         gettimeofday(&now, NULL);
 
         uint64_t thistime = now.tv_sec*1000000 + now.tv_usec;
-        printf("%zu pkts/s\n %zu Gbits/s", (count * 1000000)/(thistime - lasttime), (count * 64 * 8.0)/(thistime - lasttime)/1000);
+        printf("%zu pkts/s %f Gbits/s\n", (count * 1000000)/(thistime - lasttime), (count * 64 * 8.0)/(thistime - lasttime)/1000);
         lasttime = thistime;
         count = 0;
     }

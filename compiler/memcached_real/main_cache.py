@@ -3,8 +3,8 @@ from compiler import Compiler
 import net, cache_smart, queue_smart, library
 
 n_cores = 1
-nic_rx_threads = 8
-nic_tx_threads = 3
+nic_rx_threads = 10
+nic_tx_threads = 1
 
 rx_queues = 1
 tx_queues = 1
@@ -44,8 +44,8 @@ class iokvs_message(State):
 CacheGetStart, CacheGetEnd, CacheSetStart, CacheSetEnd, CacheState = \
     cache_smart.smart_cache_with_state('MyCache',
                                        (Pointer(Int),'key','keylen'), [(Pointer(Int),'val','vallen')],
-                                       var_size=True, hash_value='hash', n_hashes=2**15,
-                                       write_policy=Cache.write_through, write_miss=Cache.no_write_alloc)
+                                       var_size=True, hash_value='hash', n_hashes=2**13,
+                                       write_policy=Cache.write_back, write_miss=Cache.write_alloc)
 
 
 class item(State):
@@ -225,7 +225,9 @@ output { out(); }''')
     class JenkinsHash(ElementOneInOut):
         def impl(self):
             self.run_c(r'''
-state->hash = jenkins_hash(state->key, state->pkt->mcr.request.keylen);
+//state->hash = jenkins_hash(state->key, state->pkt->mcr.request.keylen);
+uint32_t *key = state->key;
+state->hash = cm_hash4(*key);
 //printf("hash = %d\n", hash);
 output { out(); }
             ''')

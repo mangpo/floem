@@ -3,8 +3,9 @@ import queue_smart, net, library
 from compiler import Compiler
 
 n_cores = 1
+n_queues = 3
 nic_rx_threads = 5
-nic_tx_threads = 2
+nic_tx_threads = 3
 
 class protocol_binary_request_header_request(State):
     magic = Field(Uint(8))
@@ -180,6 +181,12 @@ output switch {
             self.run_c(r'''
 uint8_t cmd = state.pkt->mcr.request.opcode;
 //printf("classify: %d\n", cmd);
+/*
+if(cmd == PROTOCOL_BINARY_CMD_GET)
+  state.qid = 0;
+else
+  state.qid = 1;
+*/
 
 output switch{
   case (cmd == PROTOCOL_BINARY_CMD_GET): out_get();
@@ -197,12 +204,13 @@ output { out(); }''')
     class GetCore(ElementOneInOut):
         def impl(self):
             self.run_c(r'''
-int core = state.hash %s %d;;
+static __thread int core = 0;
 state.qid = core;
+core = (core + 1) %s %d;
 #ifdef DEBUG
 printf("hash = %s, keylen = %s, core = %s\n", state.pkt->mcr.request.keylen, state.hash, core);
 #endif
-            output { out(); }''' % ('%', n_cores, '%d', '%d', '%d'))
+            output { out(); }''' % ('%', n_queues, '%d', '%d', '%d'))
 
     ######################## hash ########################
 
@@ -263,7 +271,7 @@ output { out(); }
     output switch {
       case(core < n_cores): out(core);
       else: log(0);
-      }''' % (n_cores, n_cores + 1, nic_tx_threads, '%'))
+      }''' % (n_queues, n_queues + 1, nic_tx_threads, '%'))
 
 
     class Malloc(Element):
@@ -925,13 +933,13 @@ output switch { case segment: out(); else: null(); }
     def impl(self):
 
         # Queue
-        RxEnq, RxDeq, RxScan = queue_smart.smart_queue("rx_queue", entry_size=64, size=512, insts=n_cores,
+        RxEnq, RxDeq, RxScan = queue_smart.smart_queue("rx_queue", entry_size=64, size=512, insts=n_queues,
                                                        channels=2, enq_blocking=True, enq_atomic=True,
                                                        enq_output=True)  # enq_blocking=False?
         rx_enq = RxEnq()
         rx_deq = RxDeq()
 
-        TxEnq, TxDeq, TxScan = queue_smart.smart_queue("tx_queue", entry_size=192, size=512, insts=n_cores,
+        TxEnq, TxDeq, TxScan = queue_smart.smart_queue("tx_queue", entry_size=192, size=512, insts=n_queues,
                                                        channels=1, checksum=True, enq_blocking=True, deq_atomic=True,
                                                        enq_output=True)
         tx_enq = TxEnq()
