@@ -122,7 +122,7 @@ class gen(Pipeline):
         net_alloc = net.NetAlloc()
         to_net = net.ToNet(configure=["net_alloc"])
 
-        library.Constant(configure=[SizeT,80]) >> net_alloc
+        library.Constant(configure=[SizeT,1024]) >> net_alloc
         net_alloc.oom >> library.Drop()
         net_alloc.out >> Request() >> PayloadGen() >> to_net
 
@@ -144,11 +144,11 @@ c.include = r'''
 #include "protocol_binary.h"
 #include <rte_ip.h>
 
-struct eth_addr src = { .addr = "\x3c\xfd\xfe\xad\x84\x8d" }; // dikdik
-struct eth_addr dest = { .addr = "\x02\x78\x1f\x5a\x5b\x01" }; // jaguar
+struct eth_addr src = { .addr = "\x3c\xfd\xfe\xaa\xd1\xe1" }; // guanaco
+struct eth_addr dest = { .addr = "\x68\x05\xca\x33\x13\x41" }; // hippo
 
-struct ip_addr src_ip = { .addr = "\x0a\x64\x14\x05" }; // dikdik
-struct ip_addr dest_ip = { .addr = "\x0a\x64\x14\x0b" }; // jaguar
+struct ip_addr src_ip = { .addr = "\x0a\x64\x14\x08" }; // guanaco
+struct ip_addr dest_ip = { .addr = "\x0a\x64\x14\x09" }; // hippo
 
 #define TEXT_BASE 10000000 /* 10M (8 bits) */
 typedef enum _TYPE {
@@ -158,7 +158,7 @@ typedef enum _TYPE {
     SEQU, /* sequencer */
 } PKT_TYPE;
 
-#define CMD HASH
+#define CMD SEQU
 '''
 c.testing = 'while (1) pause();'
 c.generate_code_and_compile()

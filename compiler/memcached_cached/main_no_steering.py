@@ -2,7 +2,7 @@ from dsl import *
 from compiler import Compiler
 import net, library, queue_smart
 
-n_cores = 9
+n_cores = 11
 miss_every = 10
 
 class protocol_binary_request_header_request(State):

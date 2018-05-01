@@ -17,9 +17,12 @@ void run_app(void *threadid) {
 
   printf("Worker %ld starting\n", tid);
 
+  int round = 0;
+  int qid = 0;
   while(true) {
-    process_eq(tid);
+    process_eq(qid);
     clean_log(&ia, true); // TODO: is this frequent enough?
+    qid = (qid + 1) % 3;
   }
 }
 

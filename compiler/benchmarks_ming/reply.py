@@ -54,8 +54,8 @@ class Hash(Element):
     def impl(self):
         self.run_c(r'''
 (size_t pkt_len, void* pkt_ptr, void* buff) = inp();
-compute_3des(pkt_ptr, pkt_len);
-//compute_aes(pkt_ptr, pkt_len);
+//compute_3des(pkt_ptr, pkt_len);
+compute_aes(pkt_ptr, pkt_len);
 //printf("AES\n");
 
 output { out(pkt_len, pkt_ptr, buff); }
