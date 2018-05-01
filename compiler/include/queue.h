@@ -48,7 +48,8 @@ typedef struct {
   void* queue;
   size_t clean;
   int id, entry_size;
-  //pthread_mutex_t lock;
+  int n1, n2;
+  int refcount1, refcount2;
 } circular_queue;
 
 typedef struct {
@@ -57,6 +58,8 @@ typedef struct {
   void* queue;
   size_t clean;
   int id, entry_size;
+  int n1, n2;
+  int refcount1, refcount2;
   pthread_mutex_t lock;
 } circular_queue_lock;
 
@@ -69,9 +72,24 @@ typedef struct {
 } __attribute__((packed)) q_entry;
 
 typedef struct {
+    uint8_t flag;
+    uint8_t task;
+    uint16_t len;
+    uint8_t checksum;
+    uint8_t half;
+    uint8_t pad[2];
+} __attribute__((packed)) q_entry_manage;
+
+typedef struct {
     q_entry* entry;
     uintptr_t addr;
+    circular_queue* queue;
 } q_buffer;
+
+#define MANAGE_SIZE
+typedef struct _manage_storage {
+uint8_t data[MANAGE_SIZE];
+} __attribute__ ((packed)) manage_storage;
 
 
 typedef pthread_mutex_t lock_t;
@@ -189,11 +207,11 @@ static q_buffer enqueue_alloc(circular_queue* q, size_t len, int gap, void(*clea
     if(q->offset + q->entry_size > q->len) q->offset = 0;
     __sync_synchronize();
     //printf("enq_alloc: queue = %p, entry = %p, len = %d, offset = %ld\n", q->queue, eqe, eqe->len, q->offset);
-    q_buffer buff = { eqe, 0 };
+    q_buffer buff = { eqe, 0, q };
     return buff;
   }
   else {
-    q_buffer buff = { NULL, 0 };
+    q_buffer buff = { NULL, 0, NULL };
     return buff;
   }
 }
@@ -241,16 +259,16 @@ static q_buffer dequeue_get(circular_queue* q) {
     __sync_synchronize();
     //printf("dequeue_get_return: entry = %p, flag = %d, offset = %ld\n", eqe, eqe->flag, q->offset);
     
-    q_buffer buff = { eqe, 0 };
+    q_buffer buff = { eqe, 0, q };
     return buff;
   }
   else {
-    q_buffer buff = { NULL, 0 };
+    q_buffer buff = { NULL, 0, NULL };
     return buff;
   }
 }
 
-static void dequeue_release(q_buffer buff, uint8_t flag_clean)
+static void dequeue_release(q_buffer buff, uint8_t flag_clean, circular_queue* manage)
 {
     q_entry *e = buff.entry;
     check_flag_val(e, -1, "dequeue_release", 5);
@@ -259,10 +277,52 @@ static void dequeue_release(q_buffer buff, uint8_t flag_clean)
     e->checksum = e->pad = 0;
     e->flag = flag_clean;
     __SYNC;
+
+    if(manage) dequeue_manage(buff, manage);
+}
+
+static void dequeue_manage(q_buffer buff, circular_queue* manage) {
+    q_entry *e = buff.entry;
+    circular_queue *q = buff.queue;
+    int index = ((uint64_t) e - (uint64_t) q->queue)/q->entry_size;
+
+    int notify = 0;
+    if(index < q->n1) {
+        int n = __sync_and_and_fetch(&q->refcount1, 1);
+        assert(n <= q->n1);
+        if(n == q->n1) {
+            notify = 1;
+            q->refcount1 = 0;
+        }
+    }
+    else {
+        int n = __sync_and_and_fetch(&q->refcount2, 1);
+        assert(n <= q->n2);
+        if(n == q->n2) {
+            notify = 2;
+            q->refcount2 = 0;
+        }
+    }
+
+    if(notify) {
+        q_buffer buff;
+        {
+            buff = enqueue_alloc(manage, manage->entry_size, 0, NULL);
+        } while(buff.entry == NULL);
+        q_entry_manage* my_e = buff.entry;
+        my_e->task = q->id;
+        my_e->half = notify;
+        enqueue_submit(buff, false);
+    }
 }
 
 static int create_dma_circular_queue(uint64_t addr, int size, int overlap, 
 				     int (*ready_scan)(void*), int (*done_scan)(void*)) 
-{ return 0; }
+{
+    static int id = -1;
+    id++;
+    return id;
+
+}
 
 #endif

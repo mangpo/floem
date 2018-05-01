@@ -1,10 +1,10 @@
 from dsl import *
 from compiler import Compiler
-import target, queue, net, library
+import target
 import queue_smart
 
-n_nic_cores = 11
-n_queues = 9
+n_nic_cores = 1 #11
+n_queues = 1 #9
 
 class MyState(State):
     key = Field(Int)

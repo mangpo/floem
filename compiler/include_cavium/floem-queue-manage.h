@@ -15,6 +15,7 @@ int smart_dma_write(int qid, size_t addr, int size, void* p);
 
 void smart_info(int qid, size_t addr, int size);
 void smart_dma_manage(int);
+void check_manager_queue();
 
 typedef struct _dma_segment {
   int id;
@@ -32,7 +33,7 @@ typedef struct _dma_segment {
 } CVMX_CACHE_LINE_ALIGNED dma_segment;
 
 typedef struct _dma_circular_queue {
-  int size, overlap, block_size, n, id;
+  int size, overlap, block_size, n, id, skip;
   size_t addr, read_ready, write_ready;
   int read_ready_seg, write_ready_seg, write_start_seg, write_finish_seg;
   dma_segment *segments;

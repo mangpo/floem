@@ -22,6 +22,7 @@
 #include "generated/cvmcs-nic-version.h"
 #include "floem-util.h"
 #include "floem-dma.h"
+#include "floem-queue.h"
 #include "floem-queue-manage.h"
 
 //#define DEBUG
@@ -52,8 +53,26 @@ void init_dma_circular_queue() {
   shared_mm_init();
 }
 
+CVMX_SHARED circular_queue_lock* manager_queue;
+void init_manager_queue(circular_queue_lock* queue) {
+    manager_queue = queue;
+}
+
+void check_manager_queue() {
+    q_buffer buff = dequeue_get(manager_queue);
+    while(buff.entry) {
+        q_entry_manage* e = buff.entry;
+        int qid = e->task;
+        int half = e->half;
+        dequeue_release(buf, 0);
+        dma_circular_queue* q = &queues[qid];
+        update_read_ready_bypass(q, half);
+        buff = dequeue_get(manager_queue);
+    }
+}
+
 int create_dma_circular_queue(uint64_t addr, int size, int overlap, 
-			      int (*ready_scan)(void*), int (*done_scan)(void*)) {
+			      int (*ready_scan)(void*), int (*done_scan)(void*), bool skip) {
   int my_id, i;
   assert(overlap <= BUFF_SIZE);
   assert(4*BUFF_SIZE <= size);
@@ -62,6 +81,7 @@ int create_dma_circular_queue(uint64_t addr, int size, int overlap,
 
   dma_circular_queue *q = &queues[id];
   q->id = id;
+  q->skip = skip;
   q->size = size;
   q->overlap = overlap;
   q->block_size = (BUFF_SIZE/overlap) * overlap;
@@ -153,6 +173,27 @@ bool no_read(dma_circular_queue* q) {
   return false;
 }
 
+void update_read_ready_bypass(dma_circular_queue* q, uint8_t half) {
+    printf("update_read_ready_bypass: qid = %d, half = %d\n", q->id, half);
+    int stop_seg = q->write_ready_seg-2;
+    if(stop_seg < 0) stop_seg += q->n;
+
+    if(half == 1) {
+        int read_ready_seg = q->n/2;
+        // if old_read_ready_seg < stop_seg < read_ready_seg
+        if(stop_seg < read_ready_seg && (q->read_ready_seg <= stop_seg || q->read_ready_seg > read_ready_seg))
+            read_ready_seg = stop_seg;
+        q->read_ready = q->addr + read_ready_seg * q->block_size;
+        q->read_ready_seg = read_ready_seg;
+    }
+    else if(half == 2) {
+        int read_ready_seg = 0;
+        if(q->read_ready_seg <= stop_seg) read_ready_seg = stop_seg;
+        q->read_ready = q->addr + read_ready_seg * q->block_size;
+        q->read_ready_seg = read_ready_seg;
+    }
+}
+
 int update_read_ready_fast(dma_circular_queue* q) {
   int stop_seg = q->write_ready_seg-2;
   if(stop_seg < 0) stop_seg += q->n;
@@ -166,11 +207,11 @@ int update_read_ready_fast(dma_circular_queue* q) {
     __SYNC;
     if(size) {
       if(seg->id == q->n-1) {
-	q->read_ready = q->addr;
+	    q->read_ready = q->addr;
         q->read_ready_seg = 0;
       }
       else {
-	q->read_ready = seg->addr_max;
+	    q->read_ready = seg->addr_max;
         q->read_ready_seg++;
       }
       seg = &q->segments[q->read_ready_seg];
@@ -817,7 +858,7 @@ void manage_read(int qid) {
 #ifdef PERF2
   t2 = cvmx_clock_get_count(CVMX_CLOCK_CORE);
 #endif
-  handle_reading(q, &q->segments[q->read_ready_seg]);
+  if(!q->skip) handle_reading(q, &q->segments[q->read_ready_seg]);
 #ifdef PERF2
   t3 = cvmx_clock_get_count(CVMX_CLOCK_CORE);
 
@@ -838,9 +879,11 @@ void manage_write(int qid) {
 
 void manage_dma_read(int qid) {
   dma_circular_queue* q = &queues[qid];
-  prefetch_segment(q, &q->segments[q->read_ready_seg]);
-  prefetch_segment(q, &q->segments[(q->read_ready_seg + 1) % q->n]);
-  //prefetch_segment(q, &q->segments[(q->read_ready_seg + 2) % q->n]);
+  if(!q->skip) {
+    prefetch_segment(q, &q->segments[q->read_ready_seg]);
+    prefetch_segment(q, &q->segments[(q->read_ready_seg + 1) % q->n]);
+    //prefetch_segment(q, &q->segments[(q->read_ready_seg + 2) % q->n]);
+  }
 }
 
 void manage_dma_write(int qid) {

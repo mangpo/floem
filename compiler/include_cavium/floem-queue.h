@@ -37,10 +37,24 @@ typedef struct {
 } __attribute__((packed)) q_entry;
 
 typedef struct {
+    uint8_t flag;
+    uint8_t task;
+    uint16_t len;
+    uint8_t checksum;
+    uint8_t half;
+    uint8_t pad[2];
+} __attribute__((packed)) q_entry_manage;
+
+typedef struct {
   q_entry* entry;
   uintptr_t addr;
   int qid;
 } q_buffer;
+
+#define MANAGE_SIZE
+typedef struct _manage_storage {
+uint8_t data[MANAGE_SIZE];
+} __attribute__ ((packed)) manage_storage;
 
 q_buffer enqueue_alloc(circular_queue* q, size_t len, int gap, void(*clean)(q_buffer));
 void enqueue_submit(q_buffer buf, bool check);
