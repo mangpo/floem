@@ -76,8 +76,9 @@ typedef struct {
     uint8_t task;
     uint16_t len;
     uint8_t checksum;
+    uint8_t pad;
     uint8_t half;
-    uint8_t pad[2];
+    uint8_t pad2;
 } __attribute__((packed)) q_entry_manage;
 
 typedef struct {
@@ -86,7 +87,7 @@ typedef struct {
     circular_queue* queue;
 } q_buffer;
 
-#define MANAGE_SIZE
+#define MANAGE_SIZE 1024*2*4
 typedef struct _manage_storage {
 uint8_t data[MANAGE_SIZE];
 } __attribute__ ((packed)) manage_storage;
@@ -218,25 +219,25 @@ static q_buffer enqueue_alloc(circular_queue* q, size_t len, int gap, void(*clea
 
 static void enqueue_submit(q_buffer buff, bool check)
 {
-    q_entry *e = buff.entry;
-    if(e) {
-      	check_flag(e, -1, "enqueue_submit");
-        __sync_synchronize();
-	    clflush_cache_range(&e[1], e->len - sizeof(q_entry));
-        e->flag = FLAG_OWN;
-
-	    e->pad = 0xff;
-        e->checksum = 0;
-        uint8_t checksum = 0;
-        if(check) {
-            uint8_t* p = (uint8_t*) e;
-            int i;
-            for(i=0; i<e->len; i++)
-                checksum ^= p[i];
-        }
-        e->checksum = checksum;
-        __sync_synchronize();
+  q_entry *e = buff.entry;
+  if(e) {
+    check_flag(e, -1, "enqueue_submit");
+    __sync_synchronize();
+    clflush_cache_range(&e[1], e->len - sizeof(q_entry));
+    e->flag = FLAG_OWN;
+    
+    e->pad = 0xff;
+    e->checksum = 0;
+    uint8_t checksum = 0;
+    if(check) {
+      uint8_t* p = (uint8_t*) e;
+      int i;
+      for(i=0; i<e->len; i++)
+	checksum ^= p[i];
     }
+    e->checksum = checksum;
+    __sync_synchronize();
+  }
 }
 
 static q_buffer dequeue_get(circular_queue* q) {
@@ -268,6 +269,8 @@ static q_buffer dequeue_get(circular_queue* q) {
   }
 }
 
+static void dequeue_manage(q_buffer buff, circular_queue* manage);
+
 static void dequeue_release(q_buffer buff, uint8_t flag_clean, circular_queue* manage)
 {
     q_entry *e = buff.entry;
@@ -285,23 +288,26 @@ static void dequeue_manage(q_buffer buff, circular_queue* manage) {
     q_entry *e = buff.entry;
     circular_queue *q = buff.queue;
     int index = ((uint64_t) e - (uint64_t) q->queue)/q->entry_size;
+    //printf("dequeue_manage: index %d %d %d\n", index, q->n1, q->n2);
 
     int notify = 0;
     if(index < q->n1) {
-        int n = __sync_and_and_fetch(&q->refcount1, 1);
+        int n = __sync_add_and_fetch(&q->refcount1, 1);
         assert(n <= q->n1);
         if(n == q->n1) {
             notify = 1;
             q->refcount1 = 0;
         }
+	//printf("refcount1: %d\n", n);
     }
     else {
-        int n = __sync_and_and_fetch(&q->refcount2, 1);
+        int n = __sync_add_and_fetch(&q->refcount2, 1);
         assert(n <= q->n2);
         if(n == q->n2) {
             notify = 2;
             q->refcount2 = 0;
         }
+	//printf("refcount2: %d\n", n);
     }
 
     if(notify) {
@@ -313,6 +319,7 @@ static void dequeue_manage(q_buffer buff, circular_queue* manage) {
         my_e->task = q->id;
         my_e->half = notify;
         enqueue_submit(buff, false);
+	//printf("notify: qid = %d, half = %d, index = %d\n", q->id, notify, index);
     }
 }
 

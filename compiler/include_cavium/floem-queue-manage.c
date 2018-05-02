@@ -26,7 +26,7 @@
 #include "floem-queue-manage.h"
 
 //#define DEBUG
-//#define CHECK
+#define CHECK
 //#define PERF
 //#define PERF2
 //#define FAST_READ
@@ -47,28 +47,35 @@ void manage_read(int qid);
 void manage_dma_read(int qid);
 void manage_write(int qid);
 void manage_dma_write(int qid);
+void update_read_ready_bypass(dma_circular_queue* q, uint8_t half);
 
 void init_dma_circular_queue() {
   id = 0;
   shared_mm_init();
 }
 
-CVMX_SHARED circular_queue_lock* manager_queue;
-void init_manager_queue(circular_queue_lock* queue) {
-    manager_queue = queue;
+CVMX_SHARED circular_queue _manager_queue;
+CVMX_SHARED circular_queue* manager_queue;
+void init_manager_queue(void* manage_storage) {
+  manager_queue = &_manager_queue;
+  memset(manager_queue, 0, sizeof(circular_queue));
+  manager_queue->len = MANAGE_SIZE;
+  manager_queue->queue = manage_storage;
+  manager_queue->entry_size = sizeof(q_entry_manage);
+  manager_queue->id = create_dma_circular_queue((uint64_t) manage_storage, MANAGE_SIZE, sizeof(q_entry_manage), dequeue_ready_var, dequeue_done_var, false);
 }
 
 void check_manager_queue() {
-    q_buffer buff = dequeue_get(manager_queue);
-    while(buff.entry) {
-        q_entry_manage* e = buff.entry;
-        int qid = e->task;
-        int half = e->half;
-        dequeue_release(buf, 0);
-        dma_circular_queue* q = &queues[qid];
-        update_read_ready_bypass(q, half);
-        buff = dequeue_get(manager_queue);
-    }
+  q_buffer buff = dequeue_get((circular_queue*) manager_queue);
+  while(buff.entry) {
+    q_entry_manage* e = (q_entry_manage*) buff.entry;
+    uint8_t qid = e->task;
+    uint8_t half = e->half;
+    dequeue_release(buff, 0);
+    dma_circular_queue* q = &queues[qid];
+    update_read_ready_bypass(q, half);
+    buff = dequeue_get((circular_queue*) manager_queue);
+  }
 }
 
 int create_dma_circular_queue(uint64_t addr, int size, int overlap, 
@@ -88,9 +95,15 @@ int create_dma_circular_queue(uint64_t addr, int size, int overlap,
   q->n = 1 + (size-1)/q->block_size;
   q->segments = shared_mm_malloc(sizeof(dma_segment) * q->n);
   q->addr = addr;
-  q->read_ready = addr;
+  if(!q->skip) {
+    q->read_ready = addr;
+    q->read_ready_seg = 0;
+  } else {
+    q->read_ready_seg = q->n - 2;
+    q->read_ready = addr + q->read_ready_seg * q->block_size;
+  }
+
   q->write_ready = addr;
-  q->read_ready_seg = 0;
   q->write_ready_seg = 0;
   q->write_start_seg = 0;
   q->write_finish_seg = 0;
@@ -174,7 +187,7 @@ bool no_read(dma_circular_queue* q) {
 }
 
 void update_read_ready_bypass(dma_circular_queue* q, uint8_t half) {
-    printf("update_read_ready_bypass: qid = %d, half = %d\n", q->id, half);
+  //printf("update_read_ready_bypass: qid = %d, half = %d\n", q->id, half);
     int stop_seg = q->write_ready_seg-2;
     if(stop_seg < 0) stop_seg += q->n;
 
@@ -192,6 +205,8 @@ void update_read_ready_bypass(dma_circular_queue* q, uint8_t half) {
         q->read_ready = q->addr + read_ready_seg * q->block_size;
         q->read_ready_seg = read_ready_seg;
     }
+
+    //printf("update: read_seg = %d, read_ready = %p | %p, write_seg = %d, n = %d\n", q->read_ready_seg, (void*) q->read_ready, (void*) q->addr, q->write_ready_seg, q->n);
 }
 
 int update_read_ready_fast(dma_circular_queue* q) {
@@ -610,19 +625,31 @@ void handle_reading(dma_circular_queue* q, dma_segment* seg) {
   }
 }
 
-void smart_info(int qid, size_t addr, int size) {
-  int sid = find_segment(qid, addr, 0);
+void smart_info(int qid) {
   dma_circular_queue* q= &queues[qid];
-  int nid = (sid+1) % q->n;
-  dma_segment *seg = &queues[qid].segments[sid];
-  dma_segment *nseg = &queues[qid].segments[nid];
+  printf("queue: qid = %d, read_seg = %d, read_ready = %p, write_seg = %d, write_ready = %p\n",
+	 qid, q->read_ready_seg, (void*) q->read_ready, q->write_ready_seg, (void*) q->write_ready);
+}
+
+void smart_info2(int qid, size_t addr, int size) {
+  //int sid = find_segment(qid, addr, 0);
+  dma_circular_queue* q= &queues[qid];
+  //int nid = (sid+1) % q->n;
+  //dma_segment *seg = &queues[qid].segments[sid];
+  //dma_segment *nseg = &queues[qid].segments[nid];
   printf("\naddr: %p, size = %d, no_read = %d, time = %ld\n", (void*) addr, size, no_read(q), cvmx_clock_get_count(CVMX_CLOCK_CORE));
+  /*
   printf("seg: sid = %d, start = %p, size = %d, status = %d, min = %p, max = %p\n",
 	 seg->id, (void*) seg->addr, seg->size, seg->status, (void*) seg->min, (void*) seg->max);
   printf("nseg: nid = %d, start = %p, size = %d, status = %d, min = %p, max = %p\n",
 	 nseg->id, (void*) nseg->addr, nseg->size, nseg->status, (void*) nseg->min, (void*) nseg->max);
+  */
   printf("queue: qid = %d, read_seg = %d, read_ready = %p, write_seg = %d, write_ready = %p\n",
 	 qid, q->read_ready_seg, (void*) q->read_ready, q->write_ready_seg, (void*) q->write_ready);
+  
+  dma_segment* seg = &q->segments[q->write_ready_seg];
+  q_entry *buf = (q_entry*) (seg->buf + (q->write_ready - seg->addr));
+  printf("entry: flag = %d\n", buf->flag);
 }
 
 void* smart_dma_read_local(int qid, size_t addr) {
@@ -780,8 +807,16 @@ void initiate_write(dma_circular_queue *q) {
 #ifdef PERF2
     t2 = cvmx_clock_get_count(CVMX_CLOCK_CORE);
 #endif
-    if(!ret && q->write_gap > WRITE_WAIT)
+    //uint64_t now = cvmx_clock_get_count(CVMX_CLOCK_CORE);
+    //dma_segment* seg = &q->segments[q->write_ready_seg];
+    //q_entry *buf = (q_entry*) (seg->buf + (q->write_ready - seg->addr));
+    //if(q->id == 1) printf("update write: ret = %d, write_gap = %ld, WAIT = %d, flag = %d\n", ret, now - q->last_write, WRITE_WAIT, buf->flag);
+    //if(!ret && now - q->last_write > WRITE_WAIT)
+    if(!ret)
       ret = update_write_ready(q, ids, &n);
+
+    //if(ret)
+    //  q->last_write = cvmx_clock_get_count(CVMX_CLOCK_CORE);
 #ifdef PERF2
     t3 = cvmx_clock_get_count(CVMX_CLOCK_CORE);
     t_scanwrite1 += t2 - t1;
@@ -815,11 +850,12 @@ int smart_dma_write(int qid, size_t addr, int size, void* p) {
 #ifdef CHECK
   assert(size <= q->overlap);
 #endif
-
+  /*
   uint64_t now = cvmx_clock_get_count(CVMX_CLOCK_CORE);
   __SYNC;
   q->write_gap = now - q->last_write;
   q->last_write = now;
+  */
   __SYNC;
 
   int sid = find_segment(qid, addr, size);
@@ -869,7 +905,7 @@ void manage_read(int qid) {
 
 void manage_write(int qid) {
   dma_circular_queue* q = &queues[qid];
-  //printf("3. write qid = %d\n", qid);
+  //if(qid == 1) printf("3. write qid = %d\n", qid);
   initiate_write(q);
 
   static size_t stat_count = 0;

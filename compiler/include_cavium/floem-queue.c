@@ -81,7 +81,7 @@ q_buffer enqueue_alloc(circular_queue* q, size_t len, int gap, void(*clean)(q_bu
        (check->flag == 0 || check->flag == FLAG_CLEAN)) {
 #endif
       // enqueue_clean is never called if we eleminate actual enqueue read.
-      if(eqe->flag == FLAG_CLEAN) enqueue_clean(eqe, addr, clean);
+      if(eqe->flag & FLAG_CLEAN) enqueue_clean(eqe, addr, clean);
 
       eqe->len = q->entry_size;  // TODO: does this need htons?
       eqe->flag = FLAG_INUSE;

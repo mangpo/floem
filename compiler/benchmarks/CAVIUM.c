@@ -38,12 +38,9 @@ rx_queue_EnqueueCollection* rx_queue_EnqueueCollection0;
 CVMX_SHARED rx_queue_EnqueueCollection _rx_queue_EnqueueCollection0;
 rx_queue_EnqueueCollection* rx_queue_EnqueueCollection0;
 
-CVMX_SHARED circular_queue_lock _manager_queue;
-circular_queue_lock* manager_queue;
-
 void init_state_instances() {
   int corenum = cvmx_get_core_num();
-  uintptr_t shm_p = STATIC_ADDRESS_HERE;
+  uintptr_t shm_p = 0xf0ac00000;
 
   rx_queue_Storage* manage_storage = (rx_queue_Storage *) shm_p;
   shm_p = shm_p + MANAGE_SIZE;
@@ -51,15 +48,8 @@ void init_state_instances() {
   rx_queue_Storage0 = (rx_queue_Storage *) shm_p;
   shm_p = shm_p + sizeof(rx_queue_Storage);
 
-  manager_queue = &_manager_queue;
   if(corenum == 0) {
-    init_manager_queue(manager_queue);
-    memset(manager_queue, 0, sizeof(circular_queue_lock));
-    qlock_init(&manager_queue->lock);
-    manager_queue->len = MANAGE_SIZE;
-    manager_queue->queue = manage_storage;
-    manager_queue->entry_size = sizeof(q_entry_manage);
-    manager_queue->id = create_dma_circular_queue((uint64_t) manage_storage, MANAGE_SIZE, sizeof(q_entry_manage), dequeue_ready_var, dequeue_done_var, false);
+    init_manager_queue((void*) manage_storage);
   }
 
   circular_queue_lock0 = &_circular_queue_lock0;
@@ -78,6 +68,7 @@ void init_state_instances() {
   rx_queue_EnqueueCollection0->insts[0] = circular_queue_lock0;
   }
 
+  printf("done init %d\n", corenum);
 }
 
 void finalize_state_instances() {}
@@ -132,6 +123,7 @@ void rx_queue_enq_alloc0_from_main_nic_rx_MakeKey0(_rx_queue_fill0_from_main_nic
 #else
     q_buffer buff = { NULL, 0, 0 };
 #endif
+    size_t count = 0;
     while(buff.entry == NULL) {
         qlock_lock(&q->lock);
         buff = enqueue_alloc((circular_queue*) q, len, 0, no_clean);
@@ -139,6 +131,11 @@ void rx_queue_enq_alloc0_from_main_nic_rx_MakeKey0(_rx_queue_fill0_from_main_nic
 #ifdef QUEUE_STAT
         if(buff.entry == NULL) full++;
 #endif
+	count++;
+	if(count % 1000000 == 0) { 
+	  printf("enqueue stuck: %ld, addr = %p\n", count, (void*) (q->queue + q->offset));
+	  smart_info2(q->id, ((size_t) q->queue) + q->offset, q->entry_size);
+	}
    }
    
                                                                      

@@ -77,6 +77,8 @@ void init_state_instances(char *argv[]) {
   circular_queue0->queue = rx_queue_Storage0;
   circular_queue0->entry_size = 64;
   circular_queue0->id = create_dma_circular_queue((uint64_t) rx_queue_Storage0, sizeof(rx_queue_Storage), 64, dequeue_ready_var, dequeue_done_var);
+  circular_queue0->n1 = circular_queue0->len/circular_queue0->entry_size/2;
+  circular_queue0->n2 = circular_queue0->len/circular_queue0->entry_size - manager_queue->n1;
 
   memset(rx_queue_DequeueCollection0, 0, sizeof(rx_queue_DequeueCollection));
   rx_queue_DequeueCollection0->insts[0] = circular_queue0;
@@ -133,14 +135,14 @@ void main_run_Display0(pipeline_rx_queue0* _x0) {
     static __thread size_t count = 0;
     static __thread uint64_t lasttime = 0;
     count++;
-                if(count == 1000000) {
-        struct timeval now;
-        gettimeofday(&now, NULL);
-
-        uint64_t thistime = now.tv_sec*1000000 + now.tv_usec;
-        printf("%zu pkts/s %f Gbits/s\n", (count * 1000000)/(thistime - lasttime), (count * 64 * 8.0)/(thistime - lasttime)/1000);
-        lasttime = thistime;
-        count = 0;
+    if(count == 10000000) {
+      struct timeval now;
+      gettimeofday(&now, NULL);
+      
+      uint64_t thistime = now.tv_sec*1000000 + now.tv_usec;
+      printf("%zu pkts/s %f Gbits/s\n", (count * 1000000)/(thistime - lasttime), (count * 64 * 8.0)/(thistime - lasttime)/1000);
+      lasttime = thistime;
+      count = 0;
     }
                 
 }

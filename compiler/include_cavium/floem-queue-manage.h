@@ -7,13 +7,15 @@
 #define BUFF_SIZE 2 * 1024
 
 void init_dma_circular_queue();
+void init_manager_queue(void* storage);
 int create_dma_circular_queue(uint64_t addr, int size, int overlap, 
-			      int (*ready_scan)(void*), int (*done_scan)(void*));
+			      int (*ready_scan)(void*), int (*done_scan)(void*), bool skip);
 void* smart_dma_read_local(int qid, size_t addr);
 void* smart_dma_read(int gqid, size_t addr, int size);
 int smart_dma_write(int qid, size_t addr, int size, void* p);
 
-void smart_info(int qid, size_t addr, int size);
+void smart_info(int qid);
+void smart_info2(int qid, size_t addr, int size);
 void smart_dma_manage(int);
 void check_manager_queue();
 

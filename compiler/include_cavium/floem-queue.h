@@ -37,12 +37,13 @@ typedef struct {
 } __attribute__((packed)) q_entry;
 
 typedef struct {
-    uint8_t flag;
-    uint8_t task;
-    uint16_t len;
-    uint8_t checksum;
-    uint8_t half;
-    uint8_t pad[2];
+  uint8_t flag;
+  uint8_t task;
+  uint16_t len;
+  uint8_t checksum;
+  uint8_t pad;
+  uint8_t half;
+  uint8_t pad2;
 } __attribute__((packed)) q_entry_manage;
 
 typedef struct {
@@ -51,7 +52,7 @@ typedef struct {
   int qid;
 } q_buffer;
 
-#define MANAGE_SIZE
+#define MANAGE_SIZE 1024*2*4
 typedef struct _manage_storage {
 uint8_t data[MANAGE_SIZE];
 } __attribute__ ((packed)) manage_storage;
