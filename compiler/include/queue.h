@@ -269,9 +269,9 @@ static q_buffer dequeue_get(circular_queue* q) {
   }
 }
 
-static void dequeue_manage(q_buffer buff, circular_queue* manage);
+static void dequeue_manage(q_buffer buff, circular_queue_lock* manage);
 
-static void dequeue_release(q_buffer buff, uint8_t flag_clean, circular_queue* manage)
+static void dequeue_release(q_buffer buff, uint8_t flag_clean, circular_queue_lock* manage)
 {
     q_entry *e = buff.entry;
     check_flag_val(e, -1, "dequeue_release", 5);
@@ -284,7 +284,32 @@ static void dequeue_release(q_buffer buff, uint8_t flag_clean, circular_queue* m
     if(manage) dequeue_manage(buff, manage);
 }
 
-static void dequeue_manage(q_buffer buff, circular_queue* manage) {
+
+static int create_dma_circular_queue(uint64_t addr, int size, int overlap, 
+				     int (*ready_scan)(void*), int (*done_scan)(void*)) 
+{
+    static int id = -1;
+    id++;
+    return id;
+
+}
+ 
+static circular_queue_lock* init_manager_queue(void* manage_storage) {
+  circular_queue_lock* manager_queue = (circular_queue_lock *) malloc(sizeof(circular_queue_lock));
+  memset(manager_queue, 0, sizeof(circular_queue));
+  qlock_init(&manager_queue->lock);
+  manager_queue->len = MANAGE_SIZE;
+  manager_queue->queue = manage_storage;
+  manager_queue->entry_size = sizeof(q_entry_manage);
+  manager_queue->n1 = MANAGE_SIZE/sizeof(q_entry_manage)/2;
+  manager_queue->n2 = MANAGE_SIZE/sizeof(q_entry_manage) - manager_queue->n1;
+  manager_queue->refcount1 = 0;
+  manager_queue->refcount2 = 0;
+  manager_queue->id = create_dma_circular_queue((uint64_t) manage_storage, MANAGE_SIZE, sizeof(q_entry_manage), enqueue_ready_var, enqueue_done_var);
+  return manager_queue;
+}
+
+static void dequeue_manage(q_buffer buff, circular_queue_lock* manage) {
     q_entry *e = buff.entry;
     circular_queue *q = buff.queue;
     int index = ((uint64_t) e - (uint64_t) q->queue)/q->entry_size;
@@ -312,9 +337,11 @@ static void dequeue_manage(q_buffer buff, circular_queue* manage) {
 
     if(notify) {
         q_buffer buff;
+	qlock_lock(&manage->lock);
         {
             buff = enqueue_alloc(manage, manage->entry_size, 0, NULL);
         } while(buff.entry == NULL);
+	qlock_unlock(&manage->lock);
         q_entry_manage* my_e = buff.entry;
         my_e->task = q->id;
         my_e->half = notify;
@@ -323,13 +350,5 @@ static void dequeue_manage(q_buffer buff, circular_queue* manage) {
     }
 }
 
-static int create_dma_circular_queue(uint64_t addr, int size, int overlap, 
-				     int (*ready_scan)(void*), int (*done_scan)(void*)) 
-{
-    static int id = -1;
-    id++;
-    return id;
-
-}
 
 #endif

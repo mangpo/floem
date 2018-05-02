@@ -40,7 +40,7 @@ circular_queue* circular_queue0;
 
 rx_queue_DequeueCollection* rx_queue_DequeueCollection0;
 
-circular_queue* manager_queue;
+circular_queue_lock* manager_queue;
 
 void init_state_instances(char *argv[]) {
   uintptr_t shm_p = (uintptr_t) util_map_dma();
@@ -55,10 +55,13 @@ void init_state_instances(char *argv[]) {
   assert(shm_p - shm_start <= HUGE_PGSIZE);
   memset((void *) shm_start, 0, shm_p - shm_start);
 
-  manager_queue = (circular_queue *) malloc(sizeof(circular_queue));
   memset(manage_storage, 0, MANAGE_SIZE);
 
+  manager_queue = init_manager_queue((void*) manage_storage);
+  /*
+  manager_queue = (circular_queue_lock *) malloc(sizeof(circular_queue_lock));
   memset(manager_queue, 0, sizeof(circular_queue));
+  qlock_init(&manager_queue->lock);
   manager_queue->len = MANAGE_SIZE;
   manager_queue->queue = manage_storage;
   manager_queue->entry_size = sizeof(q_entry_manage);
@@ -67,7 +70,8 @@ void init_state_instances(char *argv[]) {
   manager_queue->refcount1 = 0;
   manager_queue->refcount2 = 0;
   manager_queue->id = create_dma_circular_queue((uint64_t) manage_storage, MANAGE_SIZE, sizeof(q_entry_manage), enqueue_ready_var, enqueue_done_var);
-
+  */
+  
   circular_queue0 = (circular_queue *) malloc(sizeof(circular_queue));
   rx_queue_DequeueCollection0 = (rx_queue_DequeueCollection *) malloc(sizeof(rx_queue_DequeueCollection));
   memset(rx_queue_Storage0, 0, sizeof(rx_queue_Storage));
