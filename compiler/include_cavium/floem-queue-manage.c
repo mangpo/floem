@@ -26,7 +26,7 @@
 #include "floem-queue-manage.h"
 
 //#define DEBUG
-#define CHECK
+//#define CHECK
 //#define PERF
 //#define PERF2
 //#define FAST_READ
@@ -637,7 +637,7 @@ void smart_info2(int qid, size_t addr, int size) {
   //int nid = (sid+1) % q->n;
   //dma_segment *seg = &queues[qid].segments[sid];
   //dma_segment *nseg = &queues[qid].segments[nid];
-  printf("\naddr: %p, size = %d, no_read = %d, time = %ld\n", (void*) addr, size, no_read(q), cvmx_clock_get_count(CVMX_CLOCK_CORE));
+  printf("\naddr: %p, addr = %p, size = %d, no_read = %d, time = %ld\n", (void*) addr, (void*) q->addr, size, no_read(q), cvmx_clock_get_count(CVMX_CLOCK_CORE));
   /*
   printf("seg: sid = %d, start = %p, size = %d, status = %d, min = %p, max = %p\n",
 	 seg->id, (void*) seg->addr, seg->size, seg->status, (void*) seg->min, (void*) seg->max);
@@ -671,6 +671,8 @@ void* smart_dma_read(int qid, size_t addr, int size) {
 #ifndef RUNTIME
   manage_read(qid);
   manage_dma_read(qid);
+  manage_write(qid);
+  manage_dma_write(qid);
 #endif
 
 #ifdef PERF
@@ -754,6 +756,7 @@ void do_write(dma_circular_queue *q, dma_segment *seg) {
     t1 = cvmx_clock_get_count(CVMX_CLOCK_CORE);
 #endif
     seg->comp = dma_write(min, max - min, seg->buf + (min - seg->addr), 0);
+
 #ifdef PERF2
     t2 = cvmx_clock_get_count(CVMX_CLOCK_CORE);
     t_dmawrite += t2 - t1;
@@ -766,16 +769,6 @@ void do_write(dma_circular_queue *q, dma_segment *seg) {
     __SYNC;
 #ifdef DEBUG
     printf("(%d) actual write: q = %d, seg = %p, addr = %p, min = %p, max= %p, cycle = %ld, t = %ld\n", cvmx_get_core_num(), q->id, seg, (void*) seg->addr, (void*) min, (void*) max, cvmx_clock_get_count(CVMX_CLOCK_CORE), seg->starttime);
-    /*
-    struct tuple *t, *end;
-    t = (struct tuple*) (seg->buf + (min - seg->addr));
-    end = (struct tuple*) (seg->buf + (max - seg->addr));
-    while(t < end) {
-      printf("%d ", t->task);
-      t++;
-    }
-    printf("\n");
-    */
 #endif
   }
 }
@@ -807,16 +800,11 @@ void initiate_write(dma_circular_queue *q) {
 #ifdef PERF2
     t2 = cvmx_clock_get_count(CVMX_CLOCK_CORE);
 #endif
-    //uint64_t now = cvmx_clock_get_count(CVMX_CLOCK_CORE);
-    //dma_segment* seg = &q->segments[q->write_ready_seg];
-    //q_entry *buf = (q_entry*) (seg->buf + (q->write_ready - seg->addr));
-    //if(q->id == 1) printf("update write: ret = %d, write_gap = %ld, WAIT = %d, flag = %d\n", ret, now - q->last_write, WRITE_WAIT, buf->flag);
-    //if(!ret && now - q->last_write > WRITE_WAIT)
-    if(!ret)
-      ret = update_write_ready(q, ids, &n);
 
-    //if(ret)
-    //  q->last_write = cvmx_clock_get_count(CVMX_CLOCK_CORE);
+    if(!ret) {
+      ret = update_write_ready(q, ids, &n);
+    }
+
 #ifdef PERF2
     t3 = cvmx_clock_get_count(CVMX_CLOCK_CORE);
     t_scanwrite1 += t2 - t1;
@@ -851,6 +839,7 @@ int smart_dma_write(int qid, size_t addr, int size, void* p) {
   assert(size <= q->overlap);
 #endif
   /*
+  // OPT
   uint64_t now = cvmx_clock_get_count(CVMX_CLOCK_CORE);
   __SYNC;
   q->write_gap = now - q->last_write;
@@ -871,8 +860,8 @@ int smart_dma_write(int qid, size_t addr, int size, void* p) {
   */
 
 #ifndef RUNTIME
-  manage_write(qid);
-  manage_dma_write(qid);
+  //manage_write(qid); // TODO
+  //manage_dma_write(qid);
 #endif
   return 0;
 }
