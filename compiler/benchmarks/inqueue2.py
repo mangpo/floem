@@ -3,8 +3,9 @@ from compiler import Compiler
 import target
 import queue_smart
 
-n_nic_cores = 1 #11
-n_queues = 1 #9
+n_nic_cores = 7 #11
+n_queues = 4 #9
+entry_size = 128
 
 class MyState(State):
     key = Field(Int)
@@ -16,7 +17,7 @@ class main(Flow):
 
     def impl(self):
         # Queue
-        RxEnq, RxDeq, RxScan = queue_smart.smart_queue("rx_queue", entry_size=64, size=1024, insts=n_queues,
+        RxEnq, RxDeq, RxScan = queue_smart.smart_queue("rx_queue", entry_size=entry_size, size=512, insts=n_queues,
                                                        channels=1, enq_blocking=True, enq_atomic=True, enq_output=False)
         rx_enq = RxEnq()
         rx_deq = RxDeq()
@@ -64,16 +65,16 @@ class main(Flow):
     static __thread size_t count = 0;
     static __thread uint64_t lasttime = 0;
     count++;
-                if(count == 1000000) {
+                if(count == 50000000) {
         struct timeval now;
         gettimeofday(&now, NULL);
 
         uint64_t thistime = now.tv_sec*1000000 + now.tv_usec;
-        printf("%zu pkts/s %f Gbits/s\n", (count * 1000000)/(thistime - lasttime), (count * 64 * 8.0)/(thistime - lasttime)/1000);
+        printf("%s Gbits/s\n", (count * %d * 8.0)/(thistime - lasttime)/1000);
         lasttime = thistime;
         count = 0;
     }
-                ''')
+                ''' % ('%f', entry_size))
 
         class run(Pipeline):
             def impl(self):
