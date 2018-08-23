@@ -10,7 +10,7 @@ class MyState(State):
     pkt_buff = Field('void*')
     key = Field('void*', size='state.keylen')
     keylen = Field(Uint(16))
-    core = Field(SizeT)
+    qid = Field(Int)
 
 
 class main(Flow):
@@ -41,7 +41,7 @@ class main(Flow):
         //printf("size = %ld\n", size);
         state.keylen = 32;  // 32->64 vs 188(size)->192
         state.key = m;
-        state.core = 0; //cvmx_get_core_num();
+        state.qid = 0; //cvmx_get_core_num();
 
         output { out(); }
                 ''')
@@ -71,13 +71,13 @@ class main(Flow):
         ############################ CPU #############################
         class Scheduler(Element):
             def configure(self):
-                self.out = Output(SizeT)
+                self.out = Output(Int)
 
             def impl(self):
                 self.run_c(r'''
-    static size_t core = 0;
+    static int core = 0;
     core = (core+1) %s %d;
-                output { out(core); }
+    output { out(core); }
                 ''' % ('%', n_cores))
 
         class Display(Element):
