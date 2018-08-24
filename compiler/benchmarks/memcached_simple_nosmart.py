@@ -18,7 +18,7 @@ class main(Flow):
 
     def impl(self):
         # Queue
-        RxEnq, RxDeq, RxScan = queue_smart.smart_queue("rx_queue", entry_size=192, size=512, insts=n_cores,
+        RxEnq, RxDeq, RxScan = queue_smart.smart_queue("rx_queue", entry_size=256, size=512, insts=n_cores,
                                                        channels=1, enq_blocking=True, enq_atomic=False, enq_output=True)
         rx_enq = RxEnq()
         rx_deq = RxDeq()
@@ -35,9 +35,9 @@ class main(Flow):
         state.pkt_buff = buff;
         //iokvs_message* m = (iokvs_message*) pkt;
 
-        state.keylen = size;
+        state.keylen = 210; //size;
         state.key = pkt;
-        state.qid = cvmx_get_core_num();
+        state.qid = 0; //cvmx_get_core_num();
 
         output { out(); }
                 ''')
@@ -71,7 +71,7 @@ class main(Flow):
 
             def impl(self):
                 self.run_c(r'''
-    static size_t core = 0;
+    static int core = 0;
     core = (core+1) %s %d;
     output { out(core); }
                 ''' % ('%', n_cores))
@@ -88,7 +88,7 @@ class main(Flow):
     static size_t count = 0;
     static uint64_t lasttime = 0;
     count++;
-    if(count == 100000) {
+    if(count == 3000000) {
         struct timeval now;
         gettimeofday(&now, NULL);
 
@@ -104,8 +104,8 @@ class main(Flow):
                 Scheduler() >> rx_deq
                 rx_deq.out[0] >> Display()
 
-        #nic_rx('nic_rx', device=target.CAVIUM, cores=range(n_cores))
-        nic_rx('nic_rx', process='dpdk', cores=range(n_cores))
+        nic_rx('nic_rx', device=target.CAVIUM, cores=range(n_cores))
+        #nic_rx('nic_rx', process='dpdk', cores=range(n_cores))
         run('run', process='app', cores=range(1))
 
 
@@ -118,3 +118,5 @@ c.include = r'''
 c.generate_code_as_header()
 c.depend = ['app']
 c.compile_and_run("test_queue")
+#c.depend = {"test_queue": ['app'], "test_queue_dpdk": ['dpdk']}
+#c.compile_and_run(["test_queue", "test_queue_dpdk"])

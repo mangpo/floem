@@ -57,10 +57,10 @@ static void dpdk_init(char *argv[], unsigned num_threads,
         abort();
     }
 
-    if (rte_eth_dev_count() != 1) {
-        fprintf(stderr, "dpdk_init: rte_eth_dev_count must be exactly 1\n");
-        abort();
-    }
+    /* if (rte_eth_dev_count() != 1) { */
+    /*     fprintf(stderr, "dpdk_init: rte_eth_dev_count must be exactly 1\n"); */
+    /*     abort(); */
+    /* } */
     if (num_threads >= rte_lcore_count()) {
         fprintf(stderr, "dpdk_init: more threads than there are cores\n");
         abort();
