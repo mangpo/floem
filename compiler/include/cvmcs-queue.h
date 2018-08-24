@@ -20,6 +20,7 @@ typedef struct {
   void* queue;
   size_t clean;
   int id, entry_size;
+  int n1, n2;
 } circular_queue;
 
 typedef struct {
@@ -28,6 +29,7 @@ typedef struct {
   void* queue;
   size_t clean;
   int id, entry_size;
+  int n1, n2;
   lock_t lock;
 } circular_queue_lock;
 

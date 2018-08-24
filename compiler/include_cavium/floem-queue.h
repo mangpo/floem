@@ -16,6 +16,7 @@ typedef struct {
   size_t clean;
   int id;
   uint32_t entry_size;
+  int n1, n2;
 } circular_queue;
 
 typedef struct {
@@ -25,6 +26,7 @@ typedef struct {
   size_t clean;
   int id;
   uint32_t entry_size;
+  int n1, n2;
   lock_t lock;
 } circular_queue_lock;
 

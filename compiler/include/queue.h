@@ -286,7 +286,7 @@ static void dequeue_release(q_buffer buff, uint8_t flag_clean, circular_queue_lo
 
 
 static int create_dma_circular_queue(uint64_t addr, int size, int overlap, 
-				     int (*ready_scan)(void*), int (*done_scan)(void*)) 
+				     int (*ready_scan)(void*), int (*done_scan)(void*), bool bypass)
 {
     static int id = -1;
     id++;

@@ -200,7 +200,8 @@ def generate_state_instances_cpu_only(graph, ext, all_processes, shared):
 
 
 def generate_state_instances_cpu_cavium(graph, ext, shared):
-    src_cpu = "void init_state_instances(char *argv[]) {\n"
+    src_cpu = "circular_queue_lock* manager_queue;\n"
+    src_cpu += "void init_state_instances(char *argv[]) {\n"
     src_cavium = "void init_state_instances() {\n"
     src_cavium += "  int corenum = cvmx_get_core_num();\n"
 
@@ -211,7 +212,16 @@ def generate_state_instances_cpu_cavium(graph, ext, shared):
 
         src_cpu += '  uintptr_t shm_p = (uintptr_t) util_map_dma();\n'
         src_cpu += '  uintptr_t shm_start = shm_p;\n'
+
+        src_cpu += '  rx_queue_Storage* manage_storage = (rx_queue_Storage *) shm_p;\n'
+        src_cpu += '  shm_p = shm_p + MANAGE_SIZE;\n'
+        src_cpu += '  memset(manage_storage, 0, MANAGE_SIZE);\n'
+        src_cpu += '  manager_queue = init_manager_queue((void*) manage_storage);\n'
+
         src_cavium += '  uintptr_t shm_p = STATIC_ADDRESS_HERE;\n'
+        src_cavium += '  rx_queue_Storage* manage_storage = (rx_queue_Storage *) shm_p;\n'
+        src_cavium += '  shm_p = shm_p + MANAGE_SIZE;\n'
+        src_cavium += '  if(corenum == 0) init_manager_queue((void*) manage_storage);\n'
 
     # Map shared states
     map_src = map_memory_regions(graph)

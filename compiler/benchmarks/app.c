@@ -36,18 +36,18 @@ static inline void pipeline_ref(pipeline_state* s) {
 
 rx_queue_Storage* rx_queue_Storage0;
 
-circular_queue* circular_queue0;
+circular_queue* circular_queue1;
 
 rx_queue_DequeueCollection* rx_queue_DequeueCollection0;
 
 circular_queue_lock* manager_queue;
-
 void init_state_instances(char *argv[]) {
   uintptr_t shm_p = (uintptr_t) util_map_dma();
   uintptr_t shm_start = shm_p;
-
   rx_queue_Storage* manage_storage = (rx_queue_Storage *) shm_p;
   shm_p = shm_p + MANAGE_SIZE;
+  memset(manage_storage, 0, MANAGE_SIZE);
+  manager_queue = init_manager_queue((void*) manage_storage);
 
   rx_queue_Storage0 = (rx_queue_Storage *) shm_p;
   shm_p = shm_p + sizeof(rx_queue_Storage);
@@ -55,37 +55,20 @@ void init_state_instances(char *argv[]) {
   assert(shm_p - shm_start <= HUGE_PGSIZE);
   memset((void *) shm_start, 0, shm_p - shm_start);
 
-  memset(manage_storage, 0, MANAGE_SIZE);
-
-  manager_queue = init_manager_queue((void*) manage_storage);
-  /*
-  manager_queue = (circular_queue_lock *) malloc(sizeof(circular_queue_lock));
-  memset(manager_queue, 0, sizeof(circular_queue));
-  qlock_init(&manager_queue->lock);
-  manager_queue->len = MANAGE_SIZE;
-  manager_queue->queue = manage_storage;
-  manager_queue->entry_size = sizeof(q_entry_manage);
-  manager_queue->n1 = MANAGE_SIZE/sizeof(q_entry_manage)/2;
-  manager_queue->n2 = MANAGE_SIZE/sizeof(q_entry_manage) - manager_queue->n1;
-  manager_queue->refcount1 = 0;
-  manager_queue->refcount2 = 0;
-  manager_queue->id = create_dma_circular_queue((uint64_t) manage_storage, MANAGE_SIZE, sizeof(q_entry_manage), enqueue_ready_var, enqueue_done_var);
-  */
-  
-  circular_queue0 = (circular_queue *) malloc(sizeof(circular_queue));
+  circular_queue1 = (circular_queue *) malloc(sizeof(circular_queue));
   rx_queue_DequeueCollection0 = (rx_queue_DequeueCollection *) malloc(sizeof(rx_queue_DequeueCollection));
   memset(rx_queue_Storage0, 0, sizeof(rx_queue_Storage));
 
-  memset(circular_queue0, 0, sizeof(circular_queue));
-  circular_queue0->len = 65536;
-  circular_queue0->queue = rx_queue_Storage0;
-  circular_queue0->entry_size = 64;
-  circular_queue0->id = create_dma_circular_queue((uint64_t) rx_queue_Storage0, sizeof(rx_queue_Storage), 64, dequeue_ready_var, dequeue_done_var);
-  circular_queue0->n1 = circular_queue0->len/circular_queue0->entry_size/2;
-  circular_queue0->n2 = circular_queue0->len/circular_queue0->entry_size - manager_queue->n1;
+  memset(circular_queue1, 0, sizeof(circular_queue));
+  circular_queue1->len = 32768;
+  circular_queue1->id = create_dma_circular_queue((uint64_t) rx_queue_Storage0, sizeof(rx_queue_Storage), 64, dequeue_ready_var, dequeue_done_var, true);
+  circular_queue1->queue = rx_queue_Storage0;
+  circular_queue1->n1 = 256;
+  circular_queue1->n2 = 256;
+  circular_queue1->entry_size = 64;
 
   memset(rx_queue_DequeueCollection0, 0, sizeof(rx_queue_DequeueCollection));
-  rx_queue_DequeueCollection0->insts[0] = circular_queue0;
+  rx_queue_DequeueCollection0->insts[0] = circular_queue1;
 
 }
 
@@ -94,8 +77,9 @@ void finalize_state_instances() {}
 void main_rx_queue_Dequeue0_get(int);
 void main_rx_queue_Dequeue0_classify_inst(q_buffer,int);
 void main_run_Display0(pipeline_rx_queue0*);
-void rx_queue_save0_inst(q_buffer,int);
 void main_rx_queue_Dequeue0_release(q_buffer);
+void rx_queue_save0_inst(q_buffer,int);
+void main_run_Scheduler0(int);
 void main_rx_queue_Dequeue0_get(int c) {
 
             assert(c < 1);
@@ -131,23 +115,30 @@ void main_rx_queue_Dequeue0_classify_inst(q_buffer buff,  int qid) {
   else if( (type == 0)) { main_rx_queue_Dequeue0_release(buff); }
 }
 
-void main_run_Display0(pipeline_rx_queue0* _x0) {
-  pipeline_rx_queue0 *_state = _x0;
+void main_run_Display0(pipeline_rx_queue0* _x1) {
+  pipeline_rx_queue0 *_state = _x1;
       
-    void *key = _state->entry->key;
+    void *key = _state->key;
+    int keylen = _state->entry->keylen;
 
     static __thread size_t count = 0;
     static __thread uint64_t lasttime = 0;
     count++;
-    if(count == 10000000) {
-      struct timeval now;
-      gettimeofday(&now, NULL);
-      
-      uint64_t thistime = now.tv_sec*1000000 + now.tv_usec;
-      printf("%zu pkts/s %f Gbits/s\n", (count * 1000000)/(thistime - lasttime), (count * 64 * 8.0)/(thistime - lasttime)/1000);
-      lasttime = thistime;
-      count = 0;
+                if(count == 3000000) {
+        struct timeval now;
+        gettimeofday(&now, NULL);
+
+        uint64_t thistime = now.tv_sec*1000000 + now.tv_usec;
+        printf("%zu pkts/s\n", (count * 1000000)/(thistime - lasttime));
+        lasttime = thistime;
+        count = 0;
     }
+                
+}
+
+void main_rx_queue_Dequeue0_release(q_buffer buf) {
+
+                dequeue_release(buf, 0, manager_queue);
                 
 }
 
@@ -155,16 +146,17 @@ void rx_queue_save0_inst(q_buffer buff,  int qid) {
   pipeline_rx_queue0 *_state = (pipeline_rx_queue0 *) malloc(sizeof(pipeline_rx_queue0));
   _state->refcount = 1;  _state->buffer = buff;
   _state->entry = (entry_rx_queue0*) buff.entry;
+  _state->key = (void*) (_state->entry->_content );
   
   main_run_Display0(_state);
   main_rx_queue_Dequeue0_release(_state->buffer);
   pipeline_unref((pipeline_state*) _state);
 }
 
-void main_rx_queue_Dequeue0_release(q_buffer buf) {
+void main_run_Scheduler0(int core) {
 
-                dequeue_release(buf, 0, manager_queue);
-                
+            
+  main_rx_queue_Dequeue0_get(core);
 }
 
 void init(char *argv[]) {
@@ -176,17 +168,17 @@ void finalize_and_check() {
 }
 
 
-pthread_t _thread_main_rx_queue_Dequeue0_get;
-void *_run_main_rx_queue_Dequeue0_get(void *tid) {
+pthread_t _thread_main_run_Scheduler0;
+void *_run_main_run_Scheduler0(void *tid) {
 
-        while(true) { main_rx_queue_Dequeue0_get(*((int*) tid)); /* usleep(1000); */ }
+        while(true) { main_run_Scheduler0(*((int*) tid)); /* usleep(1000); */ }
         }
-int ids_main_rx_queue_Dequeue0_get[1];
+int ids_main_run_Scheduler0[1];
 void run_threads() {
-  ids_main_rx_queue_Dequeue0_get[0] = 0;
-  pthread_create(&_thread_main_rx_queue_Dequeue0_get, NULL, _run_main_rx_queue_Dequeue0_get, (void*) &ids_main_rx_queue_Dequeue0_get[0]);
+  ids_main_run_Scheduler0[0] = 0;
+  pthread_create(&_thread_main_run_Scheduler0, NULL, _run_main_run_Scheduler0, (void*) &ids_main_run_Scheduler0[0]);
 }
 void kill_threads() {
-  pthread_cancel(_thread_main_rx_queue_Dequeue0_get);
+  pthread_cancel(_thread_main_run_Scheduler0);
 }
 

@@ -29,46 +29,39 @@ static inline void pipeline_ref(pipeline_state* s) {
 CVMX_SHARED rx_queue_Storage _rx_queue_Storage0;
 rx_queue_Storage* rx_queue_Storage0;
 
-CVMX_SHARED circular_queue_lock _circular_queue_lock0;
-circular_queue_lock* circular_queue_lock0;
-
-CVMX_SHARED rx_queue_EnqueueCollection _rx_queue_EnqueueCollection0;
-rx_queue_EnqueueCollection* rx_queue_EnqueueCollection0;
+CVMX_SHARED circular_queue _circular_queue0;
+circular_queue* circular_queue0;
 
 CVMX_SHARED rx_queue_EnqueueCollection _rx_queue_EnqueueCollection0;
 rx_queue_EnqueueCollection* rx_queue_EnqueueCollection0;
 
 void init_state_instances() {
   int corenum = cvmx_get_core_num();
-  uintptr_t shm_p = 0xf0ac00000;
-
+  uintptr_t shm_p = STATIC_ADDRESS_HERE;
   rx_queue_Storage* manage_storage = (rx_queue_Storage *) shm_p;
   shm_p = shm_p + MANAGE_SIZE;
+  if(corenum == 0) init_manager_queue((void*) manage_storage);
 
   rx_queue_Storage0 = (rx_queue_Storage *) shm_p;
   shm_p = shm_p + sizeof(rx_queue_Storage);
 
-  if(corenum == 0) {
-    init_manager_queue((void*) manage_storage);
-  }
-
-  circular_queue_lock0 = &_circular_queue_lock0;
+  circular_queue0 = &_circular_queue0;
   rx_queue_EnqueueCollection0 = &_rx_queue_EnqueueCollection0;
   if(corenum == 0) {
-  memset(circular_queue_lock0, 0, sizeof(circular_queue_lock));
-  qlock_init(&circular_queue_lock0->lock);
-  circular_queue_lock0->len = 65536;
-  circular_queue_lock0->queue = rx_queue_Storage0;
-  circular_queue_lock0->entry_size = 64;
-  circular_queue_lock0->id = create_dma_circular_queue((uint64_t) rx_queue_Storage0, sizeof(rx_queue_Storage), 64, enqueue_ready_var, enqueue_done_var, true);
+  memset(circular_queue0, 0, sizeof(circular_queue));
+  circular_queue0->len = 32768;
+  circular_queue0->id = create_dma_circular_queue((uint64_t) rx_queue_Storage0, sizeof(rx_queue_Storage), 64, enqueue_ready_var, enqueue_done_var, true);
+  circular_queue0->queue = rx_queue_Storage0;
+  circular_queue0->n1 = 256;
+  circular_queue0->n2 = 256;
+  circular_queue0->entry_size = 64;
   }
 
   if(corenum == 0) {
   memset(rx_queue_EnqueueCollection0, 0, sizeof(rx_queue_EnqueueCollection));
-  rx_queue_EnqueueCollection0->insts[0] = circular_queue_lock0;
+  rx_queue_EnqueueCollection0->insts[0] = circular_queue0;
   }
 
-  printf("done init %d\n", corenum);
 }
 
 void finalize_state_instances() {}
@@ -80,21 +73,34 @@ void _rx_queue_fill0_from_main_nic_rx_MakeKey0_join_buffer_in_pkt_save(_rx_queue
   p->in_pkt_arg0 = in_pkt_arg0;
 }
 
+void main_nic_rx_GetPktBuff0(MyState_compressed0*);
 void rx_queue_enq_submit0_from_main_nic_rx_MakeKey0(q_buffer);
 void rx_queue_fork0_from_main_nic_rx_MakeKey0(MyState_compressed0*);
 void rx_queue_enq_alloc0_from_main_nic_rx_MakeKey0(_rx_queue_fill0_from_main_nic_rx_MakeKey0_join_buffer*,int,int,MyState_compressed0*);
-void main_nic_rx_MakeKey0();
+void main_nic_rx_Drop0();
 void rx_queue_fill0_from_main_nic_rx_MakeKey0(q_buffer,MyState_compressed0*);
+void main_nic_rx_FromNetFree0(void*,void*);
+void main_nic_rx_FromNet0();
 void rx_queue_size_qid0_from_main_nic_rx_MakeKey0(_rx_queue_fill0_from_main_nic_rx_MakeKey0_join_buffer*,MyState_compressed0*);
+void main_nic_rx_MakeKey0(size_t,void*,void*,MyState_compressed0*);
+void main_nic_rx_GetPktBuff0(MyState_compressed0* _x0) {
+  MyState_compressed0 *_state = _x0;
+    
+        void* pkt = _state->pkt;
+        void* pkt_buff = _state->pkt_buff;
+        
+  main_nic_rx_FromNetFree0(pkt, pkt_buff);
+}
+
 void rx_queue_enq_submit0_from_main_nic_rx_MakeKey0(q_buffer buf) {
 
             enqueue_submit(buf, false);
             
 }
 
-void rx_queue_fork0_from_main_nic_rx_MakeKey0(MyState_compressed0* _x1) {
+void rx_queue_fork0_from_main_nic_rx_MakeKey0(MyState_compressed0* _x2) {
   _rx_queue_fill0_from_main_nic_rx_MakeKey0_join_buffer *_p_rx_queue_fill0_from_main_nic_rx_MakeKey0 = malloc(sizeof(_rx_queue_fill0_from_main_nic_rx_MakeKey0_join_buffer));
-  MyState_compressed0 *_state = _x1;
+  MyState_compressed0 *_state = _x2;
     
   rx_queue_size_qid0_from_main_nic_rx_MakeKey0(_p_rx_queue_fill0_from_main_nic_rx_MakeKey0,_state);
   _rx_queue_fill0_from_main_nic_rx_MakeKey0_join_buffer_in_pkt_save(_p_rx_queue_fill0_from_main_nic_rx_MakeKey0, _state);  rx_queue_fill0_from_main_nic_rx_MakeKey0(_p_rx_queue_fill0_from_main_nic_rx_MakeKey0->in_entry_arg0, _p_rx_queue_fill0_from_main_nic_rx_MakeKey0->in_pkt_arg0);
@@ -105,7 +111,7 @@ void rx_queue_fork0_from_main_nic_rx_MakeKey0(MyState_compressed0* _x1) {
 void rx_queue_enq_alloc0_from_main_nic_rx_MakeKey0(_rx_queue_fill0_from_main_nic_rx_MakeKey0_join_buffer* _p_rx_queue_fill0_from_main_nic_rx_MakeKey0, int len,  int c,  MyState_compressed0* _state) {
 
             assert(c < 1);
-            circular_queue_lock *q = rx_queue_EnqueueCollection0->insts[c];
+            circular_queue *q = rx_queue_EnqueueCollection0->insts[c];
             
 #ifdef QUEUE_STAT
     static size_t full = 0;
@@ -123,54 +129,69 @@ void rx_queue_enq_alloc0_from_main_nic_rx_MakeKey0(_rx_queue_fill0_from_main_nic
 #else
     q_buffer buff = { NULL, 0, 0 };
 #endif
-    size_t count = 0;
     while(buff.entry == NULL) {
-        qlock_lock(&q->lock);
+        
         buff = enqueue_alloc((circular_queue*) q, len, 0, no_clean);
-        qlock_unlock(&q->lock);
+        
 #ifdef QUEUE_STAT
         if(buff.entry == NULL) full++;
 #endif
-	count++;
-	if(count % 1000000 == 0) { 
-	  printf("enqueue stuck: %ld, addr = %p\n", count, (void*) (q->queue + q->offset));
-	  smart_info2(q->id, ((size_t) q->queue) + q->offset, q->entry_size);
-	}
    }
    
                                                                      
   _rx_queue_fill0_from_main_nic_rx_MakeKey0_join_buffer_in_entry_save(_p_rx_queue_fill0_from_main_nic_rx_MakeKey0, buff);
 }
 
-void main_nic_rx_MakeKey0() {
-  MyState_compressed0 *_state = (MyState_compressed0 *) malloc(sizeof(MyState_compressed0));
-  _state->refcount = 1;
+void main_nic_rx_Drop0() {
     
-        _state->key = 99;
-        static int qid = 0;
-        _state->qid= qid;
-        qid = (qid+1) % 1;
-
-        
-  rx_queue_fork0_from_main_nic_rx_MakeKey0(_state);
-  pipeline_unref((pipeline_state*) _state);
 }
 
-void rx_queue_fill0_from_main_nic_rx_MakeKey0(q_buffer _x2, MyState_compressed0* _x3) {
-  MyState_compressed0 *_state = _x3;
-      q_buffer buff = _x2;
+void rx_queue_fill0_from_main_nic_rx_MakeKey0(q_buffer _x3, MyState_compressed0* _x4) {
+  MyState_compressed0 *_state = _x4;
+      q_buffer buff = _x3;
   entry_rx_queue0* e = (entry_rx_queue0*) buff.entry;
   if(e) {
-    e->key = nic_htonl(_state->key);
+    e->keylen = nic_htons(_state->keylen);
+    memcpy(e->_content , _state->key, _state->keylen);
     e->task = 1;
   }  
   rx_queue_enq_submit0_from_main_nic_rx_MakeKey0(buff);
+  main_nic_rx_GetPktBuff0(_state);
 }
 
-void rx_queue_size_qid0_from_main_nic_rx_MakeKey0(_rx_queue_fill0_from_main_nic_rx_MakeKey0_join_buffer* _p_rx_queue_fill0_from_main_nic_rx_MakeKey0, MyState_compressed0* _x4) {
-  MyState_compressed0 *_state = _x4;
+void main_nic_rx_FromNetFree0(void* p,  void* buf) {
+
+        
+}
+
+void main_nic_rx_FromNet0(cvmx_wqe_t *wqe) {
+  MyState_compressed0 *_state = (MyState_compressed0 *) malloc(sizeof(MyState_compressed0));
+  _state->refcount = 1;
     
-  rx_queue_enq_alloc0_from_main_nic_rx_MakeKey0(_p_rx_queue_fill0_from_main_nic_rx_MakeKey0,sizeof(entry_rx_queue0), _state->qid, _state);
+    void* p = cvmx_phys_to_ptr(wqe->packet_ptr.s.addr);
+    size_t size = 0;
+    if(p) size = cvmx_wqe_get_len(wqe);
+    
+  if( p != NULL) { main_nic_rx_MakeKey0(size, p, wqe, _state); }
+  else if( p == NULL) { main_nic_rx_Drop0(); }
+  pipeline_unref((pipeline_state*) _state);
+}
+
+void rx_queue_size_qid0_from_main_nic_rx_MakeKey0(_rx_queue_fill0_from_main_nic_rx_MakeKey0_join_buffer* _p_rx_queue_fill0_from_main_nic_rx_MakeKey0, MyState_compressed0* _x5) {
+  MyState_compressed0 *_state = _x5;
+    
+  rx_queue_enq_alloc0_from_main_nic_rx_MakeKey0(_p_rx_queue_fill0_from_main_nic_rx_MakeKey0,sizeof(entry_rx_queue0) + _state->keylen, _state->qid, _state);
+}
+
+void main_nic_rx_MakeKey0(size_t size,  void* pkt,  void* buff,  MyState_compressed0* _state) {
+
+        _state->pkt = pkt;
+        _state->pkt_buff = buff;
+        
+                                        _state->keylen = 32;          _state->key = pkt;
+        _state->qid = 0; 
+        
+  rx_queue_fork0_from_main_nic_rx_MakeKey0(_state);
 }
 
 void init(char *argv[]) {
@@ -182,27 +203,25 @@ void finalize_and_check() {
 }
 
 
-void _run_main_nic_rx_MakeKey0(int corenum) {
-
-        main_nic_rx_MakeKey0();
-            }
 void run_threads() {
 
 #ifdef RUNTIME
     {
         int corenum = cvmx_get_core_num();
-        if(corenum >= RUNTIME_START_CORE)  smart_dma_manage(corenum - RUNTIME_START_CORE);
+        if(corenum >= RUNTIME_START_CORE) smart_dma_manage(corenum - RUNTIME_START_CORE);
         if(corenum == RUNTIME_START_CORE) check_manager_queue();
     }
 #endif
-        
-    {
-        int corenum = cvmx_get_core_num();
-        if((corenum == 0))  _run_main_nic_rx_MakeKey0(corenum);
-    }
         }
-int get_wqe_cond() { return 1; }
-void run_from_net(cvmx_wqe_t *wqe) {}
-void kill_threads() {
+
+int get_wqe_cond() {
+    int corenum = cvmx_get_core_num();
+    return (corenum == 0);
+}
+    
+void run_from_net(cvmx_wqe_t *wqe) {
+    main_nic_rx_FromNet0(wqe);
+}
+    void kill_threads() {
 }
 

@@ -14,20 +14,23 @@
 
 
 typedef struct _MyState { 
+void* pkt_buff;
+void* key;
+void* pkt;
 int qid;
-int key;
+uint16_t keylen;
  
 } __attribute__ ((packed)) MyState;
 
 
 typedef struct _rx_queue_Storage { 
-uint8_t data[65536];
+uint8_t data[32768];
  
 } __attribute__ ((packed)) rx_queue_Storage;
 
 
 typedef struct _rx_queue_EnqueueCollection { 
-circular_queue_lock* insts[1];
+circular_queue* insts[1];
  
 } __attribute__ ((packed)) rx_queue_EnqueueCollection;
 
@@ -39,18 +42,21 @@ circular_queue* insts[1];
 
 
 typedef struct _entry_rx_queue0 { 
-uint8_t flag; uint8_t task; uint16_t len; uint8_t checksum; uint8_t pad;  int key;  
+uint8_t flag; uint8_t task; uint16_t len; uint8_t checksum; uint8_t pad;  uint16_t keylen; uint8_t _content[];  
 } __attribute__ ((packed)) entry_rx_queue0;
 
 
 typedef struct _pipeline_rx_queue0 { 
-int refcount; q_buffer buffer; entry_rx_queue0* entry;  
+int refcount; q_buffer buffer; entry_rx_queue0* entry; void* key;  
 } __attribute__ ((packed)) pipeline_rx_queue0;
 
 
 typedef struct _MyState_compressed0 { 
-int refcount; int qid;
-int key;
+int refcount; void* pkt_buff;
+void* key;
+void* pkt;
+int qid;
+uint16_t keylen;
  
 } __attribute__ ((packed)) MyState_compressed0;
 

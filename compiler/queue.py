@@ -11,6 +11,8 @@ class circular_queue(State):
     clean = Field(SizeT)
     id = Field(Int)
     entry_size = Field(Int)
+    n1 = Field(Int)
+    n2 = Field(Int)
 
     def init(self, len=0, queue=0, overlap=8, ready="NULL", done="NULL"):
         self.len = len
@@ -19,8 +21,10 @@ class circular_queue(State):
         self.clean = 0
         self.entry_size = overlap
         self.declare = False
-        self.id = "create_dma_circular_queue((uint64_t) {0}, sizeof({1}), {2}, {3}, {4})"\
+        self.id = "create_dma_circular_queue((uint64_t) {0}, sizeof({1}), {2}, {3}, {4}, true)"\
             .format(queue.name, queue.__class__.__name__, overlap, ready, done)
+        self.n1 = (len/overlap)/2
+        self.n2 = len/overlap - (len/overlap)/2
 
 
 class circular_queue_lock(State):
@@ -31,6 +35,8 @@ class circular_queue_lock(State):
     lock = Field('lock_t')
     id = Field(Int)
     entry_size = Field(Int)
+    n1 = Field(Int)
+    n2 = Field(Int)
 
     def init(self, len=0, queue=0, entry_size=0, ready="NULL", done="NULL"):
         self.len = len
@@ -40,8 +46,10 @@ class circular_queue_lock(State):
         self.entry_size = entry_size
         self.lock = lambda (x): 'qlock_init(&%s)' % x
         self.declare = False
-        self.id = "create_dma_circular_queue((uint64_t) {0}, sizeof({1}), {2}, {3}, {4})" \
+        self.id = "create_dma_circular_queue((uint64_t) {0}, sizeof({1}), {2}, {3}, {4}, true)" \
             .format(queue.name, queue.__class__.__name__, entry_size, ready, done)
+        self.n1 = (len/entry_size)/2
+        self.n2 = len/entry_size - (len/entry_size)/2
 
 
 def get_field_name(state, field):
@@ -285,6 +293,18 @@ def queue_default(name, entry_size, size, insts,
             self.inp = Input(q_buffer)
 
         def impl(self):
+            if clean:
+                self.run_c(r'''
+                (q_buffer buf) = inp();
+                dequeue_release(buf, FLAG_CLEAN, manager_queue);
+                ''')
+            else:
+                self.run_c(r'''
+                (q_buffer buf) = inp();
+                dequeue_release(buf, 0, manager_queue);
+                ''')
+
+        def impl_cavium(self):
             if clean:
                 self.run_c(r'''
                 (q_buffer buf) = inp();

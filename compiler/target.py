@@ -35,7 +35,8 @@ def runtime_hook(graph, process):
 #ifdef RUNTIME
     {
         int corenum = cvmx_get_core_num();
-        if(corenum >= RUNTIME_START_CORE)  smart_dma_manage(corenum - RUNTIME_START_CORE);
+        if(corenum >= RUNTIME_START_CORE) smart_dma_manage(corenum - RUNTIME_START_CORE);
+        if(corenum == RUNTIME_START_CORE) check_manager_queue();
     }
 #endif
         '''
