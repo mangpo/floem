@@ -10,7 +10,7 @@ class MyState(State):
     pkt_buff = Field('void*')
     key = Field('void*', size='state.keylen')
     keylen = Field(Uint(16))
-    core = Field(SizeT)
+    qid = Field(Int)
 
 
 class main(Flow):
@@ -33,15 +33,15 @@ class main(Flow):
         (size_t size, void* pkt, void* buff) = inp();
         state.pkt = pkt;
         state.pkt_buff = buff;
-        iokvs_message* m = (iokvs_message*) pkt;
+        //iokvs_message* m = (iokvs_message*) pkt;
 
         //printf("keylen = %d\n", htons(m->mcr.request.keylen));
         //state.keylen = htons(m->mcr.request.keylen);
         //state.key = m->payload + m->mcr.request.extlen;
         //printf("size = %ld\n", size);
         state.keylen = 32;  // 32->64 vs 188(size)->192
-        state.key = m;
-        state.core = 0; //cvmx_get_core_num();
+        state.key = pkt;
+        state.qid = 0; //cvmx_get_core_num();
 
         output { out(); }
                 ''')
@@ -71,13 +71,15 @@ class main(Flow):
         ############################ CPU #############################
         class Scheduler(Element):
             def configure(self):
-                self.out = Output(SizeT)
+                self.inp = Input(Int)
+                self.out = Output(Int)
 
             def impl(self):
                 self.run_c(r'''
-    static size_t core = 0;
-    core = (core+1) %s %d;
-                output { out(core); }
+    (int core) = inp();
+    //static int core = 0;
+    //core = (core+1) %s %d;
+    output { out(core); }
                 ''' % ('%', n_cores))
 
         class Display(Element):
@@ -89,10 +91,10 @@ class main(Flow):
     void *key = state.key;
     int keylen = state.keylen;
 
-    static size_t count = 0;
-    static uint64_t lasttime = 0;
+    static __thread size_t count = 0;
+    static __thread uint64_t lasttime = 0;
     count++;
-    if(count == 100000) {
+                if(count == 3000000) {
         struct timeval now;
         gettimeofday(&now, NULL);
 
@@ -105,11 +107,11 @@ class main(Flow):
 
         class run(Pipeline):
             def impl(self):
-                Scheduler() >> rx_deq
+                self.core_id >> Scheduler() >> rx_deq
                 rx_deq.out[0] >> Display()
 
-        #nic_rx('nic_rx', device=target.CAVIUM, cores=range(n_cores))
-        nic_rx('nic_rx', process='dpdk', cores=range(n_cores))
+        nic_rx('nic_rx', device=target.CAVIUM, cores=range(n_cores))
+        #nic_rx('nic_rx', process='dpdk', cores=range(n_cores))
         run('run', process='app', cores=range(1))
 
 
@@ -120,5 +122,7 @@ c.include = r'''
 #include "protocol_binary.h"
 '''
 c.generate_code_as_header()
-c.depend = {"test_queue": ['app'], "test_queue_dpdk": ['dpdk']}
-c.compile_and_run(["test_queue", "test_queue_dpdk"])
+#c.depend = {"test_queue": ['app'], "test_queue_dpdk": ['dpdk']}
+#c.compile_and_run(["test_queue", "test_queue_dpdk"])
+c.depend = {"test_queue": ['app']}
+c.compile_and_run(["test_queue"])
