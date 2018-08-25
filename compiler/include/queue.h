@@ -305,7 +305,7 @@ static circular_queue_lock* init_manager_queue(void* manage_storage) {
   manager_queue->n2 = MANAGE_SIZE/sizeof(q_entry_manage) - manager_queue->n1;
   manager_queue->refcount1 = 0;
   manager_queue->refcount2 = 0;
-  manager_queue->id = create_dma_circular_queue((uint64_t) manage_storage, MANAGE_SIZE, sizeof(q_entry_manage), enqueue_ready_var, enqueue_done_var);
+  manager_queue->id = create_dma_circular_queue((uint64_t) manage_storage, MANAGE_SIZE, sizeof(q_entry_manage), enqueue_ready_var, enqueue_done_var, false);
   return manager_queue;
 }
 
