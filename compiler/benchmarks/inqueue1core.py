@@ -3,8 +3,9 @@ from compiler import Compiler
 import target, queue, net, library
 import queue_smart
 
-n_nic_cores = 8
-n_queues = 11
+n_queues = 8
+n_nic_cores = 11
+size = 256
 
 class MyState(State):
     key = Field(Int)
@@ -17,7 +18,7 @@ class main(Flow):
 
     def impl(self):
         # Queue
-        RxEnq, RxDeq, RxScan = queue_smart.smart_queue("rx_queue", entry_size=32, size=512, insts=n_queues,
+        RxEnq, RxDeq, RxScan = queue_smart.smart_queue("rx_queue", entry_size=size, size=512, insts=n_queues,
                                                        channels=1, enq_blocking=True, enq_atomic=True, enq_output=False)
         rx_enq = RxEnq()
         rx_deq = RxDeq()
@@ -30,7 +31,7 @@ class main(Flow):
                 self.run_c(r'''
         static void* p = NULL;
 
-        int n = 22;
+        int n = 246;
         if(p == NULL) p = malloc(n);
 
         state.key = n;
@@ -78,11 +79,11 @@ class main(Flow):
         gettimeofday(&now, NULL);
 
         uint64_t thistime = now.tv_sec*1000000 + now.tv_usec;
-        printf("%zu pkts/s %f Gbits/s\n", (count * 1000000)/(thistime - lasttime), (count * 64 * 8.0)/(thistime - lasttime)/1000);
+        printf("%s pkts/s %s Gbits/s\n", (count * 1000000)/(thistime - lasttime), (count * %d * 8.0)/(thistime - lasttime)/1000);
         lasttime = thistime;
         count = 0;
     }
-                ''')
+                ''' % ('%zu', '%f', size))
 
         class run(Pipeline):
             def impl(self):

@@ -188,7 +188,7 @@ c.init = r'''
 cm_sketch_init();
 '''
 c.testing = 'while (1) pause();'
-c.depend = ['pkt-utils', 'count-min-sketch', 'nic-compute', 'tdes', 'aes']
+c.depend = ['pkt-utils', 'count-min-sketch', 'nic-compute', 'tdes', 'aes', 'aes_ni']
 #c.generate_code_as_header()
 #c.generate_code_and_compile()
 #c.compile_and_run('dpdk')
