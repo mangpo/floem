@@ -18,6 +18,7 @@
 #include <assert.h>
 #include "tdes.h"
 #include "aes.h"
+#include "aes_ni.h"
 #endif
 
 void lock_group_init(spinlock_t* lock_group, int n) {
@@ -171,7 +172,10 @@ compute_aes(uint8_t *pkt_ptr,
     uint8_t iv[]  = { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f };
 
     //AES_CBC_encrypt_buffer(result_aes, result_aes, sizeof(uint64_t) * 4, key_aes, iv);
-    AES_CBC_encrypt_buffer(result_aes, result_aes, ((pkt_len - UDP_PAYLOAD - 5)/8) * 8, key_aes, iv);
+    //AES_CBC_encrypt_buffer(result_aes, result_aes, ((pkt_len - UDP_PAYLOAD - 5)/8) * 8, key_aes, iv);
+
+    aes128_load_key(key_aes);
+    aes128_enc(result_aes,result_aes);
 }
 
 #endif
