@@ -138,7 +138,7 @@ compute_aes(uint8_t *pkt_ptr,
                                            0x0123456789abcdefull};
     uint64_t *result_aes = (uint64_t *)(pkt_ptr + UDP_PAYLOAD + 5);
 
-    crypto_aes_initialize(key_aes, 256);
+    crypto_aes_initialize(key_aes, 128); //256
     //crypto_aes_encrypt(result_aes, sizeof(uint64_t) * 4);
     crypto_aes_encrypt(result_aes, ((pkt_len - UDP_PAYLOAD - 5)/8) * 8);
 }
@@ -166,16 +166,16 @@ compute_aes(uint8_t *pkt_ptr,
                                            0x0123456789abcdefull,
                                            0x0123456789abcdefull};
     uint64_t *result_aes = (uint64_t *)(pkt_ptr + UDP_PAYLOAD + 5);
-    /* crypto_aes_initialize(key_aes, 256); */
-    /* crypto_aes_encrypt(result_aes, sizeof(uint64_t) * 4); */
-
     uint8_t iv[]  = { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f };
 
-    //AES_CBC_encrypt_buffer(result_aes, result_aes, sizeof(uint64_t) * 4, key_aes, iv);
-    //AES_CBC_encrypt_buffer(result_aes, result_aes, ((pkt_len - UDP_PAYLOAD - 5)/8) * 8, key_aes, iv);
-
+#if 0
+    // AES in software
+    AES_CBC_encrypt_buffer(result_aes, result_aes, ((pkt_len - UDP_PAYLOAD - 5)/8) * 8, key_aes, iv);
+#else
+    // AES NI
     aes128_load_key(key_aes);
     aes128_enc(result_aes,result_aes);
+#endif
 }
 
 #endif

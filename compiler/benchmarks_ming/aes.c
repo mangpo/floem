@@ -44,7 +44,6 @@ NOTE:   String length must be evenly divisible by 16byte (str_len % 16 == 0)
 /*****************************************************************************/
 // The number of columns comprising a state in AES. This is a constant in AES. Value=4
 #define Nb 4
-#define BLOCKLEN 16 //Block length in bytes AES is 128b block only
 
 #if defined(AES256) && (AES256 == 1)
     #define Nk 8
@@ -62,6 +61,8 @@ NOTE:   String length must be evenly divisible by 16byte (str_len % 16 == 0)
     #define Nr 10       // The number of rounds in AES Cipher.
     #define keyExpSize 176
 #endif
+
+#define BLOCKLEN KEYLEN
 
 // jcallan@github points out that declaring Multiply as a function 
 // reduces code size considerably with the Keil ARM compiler.

@@ -2,6 +2,7 @@ from dsl import *
 from compiler import Compiler
 import target, queue, net, library
 
+pkt_size = 80
 
 class Request(Element):
     def configure(self):
@@ -100,21 +101,23 @@ udp_message* m = (udp_message*) pkt;
 
 
 if(m->ipv4._proto == 17) {
-        //printf("pkt %ld\n", size);
 uint64_t mycount = __sync_fetch_and_add64(&this->count, 1);
-        if(mycount == 100000) {
+        if(mycount == 5000000) {
+    __sync_synchronize();
+    size_t lasttime = this->lasttime;
     struct timeval now;
     gettimeofday(&now, NULL);
     size_t thistime = now.tv_sec * 1000000 + now.tv_usec;
-    printf("%zu pkts/s  %f Gbits/s\n", (mycount * 1000000)/(thistime - this->lasttime),
-                                        (mycount * size * 8.0)/((thistime - this->lasttime) * 1000));
+    printf("%s pkts/s %s Gbits/s\n", (mycount * 1000000)/(thistime - lasttime),
+        (mycount * %d * 8.0)/((thistime - lasttime) * 1000));
     this->lasttime = thistime;
     this->count = 0;
+    __sync_synchronize();
 }
 }
 
 output { out(pkt, buff); }
-        ''')
+        ''' % ('%zu', '%f', pkt_size))
 
 
 class gen(Pipeline):
@@ -122,7 +125,7 @@ class gen(Pipeline):
         net_alloc = net.NetAlloc()
         to_net = net.ToNet(configure=["net_alloc"])
 
-        library.Constant(configure=[SizeT,1024]) >> net_alloc
+        library.Constant(configure=[SizeT,pkt_size]) >> net_alloc
         net_alloc.oom >> library.Drop()
         net_alloc.out >> Request() >> PayloadGen() >> to_net
 
@@ -144,11 +147,15 @@ c.include = r'''
 #include "protocol_binary.h"
 #include <rte_ip.h>
 
-struct eth_addr src = { .addr = "\x3c\xfd\xfe\xaa\xd1\xe1" }; // guanaco
-struct eth_addr dest = { .addr = "\x68\x05\xca\x33\x13\x41" }; // hippo
+//struct eth_addr src = { .addr = "\x3c\xfd\xfe\xaa\xd1\xe1" }; // guanaco
+struct eth_addr dest = { .addr = "\x02\x78\x1f\x5a\x5b\x01" }; // jaguar
+struct eth_addr src = { .addr = "\x3c\xfd\xfe\xaa\xd1\xe0" }; // guanaco
+//struct eth_addr dest = { .addr = "\x68\x05\xca\x33\x13\x40" }; // hippo
 
-struct ip_addr src_ip = { .addr = "\x0a\x64\x14\x08" }; // guanaco
-struct ip_addr dest_ip = { .addr = "\x0a\x64\x14\x09" }; // hippo
+//struct ip_addr src_ip = { .addr = "\x0a\x64\x14\x08" }; // guanaco
+struct ip_addr dest_ip = { .addr = "\x0a\x64\x14\x0b" }; // jauar
+struct ip_addr src_ip = { .addr = "\x0a\x64\x0a\x08" }; // guanaco
+//struct ip_addr dest_ip = { .addr = "\x0a\x64\x0a\x09" }; // hippo
 
 #define TEXT_BASE 10000000 /* 10M (8 bits) */
 typedef enum _TYPE {
@@ -158,7 +165,7 @@ typedef enum _TYPE {
     SEQU, /* sequencer */
 } PKT_TYPE;
 
-#define CMD SEQU
+#define CMD HASH
 '''
 c.testing = 'while (1) pause();'
 c.generate_code_and_compile()
