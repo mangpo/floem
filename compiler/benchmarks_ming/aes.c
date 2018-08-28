@@ -519,7 +519,8 @@ static void XorWithIv(uint8_t* buf)
   }
 }
 
-void AES_CBC_encrypt_buffer(uint8_t* output, uint8_t* input, uint32_t length, const uint8_t* key, const uint8_t* iv)
+
+void AES_CBC_encrypt_buffer(uint8_t* output, uint32_t length, const uint8_t* key, const uint8_t* iv)
 {
   uintptr_t i;
   uint8_t extra = length % BLOCKLEN; /* Remaining bytes in the last non-full block */
@@ -527,8 +528,12 @@ void AES_CBC_encrypt_buffer(uint8_t* output, uint8_t* input, uint32_t length, co
   // Skip the key expansion if key is passed as 0
   if (0 != key)
   {
+#ifdef AESNI
+    aes128_load_key(key);
+#else
     Key = key;
     KeyExpansion();
+#endif
   }
 
   if (iv != 0)
@@ -538,21 +543,25 @@ void AES_CBC_encrypt_buffer(uint8_t* output, uint8_t* input, uint32_t length, co
 
   for (i = 0; i < length; i += BLOCKLEN)
   {
-    XorWithIv(input);
-    memcpy(output, input, BLOCKLEN);
+    XorWithIv(output);
+#ifdef AESNI
+    aes128_enc(output,output);
+#else
     state = (state_t*)output;
     Cipher();
+#endif
     Iv = output;
-    input += BLOCKLEN;
     output += BLOCKLEN;
-    //printf("Step %d - %d", i/16, i);
   }
 
   if (extra)
   {
-    memcpy(output, input, extra);
+#ifdef AESNI
+    aes128_enc(output,output);
+#else
     state = (state_t*)output;
     Cipher();
+#endif
   }
 }
 
