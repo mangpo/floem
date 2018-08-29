@@ -2,7 +2,7 @@ from dsl import *
 from compiler import Compiler
 import target, queue, net, library
 
-pkt_size = 80
+pkt_size = 1024 #1024
 
 class Request(Element):
     def configure(self):
@@ -49,21 +49,25 @@ class PayloadGen(Element):
 
 udp_message* m = (udp_message*) pkt;
 int i;
+uint8_t r;
 
 switch(CMD) {
 
 case HASH:
 strcpy(m->cmd, "HASH");
-for(i=0; i< (size - sizeof(udp_message) - 5)/8; i++) {                            
-    sprintf(m->payload + 8*i, "%d", TEXT_BASE + rand() % TEXT_BASE);          
-}                                                                          
+r = rand() % TEXT_BASE;
+memset(m->payload, &r, (size - sizeof(udp_message) - 5)/8);
 break;  
 
 case FLOW:
 strcpy(m->cmd, "FLOW");
+r = rand() % TEXT_BASE;
+memset(m->payload, &r, (size - sizeof(udp_message) - 5)/8);
+/*
 for(i=0; i<4; i++) {
-    sprintf(m->payload + 8*i, "%d", TEXT_BASE + rand() % TEXT_BASE);
+        sprintf(m->payload + 8*i, "%d", TEXT_BASE + r);
 }
+*/
 break;
 
 case SEQU:
@@ -138,7 +142,7 @@ class recv(Pipeline):
 
         from_net >> Reply() >> free
 
-n = 5
+n = 1
 gen('gen', process='dpdk', cores=range(n))
 recv('recv', process='dpdk', cores=range(n))
 c = Compiler()
