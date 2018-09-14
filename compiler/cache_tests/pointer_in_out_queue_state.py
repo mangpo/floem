@@ -178,7 +178,7 @@ class main(Flow):
         storage = Storage()
 
 
-        class compute(CallablePipeline):
+        class compute(CallableSegment):
             def configure(self):
                 self.inp = Input(Int)
 
@@ -186,7 +186,7 @@ class main(Flow):
                 enq = InEnq()
                 self.inp >> Key2Pointer() >> CacheGetStart() >> QID() >> enq.inp[0]
 
-        class set(CallablePipeline):
+        class set(CallableSegment):
             def configure(self):
                 self.inp = Input(Int, Int)
 
@@ -194,7 +194,7 @@ class main(Flow):
                 enq = InEnq()
                 self.inp >> KV2Pointer() >> CacheSetStart() >> QID() >> enq.inp[1]
 
-        class nic_tx(Pipeline):
+        class nic_tx(Segment):
             def impl(self):
                 deq = OutDeq()
 
@@ -202,7 +202,7 @@ class main(Flow):
                 deq.out[0] >> CacheGetEnd() >> DisplayGet()
                 deq.out[1] >> CacheSetEnd() >> DisplaySet()
 
-        class server(Pipeline):
+        class server(Segment):
             def impl(self):
                 deq = InDeq()
                 enq = OutEnq()

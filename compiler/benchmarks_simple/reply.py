@@ -45,7 +45,7 @@ printf("\n");
 output { out(size, pkt, buff); }
         ''')
 
-class nic_rx(Pipeline):
+class nic_rx(Segment):
     def impl(self):
         from_net = net.FromNet()
         to_net = net.ToNet()

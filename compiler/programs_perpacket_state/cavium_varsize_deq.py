@@ -73,7 +73,7 @@ class main(Flow):
             output { out(0); }
             ''')
 
-    class push(CallablePipeline):
+    class push(CallableSegment):
         def configure(self):
             self.inp = Input(Int, Uint(8))
 
@@ -82,7 +82,7 @@ class main(Flow):
 
             main.Scan() >> main.DisplayClean()
 
-    class pop(Pipeline):
+    class pop(Segment):
         def impl(self):
             main.Zero() >> main.Deq() >> main.Display()
 

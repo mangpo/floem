@@ -659,7 +659,7 @@ output { out(msglen, (void*) m, buff); }
         tx_deq = TxDeq()
 
         ######################## CPU #######################
-        class process_one_pkt(Pipeline):
+        class process_one_pkt(Segment):
             def impl(self):
                 self.core_id >> main.CleanLog() >> main.RxScheduler() >> rx_deq
                 rx_deq.out[0] >> main.HashGet() >> main.QIDCPU() >> tx_enq.inp[0]
@@ -668,7 +668,7 @@ output { out(msglen, (void*) m, buff); }
 
 
         ######################## NIC #######################
-        class nic_rx(Pipeline):
+        class nic_rx(Segment):
             def impl(self):
                 from_net = net.FromNet('from_net')
                 from_net_free = net.FromNetFree('from_net_free')
@@ -692,7 +692,7 @@ output { out(msglen, (void*) m, buff); }
                 arp.drop >> from_net_free
                 check_packet.drop >> from_net_free
 
-        class nic_tx(Pipeline):
+        class nic_tx(Segment):
             def impl(self):
                 prepare_header = main.PrepareHeader()
                 get_result = main.GetResult()

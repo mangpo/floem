@@ -87,7 +87,7 @@ class main(Flow):
             free(state.key);
                 ''')
 
-        class nic_rx(Pipeline):
+        class nic_rx(Segment):
             def impl(self):
                 from_net = net.FromNet()
                 from_net_free = net.FromNetFree()
@@ -97,7 +97,7 @@ class main(Flow):
                 rx_enq.done >> GetPktBuff() >> from_net_free
                 from_net.nothing >> library.Drop()
 
-        class nic_tx(Pipeline):
+        class nic_tx(Segment):
             def impl(self):
                 Scheduler() >> tx_deq
                 tx_deq.out[0] >> Display() >> library.Drop()
@@ -151,7 +151,7 @@ class main(Flow):
         output { out(); }
                 ''')
 
-        class run(Pipeline):
+        class run(Segment):
             def impl(self):
                 Scheduler() >> rx_deq
                 rx_deq.out[0] >> Display() >> tx_enq.inp[0]

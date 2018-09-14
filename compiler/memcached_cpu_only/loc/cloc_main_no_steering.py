@@ -305,7 +305,7 @@ class main(Flow):
 
 
         ######################## NIC Rx #######################
-        class process_one_pkt(Pipeline):
+        class process_one_pkt(Segment):
             def impl(self):
                 from_net = net.FromNet('from_net',configure=[32])
                 from_net_free = net.FromNetFree('from_net_free')

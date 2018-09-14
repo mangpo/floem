@@ -684,7 +684,7 @@ if(!yes) {
         MemoryRegion('data_region', 2 * 1024 * 1024 * 512, init='ialloc_init(data_region);') #4 * 1024 * 512)
 
         ######################## NIC Rx #######################
-        class process_one_pkt(Pipeline):
+        class process_one_pkt(Segment):
             def impl(self):
                 from_net = net.FromNet('from_net')
                 from_net_free = net.FromNetFree('from_net_free')

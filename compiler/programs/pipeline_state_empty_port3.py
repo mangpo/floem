@@ -42,7 +42,7 @@ class main(Flow):
             printf("%d\n", state.b);
             ''')
 
-    class run(CallablePipeline):
+    class run(CallableSegment):
         def impl(self):
             save = main.Save()
             display = main.Display()

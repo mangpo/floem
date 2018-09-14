@@ -71,7 +71,7 @@ class Drop(Element):
     def impl(self):
         self.run_c("")
 
-class run(Pipeline):
+class run(Segment):
     def impl(self):
         from_net = net.FromNet()
         from_net_free = net.FromNetFree()

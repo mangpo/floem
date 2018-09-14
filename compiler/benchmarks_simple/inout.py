@@ -39,13 +39,13 @@ class main(Flow):
         output { out(); }
                 ''')
 
-        class nic_rx(Pipeline):
+        class nic_rx(Segment):
             def impl(self):
                 MakeKey() >> rx_enq.inp[0]
 
 
         ############################ CPU #############################
-        class run(Pipeline):
+        class run(Segment):
             def impl(self):
                 self.core_id >> rx_deq
                 rx_deq.out[0] >> tx_enq.inp[0]
@@ -71,7 +71,7 @@ class main(Flow):
         }
                     ''')
 
-        class nic_tx(Pipeline):
+        class nic_tx(Segment):
             def impl(self):
                 self.core_id >> tx_deq
                 tx_deq.out[0] >> Display()

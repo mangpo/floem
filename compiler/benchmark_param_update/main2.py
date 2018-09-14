@@ -91,7 +91,7 @@ class main(Flow):
         output { out(size); }
                 ''')
 
-        class run(Pipeline):
+        class run(Segment):
             def impl(self):
                 from_net = net.FromNet()
                 update = Update()

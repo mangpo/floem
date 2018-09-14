@@ -124,7 +124,7 @@ class DropSize(Element):
         ''')
 
 
-class nic_rx(Pipeline):
+class nic_rx(Segment):
     def impl(self):
         from_net = net.FromNet()
         from_net_free = net.FromNetFree()
@@ -140,7 +140,7 @@ class nic_rx(Pipeline):
         run_order(enq, from_net_free)
 
 
-class run(Pipeline):
+class run(Segment):
     def impl(self):
         Scheduler() >> Deq() >> Display() >> DeqRelease()
 

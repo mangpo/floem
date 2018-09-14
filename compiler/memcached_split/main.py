@@ -889,7 +889,7 @@ output switch { case segment: out(); else: null(); }
         log_out_deq = LogOutDeq()
 
         ######################## NIC Rx #######################
-        class nic_rx(Pipeline):
+        class nic_rx(Segment):
             def impl(self):
                 from_net = net.FromNet('from_net')
                 from_net_free = net.FromNetFree('from_net_free')
@@ -937,7 +937,7 @@ output switch { case segment: out(); else: null(); }
 
 
         ######################## APP #######################
-        class process_eq(CallablePipeline):
+        class process_eq(CallableSegment):
             def configure(self):
                 self.inp = Input(Int)
 
@@ -960,14 +960,14 @@ output switch { case segment: out(); else: null(); }
                 tx_scan.out[2] >> drop
 
 
-        class init_segment(CallablePipeline):
+        class init_segment(CallableSegment):
             def configure(self):
                 self.inp = Input(Int)
 
             def impl(self):
                 self.inp >> main.FirstSegment() >> log_out_enq.inp[0]
 
-        class create_segment(CallablePipeline):
+        class create_segment(CallableSegment):
             def impl(self):
                 new_segment = main.NewSegment()
                 library.Constant(configure=[Int,0]) >> log_in_deq
@@ -975,7 +975,7 @@ output switch { case segment: out(); else: null(); }
                 new_segment.null >> main.Drop()
 
         ####################### NIC Tx #######################
-        class nic_tx(Pipeline):
+        class nic_tx(Segment):
             def impl(self):
                 scheduler = main.Scheduler()
 

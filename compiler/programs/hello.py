@@ -5,7 +5,7 @@ class Hello(Element):
         self.run_c(r'''printf("hello world\n");''')
 
 
-class P(Pipeline):
+class P(Segment):
     def impl(self):
         Hello()
 

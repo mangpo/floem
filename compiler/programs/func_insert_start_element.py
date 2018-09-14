@@ -1,7 +1,7 @@
 from library import *
 from compiler import Compiler
 
-class func(CallablePipeline):
+class func(CallableSegment):
     def configure(self):
         self.inp = Input(Int)
         self.offset = Input(Int)

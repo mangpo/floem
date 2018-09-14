@@ -58,12 +58,12 @@ class ReadCounter(Element):
         ''')
 
 
-class NICRx(Pipeline):
+class NICRx(Segment):
     def impl(self):
         net.FromNet() >> Counter() >> net.FromNetFree()
 
 
-class GetCount(CallablePipeline):
+class GetCount(CallableSegment):
     def impl(self):
         ReadCounter()
 

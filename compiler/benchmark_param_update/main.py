@@ -62,7 +62,7 @@ update_param(m->pool, m->param);
         ''')
 
 
-class run(Pipeline):
+class run(Segment):
     def impl(self):
         from_net = net.FromNet()
         to_net = net.ToNet()

@@ -35,7 +35,7 @@ class EnqConfirm(Element):
 
 Enq, Deq, Release = queue.queue_custom('queue', Tuple, 4, n_cores, Tuple.task, enq_output=True)
 
-class RxWrite(CallablePipeline):
+class RxWrite(CallableSegment):
     def configure(self):
         self.inp = Input(Pointer(Tuple), Int)
 
@@ -44,7 +44,7 @@ class RxWrite(CallablePipeline):
         self.inp >> enq >> EnqConfirm()
 
 
-class RxPrint(CallablePipeline):
+class RxPrint(CallableSegment):
     def configure(self):
         self.inp = Input(Int)
 

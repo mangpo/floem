@@ -538,7 +538,7 @@ state.core = cvmx_get_core_num();
     def impl(self):
 
         ######################## NIC Rx #######################
-        class process_one_pkt(Pipeline):
+        class process_one_pkt(Segment):
             def impl(self):
                 from_net = net.FromNet('from_net')
                 from_net_free = net.FromNetFree('from_net_free')
@@ -593,7 +593,7 @@ state.core = cvmx_get_core_num();
         process_one_pkt('process_one_pkt', device=target.CAVIUM, cores=range(n_cores))
 
 
-class maintenance(Pipeline):
+class maintenance(Segment):
     def impl(self):
 
         class Schedule(Element):

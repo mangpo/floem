@@ -1,6 +1,6 @@
 from floem import *
 
-class add2(CallablePipeline):
+class add2(CallableSegment):
     def configure(self):
         self.inp = Input(Int)
         self.out = Output(Int)

@@ -32,14 +32,14 @@ class main(Flow):
     Enq, Deq, Scan = queue_smart.smart_queue("queue", 32, 128, 2, 1)
 
 
-    class push(CallablePipeline):
+    class push(CallableSegment):
         def configure(self):
             self.inp = Input(Int)
 
         def impl(self):
             self.inp >> main.Save() >> main.Enq()
 
-    class pop(CallablePipeline):
+    class pop(CallableSegment):
         def configure(self):
             self.inp = Input(Int)
 

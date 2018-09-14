@@ -60,7 +60,7 @@ net_alloc = net.NetAlloc()
 net_alloc_free = net.NetAllocFree()
 to_net = net.ToNet()
 
-class test(Pipeline):
+class test(Segment):
     def impl(self):
         size = Const()
         display = Display()

@@ -165,11 +165,11 @@ class TestDSL(unittest.TestCase):
             def impl(self):
                 self.run_c(r'''int x = state.a; state.a = 0;''')
 
-        class run1(Pipeline):
+        class run1(Segment):
             def impl(self):
                 Dummy1()
 
-        class run2(Pipeline):
+        class run2(Segment):
             def impl(self):
                 Dummy2()
 
@@ -228,7 +228,7 @@ class TestDSL(unittest.TestCase):
 
         Enq, Deq, Scan = queue_smart.smart_queue("queue", entry_size=16, size=256, insts=1, channels=2)
 
-        class run1(CallablePipeline):
+        class run1(CallableSegment):
             def configure(self):
                 self.inp = Input(Int)
 
@@ -240,7 +240,7 @@ class TestDSL(unittest.TestCase):
                 choose.out0 >> DefA() >> enq.inp[0]
                 choose.out1 >> DefB() >> enq.inp[1]
 
-        class run2(CallablePipeline):
+        class run2(CallableSegment):
             def configure(self):
                 self.inp = Input(Int)
 
@@ -293,7 +293,7 @@ class TestDSL(unittest.TestCase):
 
             return My()
 
-        class f(CallablePipeline):
+        class f(CallableSegment):
             def configure(self):
                 self.inp = Input(Int)
 

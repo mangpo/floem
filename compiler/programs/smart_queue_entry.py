@@ -65,7 +65,7 @@ class main(Flow):
     Enq, Deq, Scan = queue_smart.smart_queue("queue", entry_size=32, size=3, insts=2, channels=2, clean=True,
                                              enq_output=True)
 
-    class run1(CallablePipeline):
+    class run1(CallableSegment):
         def configure(self):
             self.inp = Input(Int)
 
@@ -82,7 +82,7 @@ class main(Flow):
             scan.out[0] >> main.Clean(configure=['a'])
             scan.out[1] >> main.Clean(configure=['b'])
 
-    class run2(CallablePipeline):
+    class run2(CallableSegment):
         def configure(self):
             self.inp = Input(Int)
 

@@ -260,7 +260,7 @@ class main(Flow):
     state = PerPacket(MyState)
 
     def impl(self):
-        class gen(Pipeline):
+        class gen(Segment):
             def impl(self):
                 net_alloc = net.NetAlloc()
                 to_net = net.ToNet(configure=["net_alloc",1])
@@ -269,7 +269,7 @@ class main(Flow):
                 net_alloc.oom >> library.Drop()
                 net_alloc.out >> Request() >> PayloadGen() >> to_net
 
-        class recv(Pipeline):
+        class recv(Segment):
             def impl(self):
                 from_net = net.FromNet(configure=[32])
                 free = net.FromNetFree()

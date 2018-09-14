@@ -59,7 +59,7 @@ class main(Flow):
     def impl(self):
         Enq, Deq, Clean = queue_smart.smart_queue("queue", 32, 16, 1, 2)
 
-        class run1(CallablePipeline):
+        class run1(CallableSegment):
             def configure(self):
                 self.inp = Input(Int)
 
@@ -72,7 +72,7 @@ class main(Flow):
                 classify.out1 >> A0() >> enq.inp[0]
                 classify.out2 >> B0() >> enq.inp[1]
 
-        class run2(CallablePipeline):
+        class run2(CallableSegment):
             def configure(self):
                 self.inp = Input(Int)
 

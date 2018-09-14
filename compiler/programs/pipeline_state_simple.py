@@ -29,7 +29,7 @@ class MyFlow(Flow):
             self.run_c(r'''printf("%d\n", state.val);''')
             self.uses(state.val)
 
-    class Run(CallablePipeline):
+    class Run(CallableSegment):
         def configure(self):
             self.inp = Input(Int)
 

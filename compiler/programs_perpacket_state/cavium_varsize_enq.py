@@ -98,7 +98,7 @@ class main(Flow):
 
     Enq, Deq, Scan = queue_smart.smart_queue("queue", 256, 2, 1, enq_blocking=False)
 
-    class push(Pipeline):
+    class push(Segment):
         def impl(self):
             from_net = net.FromNet()
             from_net_free = net.FromNetFree()
@@ -108,7 +108,7 @@ class main(Flow):
 
             from_net.nothing >> main.Drop()
 
-    class pop(Pipeline):
+    class pop(Segment):
 
         def impl(self):
             self.core_id >> main.Deq() >> main.Display()

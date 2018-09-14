@@ -10,7 +10,7 @@ class Inc(Element):
         self.run_c("int x = inp() + 1; output { out(x); }")
 
 
-class inc2(CallablePipeline):
+class inc2(CallableSegment):
     def configure(self):
         self.inp = Input(Int)
         self.out = Output(Int)

@@ -79,7 +79,7 @@ class main(Flow):
             free(state.key);
                 ''')
 
-        class nic_rx(Pipeline):
+        class nic_rx(Segment):
             def impl(self):
                 from_net = net.FromNet()
                 from_net_free = net.FromNetFree()
@@ -142,7 +142,7 @@ class main(Flow):
 #endif
                 ''')
 
-        class run(Pipeline):
+        class run(Segment):
             def impl(self):
                 Scheduler() >> rx_deq
                 rx_deq.out[0] >> Display()

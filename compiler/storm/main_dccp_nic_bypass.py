@@ -783,7 +783,7 @@ class NicRxFlow(Flow):
     def impl(self):
         from_net = net.FromNet()
         from_net_free = net.FromNetFree()
-        class nic_rx(Pipeline):
+        class nic_rx(Segment):
 
             def impl_basic(self):
                 # Notice that it's okay to connect non-empty port to an empty port.
@@ -824,7 +824,7 @@ class NicRxFlow(Flow):
             nic_rx('nic_rx', device=target.CAVIUM, cores=[n_nic_tx + x for x in range(n_nic_rx)])
 
 
-class inqueue_get(CallablePipeline):
+class inqueue_get(CallableSegment):
     def configure(self):
         self.inp = Input(Int)
         self.out = Output(queue.q_buffer)
@@ -833,7 +833,7 @@ class inqueue_get(CallablePipeline):
     def impl(self): self.inp >> rx_deq_creator() >> self.out
 
 
-class bypass_get(CallablePipeline):
+class bypass_get(CallableSegment):
     def configure(self):
         self.inp = Input(Int)
         self.out = Output(queue.q_buffer)
@@ -841,19 +841,19 @@ class bypass_get(CallablePipeline):
 
     def impl(self): self.inp >> BypassDeq() >> self.out
 
-class inqueue_advance(CallablePipeline):
+class inqueue_advance(CallableSegment):
     def configure(self):
         self.inp = Input(queue.q_buffer)
 
     def impl(self): self.inp >> rx_release_creator()
 
-class bypass_advance(CallablePipeline):
+class bypass_advance(CallableSegment):
     def configure(self):
         self.inp = Input(queue.q_buffer)
 
     def impl(self): self.inp >> BypassRelease()
 
-class outqueue_put(CallablePipeline):
+class outqueue_put(CallableSegment):
     def configure(self):
         self.inp = Input("struct tuple*", Int)
 
@@ -915,7 +915,7 @@ class NicTxFlow(Flow):
                 nop >> self.out
 
 
-        class nic_tx(Pipeline):
+        class nic_tx(Segment):
             def impl(self):
                 tx_deq = tx_deq_creator()
                 save_buff = SaveBuff()
@@ -931,12 +931,12 @@ class NicTxFlow(Flow):
             nic_tx('nic_tx', device=target.CAVIUM, cores=range(n_nic_tx))
 
 if nic == 'dpdk':
-    class dccp_print_stat(CallablePipeline):
+    class dccp_print_stat(CallableSegment):
         def impl(self):
             DccpPrintStat()
     dccp_print_stat('dccp_print_stat', process='dpdk') 
 else:
-    class dccp_print_stat(Pipeline):
+    class dccp_print_stat(Segment):
         def impl(self):
             DccpPrintStat()
     dccp_print_stat('dccp_print_stat', device=target.CAVIUM, cores=[8])

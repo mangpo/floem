@@ -924,7 +924,7 @@ iokvs_message* pkt = state.pkt;
         log_out_deq = LogOutDeq()
 
         ######################## NIC Rx #######################
-        class nic_rx(Pipeline):
+        class nic_rx(Segment):
             def impl(self):
                 from_net = net.FromNet('from_net')
                 from_net_free = net.FromNetFree('from_net_free')
@@ -972,7 +972,7 @@ iokvs_message* pkt = state.pkt;
 
 
         ######################## APP #######################
-        class process_eq(CallablePipeline):
+        class process_eq(CallableSegment):
             def configure(self):
                 self.inp = Input(Int)
 
@@ -995,14 +995,14 @@ iokvs_message* pkt = state.pkt;
                 tx_enq.done >> main.Unref() >> main.Free()
 
 
-        class init_segment(CallablePipeline):
+        class init_segment(CallableSegment):
             def configure(self):
                 self.inp = Input(Int)
 
             def impl(self):
                 self.inp >> main.FirstSegment() >> log_out_enq.inp[0]
 
-        class create_segment(CallablePipeline):
+        class create_segment(CallableSegment):
             def impl(self):
                 new_segment = main.NewSegment()
                 library.Constant(configure=[Int,0]) >> log_in_deq
@@ -1010,7 +1010,7 @@ iokvs_message* pkt = state.pkt;
                 new_segment.null >> main.Drop()
 
         ####################### NIC Tx #######################
-        class nic_tx(Pipeline):
+        class nic_tx(Segment):
             def impl(self):
                 scheduler = main.Scheduler()
                 to_net = net.ToNet('to_net', configure=['from_net'])

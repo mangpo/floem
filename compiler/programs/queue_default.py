@@ -59,7 +59,7 @@ class CleanPrint(Element):
         ''')
 
 
-class rx_write(CallablePipeline):
+class rx_write(CallableSegment):
     def configure(self):
         self.inp  = Input(Int, Int)  # val, qid
 
@@ -73,7 +73,7 @@ class rx_write(CallablePipeline):
 
         clean >> CleanPrint()
 
-class rx_read(CallablePipeline):
+class rx_read(CallableSegment):
     def configure(self):
         self.inp = Input(Int)
         self.out = Output(queue.q_buffer)
@@ -81,7 +81,7 @@ class rx_read(CallablePipeline):
     def impl(self):
         self.inp >> DeqGet() >> self.out
 
-class rx_release(CallablePipeline):
+class rx_release(CallableSegment):
     def configure(self):
         self.inp = Input(queue.q_buffer)
 

@@ -29,7 +29,7 @@ class Drop(Element):
     def impl(self):
         self.run_c(r'''while (0); ''')
 
-class test(Pipeline):
+class test(Segment):
     def impl(self):
         from_net = net.FromNet('from_net')
         from_net.out >> DisplayPacket('print_packet') >> \

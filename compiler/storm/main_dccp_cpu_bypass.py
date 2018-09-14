@@ -656,7 +656,7 @@ class NicRxFlow(Flow):
     def impl(self):
         from_net = net.FromNet(configure=[128])
         from_net_free = net.FromNetFree()
-        class nic_rx(Pipeline):
+        class nic_rx(Segment):
 
             def impl_basic(self):
                 # Notice that it's okay to connect non-empty port to an empty port.
@@ -695,7 +695,7 @@ class NicRxFlow(Flow):
         #nic_rx('nic_rx', device=target.CAVIUM, cores=[0,1,2,3])
 
 
-class inqueue_get(CallablePipeline):
+class inqueue_get(CallableSegment):
     def configure(self):
         self.inp = Input(Int)
         self.out = Output(queue.q_buffer)
@@ -703,7 +703,7 @@ class inqueue_get(CallablePipeline):
     def impl(self): self.inp >> rx_deq_creator() >> self.out
 
 
-class bypass_get(CallablePipeline):
+class bypass_get(CallableSegment):
     def configure(self):
         self.inp = Input(Int)
         self.out = Output(queue.q_buffer)
@@ -712,20 +712,20 @@ class bypass_get(CallablePipeline):
     def impl(self): self.inp >> BypassDeq() >> self.out
 
 
-class inqueue_advance(CallablePipeline):
+class inqueue_advance(CallableSegment):
     def configure(self):
         self.inp = Input(queue.q_buffer)
 
     def impl(self): self.inp >> rx_release_creator()
 
-class bypass_advance(CallablePipeline):
+class bypass_advance(CallableSegment):
     def configure(self):
         self.inp = Input(queue.q_buffer)
 
     def impl(self): self.inp >> BypassRelease()
 
 
-class outqueue_put(CallablePipeline):
+class outqueue_put(CallableSegment):
     def configure(self):
         self.inp = Input("struct tuple*", Int)
 
@@ -737,7 +737,7 @@ class outqueue_put(CallablePipeline):
         # remote
         local_or_remote.out_send >> tx_enq_creator()
 
-class get_dccp_stat(CallablePipeline):
+class get_dccp_stat(CallableSegment):
     def configure(self):
         self.inp = Input()
         self.out = Output(Pointer(DccpInfo))
@@ -792,7 +792,7 @@ class NicTxFlow(Flow):
                 nop >> self.out
 
 
-        class nic_tx(Pipeline):
+        class nic_tx(Segment):
             def impl(self):
                 tx_deq = tx_deq_creator()
                 save_buff = SaveBuff()

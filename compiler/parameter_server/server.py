@@ -265,7 +265,7 @@ class main(Flow):
     state = PerPacket(MyState)
 
     def impl(self):
-        class nic_rx(Pipeline):
+        class nic_rx(Segment):
             def impl(self):
                 from_net = net.FromNet(configure=[32])
                 to_net = net.ToNet(configure=["alloc",1])

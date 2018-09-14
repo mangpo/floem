@@ -66,7 +66,7 @@ class main(Flow):
     state = PerPacket(MyState)
 
     def impl(self):
-        class compute(CallablePipeline):
+        class compute(CallableSegment):
             def configure(self):
                 self.inp = Input(Int)
                 self.out = Output(Int)
@@ -74,7 +74,7 @@ class main(Flow):
             def impl(self):
                 self.inp >> SaveKey() >> CacheGetStart() >> Mult2() >> CacheGetEnd() >> OnlyVal() >> self.out
 
-        class set(CallablePipeline):
+        class set(CallableSegment):
             def configure(self):
                 self.inp = Input(Int, Int)
 

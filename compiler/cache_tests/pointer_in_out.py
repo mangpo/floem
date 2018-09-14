@@ -122,7 +122,7 @@ class main(Flow):
     def impl(self):
         storage = Storage()
 
-        class compute(CallablePipeline):
+        class compute(CallableSegment):
             def configure(self):
                 self.inp = Input(Int)
                 self.out = Output(Int)
@@ -130,7 +130,7 @@ class main(Flow):
             def impl(self):
                 self.inp >> Key2Pointer() >> CacheGetStart() >> Mult2(states=[storage]) >> CacheGetEnd() >> OnlyVal() >> self.out
 
-        class set(CallablePipeline):
+        class set(CallableSegment):
             def configure(self):
                 self.inp = Input(Int, Int)
 

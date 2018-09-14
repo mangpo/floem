@@ -80,7 +80,7 @@ output { out(pkt, buff); }
         ''')
 
 
-class gen(Pipeline):
+class gen(Segment):
     def impl(self):
         net_alloc = net.NetAlloc()
         to_net = net.ToNet(configure=["net_alloc"])
@@ -89,7 +89,7 @@ class gen(Pipeline):
         net_alloc.oom >> library.Drop()
         net_alloc.out >> Request() >> to_net
 
-class recv(Pipeline):
+class recv(Segment):
     def impl(self):
         from_net = net.FromNet()
         free = net.FromNetFree()

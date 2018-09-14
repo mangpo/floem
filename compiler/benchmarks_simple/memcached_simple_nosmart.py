@@ -54,7 +54,7 @@ class main(Flow):
         output { out(pkt, pkt_buff); }
                 ''')
 
-        class nic_rx(Pipeline):
+        class nic_rx(Segment):
             def impl(self):
                 from_net = net.FromNet()
                 from_net_free = net.FromNetFree()
@@ -99,7 +99,7 @@ class main(Flow):
     }
                 ''')
 
-        class run(Pipeline):
+        class run(Segment):
             def impl(self):
                 Scheduler() >> rx_deq
                 rx_deq.out[0] >> Display()

@@ -10,7 +10,7 @@ A. [Prerequisites](#Prerequisites)
 B. [Language](#Language)
   1. [Element](#Element)
   2. [Element Connection](#Element-Connection)
-  3. [Pipeline](#Pipeline)
+  3. [Segment](#Segment)
   4. [State](#State)
   5. [Shared Data](#Shared-Data)
   6. [Composite Element](#Composite-Element)
@@ -211,27 +211,41 @@ An output port `out` of an element `a` can be connected to an input port `inp` o
 
 For one special case, an output port `out` of an element `a` can also be connected to an input port `inp` of an element `b` even when their types do not match, with the condition that port `inp` must has zero argument. In this case, the element `a` simply drops arguments that supposed to be sent to the element `b`. We introduce this feature as we find it to be quite convenient.
 
-<a name="Pipeline"></a>
-## 3. Pipeline
+<a name="Segment"></a>
+## 3. Segment
 
-To execute a program, you need to assign an element to a *pipeline* to run. A pipeline is a set of connected elements that starts from a *source element* and ends at leaf elements (elements with no output ports) or queues. Packet handoff along a pipeline is initiated by the source element pushing a packet to subsequent elements. 
+To execute a program, you need to assign an element to a *segment* to run. 
+A segment is a set of connected elements that 
+starts from a *source element* and ends at leaf elements 
+(elements with no output ports) or queues. Packet handoff along a segment is 
+initiated by the source element pushing a packet to subsequent elements. 
 
-### 3.1 Normal Pipeline
-By default, a pipeline is executed by one dedicated thread on a device, so elements within a pipeline run sequentially with respect to packet-flow dependencies. A thread starts invoke the source node (an element that doesn't has any data dependency). Then, the rest of the elements are executed in a topological order according to the dataflow. A thread repeats the execution of the pipeline forever. If an element assigned to a pieline is unreachable (no data dependency) from the source element, the compiler will throw an error. In the current implementation, if there is no dependency between elements `x` and `y` according to the dataflow, `x` is executed before `y` if `x` appears before `y` in the program.
+### 3.1 Normal Segment
+By default, a segment is executed by one dedicated thread on a device, 
+so elements within a segment run sequentially with respect to packet-flow 
+dependencies. A thread starts invoke the source node (an element that doesn't 
+has any data dependency). Then, the rest of the elements are executed in a 
+topological order according to the dataflow. A thread repeats the execution of 
+the segment forever. If an element assigned to a segment is unreachable 
+(no data dependency) from the source element, the compiler will throw an error. 
+In the current implementation, if there is no dependency between elements `x` 
+and `y` according to the dataflow, `x` is executed before `y` if `x` appears 
+before `y` in the program.
 
-To create a pipeline of connected elements, simply create elements and connect them inside a pipeline. For example:
+To create a segment of connected elements, simply create elements and connect them inside a segment. For example:
 ```python
-class P(Pipeline):
+class P(Segment):
     def impl(self):
-        Hello()  # one element in this pipeline
+        Hello()  # one element in this segment
      
-P('pipeline_name')
+P('segment_name')
 ```
 
 
 
 ##### Compile and Run
-To compile all the defined pipelines into an executable file, add the following code in your program:
+To compile all the defined segments into an executable file, 
+add the following code in your program:
 ```python
 c = Compiler()
 c.testing = "while(1) pause();"
@@ -241,7 +255,7 @@ c.generate_code_and_run()
 `c.testing` is the body of the main function. In this case, we want the main function to run forever.
 
 Under the hood, 
-1. Floem compiler compiles all pipelines to `tmp.c`. 
+1. Floem compiler compiles all segments to `tmp.c`. 
 2. GCC compiles `tmp.c` to executable `tmp`. 
 3. `tmp` is then executed for a few second by the script. 
 
@@ -275,11 +289,18 @@ c.generate_code_and_run([12])
 The compiler captures the stdout of the program and checks against the provided list. The list can contains numbers and strings. The stdout of the program is splitted by whitespace and newline.
 
 
-### 3.2 Callable Pipeline
+### 3.2 Callable Segment
 
-To enable programmers to offload their existing applications to run on a NIC without having to port their entire applications into Floem, we introduce a *callable pipeline*, which is a pipeline that is exposed as a function that can be called from any C program. This way, programmers have to port only the parts they want to offload to a NIC into Floem.
+To enable programmers to offload their existing applications to run on a NIC without having to port their entire applications into Floem, 
+we introduce a *callable segment*, which is a segment that is exposed as a function that 
+can be called from any C program. This way, programmers have to port only the parts they 
+want to offload to a NIC into Floem.
 
-Programmers can create a callable pipeline similar to a normal pipeline, but additionally, they must define the argument types and the return type of the function via an input and output port of the pipeline. Note that a callable pipeline can take multiple input arguments though one input port. A callable pipeline can return nothing (no output port) or return one return value via an output port.
+Programmers can create a callable segment similar to a normal segment, but additionally, 
+they must define the argument types and the return type of the function via an input 
+and output port of the segment. Note that a callable segment can take multiple input 
+arguments though one input port. A callable segment can return nothing (no output port) 
+or return one return value via an output port.
 
 For example, we can create a function `inc2` (a function that returns its argument added by 2) from element `Inc` (an element that increments its input by 1) as follows.
 
@@ -292,7 +313,7 @@ class Inc(Element):
   def impl(self):
     self.run_c("int x = inp() + 1; output { out(x); }")
     
-class inc2(CallablePipeline):
+class inc2(CallableSegment):
   def configure(self):
     self.inp = Input(Int)
     self.out = Output(Int)
@@ -305,7 +326,7 @@ inc2('inc2', process='simple_math')
 The function `inc2` can be used in any C program like a normal C function. To use the function, users have to including `#include "simple_math.h"`. Notice that you can choose the name of the header to include.
 
 ##### Compile and Run 1
-Similar to normal pipelines, we can compile callable pipelines using the same commands:
+Similar to normal segments, we can compile callable segments using the same commands:
 ```python
 c = Compiler()
 c.testing = r'''
@@ -314,12 +335,12 @@ printf("%d\n", x);
 '''
 c.generate_code_and_run()
 ```
-Notice, that the main body can call function `inc2`. The compiler generates executable `tmp` similar to how it is done for normal pipelines. This method for compiling and running is good for testing, but not suitable for an actual use because we want to use function `inc2` in any C program not in `tmp.c` where it is defined.
+Notice, that the main body can call function `inc2`. The compiler generates executable `tmp` similar to how it is done for normal segments. This method for compiling and running is good for testing, but not suitable for an actual use because we want to use function `inc2` in any C program not in `tmp.c` where it is defined.
 
 > See `compiler/programs/inc2_function.py` for a working exmaple.
 
 ##### Compile and Run 2
-To compile callable pipelines to be used in any external C program, we write:
+To compile callable segments to be used in any external C program, we write:
 ```python
 c = Compiler()
 c.generate_code_as_header('simple_math')
@@ -337,27 +358,36 @@ The code shows how to use Floem to compile an external C program `simple_math_ex
 ##### External C Program's Initialization
 The external user's application must call the following functions to properly initialize and run the system:
 - `init()` initializes states used by elements.
-- `run_threads()` creates and runs normal pipelines.
+- `run_threads()` creates and runs normal segments.
 
-Note that multiple pipelines can be compiled into one file; the file name is indicated by the parameter `process` when creating a pipeline. Therefore, a process/file can contains both normal and callable pipelines. In such case, it is crucial to call `run_threads()` in order to start running the normal pipelines.
+Note that multiple segments can be compiled into one file; the file name is indicated by the parameter `process` when creating a segment. Therefore, a process/file can contains both normal and callable segments. In such case, it is crucial to call `run_threads()` in order to start running the normal segments.
 
 > See `compiler/programs/simple_math_ext.c` and `compiler/programs/inc2_function_ext.py` for a basic working exmaple.
 > See the main function in`compiler/memcached_real/test_no_steer.c` and the very end of `compiler/memcached_real/test_no_steer.py` for a more complexing exmaple. Do not try to understand the program at this point.
 
 
 ##### Default Return
-If a callable pipeline has a return value, but the pipeline may not produce a return value because one or more elements in the pipeline may not fire its output ports, users have to provide a default return value to be used as the return value when the returning element of the API does not produce the return value. The default return value can be provided by assigning the default value to 
-- the field `self.default_return = val` of the pipeline class, or
-- the parameter `default_return` when instantiating the pipeline `pipeline_class(pipeline_name, default_return=val)`
+If a callable segment has a return value, but the segment may not produce a return 
+value because one or more elements in the segment may not fire its output ports, 
+users have to provide a default return value to be used as the return value when the 
+returning element of the API does not produce the return value. The default return value 
+can be provided by assigning the default value to 
+- the field `self.default_return = val` of the segment class, or
+- the parameter `default_return` when instantiating the segment 
+`segment_class(segment_name, default_return=val)`
 
-> See `compiler/storm/main_nic_dccp_bypass.py` for an exmaple. Search for "inqueue_get(CallablePipeline)". Do not try to understand the program at this point.
+> See `compiler/storm/main_nic_dccp_bypass.py` for an exmaple. Search for "inqueue_get(CallableSegment)". Do not try to understand the program at this point.
 
 
 ### 3.3 run_order
 
-If there are multiple source elements in a pipeline, we have to choose which source element is the starting element of the pipeline, and explicitly create dependency for the other source elements. For example, if we have `a >> b` and `c >> d`, and both `a` and `c` are source elements. We want `a` to be the starting element, and make `c` run after `b`. We can specify this intent using `run_order` as follows:
+If there are multiple source elements in a segment, we have to choose which source 
+element is the starting element of the segment, and explicitly create dependency for 
+the other source elements. For example, if we have `a >> b` and `c >> d`, and both 
+`a` and `c` are source elements. We want `a` to be the starting element, and make 
+`c` run after `b`. We can specify this intent using `run_order` as follows:
 ```python
-class P(Pipeline):
+class P(Segment):
   def impl(self):
      a >> b
      c >> d
@@ -370,17 +400,25 @@ run_order([l1, l2, ..., ln], c)  # run c after either l1, l2, .., or ln
 ```
 
 ### 3.4 Mapping to Device
-By default, a pipeline is executed by one dedicated thread on a CPU. We can map a pipeline to a Cavium NIC by assinging the parameter `device` of the pipeline to `target.CAVIUM`: `pipeline_class(pipeline_name, device=target.CAVIUM)`
+By default, a segment is executed by one dedicated thread on a CPU. We can map a segment 
+to a Cavium NIC by assinging the parameter `device` of the segment to `target.CAVIUM`: 
+`segment_class(segment_name, device=target.CAVIUM)`
 
 ### 3.5 Mapping to Multiple Threads
-By default, a pipeline is executed by one dedicated thread on a CPU, or one dedicated core on a Cavium NIC. We can run a pipeline on mutiple threads/cores in parallel by assigning parameter `cores` to a list of thread/core ids. For example, `pipeline_class(pipeline_name, device=target.CAVIUM, cores=[0,1,2,3])` runs this pipeline using cores 0--3 on Cavium.
+By default, a segment is executed by one dedicated thread on a CPU, or one dedicated 
+core on a Cavium NIC. We can run a segment on mutiple threads/cores in parallel by 
+assigning parameter `cores` to a list of thread/core ids. For example, 
+`segment_class(segment_name, device=target.CAVIUM, cores=[0,1,2,3])` runs this segment 
+using cores 0--3 on Cavium.
 
-On CPU, we can use an unlimited number of threads. Floem relies on an OS to schedule which threads to run. On Cavium, valid core ids are 0 to 11, as there are 12 cores on Cavium. Assigning the same core id to multiple pipelines leads to undefined behaviors.
+On CPU, we can use an unlimited number of threads. Floem relies on an OS to schedule which threads to run. On Cavium, valid core ids are 0 to 11, as there are 12 cores on Cavium. 
+Assigning the same core id to multiple segments leads to undefined behaviors.
 
 ##### core_id
-Often, we need to determine which physical queue instance to enqueue/dequeue based on the core/thread id. To facilitate this, a pipeline can access its core id via `self.core_id`. For example, 
+Often, we need to determine which physical queue instance to enqueue/dequeue based on the core/thread id. 
+To facilitate this, a segment can access its core id via `self.core_id`. For example, 
 ```python
-class P(Pineline):
+class P(Segment):
     self impl(self):
         self.core_id >> Display()
         
@@ -410,7 +448,7 @@ tracker2 = Tracker(init=[10,42])
 # ^ use this init: total = 10, last = 42
 ```
 
-### 4.1 Persistent State
+### 4.1 Persistent State (Shared State)
 
 State can be used as a global variable shared between multiple elements and persistent across all packets. Users must explicitly define which states an element can access to. Note that an element can access more than one states.
 
@@ -442,10 +480,13 @@ Notice that `o1` and `o2` share the same tracker state, so they both contribute 
 
 ### 4.2 Flow and Per-Packet State
 
-Floem provides a per-packet state abstraction that a packet and its metadata can be accessed anywhere for the same *flow*. With this abstraction, programmers can access the per-packet state in any element without explicitly passing the per-packet state around. *Flow* is a set of pipelines that connect to each other via (queues)[#Multi-Queue].
+Floem provides a per-packet state abstraction that a packet and its metadata can be accessed anywhere for the same *flow*. With this abstraction, programmers can access the per-packet state in any element without explicitly passing the per-packet state around. 
+*Flow* is a set of segments that connect to each other via (queues)[#Multi-Queue].
 
 
-To use this abstraction, programmers define a flow class, and set the field `state` of the flow class to a per-packet state associated with the flow. The elements and pipelines associated with the flow must be created inside the `impl` method of the flow. 
+To use this abstraction, programmers define a flow class, and set the field `state` of the flow class to a per-packet state associated with the flow. 
+The elements and segments associated with the flow must be created inside the `impl` 
+method of the flow. 
 
 ```python
 class ProtocolBinaryReq(State):
@@ -555,12 +596,12 @@ class Observer(Element):
       output { out(id); }
     ''')
     
-class P_CPU(Pipeline):
+class P_CPU(Segment):
     def impl(self):
         o1 = Observer(states=[tracker1])  # observer element on CPU
         ...
         
-class P_NIC(Pipeline):
+class P_NIC(Segment):
     def impl(self):
         o2 = Observer(states=[tracker1])  # observer element on NIC
         ...
@@ -607,6 +648,11 @@ a >> queue >> b
 
 <a name="Running-on-Cavium"></a>
 # C. Running on Cavium
+
+##### Prerequisite
+**Developers must have source for Cavium LiquidIO's firmware and Cavium SDK.**
+
+
 When compiling an application that runs on both a CPU and a Cavium NIC, Floem will generate:
 - `CAVIUM.c` and `CAVIUM.h` for the NIC
 - one or more executable binaries for the CPU. For example, when compiling `compiler/benchmarks/inqueue.py`, Floem will generate `test_queue` executable for the CPU.

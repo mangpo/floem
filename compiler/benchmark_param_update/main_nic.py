@@ -76,7 +76,7 @@ class main(Flow):
         output { out(); }
                 ''' % ('%', n_cores))
 
-        class nic_rx(Pipeline):
+        class nic_rx(Segment):
             def impl(self):
                 from_net = net.FromNet()
                 to_net = net.ToNet()
@@ -110,7 +110,7 @@ class main(Flow):
         update_param(*pool, *param);
                     ''')
 
-        class run(Pipeline):
+        class run(Segment):
             def impl(self):
                 #Scheduler() >> rx_deq
                 self.core_id >> rx_deq

@@ -36,7 +36,7 @@ class main(Flow):
                 ''' % ('%', n_queues))
 
 
-        class nic_rx(Pipeline):
+        class nic_rx(Segment):
             def impl(self):
                 MakeKey() >> rx_enq.inp[0]
 
@@ -75,7 +75,7 @@ class main(Flow):
     }
                 ''')
 
-        class run(Pipeline):
+        class run(Segment):
             def impl(self):
                 self.core_id >> rx_deq
                 rx_deq.out[0] >> Display()

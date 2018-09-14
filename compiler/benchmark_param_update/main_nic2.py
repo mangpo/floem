@@ -108,12 +108,12 @@ class main(Flow):
         output { out(size); }
                 ''')
 
-        class run(Pipeline):
+        class run(Segment):
             def impl(self):
                 self.core_id >> rx_deq
                 rx_deq.out[0] >> Update()
 
-        class nic_rx(Pipeline):
+        class nic_rx(Segment):
             def impl(self):
                 from_net = net.FromNet()
                 to_net1 = net.ToNet(configure=["from_net"])

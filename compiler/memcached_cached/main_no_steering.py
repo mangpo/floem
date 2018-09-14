@@ -707,7 +707,7 @@ state.qid = cvmx_get_core_num();
         tx_deq = TxDeq()
 
         ######################## CPU #######################
-        class process_eq(CallablePipeline):
+        class process_eq(CallableSegment):
             def configure(self):
                 self.inp = Input(Int)
 
@@ -741,7 +741,7 @@ state.qid = cvmx_get_core_num();
                 tx_enq.done >> main.Unref() >> main.Free()
 
         ####################### NIC Tx #######################
-        class nic_tx(Pipeline):
+        class nic_tx(Segment):
             def impl(self):
                 scheduler = main.Scheduler()
                 to_net = net.ToNet('to_net', configure=['from_net'])
@@ -754,7 +754,7 @@ state.qid = cvmx_get_core_num();
 
 
         ######################## NIC Rx #######################
-        class process_one_pkt(Pipeline):
+        class process_one_pkt(Segment):
             def impl(self):
                 from_net = net.FromNet('from_net')
                 from_net_free = net.FromNetFree('from_net_free')
@@ -812,7 +812,7 @@ state.qid = cvmx_get_core_num();
         nic_tx('nic_tx', device=target.CAVIUM, cores=[n_cores])
         process_eq('process_eq', process='app')
 
-class maintenance(Pipeline):
+class maintenance(Segment):
     def impl(self):
 
         class Schedule(Element):
