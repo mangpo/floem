@@ -1,7 +1,9 @@
 from dsl import *
 import common, graph_ir, library
 
-
+'''
+state: per-packet state
+'''
 def cache_default(name, key_type, val_type,
                   state=False, key_name=None, val_names=None, keylen_name=None, vallen_name=None,
                   hash_value=False, var_size=False, update_func='f',
@@ -140,10 +142,10 @@ def cache_default(name, key_type, val_type,
                 if state:
                     input_src = "%s key = state->%s;" % (key_type, key_name)
                     output_src = ' '.join(["state->%s = %s;" % (s, v) for s, v in zip(val_names, return_vals)]) + \
-                                 " output switch { case it: hit(); cass success: miss(); else: fail(); }"
+                                 " output switch { case it: hit(); case success: miss(); else: fail(); }"
                 else:
                     input_src = "(%s key) = inp();" % (key_type)
-                    output_src = "output switch { case it: hit(key, %s); else: miss(key); }" % ','.join(return_vals)
+                    output_src = "output switch { case it: hit(key, %s); case true: miss(key); else: fail(); }" % ','.join(return_vals)
 
                 self.run_c(r'''
                 %s
@@ -163,8 +165,9 @@ def cache_default(name, key_type, val_type,
                                  " output switch { case it: hit(); case success: miss(); else: fail(); }"
                 else:
                     input_src = "(%s key, int keylen) = inp();" % (key_type)
-                    output_src = "output switch { case it: hit(key, keylen, it->last_vallen, %s); else: miss(key, keylen); }" \
-                                 % ','.join(return_vals)
+                    output_src = "output switch { case it: hit(key, keylen, it->last_vallen, %s); case true: miss(key, keylen);" \
+                                 % ','.join(return_vals) \
+                                 + " else: fail(); }"
 
                 self.run_c(r'''
                 %s
@@ -618,6 +621,31 @@ def cache_default(name, key_type, val_type,
                 output { out(key, %s %s); release(); }
                 ''' % (key_type, extra_args, ','.join(type_vals), extra_return, ','.join(return_vals)))
 
+    class ForkRelKeyOnly(Element):
+        def configure(self):
+            self.inp = Input(*key_params)
+            self.out = Output(*key_params)
+            self.release = Output()
+            self.outports_order = ['out', 'release']
+
+        def impl(self):
+            if state:
+                self.run_c(r'''
+                output { out(); release(); }
+                ''')
+
+            else:
+                if var_size:
+                    self.run_c(r'''
+                    (%s key, int keylen) = inp();
+                    output { out(key, keylen); release(); }
+                    ''' % (key_type))
+                else:
+                    self.run_c(r'''
+                    (%s key) = inp();
+                    output { out(key); release(); }
+                    ''' % (key_type))
+
     class Fork(Element):
         def configure(self):
             self.inp = Input(*kv_params)
@@ -686,7 +714,7 @@ def cache_default(name, key_type, val_type,
         def impl(self):
             cache_get = CacheGet()
             cache_set_get = CacheSetGet()
-            fork_rel = ForkRel()
+            fork_rel = ForkRelKeyOnly()
 
             self.inp >> fork_rel >> cache_get
             fork_rel.release >> self.enq_out

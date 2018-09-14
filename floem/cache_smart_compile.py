@@ -434,12 +434,22 @@ def cache_pass(g):
                         g.disconnect(enq.name, inst_name, 'done', port_name)
 
                     in_queue.enq_output = False
+                    enq_out_get = enq_out
+                    enq_out_set = enq_out
+
 
         if enq_out is None:
-            drop_inst = Drop(create=False).instance
-            g.newElementInstance(drop_inst.element, drop_inst.name, drop_inst.args)
-            g.set_thread(drop_inst.name, prev.thread)
-            enq_out = (drop_inst.name, 'inp')
+            if get_start:
+                drop_inst_get = Drop(create=False).instance
+                g.newElementInstance(drop_inst_get.element, drop_inst_get.name, drop_inst_get.args)
+                g.set_thread(drop_inst_get.name, get_start.thread)
+                enq_out_get = (drop_inst_get.name, 'inp')
+
+            if set_start:
+                drop_inst_set = Drop(create=False).instance
+                g.newElementInstance(drop_inst_set.element, drop_inst_set.name, drop_inst_set.args)
+                g.set_thread(drop_inst_set.name, set_start.thread)
+                enq_out_set = (drop_inst_set.name, 'inp')
 
 
         # Remove connection at set_end for write-back policy
@@ -486,12 +496,12 @@ def cache_pass(g):
 
         # Graph transformation
         if get_start:
-            transform_get(g, get_start, get_end, get_composite, set_start, Drop, cache_high.write_policy, enq_out)
+            transform_get(g, get_start, get_end, get_composite, set_start, Drop, cache_high.write_policy, enq_out_get)
         if set_start:
             if cache_high.write_policy==graph_ir.Cache.write_back:
-                transform_set_write_back(g, set_start, set_end, set_composite, enq_out)
+                transform_set_write_back(g, set_start, set_end, set_composite, enq_out_set)
             else:
-                transform_set_write_through(g, set_start, set_end, set_composite, enq_out)
+                transform_set_write_through(g, set_start, set_end, set_composite, enq_out_set)
 
         print "------------------------- adding cache --------------------------"
         g.print_graphviz()
