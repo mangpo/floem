@@ -28,7 +28,7 @@ E. [Library of C Functions](doc/library-of-c-functions.md)
 - GCC
 - Python 2
 
-For a CPU-only system, you require [DPDK](http://dpdk.org/) to be installed. Set variable `dpdk_dir` in `compiler/target.py` to DPDK directory's path. If you do not intent to use DPDK, leave the variable as is.
+For a CPU-only system, you require [DPDK](http://dpdk.org/) to be installed. Set variable `dpdk_dir` in `floem/target.py` to DPDK directory's path. If you do not intent to use DPDK, leave the variable as is.
 
 For a system with a Cavium LiquidIO NIC, you require Cavium SDK, source and binary for 
 LiquidIO driver and firmware. Copy all files in `include_cavium` directory of 
@@ -43,7 +43,7 @@ export PYTHONPATH=/path/to/repo/compiler
 ```
 
 ### Testing
-Run `compiler/programs/hello.py`. It should print out a bunch of "hello world" before stopping. You should find `tmp` executable binary in `compiler/programs/`. Try running `tmp` via commandline. It should keep printing "hello world" forever.
+Run `floem/programs/hello.py`. It should print out a bunch of "hello world" before stopping. You should find `tmp` executable binary in `floem/programs/`. Try running `tmp` via commandline. It should keep printing "hello world" forever.
 
 ### Import
 
@@ -264,7 +264,7 @@ Under the hood,
 
 All the generated files remain after the compilation process is done. Therefore, `tmp` can be executed later using command line.
 
-> See `compiler/programs/hello.py` for a working exmaple.
+> See `floem/programs/hello.py` for a working exmaple.
 
 ##### Dependencies
 
@@ -280,7 +280,7 @@ If the C implemenations of elements require external object files, we can set th
 c.depend = ['hello']
 ```
 The compiler will first compile each C program in `c.depend` to an object file, and then compile `tmp.c` with all the object files.
-> See `compiler/programs/hello_depend.py` for a working exmaple.
+> See `floem/programs/hello_depend.py` for a working exmaple.
 
 ##### Testing
 We can provide a list of expected outputs from the program as an argument to `generate_code_and_run(expect)`. For example:
@@ -340,7 +340,7 @@ c.generate_code_and_run()
 ```
 Notice, that the main body can call function `inc2`. The compiler generates executable `tmp` similar to how it is done for normal segments. This method for compiling and running is good for testing, but not suitable for an actual use because we want to use function `inc2` in any C program not in `tmp.c` where it is defined.
 
-> See `compiler/programs/inc2_function.py` for a working exmaple.
+> See `floem/programs/inc2_function.py` for a working exmaple.
 
 ##### Compile and Run 2
 To compile callable segments to be used in any external C program, we write:
@@ -356,7 +356,7 @@ The code shows how to use Floem to compile an external C program `simple_math_ex
 3. GCC compiles the C program given to `c.compile_and_run` with the object files to generate an executable binary. In this case, it generates binary `simple_math_ext` from `simple_math_ext.c` and `simple_math.o`. 
 4. Finally, `simple_math_ext` is executed.
 
-> See `compiler/programs/inc2_function_ext.py` for a working exmaple.
+> See `floem/programs/inc2_function_ext.py` for a working exmaple.
 
 ##### External C Program's Initialization
 The external user's application must call the following functions to properly initialize and run the system:
@@ -365,8 +365,8 @@ The external user's application must call the following functions to properly in
 
 Note that multiple segments can be compiled into one file; the file name is indicated by the parameter `process` when creating a segment. Therefore, a process/file can contains both normal and callable segments. In such case, it is crucial to call `run_threads()` in order to start running the normal segments.
 
-> See `compiler/programs/simple_math_ext.c` and `compiler/programs/inc2_function_ext.py` for a basic working exmaple.
-> See the main function in`compiler/memcached_real/test_no_steer.c` and the very end of `compiler/memcached_real/test_no_steer.py` for a more complexing exmaple. Do not try to understand the program at this point.
+> See `floem/programs/simple_math_ext.c` and `floem/programs/inc2_function_ext.py` for a basic working exmaple.
+> See the main function in`apps/memcached_cpu_only/test_no_steer.c` and the very end of `apps/memcached_cpu_only/test_no_steer.py` for a more complexing exmaple. Do not try to understand the program at this point.
 
 
 ##### Default Return
@@ -379,7 +379,7 @@ can be provided by assigning the default value to
 - the parameter `default_return` when instantiating the segment 
 `segment_class(segment_name, default_return=val)`
 
-> See `compiler/storm/main_nic_dccp_bypass.py` for an exmaple. Search for "inqueue_get(CallableSegment)". Do not try to understand the program at this point.
+> See `apps/storm/main_dccp_nic_bypass.py` for an exmaple. Search for "inqueue_get(CallableSegment)". Do not try to understand the program at this point.
 
 
 ### 3.3 run_order
@@ -536,7 +536,7 @@ class Main(Flow):             # define a flow
     ...
 ```
 
-> See `compiler/memcached_real/test_no_steer.py` as a working example.
+> See `apps/memcached_cpu_only/test_no_steer.py` as a working example.
 
 ### 4.3 Special fields: layout, defined, packed
 - `layout` By default, the defined fields in a state is laid out in an artitrary order in a struct. To control the order, we must explicitly assign the `layout` field of the state. 
@@ -617,7 +617,7 @@ Note that if `impl_cavium` method is unimplementated, Floem uses `impl` method t
 ### 5.2 Shared memory region
 Floem provides another method for sharing a memory region between a CPU and a NIC or between different processes on a CPU without defining state. `MemoryRegion(<name>, <size_in_bytes>)` allocates a memory on host memory. `<name>`can be accessed by any element. For elements on a CPU, `<name>` is a local pointer to the shared region. For elements on a Cavium NIC, `<name>` is a physical address of the shared region, so we must use DMA operations to access the region. `<name>` can also be used in an external C program that includes the header filed generated by Floem.
 
-> See `compiler/programas_perpacket_state/queue_shared_pointer.py` for a working example. In this example, two external C programs (queue_shared_p1_main.c and queue_shared_p2_main.c) running in separate processes access the shared memory region called *data_region* created in Floem.
+> See `floem/programs_perpacket_state/queue_shared_pointer.py` for a working example. In this example, two external C programs (queue_shared_p1_main.c and queue_shared_p2_main.c) running in separate processes access the shared memory region called *data_region* created in Floem.
 
 <a name="Composite-Element"></a>
 ## 6. Composite Element
@@ -658,7 +658,7 @@ a >> queue >> b
 
 When compiling an application that runs on both a CPU and a Cavium NIC, Floem will generate:
 - `CAVIUM.c` and `CAVIUM.h` for the NIC
-- one or more executable binaries for the CPU. For example, when compiling `compiler/benchmarks/inqueue.py`, Floem will generate `test_queue` executable for the CPU.
+- one or more executable binaries for the CPU. For example, when compiling `apps/benchmarks_simple/inqueue.py`, Floem will generate `test_queue` executable for the CPU.
 
 To run the application,
 1. Run the CPU executable if there is one. It should print out `physical address = <address>`. 
