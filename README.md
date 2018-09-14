@@ -673,7 +673,7 @@ sudo rmmod liquidio.ko
 sudo insmod bin/liquid.ko
 ```
 Make sure that the CPU executable is running (if there is one) before running the last command. 
-5. Finally, we should set up an IP address for the ethernet port that the NIC is connected to.
+5. Finally, we should set up an IP address for the ethernet port that the Cavium NIC is connected to. For example,
 ```
 sudo ifconfig eth2 10.3.0.35
 ```
@@ -692,7 +692,9 @@ OBJS =  $(OBJ_DIR)/cvmcs-nic-main.o   \
 and add `xxx.o` to the list. Note that the name `xxx` must match your C file.
 
 ##### Queue Management Runtime
-- By default, Floem uses one Cavium LiquidIO core (core 11) to manage the runtime. 
-- To use more than one core for runtime, change `#define RUNTIME_CORES` in `liquidio-linux-driver-fwsrc-1.6.1_rc2/octeon/se/apps/nic/floem-util.h` to the desired number N. Floem will use the last N cores to manage the runtime (i.e. cores 11, 10, .., 12-N).
+- Set the number of Cavium cores to run the runtime manager threads by changing
+  `#define RUNTIME_CORES` in `liquidio-linux-driver-fwsrc-1.6.1_rc2/octeon/se/apps/nic/floem-util.h` to the desired number N.
+  Floem will use the last N cores to manage the runtime (i.e. cores 11, 10, .., 12-N). 12-N cores will be used to run
+  the NIC worker threads. N is usually set to 1-4.
 - Instead of using dedicated cores to manage the runtime, the queue managment can also be performed by the cores that use the queues. To use this setting, comment out `#define RUNTIME` in `floem-util.h`. `RUNTIME_CORES` is ignored when `RUNTIME` is not defined.
 
