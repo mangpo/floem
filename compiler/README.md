@@ -613,7 +613,7 @@ When compiling an application that runs on both a CPU and a Cavium NIC, Floem wi
 
 To run the application,
 1. Run the CPU executable if there is one. It should print out `physical address = <address>`. 
-2. Replace `STATIC_ADDRESS_HERE` in `CAVIUM.c` with `<address>`.
+2. Replace `STATIC_ADDRESS_HERE` in `CAVIUM.c` with `<address>`. This is the host physical address for NIC-CPU communications.
 1. Copy `CAVIUM.c` and `CAVIUM.h` to `LiquidIOII-Floem/liquidio-linux-driver-fwsrc-1.6.1_rc2/octeon/se/apps/nic` (the other [repository](https://gitlab.cs.washington.edu/mangpo/LiquidIOII-UseCase)). 
 2. Make and install LiquidIO's driver and firmware using the following commands:
 ```
