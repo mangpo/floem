@@ -1,6 +1,4 @@
 from floem import *
-from compiler import Compiler
-import net, cache_smart, queue_smart, library
 
 n_cores = 1
 nic_rx_threads = 10

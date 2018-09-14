@@ -1,37 +1,8 @@
 from floem import *
 
-n_cores = 4
-nic_rx_threads = 2
-nic_tx_threads = 3
-
-class protocol_binary_request_header_request(State):
-    magic = Field(Uint(8))
-    opcode = Field(Uint(8))
-    keylen = Field(Uint(16))
-    extlen = Field(Uint(8))
-    datatype = Field(Uint(8))
-    status = Field(Uint(16))
-    bodylen = Field(Uint(32))
-    opaque = Field(Uint(32))
-    cas = Field(Uint(64))
-
-    # Tell compiler not to generate this struct because it's already declared in some other header file.
-    def init(self): self.declare = False
-
-class protocol_binary_request_header(State):
-    request = Field(protocol_binary_request_header_request)
-
-    def init(self): self.declare = False
-
-class iokvs_message(State):
-    ether = Field('struct ether_hdr')
-    ipv4 = Field('struct ipv4_hdr')
-    dup = Field('struct udp_hdr')
-    mcudp = Field('memcached_udp_header')
-    mcr = Field(protocol_binary_request_header)
-    payload = Field(Array(Uint(8)))
-
-    def init(self): self.declare = False
+n_cores = 1
+nic_rx_threads = 5
+nic_tx_threads = 2
 
 class item(State):
     next = Field('struct _item')
@@ -44,34 +15,37 @@ class item(State):
     def init(self): self.declare = False
 
 class MyState(State):
-    pkt = Field(Pointer(iokvs_message))
+    pkt = Field('iokvs_message*', size='state.size')
     pkt_buff = Field('void*')
-    it = Field(Pointer(item), shared='data_region')
-    key = Field('void*', size='state.pkt->mcr.request.keylen')
+    it = Field(Pointer(item))
+    it_addr = Field(Uint(64))
     hash = Field(Uint(32))
     segfull = Field(Uint(64))
     segbase = Field(Uint(64))
+    segaddr = Field(Uint(64))
     seglen = Field(Uint(64))
     qid = Field(Uint(16))
     vallen = Field(Uint(32))
-    src_mac = Field('struct ether_addr')
-    dst_mac = Field('struct ether_addr')
-    src_ip = Field(Uint(32))
-    src_port = Field(Uint(16))
+    keylen = Field(Uint(16))
+    size = Field(SizeT)
+    resp_size = Field(SizeT)
+    resp = Field('iokvs_message*', size='state.resp_size')  # TODO: make sure vallen is set
+
 
 class ItemAllocators(State):
     ia = Field(Array('struct item_allocator*', n_cores))
 
 class segment(State):
     segbase = Field(Uint(64))
+    segaddr = Field(Uint(64))
     seglen = Field(Uint(64))
     offset = Field(Uint(64))
 
 class segment_holders(State):
     segments = Field(Array(segment, 16))
-    head = Field(Int)
-    tail = Field(Int)
-    len = Field(Int)
+    head = Field(Uint(32))
+    tail = Field(Uint(32))
+    len = Field(Uint(32))
     lock = Field('lock_t')
 
     def init(self):
@@ -92,11 +66,7 @@ class main(Flow):
 iokvs_message* m = (iokvs_message*) pkt;
 state.pkt = m;
 state.pkt_buff = buff;
-state.src_mac = m->ether.s_addr;
-state.dst_mac = m->ether.d_addr;
-state.src_ip = m->ipv4.src_addr;
-state.src_port = m->udp.src_port;
-
+state.size = size;
 output { out(); }
             ''')
 
@@ -126,10 +96,11 @@ iokvs_message* m = (iokvs_message*) pkt;
 
 int type; // 0 = normal, 1 = slow, 2 = drop
 
-if (m->ether.ether_type == htons(ETHER_TYPE_IPv4) &&
-    m->ipv4.next_proto_id == 17 &&
-    m->ipv4.dst_addr == settings.localip &&
-    m->udp.dst_port == htons(11211) &&
+if (m->ether.type == htons(ETHERTYPE_IPv4) &&
+    m->ipv4._proto == 17 &&
+    memcmp(m->ipv4.dest.addr, settings.localip.addr, sizeof(struct ip_addr)) == 0 &&
+    //m->ipv4.dest == settings.localip &&
+    m->udp.dest_port == htons(11211) &&
     msglen >= sizeof(iokvs_message))
 {
     uint32_t blen = m->mcr.request.bodylen;
@@ -170,8 +141,9 @@ output switch {
 
         def impl(self):
             self.run_c(r'''
-uint8_t cmd = state.pkt->mcr.request.opcode;
-//printf("receive: %d\n", cmd);
+iokvs_message* pkt = state.pkt;
+uint8_t cmd = pkt->mcr.request.opcode;
+//printf("classify: %d\n", cmd);
 
 output switch{
   case (cmd == PROTOCOL_BINARY_CMD_GET): out_get();
@@ -183,7 +155,6 @@ output switch{
     class GetKey(ElementOneInOut):
         def impl(self):
             self.run_c(r'''
-state.key = state.pkt->payload + state.pkt->mcr.request.extlen;
 output { out(); }''')
 
     class GetCore(ElementOneInOut):
@@ -191,15 +162,20 @@ output { out(); }''')
             self.run_c(r'''
 int core = state.hash %s %d;;
 state.qid = core;
-//printf("hash = %s, core = %s\n", state.hash, core);
-            output { out(); }''' % ('%', n_cores, '%d', '%d'))
+#ifdef DEBUG
+iokvs_message* pkt = state.pkt;
+printf("hash = %s, keylen = %s, core = %s\n", pkt->mcr.request.keylen, state.hash, core);
+#endif
+            output { out(); }''' % ('%', n_cores, '%d', '%d', '%d'))
 
     ######################## hash ########################
 
     class JenkinsHash(ElementOneInOut):
         def impl(self):
             self.run_c(r'''
-state.hash = jenkins_hash(state.key, state.pkt->mcr.request.keylen);
+iokvs_message* pkt = state.pkt;
+void* key = pkt->payload + pkt->mcr.request.extlen;
+state.hash = jenkins_hash(key, pkt->mcr.request.keylen);
 output { out(); }
             ''')
 
@@ -211,16 +187,23 @@ output { out(); }
 
         def impl(self):
             self.run_c(r'''
-item* it = hasht_get(state.key, state.pkt->mcr.request.keylen, state.hash);
-//printf("hash get\n");
+iokvs_message* pkt = state.pkt;
+void* key = pkt->payload + pkt->mcr.request.extlen;
+item* it = hasht_get(key, htons(pkt->mcr.request.keylen), state.hash);
+#ifdef DEBUG
+            printf("hash get: keylen = %d, hash = %d\n", htons(pkt->mcr.request.keylen), state.hash);
+#endif
 state.it = it;
+if(it) state.it_addr = it->addr;
 output switch { case it: out(); else: null(); }
             ''')
 
     class HashPut(ElementOneInOut):
         def impl(self):
             self.run_c(r'''
-//printf("hash put\n");
+#ifdef DEBUG
+printf("hash put: state.it = %p\n", state.it);
+#endif
 hasht_put(state.it, NULL);
 output { out(); }
             ''')
@@ -237,18 +220,32 @@ output { out(); }
 
         def impl(self):
             self.run_c(r'''
-int core_id = inp();
-int n_cores = %d;
-int mod = %d;
+    size_t core_id = inp();
+    size_t n_cores = %d;
+    size_t mod = %d;
 
-static __thread int core = -1;
-if(core == -1) core = (core_id * mod)/%d;
+    static __thread int core = -1;
+    if(core == -1) core = (core_id * mod)/%d;
 
-core = (core + 1) %s mod;
-output switch {
-  case(core < n_cores): out(core);
-  else: log(0);
-  }''' % (n_cores, n_cores+1, nic_tx_threads, '%'))
+    core = (core + 1) %s mod;
+    output switch {
+      case((size_t) core < n_cores): out(core);
+      else: log(0);
+      }''' % (n_cores, n_cores + 1, nic_tx_threads, '%'))
+
+
+    class Malloc(Element):
+        def configure(self):
+            self.inp = Input(SizeT)
+            self.out = Output(SizeT, 'void*', 'void*')
+
+        def impl(self):
+            self.run_c(r'''
+    size_t size = inp();
+    void* p = malloc(size);
+    output { out(size, p, NULL); }
+            ''')
+
 
     class SizeGetResp(Element):
         def configure(self):
@@ -257,43 +254,48 @@ output switch {
 
         def impl(self):
             self.run_c(r'''
-//printf("size get\n");
     size_t msglen = sizeof(iokvs_message) + 4 + state.it->vallen;
+            //printf("size get: vallen = %d, size = %ld\n", state.it->vallen, msglen);
+    state.resp_size = msglen;
     state.vallen = state.it->vallen;
+    state.keylen = state.it->keylen;
+    state.it_addr;  // to make state.addr live.
     output { out(msglen); }
             ''')
 
         def impl_cavium(self):
             self.run_c(r'''
-    uint32_t* vallen
-    dma_read(&state.it->vallen, sizeof(uint32_t), (void**) &vallen);
-    size_t msglen = sizeof(iokvs_message) + 4 + *vallen;
-    state.vallen = *vallen;
-    dma_free(vallen);
+    item* it;
+    dma_read(state.it_addr, sizeof(item), (void**) &it);
+    state.keylen = nic_htons(it->keylen);
+    state.vallen = nic_htonl(it->vallen);
+    dma_free(it);
+    size_t msglen = sizeof(iokvs_message) + 4 + state.vallen;
+
     output { out(msglen); }
                         ''')
 
     class PrepareGetResp(Element):
         def configure(self):
             self.inp = Input(SizeT, 'void*', 'void*')
-            self.out = Output(SizeT, Pointer(iokvs_message), 'void*')
+            self.out = Output(SizeT, 'iokvs_message*', 'void*')
 
         def impl(self):
             self.run_c(r'''
         (size_t msglen, void* pkt, void* pkt_buff) = inp();
 
         iokvs_message *m = pkt;
-        memcpy(m, &iokvs_template, sizeof(iokvs_message));
+        memcpy(m, iokvs_template(), sizeof(iokvs_message));
         item* it = state.it;
 
         m->mcr.request.magic = PROTOCOL_BINARY_RES;
         m->mcr.request.opcode = PROTOCOL_BINARY_CMD_GET;
         m->mcr.request.datatype = PROTOCOL_BINARY_RAW_BYTES;
-        m->mcr.request.status = PROTOCOL_BINARY_RESPONSE_SUCCESS;
+        m->mcr.request.status = htons(PROTOCOL_BINARY_RESPONSE_SUCCESS);
 
 m->mcr.request.keylen = 0;
 m->mcr.request.extlen = 4;
-m->mcr.request.bodylen = 4;
+m->mcr.request.bodylen = htonl(4);
 *((uint32_t *)m->payload) = 0;
 m->mcr.request.bodylen = 4 + state.vallen;
 rte_memcpy(m->payload + 4, item_value(it), state.vallen);
@@ -305,8 +307,7 @@ output { out(msglen, m, pkt_buff); }
             self.run_c(r'''
         (size_t msglen, void* pkt, void* pkt_buff) = inp();
         iokvs_message *m = pkt;
-        memcpy(m, &iokvs_template, sizeof(iokvs_message));
-        item* it = state.it;
+        memcpy(m, iokvs_template(), sizeof(iokvs_message));
 
         m->mcr.request.magic = PROTOCOL_BINARY_RES;
         m->mcr.request.opcode = PROTOCOL_BINARY_CMD_GET;
@@ -319,13 +320,13 @@ m->mcr.request.bodylen = 4;
 *((uint32_t *)m->payload) = 0;
 m->mcr.request.bodylen = 4 + state.vallen;
 
-void* value;
-dma_read(item_value(it), state.vallen, (void**) &value);
-rte_memcpy(m->payload + 4, value, state.vallen);
+uint8_t* value;
+dma_read(state.it_addr + sizeof(item) + state.keylen, state.vallen, (void**) &value);
+memcpy(m->payload + 4, value, state.vallen);
 dma_free(value);
 
 output { out(msglen, m, pkt_buff); }
-            ''')
+            ''')  # TODO: hton conversion???
 
     class SizeGetNullResp(Element):
         def configure(self):
@@ -334,30 +335,31 @@ output { out(msglen, m, pkt_buff); }
 
         def impl(self):
             self.run_c(r'''
-//printf("size get null\n");
-            size_t msglen = sizeof(iokvs_message) + 4;
-            output { out(msglen); }
+    size_t msglen = sizeof(iokvs_message) + 4;
+            //printf("size get null: size = %ld\n", msglen);
+    state.resp_size = msglen;
+    output { out(msglen); }
             ''')
 
     class PrepareGetNullResp(Element):
         def configure(self):
             self.inp = Input(SizeT, 'void*', 'void*')
-            self.out = Output(SizeT, Pointer(iokvs_message), 'void*')
+            self.out = Output(SizeT, 'iokvs_message*', 'void*')
 
         def impl(self):
             self.run_c(r'''
             (size_t msglen, void* pkt, void* pkt_buff) = inp();
             iokvs_message *m = pkt;
-            memcpy(m, &iokvs_template, sizeof(iokvs_message));
+            memcpy(m, iokvs_template(), sizeof(iokvs_message));
 
             m->mcr.request.magic = PROTOCOL_BINARY_RES;
             m->mcr.request.opcode = PROTOCOL_BINARY_CMD_GET;
             m->mcr.request.datatype = PROTOCOL_BINARY_RAW_BYTES;
-            m->mcr.request.status = PROTOCOL_BINARY_RESPONSE_KEY_ENOENT;
+            m->mcr.request.status = htons(PROTOCOL_BINARY_RESPONSE_KEY_ENOENT);
 
     m->mcr.request.keylen = 0;
     m->mcr.request.extlen = 4;
-    m->mcr.request.bodylen = 4;
+    m->mcr.request.bodylen = htonl(4);
     *((uint32_t *)m->payload) = 0;
 
     output { out(msglen, m, pkt_buff); }
@@ -370,9 +372,10 @@ output { out(msglen, m, pkt_buff); }
 
         def impl(self):
             self.run_c(r'''
-//printf("size set\n");
-            size_t msglen = sizeof(iokvs_message) + 4;
-            output { out(msglen); }
+    size_t msglen = sizeof(iokvs_message) + 4;
+            //printf("size set: size = %ld\n", msglen);
+    state.resp_size = msglen;
+    output { out(msglen); }
             ''')
 
     class SizePktBuffSetResp(Element):
@@ -391,7 +394,7 @@ output { out(msglen, m, pkt_buff); }
     class PrepareSetResp(Element):
         def configure(self, status):
             self.inp = Input(SizeT, 'void*', 'void*')
-            self.out = Output(SizeT, Pointer(iokvs_message), 'void*')
+            self.out = Output(SizeT, 'iokvs_message*', 'void*')
             self.status = status
             # PROTOCOL_BINARY_RESPONSE_SUCCESS
             # PROTOCOL_BINARY_RESPONSE_ENOMEM
@@ -400,12 +403,12 @@ output { out(msglen, m, pkt_buff); }
             self.run_c(r'''
 (size_t msglen, void* pkt, void* pkt_buff) = inp();
 iokvs_message *m = pkt;
-memcpy(m, &iokvs_template, sizeof(iokvs_message));
+memcpy(m, iokvs_template(), sizeof(iokvs_message));
 
 m->mcr.request.magic = PROTOCOL_BINARY_RES;
 m->mcr.request.opcode = PROTOCOL_BINARY_CMD_SET;
 m->mcr.request.datatype = PROTOCOL_BINARY_RAW_BYTES;
-m->mcr.request.status = %s;
+m->mcr.request.status = htons(%s);
 
 m->mcr.request.keylen = 0;
 m->mcr.request.extlen = 0;
@@ -417,28 +420,45 @@ output { out(msglen, m, pkt_buff); }
 
     class PrepareHeader(Element):
         def configure(self):
-            self.inp = Input(SizeT, Pointer(iokvs_message), "void *")
+            self.inp = Input(SizeT, 'iokvs_message*', "void *")
             self.out = Output(SizeT, "void *", "void *")
 
         def impl(self):
             self.run_c(r'''
         (size_t msglen, iokvs_message* m, void* buff) = inp();
-            
-        m->ether.d_addr = state.src_mac;
-        m->ether.s_addr = state.dst_mac; //settings.localmac;
-        m->ipv4.dst_addr = state.src_ip;
-        m->ipv4.src_addr = settings.localip;
-        m->ipv4.total_length = htons(msglen - offsetof(iokvs_message, ipv4));
-        m->ipv4.time_to_live = 64;
-        m->ipv4.hdr_checksum = 0;
-        //m->ipv4.hdr_checksum = rte_ipv4_cksum(&m->ipv4);  // TODO
+iokvs_message* pkt = state.pkt;
 
-        m->udp.dst_port = state.src_port;
+        struct eth_addr dest, src;
+        dest = pkt->ether.dest;
+        src = pkt->ether.src;
+        m->ether.dest = src;
+        m->ether.src = dest;
+        
+        m->ipv4.dest = pkt->ipv4.src;
+        m->ipv4.src = settings.localip;
+        m->ipv4._len = htons(msglen - offsetof(iokvs_message, ipv4));
+        m->ipv4._ttl = 64;
+        m->ipv4._chksum = 0;
+        //m->ipv4._chksum = rte_ipv4_cksum(&m->ipv4);  // TODO
+
+        m->udp.dest_port = pkt->udp.src_port;
         m->udp.src_port = htons(11211);
-        m->udp.dgram_len = htons(msglen - offsetof(iokvs_message, udp));
-        m->udp.dgram_cksum = 0;
+        m->udp.len = htons(msglen - offsetof(iokvs_message, udp));
+        m->udp.cksum = 0;
 
         output { out(msglen, (void*) m, buff); }
+            ''')
+
+    class SaveResponse(Element):
+        def configure(self):
+            self.inp = Input(SizeT, "void *", "void *")
+            self.out = Output()
+
+        def impl(self):
+            self.run_c(r'''
+    (size_t msglen, void* m, void* buff) = inp();
+    state.resp = m;
+    output { out(); }
             ''')
 
     class HandleArp(Element):
@@ -455,21 +475,24 @@ output { out(msglen, m, pkt_buff); }
     int resp = 0;
 
     /* Currently we're only handling ARP here */
-    if (msg->ether.ether_type == htons(ETHER_TYPE_ARP) &&
-            arp->arp_hrd == htons(ARP_HRD_ETHER) && arp->arp_pln == 4 &&
-            arp->arp_op == htons(ARP_OP_REQUEST) && arp->arp_hln == 6 &&
-            arp->arp_data.arp_tip == settings.localip)
+    if (msg->ether.type == htons(ETHERTYPE_ARP) &&
+            arp->arp_hrd == htons(ARPHRD_ETHER) && arp->arp_pln == 4 &&
+            arp->arp_op == htons(ARPOP_REQUEST) && arp->arp_hln == 6 &&
+            memcmp(arp->arp_tip.addr, settings.localip.addr, sizeof(struct ip_addr)) == 0
+            //arp->arp_tip == settings.localip
+            )
     {
         printf("Responding to ARP\n");
         resp = 1;
-        struct ether_addr mymac = msg->ether.d_addr;
-        msg->ether.d_addr = msg->ether.s_addr;
-        msg->ether.s_addr = mymac; // TODO
-        arp->arp_op = htons(ARP_OP_REPLY);
-        arp->arp_data.arp_tha = arp->arp_data.arp_sha;
-        arp->arp_data.arp_sha = mymac;
-        arp->arp_data.arp_tip = arp->arp_data.arp_sip;
-        arp->arp_data.arp_sip = settings.localip;
+        struct eth_addr mymac = msg->ether.dest;
+        msg->ether.dest = msg->ether.src;
+        msg->ether.src = mymac; // TODO
+
+        arp->arp_op = htons(ARPOP_REPLY);
+        arp->arp_tha = arp->arp_sha;
+        arp->arp_sha = mymac;
+        arp->arp_tip = arp->arp_sip;
+        arp->arp_sip = settings.localip;
 
         //rte_mbuf_refcnt_update(mbuf, 1);  // TODO
 
@@ -480,10 +503,23 @@ output { out(msglen, m, pkt_buff); }
     }
 
     output switch { 
-      case resp: out(sizeof(struct ether_hdr) + sizeof(struct arp_hdr), pkt, buff); 
+      case resp: out(sizeof(struct eth_hdr) + sizeof(struct arp_hdr), pkt, buff); 
             else: drop(pkt, buff);
     }
             ''')
+
+    class ExtractPkt(Element):
+        def configure(self):
+            self.inp = Input()
+            self.out = Output(SizeT, "void *", "void *")
+
+        def impl(self):
+            self.run_c(r'''
+iokvs_message* resp = state.resp;
+size_t msglen = state.resp_size; //sizeof(iokvs_message) + resp->mcr.request.bodylen;
+
+output { out(msglen, (void*) resp, NULL); }
+            ''')  # TODO: dpdk supports buf = NULL; if buf == NULL: create buffer and copy
 
 
     class PrintMsg(Element):
@@ -495,20 +531,17 @@ output { out(msglen, m, pkt_buff); }
             self.run_c(r'''
 (size_t msglen, void* pkt, void* buff) = inp();
 iokvs_message* m = (iokvs_message*) pkt;
+
+#ifdef DEBUG
 uint8_t *val = m->payload + 4;
 uint8_t opcode = m->mcr.request.opcode;
 
-/*
-static count = 0;
-count++;
-if(count == 10000) {
-count = 0;
 if(opcode == PROTOCOL_BINARY_CMD_GET)
-    printf("GET -- status: %d, len: %d, val:%d\n", m->mcr.request.status, m->mcr.request.bodylen, val[0]);
+    printf("GET -- status: %d, val:%d, len: %d\n", m->mcr.request.status, val[0], m->mcr.request.bodylen);
 else if (opcode == PROTOCOL_BINARY_CMD_SET)
     printf("SET -- status: %d, len: %d\n", m->mcr.request.status, m->mcr.request.bodylen);
-}
-*/
+#endif
+
 output { out(msglen, (void*) m, buff); }
     ''')
 
@@ -539,7 +572,8 @@ this->ia[core] = ia;
 struct segment_header *h = ialloc_nicsegment_alloc(ia);
 //state.qid = core;
 state.qid = 0;
-state.segbase = get_pointer_offset(h->data);
+state.segbase = (uint64_t) h->data;
+state.segaddr = h->addr;
 state.seglen = h->size;
 output { out(); }
             ''')
@@ -563,18 +597,17 @@ if(segment == NULL) {
     printf("Fail to allocate new segment.\n");
     //exit(-1);
 } else {
-    state.segbase = get_pointer_offset(segment->data);
+    state.segbase = segment->data;
+    state.segaddr = segment->addr;
     state.seglen = segment->size;
     state.qid = 0;
-    //printf("New segment: segbase = %p.\n", (void*) get_pointer_offset(segment->data));
-
 }
 output switch { case segment: out(); else: null(); }
-            ''')  # TODO: maybe we should exit if segment = NULL?
+            ''')
 
     segments = segment_holders()
 
-    class AddLogseg(Element):
+    class AddLogseg(Element):  # TODO: concurency version
         this = Persistent(segment_holders)
 
         def configure(self):
@@ -583,12 +616,14 @@ output switch { case segment: out(); else: null(); }
 
         def impl(self):
             self.run_c(r'''
-        qlock_lock(&this->lock);
+        spinlock_lock(&this->lock);
         segment* h = &this->segments[this->tail];
         h->segbase = state.segbase;
+        h->segaddr = state.segaddr;
         h->seglen = state.seglen;
         h->offset = 0;
-        __sync_synchronize();
+        //__sync_synchronize(); // CVMX_SYNCWS for cavium
+        __SYNC;
         this->tail = (this->tail + 1) % this->len;
 
         if(this->head == this->tail) {
@@ -596,14 +631,15 @@ output switch { case segment: out(); else: null(); }
             abort();
         }
 
-            printf("addlog: new->segaddr = %p, cur->segaddr = %p\n", (void*) h->segbase, (void*) this->segments[this->head].segbase);
+        printf("addlog: new->segaddr = %p, cur->segaddr = %p\n", (void*) h->segaddr, (void*) this->segments[this->head].segaddr);
         printf("holder: head = %d, tail = %d\n", this->head, this->tail);
-        qlock_unlock(&this->lock);
+        spinlock_unlock(&this->lock);
+
             ''')
 
     ######################## item ########################
 
-    class GetItem(Element):
+    class GetItem(Element):  # TODO: concurency version
         this = Persistent(segment_holders)
 
         def states(self):
@@ -622,21 +658,21 @@ output switch { case segment: out(); else: null(); }
         uint32_t new = (old + 1) % this->len;
         if(__sync_bool_compare_and_swap(&this->head, old, new)) {
             h = &this->segments[old];
-            printf("h = %p\n", h);
             break;
         }
     }
-
-    size_t totlen = state.pkt->mcr.request.bodylen - state.pkt->mcr.request.extlen;
+    
+iokvs_message* pkt = state.pkt;
+    size_t totlen = pkt->mcr.request.bodylen - pkt->mcr.request.extlen;
 
     uint64_t full = 0;
     item *it = NULL;
     if(h) {
-        it = segment_item_alloc(h->segbase, h->seglen, &h->offset, sizeof(item) + totlen);
+        it = segment_item_alloc(h->segaddr, h->seglen, &h->offset, sizeof(item) + totlen);
 
         if(it == NULL) {
             printf("Segment is full. offset = %dd\n", h->offset);  // including this line will make CPU keep making new segment. Without this line, # of segment will stop under 100.
-            full = (uintptr_t) h->segbase + h->offset;
+            full = h->segaddr + h->offset;
             // when tx queue is backed up, CPU will have high number of segment, but NIC will never get anything back.
             h = NULL;
 
@@ -650,7 +686,7 @@ output switch { case segment: out(); else: null(); }
             }
 
             if(h) {
-                it = segment_item_alloc(h->segbase, h->seglen, &h->offset, sizeof(item) + totlen);
+                it = segment_item_alloc(h->segaddr, h->seglen, &h->offset, sizeof(item) + totlen);
             }
         }
     }
@@ -660,35 +696,98 @@ output switch { case segment: out(); else: null(); }
 
     if(it) {
         it->refcount = 1;
-        uint16_t keylen = state.pkt->mcr.request.keylen;
+        uint16_t keylen = pkt->mcr.request.keylen;
 
-        //    printf("get_item id: %d, keylen: %ld, totlen: %ld, item: %ld\n",
-        //state.pkt->mcr.request.opaque, state.pkt->mcr.request.keylen, totlen, it);
         it->hv = state.hash;
         it->vallen = totlen - keylen;
         it->keylen = keylen;
-        memcpy(item_key(it), state.key, totlen);
+        void* key = pkt->payload + pkt->mcr.request.extlen;
+        memcpy(item_key(it), key, totlen);
         state.it = it;
     }
 
     output switch { case it: out();  else: nothing(); }
-
                 ''')
+
+        def impl_cavium(self):  # TODO: concurrent version -- each thread maintain current segment.
+            self.run_c(r'''
+    static __thread segment* h = NULL;
+    while(h == NULL && this->head != this->tail) {
+        int old = this->head;
+        int new = (old + 1) % this->len;
+        if(cvmx_atomic_compare_and_store32(&this->head, old, new)) {
+            h = &this->segments[old];
+            printf("h = %p\n", h);
+            break;
+        }
+    }
+
+iokvs_message* pkt = state.pkt;
+    size_t totlen = pkt->mcr.request.bodylen - pkt->mcr.request.extlen;
+
+    uint64_t full = 0;
+    uint64_t addr = 0;
+
+    if(h) {
+        addr = segment_item_alloc(h->segaddr, h->seglen, &h->offset, sizeof(item) + totlen);  // TODO: concurrent
+
+        if(addr == 0) {
+            printf("Segment is full. offset = %ld\n", h->offset);  // including this line will make CPU keep making new segment. Without this line, # of segment will stop under 100.
+            full = h->segaddr + h->offset;
+            // when tx queue is backed up, CPU will have high number of segment, but NIC will never get anything back.
+            h = NULL;
+
+            while(this->head != this->tail) {
+                int old = this->head;
+                int new = (old + 1) % this->len;
+                if(cvmx_atomic_compare_and_store32(&this->head, old, new)) {
+                    h = &this->segments[old];
+                    break;
+                }
+            }
+
+            if(h) {
+                addr = segment_item_alloc(h->segaddr, h->seglen, &h->offset, sizeof(item) + totlen);
+            }
+        }
+    }
+
+    state.segfull = full;
+
+    if(addr) {
+        item *it;
+        dma_buf_alloc((void**) &it);
+        //dma_read(addr, sizeof(item), (void**) &it);
+        it->refcount = nic_ntohs(1);
+
+        it->hv = nic_ntohl(state.hash);
+        it->vallen = nic_ntohl(totlen - pkt->mcr.request.keylen);
+        it->keylen = nic_ntohs(pkt->mcr.request.keylen);
+        it->addr = nic_ntohp(addr);
+        void* key = pkt->payload + pkt->mcr.request.extlen;
+        memcpy(item_key(it), key, totlen);
+        dma_write(addr, sizeof(item) + totlen, it, 1);
+        dma_free(it);
+        state.it = (item*) (addr - h->segaddr + h->segbase);
+    }
+
+    output switch { case addr: out();  else: nothing(); }
+            ''')
 
     class GetItemSpec(ElementOneInOut):
         def impl(self):
             self.run_c(r'''
-    size_t totlen = state.pkt->mcr.request.bodylen - state.pkt->mcr.request.extlen;
+    iokvs_message* pkt = state.pkt;
+    size_t totlen = pkt->mcr.request.bodylen - pkt->mcr.request.extlen;
 
     item *it = (item *) malloc(sizeof(item) + totlen);
 
-    //printf("get_item id: %d, keylen: %ld, totlen: %ld, item: %ld\n",
-    //         state.pkt->mcr.request.opaque, state.pkt->mcr.request.keylen, totlen, it);
     it->hv = state.hash;
-    it->vallen = totlen - state.pkt->mcr.request.keylen;
-    it->keylen = state.pkt->mcr.request.keylen;
+    it->vallen = totlen - pkt->mcr.request.keylen;
+    it->keylen = pkt->mcr.request.keylen;
     it->refcount = 1;
-    memcpy(item_key(it), state.key, totlen);
+    void* key = pkt->payload + pkt->mcr.request.extlen;
+    memcpy(item_key(it), key, totlen);
     state.it = it;
 
     output { out(); }
@@ -697,7 +796,10 @@ output switch { case segment: out(); else: null(); }
     class Unref(ElementOneInOut):
         def impl(self):
             self.run_c(r'''
-        if(state.it) item_unref(state.it);
+        if(state.it) { 
+          item_unref(state.it);
+          state.it = NULL;
+        }
         output { out(); }
             ''')
 
@@ -717,6 +819,13 @@ output switch { case segment: out(); else: null(); }
         def impl(self):
             self.run_c("")
 
+    class Free(Element):
+        def configure(self):
+            self.inp = Input()
+
+        def impl(self):
+            self.run_c("free(state.resp);")
+
     class ForwardBool(Element):
         def configure(self):
             self.inp = Input(Bool)
@@ -728,45 +837,85 @@ output switch { case segment: out(); else: null(); }
             output { out(x); }
             ''')
 
+    ########################### Fake net elements ###############################
+    class FromNet(Element):
+        def configure(self):
+            self.out = Output(SizeT, "void *", "void *")  # packet, buffer
+            self.nothing = Output()
 
-    ########################## program #########################
-    # def spec(self):
-    #     class nic(InternalLoop):
-    #         def impl(self):
-    #             from_net = net_real.FromNet('from_net')
-    #             classifier = main.Classifer()
-    #             display = main.PrintMsg()
-    #
-    #             from_net.out >> main.SaveState() >> main.GetKey() >> main.JenkinsHash() >> classifier
-    #             from_net.nothing >> main.Drop()
-    #             # get
-    #             classifier.out_get >> main.HashGet() >> main.PrepareGetResp() >> main.Probe() >> display
-    #             # set
-    #             classifier.out_set >> main.GetItemSpec() >> main.HashPut() >> main.PrepareSetResp() >> main.Probe() \
-    #             >> display
-    #
-    #     nic('nic', process='nic')
+        def impl(self):
+            self.run_c(r'''
+        static uint8_t v = 0;
+        iokvs_message* m = NULL;
+        if(v < 100) {
+            printf("\n");
+            m = random_request(v);
+            v++;
+        }
+
+        output switch {
+            case m != NULL: out(sizeof(iokvs_message) + m->mcr.request.bodylen, m, NULL);
+            case m == NULL: nothing();
+        }
+            ''')
+
+    class FromNetFree(Element):
+        def configure(self):
+            self.inp = Input("void *", "void *")  # packet, buffer
+
+        def impl(self):
+            self.run_c(r'''
+        (void* p, void* buf) = inp();
+        free(p);
+            ''')
+
+    class ToNet(Element):
+        def configure(self):
+            self.inp = Input(SizeT, "void *", "void *")  # size, packet, buffer
+
+        def impl(self):
+            self.run_c(r'''
+        (size_t len, void* p, void* buf) = inp();
+        free(p);
+            ''')
+
+    class NetAlloc(Element):
+        def configure(self):
+            self.inp = Input(SizeT)
+            self.out = Output(SizeT, "void *", "void *")  # packet, buffer
+            self.oom = Output()
+
+        def impl(self):
+            self.run_c(r'''
+        (size_t len) = inp();
+        void *data = malloc(len);
+        output switch {
+            case data != NULL: out(len, data, NULL);
+            else: oom();
+        }
+            ''')
 
     def impl(self):
-        MemoryRegion('data_region', 2 * 1024 * 1024 * 512) #4 * 1024 * 512)
 
         # Queue
-        RxEnq, RxDeq, RxScan = queue_smart.smart_queue("rx_queue", 64, 512, n_cores, 2, enq_blocking=True,
-                                                       enq_atomic=True, enq_output=True)
-        # ^ if enq_blocking = false, need to call item_unref if queue is full on set_request.
-        TxEnq, TxDeq, TxScan = queue_smart.smart_queue("tx_queue", 64, 512, n_cores, 3, enq_blocking=True,
-                                                       deq_atomic=True,
-                                                       clean="enq")  # debug: size = 1 KB, real: size = 64 KB
+        RxEnq, RxDeq, RxScan = queue_smart.smart_queue("rx_queue", entry_size=192, size=512, insts=n_cores,
+                                                       channels=2, enq_blocking=True, enq_atomic=True,
+                                                       enq_output=True)  # enq_blocking=False?
         rx_enq = RxEnq()
         rx_deq = RxDeq()
+
+        TxEnq, TxDeq, TxScan = queue_smart.smart_queue("tx_queue", entry_size=160, size=512, insts=n_cores,
+                                                       channels=1, checksum=True, enq_blocking=True, deq_atomic=True,
+                                                       enq_output=True)
         tx_enq = TxEnq()
         tx_deq = TxDeq()
-        tx_scan = TxScan()
 
-        LogInEnq, LogInDeq, LogInScan = queue_smart.smart_queue("log_in_queue", 32, 256, 1, 1,
-                                                                enq_blocking=True, enq_atomic=True)
-        LogOutEnq, LogOutDeq, LogOutScan = queue_smart.smart_queue("log_out_queue", 32, 256, 1, 1,
-                                                                   enq_blocking=True, deq_atomic=True)
+        LogInEnq, LogInDeq, LogInScan = queue_smart.smart_queue("log_in_queue", entry_size=32, size=256,
+                                                                insts=1, channels=1, enq_blocking=True,
+                                                                enq_atomic=True)
+        LogOutEnq, LogOutDeq, LogOutScan = queue_smart.smart_queue("log_out_queue", entry_size=32, size=256,
+                                                                   insts=1, channels=1, enq_blocking=True,
+                                                                   deq_atomic=True)
         log_in_enq = LogInEnq()
         log_in_deq = LogInDeq()
         log_out_enq = LogOutEnq()
@@ -778,6 +927,11 @@ output switch { case segment: out(); else: null(); }
                 from_net = net.FromNet('from_net')
                 from_net_free = net.FromNetFree('from_net_free')
                 to_net = net.ToNet('to_net', configure=['from_net'])
+
+                #from_net = main.FromNet()
+                #from_net_free = main.FromNetFree()
+                #to_net = main.ToNet()
+
                 classifier = main.Classifer()
                 check_packet = main.CheckPacket()
                 hton1 = net.HTON(configure=['iokvs_message'])
@@ -800,7 +954,7 @@ output switch { case segment: out(); else: null(); }
                 >> main.PrintMsg() >> hton2 >> to_net
 
                 # full
-                filter_full = main.FilterFull()  # TODO: impose order of state.qid assignment: how to make sure that FilterFull doesn't run before rx_enq
+                filter_full = main.FilterFull()
                 get_item.out >> filter_full
                 get_item.nothing >> filter_full
                 filter_full >> log_in_enq.inp[0]
@@ -821,22 +975,23 @@ output switch { case segment: out(); else: null(); }
                 self.inp = Input(Int)
 
             def impl(self):
+                prepare_header = main.PrepareHeader()
+
                 self.inp >> rx_deq
 
                 # get
                 hash_get = main.HashGet()
                 rx_deq.out[0] >> hash_get
-                hash_get.out >> tx_enq.inp[0]
-                hash_get.null >> tx_enq.inp[2]
+                hash_get.out >> main.SizeGetResp() >> main.Malloc() >> main.PrepareGetResp() >> prepare_header
+                hash_get.null >> main.SizeGetNullResp() >> main.Malloc() >> main.PrepareGetNullResp() >> prepare_header
+
                 # set
-                rx_deq.out[1] >> main.HashPut() >> main.Unref() >> tx_enq.inp[1]
+                rx_deq.out[1] >> main.HashPut() >> main.SizeSetResp() >> main.Malloc() \
+                >> main.PrepareSetResp(configure=['PROTOCOL_BINARY_RESPONSE_SUCCESS']) >> prepare_header
 
-                # cleaning tx queue
-                drop = main.Drop()
-                tx_scan.out[0] >> main.Unref() >> drop
+                prepare_header >> main.SaveResponse() >> tx_enq.inp[0]
+                tx_enq.done >> main.Unref() >> main.Free()
 
-                tx_scan.out[1] >> drop
-                tx_scan.out[2] >> drop
 
         class init_segment(CallableSegment):
             def configure(self):
@@ -856,48 +1011,25 @@ output switch { case segment: out(); else: null(); }
         class nic_tx(Segment):
             def impl(self):
                 scheduler = main.Scheduler()
-                to_net = net.ToNet('to_net', configure=['alloc'])
-                net_alloc0 = net.NetAlloc('net_alloc0')
-                net_alloc1 = net.NetAlloc('net_alloc1')
-                net_alloc3 = net.NetAlloc('net_alloc3')
-                prepare_header = main.PrepareHeader()
+                to_net = net.ToNet('to_net', configure=['from_net'])
                 display = main.PrintMsg()
                 hton = net.HTON(configure=['iokvs_message'])
-                drop = main.Drop()
+                extract_pkt = main.ExtractPkt()
 
                 self.core_id >> scheduler >> tx_deq
+                tx_deq.out[0] >> extract_pkt >> display >> hton >> to_net
+
+                # log
                 scheduler.log >> log_out_deq
-
-                # get
-                tx_deq.out[0] >> main.SizeGetResp() >> net_alloc0 >> main.PrepareGetResp() >> prepare_header
-                tx_deq.out[2] >> main.SizeGetNullResp() >> net_alloc3 >> main.PrepareGetNullResp() >> prepare_header
-
-                # set
-                set_response = main.PrepareSetResp(configure=['PROTOCOL_BINARY_RESPONSE_SUCCESS'])
-                tx_deq.out[1] >> main.SizeSetResp() >> net_alloc1 >> set_response >> prepare_header
-
-                # send
-                prepare_header >> display >> hton >> to_net
-
-
-                # free net_alloc
-                net_alloc0.oom >> drop
-                net_alloc1.oom >> drop
-                net_alloc3.oom >> drop
-
-                # full
                 log_out_deq.out[0] >> main.AddLogseg()
 
-        nic_rx('nic_rx', process='dpdk', cores=[nic_tx_threads + i for i in range(nic_rx_threads)])
+        nic_rx('nic_rx', device=target.CAVIUM, cores=[nic_tx_threads + i for i in range(nic_rx_threads)])
         process_eq('process_eq', process='app')
         init_segment('init_segment', process='app')
         create_segment('create_segment', process='app')
-        nic_tx('nic_tx', process='dpdk', cores=range(nic_tx_threads))
+        nic_tx('nic_tx', device=target.CAVIUM, cores=range(nic_tx_threads))
 
 master_process('app')
-
-# NIC: ['jenkins_hash', 'ialloc', 'settings']
-# APP: ['jenkins_hash', 'hashtable', 'ialloc', 'settings']
 
 
 ######################## Run test #######################
@@ -907,10 +1039,10 @@ c.include = r'''
 #include "iokvs.h"
 #include "protocol_binary.h"
 '''
+c.init = r'''
+  settings_init(argv);  // TODO: settings_init must be called before other inits.
+  //ialloc_init();
+  '''
 c.generate_code_as_header()
-c.depend = {"test_app": ['jenkins_hash', 'hashtable', 'ialloc', 'settings', 'app'],
-            "test_nic": ['jenkins_hash', 'hashtable', 'ialloc', 'settings', 'dpdk']}
-c.compile_and_run(["test_app", "test_nic"])
-
-
-# TODO: spec
+c.depend = {"test_app": ['jenkins_hash', 'hashtable', 'ialloc', 'settings', 'app']}
+c.compile_and_run(["test_app"])
