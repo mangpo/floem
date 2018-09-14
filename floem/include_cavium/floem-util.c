@@ -92,6 +92,9 @@ int network_send(size_t len, uint8_t *pkt_ptr, int sending_port) {
   int pko_port, corenum, queue, ret;
   cvmx_buf_ptr_t hw_buffer;
   cvmx_pko_command_word0_t pko_command;
+  
+  sending_port = 2576;
+  //printf("len %ld\n", len);
 
 #ifdef DEBUG_PACKET_SEND
   printf("network_send: p = %p, len = %ld\n", pkt_ptr, len);
