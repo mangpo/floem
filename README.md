@@ -37,9 +37,9 @@ in the LiquidIO firmware's source.
 
 ### Setup
 
-Add the `compiler` directory into your evironment path.
+At the top level of the repo, install Floem local package:
 ```
-export PYTHONPATH=/path/to/repo/compiler
+pip install . --user
 ```
 
 ### Testing

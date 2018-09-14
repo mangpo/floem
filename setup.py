@@ -6,6 +6,6 @@ setup(name='floem',
       url='http://github.com/mangpo/floem',
       author='Phitchaya Mangpo Phothilimthana',
       author_email='mangpo@eecs.berkeley.edu',
-      license='MIT',
+      license='BSD',
       packages=['floem'],
       zip_safe=False)
