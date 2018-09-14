@@ -28,4 +28,9 @@ static inline uint64_t ntohp(uint64_t x) {
 #define CVMX_CACHE_LINE_ALIGNED
 #define CVMX_SHARED
 
+
+#define shared_mm_malloc(x) malloc(x)
+#define shared_mm_free(x) free(x)
+
+
 #endif
