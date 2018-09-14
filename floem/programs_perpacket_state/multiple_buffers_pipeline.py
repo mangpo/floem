@@ -1,5 +1,4 @@
-from dsl import *
-from elements_library import *
+from floem import *
 
 fork = create_element_instance("myfork", [Port("in", ["int"])], [Port("out0", []), Port("out1", [])],
                                  r'''

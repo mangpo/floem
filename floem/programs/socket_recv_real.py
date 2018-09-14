@@ -1,6 +1,4 @@
-from dsl import *
-import net
-from compiler import Compiler
+from floem import *
 
 class DisplayPacket(Element):
     def configure(self):

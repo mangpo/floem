@@ -1,5 +1,4 @@
 from floem import *
-import cache_smart, queue_smart
 
 class Storage(State):
     mem = Field(Array(Int, 100))

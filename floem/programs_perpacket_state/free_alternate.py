@@ -1,4 +1,4 @@
-from dsl import *
+from floem import *
 
 save = create_element_instance("save", [Port("in", ["int"])], [Port("out", [])],
                                    r'''

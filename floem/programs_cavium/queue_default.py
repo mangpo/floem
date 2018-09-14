@@ -1,7 +1,4 @@
-from dsl import *
-from compiler import Compiler
-import target, queue, net, library
-import queue_smart
+from floem import *
 
 MAX_ELEMS = 64
 n_cores = 1

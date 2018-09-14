@@ -1,5 +1,4 @@
-from library import *
-from compiler import Compiler
+from floem import *
 
 Inject = create_inject("inject", "int", 40, "gen_func")
 

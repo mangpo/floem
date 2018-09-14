@@ -1,6 +1,4 @@
-from dsl import *
-import queue, library
-from compiler import Compiler
+from floem import *
 
 n_cores = 2
 

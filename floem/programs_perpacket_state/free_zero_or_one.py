@@ -1,4 +1,4 @@
-from dsl import *
+from floem import *
 
 choose = create_element_instance("choose", [Port("in", ["int"])], [Port("out0", []), Port("out1", [])],
                                    r'''

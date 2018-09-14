@@ -1,6 +1,4 @@
-from dsl import *
-from compiler import Compiler
-import queue
+from floem import *
 
 MAX_ELEMS = 10
 n_cores = 4

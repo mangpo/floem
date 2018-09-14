@@ -1,6 +1,4 @@
-import queue_smart
-from dsl import *
-from compiler import Compiler
+from floem import *
 
 class MyState(State):
     a = Field(Int)

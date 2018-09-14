@@ -1,6 +1,4 @@
-from dsl import *
-from compiler import Compiler
-import target
+from floem import *
 
 class Hello(Element):
     def impl(self):

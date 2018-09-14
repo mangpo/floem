@@ -1,5 +1,4 @@
-from dsl import *
-from compiler import Compiler
+from floem import *
 
 MemoryRegion("region", 10)
 

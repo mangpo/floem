@@ -1,9 +1,6 @@
-from dsl import *
+from floem import *
 import unittest
 import os
-import queue_smart
-import library
-from compiler import Compiler
 
 class Nop(Element):
     def configure(self):

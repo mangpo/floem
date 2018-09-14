@@ -1,5 +1,4 @@
-from library import *
-from compiler import Compiler
+from floem import *
 
 Inject = create_inject("inject", "int", 10, "gen_func")
 Probe = create_probe("probe", "int", 10, "cmp_func")
