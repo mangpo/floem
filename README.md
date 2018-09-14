@@ -691,7 +691,7 @@ OBJS =  $(OBJ_DIR)/cvmcs-nic-main.o   \
 ```
 and add `xxx.o` to the list. Note that the name `xxx` must match your C file.
 
-##### Queue Management Runtime
+##### Data Synchronization Runtime for NIC-CPU Queues
 - Set the number of Cavium cores to run the runtime manager threads by changing
   `#define RUNTIME_CORES` in `liquidio-linux-driver-fwsrc-1.6.1_rc2/octeon/se/apps/nic/floem-util.h` to the desired number N.
   Floem will use the last N cores to manage the runtime (i.e. cores 11, 10, .., 12-N). 12-N cores will be used to run
