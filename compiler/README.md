@@ -30,7 +30,10 @@ E. [Library of C Functions](doc/library-of-c-functions.md)
 
 For a CPU-only system, you require [DPDK](http://dpdk.org/) to be installed. Set variable `dpdk_dir` in `compiler/target.py` to DPDK directory's path. If you do not intent to use DPDK, leave the variable as is.
 
-For a system with a Cavium LiquidIO NIC, you require Cavium SDK and this [repository](https://gitlab.cs.washington.edu/mangpo/LiquidIOII-UseCase), containing source and binary for LiquidIO driver and firmware with Floem runtime.
+For a system with a Cavium LiquidIO NIC, you require Cavium SDK, source and binary for 
+LiquidIO driver and firmware. Copy all files in `include_cavium` directory of 
+this repo to `liquidio-linux-driver-fwsrc-1.6.1_rc2/octeon/se/apps/nic` directory
+in the LiquidIO firmware's source.
 
 ### Setup
 
