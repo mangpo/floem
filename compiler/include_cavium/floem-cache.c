@@ -23,6 +23,7 @@
 #include "floem-util.h"
 #include "floem-cache.h"
 
+
 inline bool citem_key_matches(citem *it, const void *key, int klen)
 {
     return klen == it->keylen && !__builtin_memcmp(it->content, key, klen);
@@ -30,6 +31,8 @@ inline bool citem_key_matches(citem *it, const void *key, int klen)
 
 inline bool citem_hkey_matches(citem *it, const void *key, int klen, uint32_t hv)
 {
+  //printf("hkey_matches: %d %d %d\n", it->hv == hv, klen == it->keylen, !__builtin_memcmp(it->content, key, klen));
+  //printf("hash: %d %d %d %d\n", it->hv, hv, klen, it->keylen);
     return it->hv == hv && citem_key_matches(it, key, klen);
 }
 
@@ -44,14 +47,27 @@ inline void *citem_value(citem *it) {
 
 void cache_init(cache_bucket *buckets, int n)
 {
-    for (int i = 0; i < n; i++) {
-        lock_init(&buckets[i].lock);
-        buckets[i].replace = 0;
-    }
+  int i;
+  for (i = 0; i < n; i++) {
+    lock_init(&buckets[i].lock);
+    buckets[i].replace = 0;
+  }
 }
 
-citem *cache_get(cache_bucket *buckets, int nbuckets, const void *key, int klen, uint32_t hv)
+void cache_info(cache_bucket *buckets, int nbuckets, uint32_t hv, const char* s) {
+  cache_bucket *b = buckets + (hv % nbuckets);
+  citem *it = b->items[0];
+  if(it)
+    printf(">>> cache_info (%s): it = %p, hv = %d, klen = %d, next = %p\n", s, it, it->hv, it->keylen, it->next);
+}
+
+#define TRY 10
+citem *cache_get(cache_bucket *buckets, int nbuckets, const void *key, int klen, uint32_t hv, bool* success)
 {
+#ifdef DEBUG
+    printf("cache_get_begin: key = %d, hash = %d\n", *((int*) key), hv);
+#endif
+
 #ifdef HIT_RATE
     static __thread size_t hit = 0, total = 0;
     total++;
@@ -61,7 +77,28 @@ citem *cache_get(cache_bucket *buckets, int nbuckets, const void *key, int klen,
     size_t i;
 
     cache_bucket *b = buckets + (hv % nbuckets);
+    
+    /*
+    //if(cvmx_spinlock_locked(&b->lock)) {
+    if(cvmx_spinlock_trylock(&b->lock)) { 
+      *success = false;
+      return NULL;
+    }
+    
     lock_lock(&b->lock);
+    *success = true;
+    */
+    
+    int count = 0;
+    while(cvmx_spinlock_trylock(&b->lock)) {
+      count++;
+      if(count == TRY) {
+	*success = false;
+	return NULL;
+      }
+    }
+    *success = true;
+    
 
     for (i = 0; i < BUCKET_NITEMS; i++) {
         if (b->items[i] != NULL && b->hashes[i] == hv) {
@@ -74,9 +111,12 @@ citem *cache_get(cache_bucket *buckets, int nbuckets, const void *key, int klen,
     it = b->items[BUCKET_NITEMS - 1];
     if (it != NULL) {
         it = it->next;
+	/*
+	assert(it == NULL);
         while (it != NULL && !citem_hkey_matches(it, key, klen, hv)) {
             it = it->next;
         }
+	*/
     }
 
 done:
@@ -97,7 +137,7 @@ done:
 }
 
 
-citem *cache_put(cache_bucket *buckets, int nbuckets, citem *nit, bool replace)
+citem *cache_put(cache_bucket *buckets, int nbuckets, citem *nit, bool replace, bool* success)
 {
     citem *it, *prev;
     size_t i, di;
@@ -107,14 +147,34 @@ citem *cache_put(cache_bucket *buckets, int nbuckets, citem *nit, bool replace)
     size_t klen = nit->keylen;
     nit->evicted = 1;
 
-    int *val = citem_value(nit);
 #ifdef DEBUG
+    int *val = citem_value(nit);
     printf("cache_put: hash = %d, key = %d, val = %d, it = %p\n", hv, *((int*) key), *val, nit);
 #endif
 
     cache_bucket *b = buckets + (hv % nbuckets);
-    lock_lock(&b->lock);
+    /*
+    //if(cvmx_spinlock_locked(&b->lock)) {
+    if(cvmx_spinlock_trylock(&b->lock)) { 
+      *success = false;
+      return NULL;
+    }
+
+    //lock_lock(&b->lock);
+    *success = true;
     //printf("lock\n");
+    */
+
+    int count = 0;
+    while(cvmx_spinlock_trylock(&b->lock)) {
+      count++;
+      if(count == TRY) {
+	*success = false;
+	return NULL;
+      }
+    }
+    *success = true;
+    
 
     // Check if we need to replace an existing item
     for (i = 0; i < BUCKET_NITEMS; i++) {
@@ -130,7 +190,7 @@ citem *cache_put(cache_bucket *buckets, int nbuckets, citem *nit, bool replace)
 #ifdef DEBUG
                 printf("free %p\n", it);
 #endif
-                free(it);
+                shared_mm_free(it);
                 nit->bucket = b;
                 return nit;
             }
@@ -143,18 +203,21 @@ citem *cache_put(cache_bucket *buckets, int nbuckets, citem *nit, bool replace)
     if (it != NULL) {
         prev = it;
         it = it->next;
+	/*
+	assert(it == NULL);
+
         while (it != NULL && !citem_hkey_matches(it, key, klen, hv)) {
             prev = it;
             it = it->next;
         }
-
+	*/
         if (it != NULL) {
             nit->next = it->next;
             prev->next = nit;
 #ifdef DEBUG
             printf("free %p\n", it);
 #endif
-            free(it);
+            shared_mm_free(it);
             nit->bucket = b;
             return nit;
         }
@@ -164,7 +227,8 @@ citem *cache_put(cache_bucket *buckets, int nbuckets, citem *nit, bool replace)
     // we find room
 
     if(has_direct) {
-        nit->next = b->items[di];
+        assert(b->items[di] == NULL);
+        nit->next = NULL;
         b->hashes[di] = hv;
         b->items[di] = nit;
         nit->bucket = b;
@@ -177,10 +241,11 @@ citem *cache_put(cache_bucket *buckets, int nbuckets, citem *nit, bool replace)
         di = b->replace;
         b->replace = (b->replace + 1) % BUCKET_NITEMS;
         evict = b->items[di];
+	assert(evict != NULL);
         evict->evicted |= 2;
         b->items[di] = NULL;
 
-        nit->next = b->items[di];
+        nit->next = NULL;
         b->hashes[di] = hv;
         b->items[di] = nit;
         nit->bucket = b;
@@ -197,9 +262,9 @@ citem *cache_put(cache_bucket *buckets, int nbuckets, citem *nit, bool replace)
     return NULL;
 }
 
-citem *cache_put_or_get(cache_bucket *buckets, int nbuckets, citem *nit, bool replace)
+citem *cache_put_or_get(cache_bucket *buckets, int nbuckets, citem *nit, bool replace, bool* success)
 {
-    citem *it, *prev;
+    citem *it;
     size_t i, di;
     bool has_direct = false;
     uint32_t hv = nit->hv;
@@ -207,14 +272,34 @@ citem *cache_put_or_get(cache_bucket *buckets, int nbuckets, citem *nit, bool re
     size_t klen = nit->keylen;
     nit->evicted = 0;
 
-    int *val = citem_value(nit);
 #ifdef DEBUG
+    int *val = citem_value(nit);
     printf("cache_put_get: hash = %d, key = %d, val = %d, it = %p\n", hv, *((int*) key), *val, nit);
 #endif
 
     cache_bucket *b = buckets + (hv % nbuckets);
-    lock_lock(&b->lock);
+    /*
+    //if(cvmx_spinlock_locked(&b->lock)) {
+    if(cvmx_spinlock_trylock(&b->lock)) { 
+      *success = false;
+      return NULL;
+    }
+
+    //lock_lock(&b->lock);
+    *success = true;
     //printf("lock\n");
+    */
+
+    int count = 0;
+    while(cvmx_spinlock_trylock(&b->lock)) {
+      count++;
+      if(count == TRY) {
+	*success = false;
+	return NULL;
+      }
+    }
+    *success = true;
+    
 
     // Check if we need to replace an existing item
     for (i = 0; i < BUCKET_NITEMS; i++) {
@@ -231,7 +316,7 @@ citem *cache_put_or_get(cache_bucket *buckets, int nbuckets, citem *nit, bool re
 #ifdef DEBUG
                 printf("exist %p\n", it);
 #endif
-                free(nit);
+                shared_mm_free(nit);
                 return it;
             }
         }
@@ -241,12 +326,16 @@ citem *cache_put_or_get(cache_bucket *buckets, int nbuckets, citem *nit, bool re
     // loop
     it = b->items[BUCKET_NITEMS - 1];
     if (it != NULL) {
-        prev = it;
+      //prev = it;
         it = it->next;
+	/*
+	assert(it == NULL);
+
         while (it != NULL && !citem_hkey_matches(it, key, klen, hv)) {
-            prev = it;
+	  //prev = it;
             it = it->next;
         }
+	*/
 
         if (it != NULL) {
             //nit->next = it->next;
@@ -254,7 +343,7 @@ citem *cache_put_or_get(cache_bucket *buckets, int nbuckets, citem *nit, bool re
 #ifdef DEBUG
             printf("exist %p\n", it);
 #endif
-            free(nit);
+            shared_mm_free(nit);
             return it; // need to release later
         }
     }
@@ -262,7 +351,8 @@ citem *cache_put_or_get(cache_bucket *buckets, int nbuckets, citem *nit, bool re
     // We did not find an existing entry to replace, just stick it in wherever
     // we find room
     if(has_direct) {
-        nit->next = b->items[di];
+        assert(b->items[di] == NULL);
+        nit->next = NULL;
         b->hashes[di] = hv;
         b->items[di] = nit;
         nit->bucket = b;
@@ -279,10 +369,11 @@ citem *cache_put_or_get(cache_bucket *buckets, int nbuckets, citem *nit, bool re
         di = b->replace;
         b->replace = (b->replace + 1) % BUCKET_NITEMS;
         evict = b->items[di];
+	assert(evict != NULL);
         evict->evicted |= 2;
         b->items[di] = NULL;
 
-        nit->next = b->items[di];
+        nit->next = NULL;
         b->hashes[di] = hv;
         b->items[di] = nit;
         nit->bucket = b;
@@ -293,7 +384,6 @@ citem *cache_put_or_get(cache_bucket *buckets, int nbuckets, citem *nit, bool re
         return evict;
     }
 
-done:
     lock_unlock(&b->lock);
 #ifdef DEBUG
     printf("insert fail %p\n", nit);
@@ -301,28 +391,47 @@ done:
     return NULL;
 }
 
-void cache_delete(cache_bucket *buckets, int nbuckets, void* key, int klen, uint32_t hv)
+void cache_delete(cache_bucket *buckets, int nbuckets, void* key, int klen, uint32_t hv, bool* success)
 {
     citem *it, *prev;
-    size_t i, di;
+    size_t i;
 
 #ifdef DEBUG
     printf("cache_delete: hash = %d, key = %d\n", hv, *((int*) key));
 #endif
 
     cache_bucket *b = buckets + (hv % nbuckets);
-    lock_lock(&b->lock);
+    /*
+    //if(cvmx_spinlock_locked(&b->lock)) {
+    if(cvmx_spinlock_trylock(&b->lock)) { 
+      *success = false;
+      return;
+    }
+
+    //lock_lock(&b->lock);
+    *success = true;
     //printf("lock\n");
+    */
+
+    int count = 0;
+    while(cvmx_spinlock_trylock(&b->lock)) {
+      count++;
+      if(count == TRY) {
+	*success = false;
+	return;
+      }
+    }
+    *success = true;
+    
 
     // Check if we need to replace an existing item
     for (i = 0; i < BUCKET_NITEMS; i++) {
         if (b->items[i] && b->hashes[i] == hv) {
             it = b->items[i];
             if (citem_key_matches(it, key, klen)) {
-	      //printf("delete %p\n", it);
                 b->items[i] = it->next;
                 if(b->items[i]) b->hashes[i] = b->items[i]->hv;
-                free(it);
+                shared_mm_free(it);
                 goto done;
             }
         }
@@ -334,15 +443,17 @@ void cache_delete(cache_bucket *buckets, int nbuckets, void* key, int klen, uint
     if (it != NULL) {
         prev = it;
         it = it->next;
+	/*
+	assert(it == NULL);
+
         while (it != NULL && !citem_hkey_matches(it, key, klen, hv)) {
             prev = it;
             it = it->next;
         }
-
+	*/
         if (it != NULL) {
-	  //printf("delete %p\n", it);
             prev->next = it->next;
-            free(it);
+            shared_mm_free(it);
             goto done;
         }
     }

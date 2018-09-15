@@ -196,14 +196,38 @@ void update_read_ready_bypass(dma_circular_queue* q, uint8_t half) {
         // if old_read_ready_seg < stop_seg < read_ready_seg
         if(stop_seg < read_ready_seg && (q->read_ready_seg <= stop_seg || q->read_ready_seg > read_ready_seg))
             read_ready_seg = stop_seg;
-        q->read_ready = q->addr + read_ready_seg * q->block_size;
-        q->read_ready_seg = read_ready_seg;
+
+	while(q->read_ready_seg != read_ready_seg) {
+	  dma_segment *seg = &q->segments[q->read_ready_seg];
+	  int offset = q->read_ready - seg->addr;
+	  memset(seg->buf + offset, 0, seg->size - offset); 
+	  q->read_ready = seg->addr_max;
+	  q->read_ready_seg++;
+	  if(q->read_ready_seg == q->n) {
+	    q->read_ready = q->addr;
+	    q->read_ready_seg = 0;
+	  }
+	}
+        //q->read_ready = q->addr + read_ready_seg * q->block_size;
+        //q->read_ready_seg = read_ready_seg;
     }
     else if(half == 2) {
         int read_ready_seg = 0;
         if(q->read_ready_seg <= stop_seg) read_ready_seg = stop_seg;
-        q->read_ready = q->addr + read_ready_seg * q->block_size;
-        q->read_ready_seg = read_ready_seg;
+
+	while(q->read_ready_seg != read_ready_seg) {
+          dma_segment *seg = &q->segments[q->read_ready_seg];
+          int offset = q->read_ready - seg->addr;
+          memset(seg->buf + offset, 0, seg->size - offset);
+          q->read_ready = seg->addr_max;
+          q->read_ready_seg++;
+	  if(q->read_ready_seg == q->n) {
+	    q->read_ready = q->addr;
+	    q->read_ready_seg = 0;
+	  }
+        }
+        //q->read_ready = q->addr + read_ready_seg * q->block_size;
+        //q->read_ready_seg = read_ready_seg;
     }
 
     //printf("update: read_seg = %d, read_ready = %p | %p, write_seg = %d, n = %d\n", q->read_ready_seg, (void*) q->read_ready, (void*) q->addr, q->write_ready_seg, q->n);
@@ -470,7 +494,7 @@ void handle_writing(dma_circular_queue* q, dma_segment* seg) {
 	seg->min = q->write_ready;
       }
       q->write_finish_seg = (seg->id + 1) % q->n;
-      seg->count = 0;
+      seg->count = 0; // OPT
       __SYNC;
       seg->status = INVALID;
       __SYNC;
@@ -671,7 +695,7 @@ void* smart_dma_read(int qid, size_t addr, int size) {
 #ifndef RUNTIME
   manage_read(qid);
   manage_dma_read(qid);
-  manage_write(qid);
+  manage_write(qid); // OPT
   manage_dma_write(qid);
 #endif
 
@@ -755,8 +779,17 @@ void do_write(dma_circular_queue *q, dma_segment *seg) {
     size_t t1, t2;
     t1 = cvmx_clock_get_count(CVMX_CLOCK_CORE);
 #endif
+    //static size_t count = 0, size = 0;
+    //if(q->id > 0) printf("dma_write: id = %d, min = %p, seg->addr = %p\n", q->id, (void*) min, (void*) seg->addr);
     seg->comp = dma_write(min, max - min, seg->buf + (min - seg->addr), 0);
-
+    /*
+    count++;
+    size += max-min;
+    if(count == 100000) {
+      printf("%d: write size = %ld\n", cvmx_get_core_num(), size/count);
+      count = size = 0;
+    }
+    */
 #ifdef PERF2
     t2 = cvmx_clock_get_count(CVMX_CLOCK_CORE);
     t_dmawrite += t2 - t1;
@@ -769,6 +802,16 @@ void do_write(dma_circular_queue *q, dma_segment *seg) {
     __SYNC;
 #ifdef DEBUG
     printf("(%d) actual write: q = %d, seg = %p, addr = %p, min = %p, max= %p, cycle = %ld, t = %ld\n", cvmx_get_core_num(), q->id, seg, (void*) seg->addr, (void*) min, (void*) max, cvmx_clock_get_count(CVMX_CLOCK_CORE), seg->starttime);
+    /*
+    struct tuple *t, *end;
+    t = (struct tuple*) (seg->buf + (min - seg->addr));
+    end = (struct tuple*) (seg->buf + (max - seg->addr));
+    while(t < end) {
+      printf("%d ", t->task);
+      t++;
+    }
+    printf("\n");
+    */
 #endif
   }
 }
@@ -791,20 +834,38 @@ void initiate_write(dma_circular_queue *q) {
     start = cvmx_clock_get_count(CVMX_CLOCK_CORE);
 #endif
 
+    //static size_t count1 = 0, count2 = 0;
     update_write = 0;
 #ifdef PERF2
     uint64_t t1, t2, t3;
     t1 = cvmx_clock_get_count(CVMX_CLOCK_CORE);
 #endif
     ret = update_write_ready_fast(q, ids, &n);
+    //if(ret) count1++;
 #ifdef PERF2
     t2 = cvmx_clock_get_count(CVMX_CLOCK_CORE);
 #endif
-
+    //uint64_t now = cvmx_clock_get_count(CVMX_CLOCK_CORE);
+    //dma_segment* seg = &q->segments[q->write_ready_seg];
+    //q_entry *buf = (q_entry*) (seg->buf + (q->write_ready - seg->addr));
+    //if(q->id == 1) printf("update write: ret = %d, write_gap = %ld, WAIT = %d, flag = %d\n", ret, now - q->last_write, WRITE_WAIT, buf->flag);
+    //if(!ret && now - q->last_write > 100) {
+    //if(!ret && q->write_gap > WRITE_WAIT) {
     if(!ret) {
       ret = update_write_ready(q, ids, &n);
+      //if(ret) count2++;
     }
 
+    /*
+    if(count1 + count2 == 100000) {
+      printf("%d: batch = %ld, indv = %ld\n", cvmx_get_core_num(), count1, count2);
+      count1 = count2 = 0;
+    }
+
+    if(ret)
+      q->last_write = cvmx_clock_get_count(CVMX_CLOCK_CORE);
+    */
+    
 #ifdef PERF2
     t3 = cvmx_clock_get_count(CVMX_CLOCK_CORE);
     t_scanwrite1 += t2 - t1;
@@ -905,6 +966,7 @@ void manage_write(int qid) {
 void manage_dma_read(int qid) {
   dma_circular_queue* q = &queues[qid];
   if(!q->skip) {
+    //printf("prefetch %d\n", qid);
     prefetch_segment(q, &q->segments[q->read_ready_seg]);
     prefetch_segment(q, &q->segments[(q->read_ready_seg + 1) % q->n]);
     //prefetch_segment(q, &q->segments[(q->read_ready_seg + 2) % q->n]);

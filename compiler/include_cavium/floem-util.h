@@ -6,7 +6,7 @@
 
 #define DMA_CACHE
 #define RUNTIME  
-#define RUNTIME_CORES 1
+#define RUNTIME_CORES 4
 #define RUNTIME_START_CORE (12-RUNTIME_CORES)
 
 typedef cvmx_spinlock_t lock_t;
