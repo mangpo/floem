@@ -7,6 +7,7 @@ The DSL is a Python Library. The library provides mechanisms to connect elements
 
 # Table of Contents
 A. [Prerequisites](#Prerequisites)
+
 B. [Language](#Language)
   1. [Element](#Element)
   2. [Element Connection](#Element-Connection)
@@ -16,7 +17,9 @@ B. [Language](#Language)
   6. [Composite Element](#Composite-Element)
 
 C. [Running on Cavium](#Running-on-Cavium)
+
 D. [Library of Elements](doc/library-of-elements.md)
+
 E. [Library of C Functions](doc/library-of-c-functions.md)
 
 
