@@ -2,6 +2,7 @@ from join_handling import get_join_buffer_name
 from codegen_thread import *
 from codegen_state import generate_state_instances, declare_data_regions
 import re, os, subprocess, time
+import path
 
 var_id = 0
 def fresh_var_name():
@@ -645,7 +646,7 @@ def generate_code_as_header(graph, opt):
 
 
 def get_compile_command(process, object_files=[]):
-    compilerdir = os.path.dirname(os.path.realpath(__file__)) + "/include"
+    compilerdir = path.srcpath + "/include"
 
     dpdk = False
     if target.is_dpdk_proc(process):
@@ -667,7 +668,7 @@ def get_compile_command(process, object_files=[]):
     return cmd
 
 def get_compile_object_command(process):
-    compilerdir = os.path.dirname(os.path.realpath(__file__)) + "/include"
+    compilerdir = path.srcpath + "/include"
     dpdk_libs = target.dpdk_libs if target.is_dpdk_proc(process) else ''
     L = "-L %s" % target.dpdk_lib if target.is_dpdk_proc(process) else ''
     cmd = 'gcc -O3 -msse4.1 -Wall -msse2 -msse -march=native -maes -D_LARGEFILE64_SOURCE=1 -I %s -I %s %s -c %s.c %s -lm -pthread -lrt -std=gnu99' % \
