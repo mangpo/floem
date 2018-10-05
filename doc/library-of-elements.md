@@ -450,7 +450,7 @@ class Main(Flow):
 ##### Byte order
 x86 is little-endian, while Cavium LiquidIO is big-endian. When using a smart queue, the compiler will automatically convert the byte order on the NIC side for the fields that use provided data types. Users are responsible for converting the byte order manually when using primitive queues.
 
-<a name="Network-Eleements"></a>
+<a name="Network-Elements"></a>
 ## 2. Network Elements
 ```python
 import net
