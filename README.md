@@ -22,6 +22,8 @@ D. [Library of Elements](doc/library-of-elements.md)
 
 E. [Library of C Functions](doc/library-of-c-functions.md)
 
+F. [Queue Synchronization Layer](doc/runtime.md)
+
 
 <a name="Prerequisites"></a>
 # A. Prerequisites
@@ -42,6 +44,7 @@ in the LiquidIO firmware's source.
 
 At the top level of the repo, install Floem local package:
 ```
+python configure.py
 pip install . --user
 ```
 
@@ -487,7 +490,7 @@ Notice that `o1` and `o2` share the same tracker state, so they both contribute 
 ### 4.2 Flow and Per-Packet State
 
 Floem provides a per-packet state abstraction that a packet and its metadata can be accessed anywhere for the same *flow*. With this abstraction, programmers can access the per-packet state in any element without explicitly passing the per-packet state around. 
-*Flow* is a set of segments that connect to each other via (queues)[#Multi-Queue].
+*Flow* is a set of segments that connect to each other via [queues](#Multi-Queue).
 
 
 To use this abstraction, programmers define a flow class, and set the field `state` of the flow class to a per-packet state associated with the flow. 

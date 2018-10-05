@@ -10,7 +10,7 @@ void init_dma_circular_queue();
 int create_dma_circular_queue(uint64_t addr, int size, int overlap, 
 			      int (*ready_scan)(void*), int (*done_scan)(void*));
 void* smart_dma_read_local(int qid, size_t addr);
-void* smart_dma_read(int gqid, size_t addr, int size);
+void* smart_dma_read(int qid, size_t addr, int size);
 int smart_dma_write(int qid, size_t addr, int size, void* p);
 
 void smart_info(int qid, size_t addr, int size);

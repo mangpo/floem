@@ -49,7 +49,7 @@ class main(Flow):
         def configure(self): self.inp = Input()
         def impl(self): self.run_c(r'''printf("b1 %d\n", state.b0);''')
 
-    class Clean(Element):
+    class PrintClean(Element):
         def configure(self, letter): self.inp = Input(); self.letter = letter
         def impl(self): self.run_c(r'''printf("clean %s!\n");''' % self.letter)
 
@@ -60,8 +60,8 @@ class main(Flow):
         def impl(self):
             self.run_c(r'''printf("done %d\n", state.a);''')
 
-    Enq, Deq, Scan = queue_smart.smart_queue("queue", entry_size=32, size=3, insts=2, channels=2, clean=True,
-                                             enq_output=True)
+    Enq, Deq, Clean = queue_smart.smart_queue("queue", entry_size=32, size=3, insts=2, channels=2, clean=True,
+                                              enq_output=True)
 
     class run1(CallableSegment):
         def configure(self):
@@ -76,9 +76,9 @@ class main(Flow):
             classify.out[1] >> main.B0() >> enq.inp[1]
             enq.done >> main.Display()
 
-            scan = main.Scan()
-            scan.out[0] >> main.Clean(configure=['a'])
-            scan.out[1] >> main.Clean(configure=['b'])
+            scan = main.Clean()
+            scan.out[0] >> main.PrintClean(configure=['a'])
+            scan.out[1] >> main.PrintClean(configure=['b'])
 
     class run2(CallableSegment):
         def configure(self):
